@@ -1,0 +1,32 @@
+# OS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Java / Maven
+backend/target/
+backend/.mvn/
+backend/dependency-reduced-pom.xml
+backend/HELP.md
+
+# Flutter
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/build/
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+frontend/android/.gradle/
+frontend/android/app/.cxx/
+frontend/.pub-cache/
+frontend/pubspec.lock
+
+# Local env
+.env
+*.local
+
+# Postgres docker volume is named, not bind-mounted
