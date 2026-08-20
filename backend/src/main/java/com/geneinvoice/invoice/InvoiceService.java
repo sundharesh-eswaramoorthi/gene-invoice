@@ -1,5 +1,6 @@
 package com.geneinvoice.invoice;
 
+import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.NotFoundException;
@@ -19,6 +20,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +30,7 @@ public class InvoiceService {
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final CurrentUser currentUser;
+    private final AuditService auditService;
 
     @Transactional
     public Invoice create(InvoiceDtos.CreateInvoiceRequest req) {
@@ -119,6 +122,25 @@ public class InvoiceService {
             throw new AccessDeniedException("Not allowed");
         }
         return invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customerId);
+    }
+    /**
+     * Invoice summaries with per-invoice overdue-reminder counts attached. The invoice
+     * selection is delegated to {@link #list()} / {@link #listByCustomer(Long)} so the
+     * existing customer-ownership restriction applies unchanged, and the count lookup
+     * runs once, batched over only the ids that selection already returned. Every
+     * returned summary carries a reminderCount, defaulting to 0 when no reminder audit
+     * rows exist for the invoice, and the result preserves the source list's order.
+     */
+    @Transactional(readOnly = true)
+    public List<InvoiceDtos.InvoiceSummary> listSummaries(Long customerId) {
+        List<Invoice> invoices = (customerId == null) ? list() : listByCustomer(customerId);
+        List<Long> ids = invoices.stream().map(Invoice::getId).toList();
+        Map<Long, Long> counts = auditService.reminderCountsByInvoiceId(ids);
+        List<InvoiceDtos.InvoiceSummary> summaries = new ArrayList<>(invoices.size());
+        for (Invoice inv : invoices) {
+            summaries.add(InvoiceDtos.InvoiceSummary.from(inv, counts.getOrDefault(inv.getId(), 0L)));
+        }
+        return summaries;
     }
 
     @Transactional

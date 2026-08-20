@@ -18,8 +18,7 @@ public class InvoiceController {
     @GetMapping
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public List<InvoiceDtos.InvoiceSummary> list(@RequestParam(required = false) Long customerId) {
-        var invoices = customerId != null ? service.listByCustomer(customerId) : service.list();
-        return invoices.stream().map(InvoiceDtos.InvoiceSummary::from).toList();
+        return service.listSummaries(customerId);
     }
 
     @GetMapping("/{id}")

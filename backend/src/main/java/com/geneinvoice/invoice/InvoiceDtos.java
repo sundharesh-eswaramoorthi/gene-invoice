@@ -49,13 +49,16 @@ public class InvoiceDtos {
     public record InvoiceSummary(
             Long id, String invoiceNumber, Long customerId, String customerName,
             Instant invoiceDate, BigDecimal total, BigDecimal paidAmount, BigDecimal balance,
-            InvoiceStatus status
+            InvoiceStatus status, long reminderCount
     ) {
         public static InvoiceSummary from(Invoice inv) {
+            return from(inv, 0L);
+        }
+        public static InvoiceSummary from(Invoice inv, long reminderCount) {
             return new InvoiceSummary(inv.getId(), inv.getInvoiceNumber(),
                     inv.getCustomer().getId(), inv.getCustomer().getName(),
                     inv.getInvoiceDate(), inv.getTotal(), inv.getPaidAmount(), inv.getBalance(),
-                    inv.getStatus());
+                    inv.getStatus(), reminderCount);
         }
     }
 }
