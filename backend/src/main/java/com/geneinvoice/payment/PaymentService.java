@@ -2,6 +2,7 @@ package com.geneinvoice.payment;
 
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.NotFoundException;
+import com.geneinvoice.creditnote.CreditNoteRepository;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.invoice.Invoice;
@@ -16,6 +17,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -24,23 +27,32 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final CustomerRepository customerRepository;
     private final InvoiceRepository invoiceRepository;
+    private final CreditNoteRepository creditNoteRepository;
 
     @Transactional
     public Payment record(PaymentDtos.CreatePaymentRequest req) {
         Customer customer = customerRepository.findById(req.customerId())
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
 
-        List<Invoice> targets;
+        List<Long> targetIds = new ArrayList<>();
         if (req.invoiceIds() != null && !req.invoiceIds().isEmpty()) {
-            targets = invoiceRepository.findAllById(req.invoiceIds());
-            for (Invoice inv : targets) {
-                if (!inv.getCustomer().getId().equals(customer.getId())) {
-                    throw new BadRequestException(
-                            "Invoice " + inv.getInvoiceNumber() + " does not belong to this customer");
-                }
-            }
+            targetIds.addAll(req.invoiceIds());
         } else {
-            targets = invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customer.getId());
+            invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customer.getId())
+                    .forEach(inv -> targetIds.add(inv.getId()));
+        }
+        targetIds.sort(Comparator.naturalOrder());
+
+        List<Invoice> targets = new ArrayList<>();
+        for (Long invoiceId : targetIds) {
+            targets.add(invoiceRepository.findByIdForUpdate(invoiceId)
+                    .orElseThrow(() -> new NotFoundException("Invoice not found")));
+        }
+        for (Invoice inv : targets) {
+            if (!inv.getCustomer().getId().equals(customer.getId())) {
+                throw new BadRequestException(
+                        "Invoice " + inv.getInvoiceNumber() + " does not belong to this customer");
+            }
         }
 
         Payment payment = Payment.builder()
@@ -66,11 +78,12 @@ public class PaymentService {
         BigDecimal remaining = amount;
         for (Invoice inv : outstanding) {
             if (remaining.signum() <= 0) break;
-            BigDecimal balance = inv.getBalance();
+            BigDecimal creditedAmount = creditNoteRepository.sumActiveAmountForInvoice(inv.getId());
+            BigDecimal balance = InvoiceService.creditAwareOutstanding(inv, creditedAmount);
             if (balance.signum() <= 0) continue;
             BigDecimal toApply = balance.min(remaining);
             inv.setPaidAmount(inv.getPaidAmount().add(toApply));
-            InvoiceService.recomputeStatus(inv);
+            InvoiceService.recomputeStatus(inv, creditedAmount);
             invoiceRepository.save(inv);
             payment.getAllocations().add(PaymentAllocation.builder()
                     .payment(payment).invoice(inv).amount(toApply).build());
@@ -101,11 +114,22 @@ public class PaymentService {
 
     /** Reverse allocations only (does NOT mark status). Used both for void and for re-recording. */
     private void reverseAllocations(Payment p) {
-        for (PaymentAllocation alloc : new ArrayList<>(p.getAllocations())) {
-            Invoice inv = alloc.getInvoice();
+        List<PaymentAllocation> allocations = new ArrayList<>(p.getAllocations());
+        List<Long> invoiceIds = allocations.stream()
+                .map(alloc -> alloc.getInvoice().getId())
+                .distinct()
+                .sorted(Comparator.naturalOrder())
+                .toList();
+        Map<Long, Invoice> lockedById = new HashMap<>();
+        for (Long invoiceId : invoiceIds) {
+            lockedById.put(invoiceId, invoiceRepository.findByIdForUpdate(invoiceId)
+                    .orElseThrow(() -> new NotFoundException("Invoice not found")));
+        }
+        for (PaymentAllocation alloc : allocations) {
+            Invoice inv = lockedById.get(alloc.getInvoice().getId());
             inv.setPaidAmount(inv.getPaidAmount().subtract(alloc.getAmount()));
             if (inv.getPaidAmount().signum() < 0) inv.setPaidAmount(BigDecimal.ZERO);
-            InvoiceService.recomputeStatus(inv);
+            InvoiceService.recomputeStatus(inv, creditNoteRepository.sumActiveAmountForInvoice(inv.getId()));
             invoiceRepository.save(inv);
         }
         p.getAllocations().clear();
@@ -136,7 +160,16 @@ public class PaymentService {
         p.setAmount(newAmount);
         if (method != null) p.setMethod(method);
         if (notes != null) p.setNotes(notes);
-        List<Invoice> targets = invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(p.getCustomer().getId());
+        List<Long> targetIds = invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(p.getCustomer().getId())
+                .stream()
+                .map(Invoice::getId)
+                .sorted(Comparator.naturalOrder())
+                .toList();
+        List<Invoice> targets = new ArrayList<>();
+        for (Long invoiceId : targetIds) {
+            targets.add(invoiceRepository.findByIdForUpdate(invoiceId)
+                    .orElseThrow(() -> new NotFoundException("Invoice not found")));
+        }
         applyTo(p, targets, newAmount);
         return paymentRepository.save(p);
     }

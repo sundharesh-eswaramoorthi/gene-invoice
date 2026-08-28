@@ -35,12 +35,14 @@ public class InvoiceDtos {
     public record InvoiceDto(
             Long id, String invoiceNumber, Long customerId, String customerName,
             Instant invoiceDate, BigDecimal total, BigDecimal paidAmount, BigDecimal balance,
+            BigDecimal creditedAmount, BigDecimal outstandingAmount,
             InvoiceStatus status, String notes, List<InvoiceLineDto> items
     ) {
-        public static InvoiceDto from(Invoice inv) {
+        public static InvoiceDto from(Invoice inv, BigDecimal creditedAmount) {
             return new InvoiceDto(inv.getId(), inv.getInvoiceNumber(),
                     inv.getCustomer().getId(), inv.getCustomer().getName(),
                     inv.getInvoiceDate(), inv.getTotal(), inv.getPaidAmount(), inv.getBalance(),
+                    creditedAmount, inv.getTotal().subtract(inv.getPaidAmount()).subtract(creditedAmount),
                     inv.getStatus(), inv.getNotes(),
                     inv.getItems().stream().map(InvoiceLineDto::from).toList());
         }
@@ -49,12 +51,14 @@ public class InvoiceDtos {
     public record InvoiceSummary(
             Long id, String invoiceNumber, Long customerId, String customerName,
             Instant invoiceDate, BigDecimal total, BigDecimal paidAmount, BigDecimal balance,
+            BigDecimal creditedAmount, BigDecimal outstandingAmount,
             InvoiceStatus status
     ) {
-        public static InvoiceSummary from(Invoice inv) {
+        public static InvoiceSummary from(Invoice inv, BigDecimal creditedAmount) {
             return new InvoiceSummary(inv.getId(), inv.getInvoiceNumber(),
                     inv.getCustomer().getId(), inv.getCustomer().getName(),
                     inv.getInvoiceDate(), inv.getTotal(), inv.getPaidAmount(), inv.getBalance(),
+                    creditedAmount, inv.getTotal().subtract(inv.getPaidAmount()).subtract(creditedAmount),
                     inv.getStatus());
         }
     }

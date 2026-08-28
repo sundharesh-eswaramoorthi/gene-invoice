@@ -24,6 +24,8 @@ class InvoiceSummary {
   final double paidAmount;
   final double balance;
   final InvoiceStatus status;
+  final double creditedAmount;
+  final double outstandingAmount;
 
   const InvoiceSummary({
     required this.id,
@@ -35,6 +37,8 @@ class InvoiceSummary {
     required this.paidAmount,
     required this.balance,
     required this.status,
+    this.creditedAmount = 0,
+    this.outstandingAmount = 0,
   });
 
   factory InvoiceSummary.fromJson(Map<String, dynamic> json) => InvoiceSummary(
@@ -47,6 +51,8 @@ class InvoiceSummary {
         paidAmount: (json['paidAmount'] as num).toDouble(),
         balance: (json['balance'] as num).toDouble(),
         status: parseStatus(json['status'] as String?),
+        creditedAmount: (json['creditedAmount'] as num?)?.toDouble() ?? 0,
+        outstandingAmount: (json['outstandingAmount'] as num?)?.toDouble() ?? 0,
       );
 }
 
@@ -91,6 +97,8 @@ class InvoiceDetail extends InvoiceSummary {
     required super.paidAmount,
     required super.balance,
     required super.status,
+    super.creditedAmount = 0,
+    super.outstandingAmount = 0,
     required this.notes,
     required this.items,
   });
@@ -105,6 +113,8 @@ class InvoiceDetail extends InvoiceSummary {
         paidAmount: (json['paidAmount'] as num).toDouble(),
         balance: (json['balance'] as num).toDouble(),
         status: parseStatus(json['status'] as String?),
+        creditedAmount: (json['creditedAmount'] as num?)?.toDouble() ?? 0,
+        outstandingAmount: (json['outstandingAmount'] as num?)?.toDouble() ?? 0,
         notes: json['notes'] as String?,
         items: ((json['items'] as List?) ?? const [])
             .map((e) => InvoiceLine.fromJson(e as Map<String, dynamic>))

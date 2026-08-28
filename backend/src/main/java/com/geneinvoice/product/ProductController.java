@@ -35,8 +35,13 @@ public class ProductController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('" + Privileges.PRODUCT_VIEW + "')")
-    public List<ProductDto> list() {
-        return repository.findAll().stream().map(ProductDto::from).toList();
+    public List<ProductDto> list(@RequestParam(required = false) String search) {
+        String text = search == null ? "" : search.trim();
+        if (text.isEmpty()) {
+            return repository.findAll().stream().map(ProductDto::from).toList();
+        }
+        return repository.findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(text, text)
+                .stream().map(ProductDto::from).toList();
     }
 
     @GetMapping("/{id}")

@@ -3,6 +3,7 @@ package com.geneinvoice.invoice;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.NotFoundException;
+import com.geneinvoice.creditnote.CreditNoteRepository;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.product.Product;
@@ -27,6 +28,7 @@ public class InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
+    private final CreditNoteRepository creditNoteRepository;
     private final CurrentUser currentUser;
 
     @Transactional
@@ -79,6 +81,27 @@ public class InvoiceService {
         else if (inv.getPaidAmount().signum() > 0) inv.setStatus(InvoiceStatus.PARTIALLY_PAID);
         else inv.setStatus(InvoiceStatus.UNPAID);
     }
+    /**
+     * Outstanding amount with active credit notes applied: total minus paidAmount minus the
+     * supplied ACTIVE credited sum. The payment-only Invoice.getBalance() stays untouched.
+     */
+    public static BigDecimal creditAwareOutstanding(Invoice inv, BigDecimal creditedAmount) {
+        BigDecimal credited = creditedAmount == null ? BigDecimal.ZERO : creditedAmount;
+        return inv.getTotal().subtract(inv.getPaidAmount()).subtract(credited);
+    }
+
+    /**
+     * Credit-aware overload of {@link #recomputeStatus(Invoice)}: derives status from the
+     * credit-aware outstanding, so payments plus active credits together covering the total
+     * yield FULLY_PAID. A CANCELLED invoice is never moved to another status.
+     */
+    public static void recomputeStatus(Invoice inv, BigDecimal creditedAmount) {
+        if (inv.getStatus() == InvoiceStatus.CANCELLED) return;
+        BigDecimal outstanding = creditAwareOutstanding(inv, creditedAmount);
+        if (outstanding.signum() <= 0) inv.setStatus(InvoiceStatus.FULLY_PAID);
+        else if (inv.getPaidAmount().signum() > 0) inv.setStatus(InvoiceStatus.PARTIALLY_PAID);
+        else inv.setStatus(InvoiceStatus.UNPAID);
+    }
 
     private String nextInvoiceNumber() {
         String prefix = "INV-" + LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
@@ -120,10 +143,20 @@ public class InvoiceService {
         }
         return invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customerId);
     }
+    /**
+     * The invoice's currently ACTIVE credit-note total, read from the credit-note ledger;
+     * zero when the invoice has no active notes.
+     */
+    @Transactional(readOnly = true)
+    public BigDecimal activeCreditedAmount(Long invoiceId) {
+        BigDecimal credited = creditNoteRepository.sumActiveAmountForInvoice(invoiceId);
+        return credited == null ? BigDecimal.ZERO : credited;
+    }
 
     @Transactional
     public Invoice cancel(Long id) {
-        Invoice inv = getInternal(id);
+        Invoice inv = invoiceRepository.findLockedById(id)
+                .orElseThrow(() -> new NotFoundException("Invoice not found"));
         if (inv.getStatus() == InvoiceStatus.FULLY_PAID || inv.getPaidAmount().signum() > 0) {
             throw new BadRequestException("Cannot cancel an invoice with payments; refund first");
         }
@@ -137,7 +170,8 @@ public class InvoiceService {
      */
     @Transactional
     public Invoice cancelWithRefund(Long id) {
-        Invoice inv = getInternal(id);
+        Invoice inv = invoiceRepository.findLockedById(id)
+                .orElseThrow(() -> new NotFoundException("Invoice not found"));
         if (inv.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BadRequestException("Invoice already cancelled");
         }
@@ -161,7 +195,8 @@ public class InvoiceService {
         if (newItems == null || newItems.isEmpty()) {
             throw new BadRequestException("Items must not be empty");
         }
-        Invoice inv = getInternal(id);
+        Invoice inv = invoiceRepository.findLockedById(id)
+                .orElseThrow(() -> new NotFoundException("Invoice not found"));
         if (inv.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BadRequestException("Cannot edit a cancelled invoice");
         }
@@ -190,7 +225,7 @@ public class InvoiceService {
             customerRepository.save(c);
             inv.setPaidAmount(total);
         }
-        recomputeStatus(inv);
+        recomputeStatus(inv, activeCreditedAmount(inv.getId()));
         return invoiceRepository.save(inv);
     }
 }

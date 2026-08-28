@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/product.dart';
 import '../auth/auth_controller.dart';
+import 'products_controller.dart';
 
 final productsProvider = FutureProvider.autoDispose<List<Product>>((ref) async {
   final dio = ref.watch(dioProvider);
@@ -19,7 +20,9 @@ class ProductsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.productManage) ?? false;
-    final async = ref.watch(productsProvider);
+    final searchState = ref.watch(productSearchControllerProvider);
+    final controller = ref.read(productSearchControllerProvider.notifier);
+    final products = searchState.products;
 
     return Scaffold(
       floatingActionButton: canManage
@@ -29,41 +32,67 @@ class ProductsScreen extends ConsumerWidget {
               onPressed: () => _openForm(context, ref, null),
             )
           : null,
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Failed: $e')),
-        data: (list) {
-          if (list.isEmpty) return const Center(child: Text('No products yet'));
-          return RefreshIndicator(
-            onRefresh: () async => ref.refresh(productsProvider.future),
-            child: ListView.separated(
-              padding: const EdgeInsets.all(8),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final p = list[i];
-                return ListTile(
-                  title: Text(p.name),
-                  subtitle: Text(p.description ?? ''),
-                  trailing: Wrap(
-                    spacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(p.price.toStringAsFixed(2),
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      if (!p.active) const Chip(label: Text('Inactive')),
-                      if (canManage)
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _openForm(context, ref, p),
-                        ),
-                    ],
-                  ),
-                );
-              },
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+            child: TextField(
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                hintText: 'Search products',
+              ),
+              onChanged: controller.onSearchChanged,
             ),
-          );
-        },
+          ),
+          if (searchState.error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Text(
+                'Search failed: ${searchState.error}',
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ),
+          Expanded(
+            child: products.isEmpty
+                ? (searchState.loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : (searchState.error != null
+                        ? Center(child: Text('Failed: ${searchState.error}'))
+                        : const Center(child: Text('No products yet'))))
+                : RefreshIndicator(
+                    onRefresh: () async {
+                      await controller.refreshCurrent();
+                      ref.invalidate(productsProvider);
+                    },
+                    child: ListView.separated(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: products.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final p = products[i];
+                        return ListTile(
+                          title: Text(p.name),
+                          subtitle: Text(p.description ?? ''),
+                          trailing: Wrap(
+                            spacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(p.price.toStringAsFixed(2),
+                                  style: const TextStyle(fontWeight: FontWeight.w600)),
+                              if (!p.active) const Chip(label: Text('Inactive')),
+                              if (canManage)
+                                IconButton(
+                                  icon: const Icon(Icons.edit_outlined),
+                                  onPressed: () => _openForm(context, ref, p),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -73,7 +102,10 @@ class ProductsScreen extends ConsumerWidget {
       context: context,
       builder: (_) => _ProductForm(existing: existing),
     );
-    if (saved == true) ref.invalidate(productsProvider);
+    if (saved == true) {
+      ref.invalidate(productsProvider);
+      await ref.read(productSearchControllerProvider.notifier).refreshCurrent();
+    }
   }
 }
 
