@@ -1,6 +1,8 @@
 package com.geneinvoice.invoice;
 
 import com.geneinvoice.customer.Customer;
+import com.geneinvoice.creditnote.CreditNote;
+import com.geneinvoice.creditnote.CreditNoteStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -44,6 +46,15 @@ public class Invoice {
     @Builder.Default
     private BigDecimal paidAmount = BigDecimal.ZERO;
 
+    /**
+     * Permanently retained credit notes of this invoice (active and voided alike).
+     * Read-only inverse relation: no cascade and no orphan removal, so voiding or
+     * any invoice change can never delete issuance evidence.
+     */
+    @OneToMany(mappedBy = "invoice", fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<CreditNote> creditNotes = new ArrayList<>();
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 30)
     @Builder.Default
@@ -63,7 +74,22 @@ public class Invoice {
         }
     }
 
+    /** Sum of this invoice's ACTIVE (non-voided) credit notes. Voided notes contribute nothing. */
+    public BigDecimal getActiveCreditedTotal() {
+        return creditNotes.stream()
+                .filter(cn -> cn.getStatus() == CreditNoteStatus.ACTIVE)
+                .map(CreditNote::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * The invoice's one derived outstanding amount: total minus successful
+     * payments minus active credit notes, floored at zero. Credits reduce what
+     * the invoice owes WITHOUT touching paidAmount (cash) or the customer's
+     * creditBalance (wallet).
+     */
     public BigDecimal getBalance() {
-        return total.subtract(paidAmount);
+        BigDecimal outstanding = total.subtract(paidAmount).subtract(getActiveCreditedTotal());
+        return outstanding.signum() < 0 ? BigDecimal.ZERO : outstanding;
     }
 }

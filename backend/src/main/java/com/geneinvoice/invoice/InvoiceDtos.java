@@ -1,5 +1,6 @@
 package com.geneinvoice.invoice;
 
+import com.geneinvoice.creditnote.CreditNoteDtos;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -32,29 +33,41 @@ public class InvoiceDtos {
         }
     }
 
+    /**
+     * The full invoice representation. {@code balance} and {@code outstanding} are
+     * the one shared derived remaining amount (total - payments - active credit
+     * notes, floored at zero); the keys are additive over the pre-credit-note
+     * contract, which only carried the (then cash-only) balance.
+     */
     public record InvoiceDto(
             Long id, String invoiceNumber, Long customerId, String customerName,
             Instant invoiceDate, BigDecimal total, BigDecimal paidAmount, BigDecimal balance,
-            InvoiceStatus status, String notes, List<InvoiceLineDto> items
+            BigDecimal activeCreditedTotal, BigDecimal outstanding,
+            InvoiceStatus status, String notes, List<InvoiceLineDto> items,
+            List<CreditNoteDtos.CreditNoteDto> creditNotes
     ) {
         public static InvoiceDto from(Invoice inv) {
             return new InvoiceDto(inv.getId(), inv.getInvoiceNumber(),
                     inv.getCustomer().getId(), inv.getCustomer().getName(),
                     inv.getInvoiceDate(), inv.getTotal(), inv.getPaidAmount(), inv.getBalance(),
+                    inv.getActiveCreditedTotal(), inv.getBalance(),
                     inv.getStatus(), inv.getNotes(),
-                    inv.getItems().stream().map(InvoiceLineDto::from).toList());
+                    inv.getItems().stream().map(InvoiceLineDto::from).toList(),
+                    inv.getCreditNotes().stream().map(CreditNoteDtos.CreditNoteDto::from).toList());
         }
     }
 
     public record InvoiceSummary(
             Long id, String invoiceNumber, Long customerId, String customerName,
             Instant invoiceDate, BigDecimal total, BigDecimal paidAmount, BigDecimal balance,
+            BigDecimal activeCreditedTotal, BigDecimal outstanding,
             InvoiceStatus status
     ) {
         public static InvoiceSummary from(Invoice inv) {
             return new InvoiceSummary(inv.getId(), inv.getInvoiceNumber(),
                     inv.getCustomer().getId(), inv.getCustomer().getName(),
                     inv.getInvoiceDate(), inv.getTotal(), inv.getPaidAmount(), inv.getBalance(),
+                    inv.getActiveCreditedTotal(), inv.getBalance(),
                     inv.getStatus());
         }
     }

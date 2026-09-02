@@ -72,11 +72,19 @@ public class InvoiceService {
         customerRepository.save(c);
     }
 
+    /**
+     * Settlement status follows the one derived outstanding (total - payments -
+     * active credit notes, floored at zero): full coverage by payments and credit
+     * notes together is FULLY_PAID, lesser non-zero coverage by either is
+     * PARTIALLY_PAID. A CANCELLED invoice is never changed (sticky status), so
+     * voiding a credit note restores its amount without resurrecting the invoice.
+     */
     public static void recomputeStatus(Invoice inv) {
         if (inv.getStatus() == InvoiceStatus.CANCELLED) return;
         BigDecimal balance = inv.getBalance();
         if (balance.signum() <= 0) inv.setStatus(InvoiceStatus.FULLY_PAID);
-        else if (inv.getPaidAmount().signum() > 0) inv.setStatus(InvoiceStatus.PARTIALLY_PAID);
+        else if (inv.getPaidAmount().signum() > 0 || inv.getActiveCreditedTotal().signum() > 0)
+            inv.setStatus(InvoiceStatus.PARTIALLY_PAID);
         else inv.setStatus(InvoiceStatus.UNPAID);
     }
 
@@ -97,9 +105,14 @@ public class InvoiceService {
         return inv;
     }
 
+    /**
+     * Loads an invoice under a pessimistic write lock for the financial writers
+     * below (cancel, cancelWithRefund, replaceItems), so a settlement mutation
+     * and a concurrent credit-note issuance or payment cannot race each other.
+     */
     @Transactional(readOnly = true)
     public Invoice getInternal(Long id) {
-        return invoiceRepository.findById(id)
+        return invoiceRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new NotFoundException("Invoice not found"));
     }
 

@@ -11,6 +11,7 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../customer_scope/customer_scope.dart';
 import '../disputes/dispute_create_dialog.dart';
+import 'credit_note_dialogs.dart';
 
 final invoicesProvider = FutureProvider.autoDispose<List<InvoiceSummary>>((ref) async {
   final dio = ref.watch(dioProvider);
@@ -69,8 +70,10 @@ class InvoicesScreen extends ConsumerWidget {
                     children: [
                       Text('Total ${inv.total.toStringAsFixed(2)}',
                           style: const TextStyle(fontWeight: FontWeight.w600)),
-                      if (inv.balance > 0)
-                        Text('Bal ${inv.balance.toStringAsFixed(2)}',
+                      if (inv.activeCreditedTotal > 0)
+                        Text('Credited ${inv.activeCreditedTotal.toStringAsFixed(2)}'),
+                      if (inv.outstanding > 0)
+                        Text('Outstanding ${inv.outstanding.toStringAsFixed(2)}',
                             style: TextStyle(color: Theme.of(context).colorScheme.error)),
                     ],
                   ),
@@ -100,7 +103,7 @@ class _InvoiceDetailDialog extends ConsumerWidget {
     final async = ref.watch(invoiceDetailProvider(id));
     final user = ref.watch(currentUserProvider);
     final canDispute = user?.has(Privileges.disputeCreate) ?? false;
-    final canViewAudit = user?.has(Privileges.auditView) ?? false;
+    final canViewAudit = user?.has(Privileges.auditView) ?? false;    final canManage = user?.has(Privileges.invoiceManage) ?? false;
     return Dialog(
       child: SizedBox(
         width: 640,
@@ -135,10 +138,64 @@ class _InvoiceDetailDialog extends ConsumerWidget {
                 const Divider(height: 24),
                 _row('Total', inv.total),
                 _row('Paid', inv.paidAmount),
-                _row('Balance', inv.balance, bold: true),
+                _row('Balance', inv.balance),
+                if (inv.activeCreditedTotal > 0) _row('Credited', inv.activeCreditedTotal),
+                _row('Outstanding', inv.outstanding, bold: true),
                 if (inv.notes != null && inv.notes!.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text('Notes: ${inv.notes}', style: const TextStyle(fontStyle: FontStyle.italic)),
+                ],
+                if (canManage || inv.creditNotes.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('Credit notes',
+                            style: Theme.of(context).textTheme.titleSmall),
+                      ),
+                      if (canManage && inv.status != InvoiceStatus.CANCELLED)
+                        TextButton.icon(
+                          icon: const Icon(Icons.add_card_outlined),
+                          label: const Text('Issue credit note'),
+                          onPressed: () => _issueCreditNote(context, ref, inv),
+                        ),
+                    ],
+                  ),
+                  if (inv.creditNotes.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 4),
+                      child: Text('No credit notes'),
+                    ),
+                  ...inv.creditNotes.map((cn) {
+                    final voided = cn.isVoided;
+                    return ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        '${cn.amount.toStringAsFixed(2)} • ${cn.reason}',
+                        style: voided
+                            ? const TextStyle(
+                                decoration: TextDecoration.lineThrough,
+                                color: Colors.grey,
+                              )
+                            : null,
+                      ),
+                      subtitle: Text(
+                        '${creditNoteStatusLabel(cn.status)} • issued '
+                        '${DateFormat.yMMMd().add_jm().format(cn.issuedAt.toLocal())}'
+                        '${cn.issuedBy != null ? ' by ${cn.issuedBy}' : ''}',
+                      ),
+                      trailing: voided
+                          ? const Chip(label: Text('VOIDED'))
+                          : (canManage
+                              ? IconButton(
+                                  tooltip: 'Void credit note',
+                                  icon: const Icon(Icons.remove_circle_outline),
+                                  onPressed: () => _voidCreditNote(context, ref, inv, cn),
+                                )
+                              : null),
+                    );
+                  }),
                 ],
                 if (canViewAudit) ...[
                   const SizedBox(height: 16),
@@ -178,6 +235,40 @@ class _InvoiceDetailDialog extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _issueCreditNote(
+      BuildContext context, WidgetRef ref, InvoiceDetail inv) async {
+    final result = await showCreditNoteIssueDialog(
+      context: context,
+      invoiceId: inv.id,
+      maxCreditable: inv.outstanding,
+    );
+    if (result == null) return;
+    // The note is committed before this point, so refresh the data even when
+    // the backend reports an admin-notification warning.
+    ref.invalidate(invoiceDetailProvider(inv.id));
+    ref.invalidate(invoicesProvider);
+    final warning = result.warning;
+    if (warning != null && warning.isNotEmpty && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(warning)),
+      );
+    }
+  }
+
+  Future<void> _voidCreditNote(BuildContext context, WidgetRef ref,
+      InvoiceDetail inv, CreditNote cn) async {
+    final voided = await showCreditNoteVoidDialog(
+      context: context,
+      invoiceId: inv.id,
+      creditNoteId: cn.id,
+      amount: cn.amount,
+    );
+    if (voided == true) {
+      ref.invalidate(invoiceDetailProvider(inv.id));
+      ref.invalidate(invoicesProvider);
+    }
   }
 
   Widget _row(String label, double value, {bool bold = false}) {

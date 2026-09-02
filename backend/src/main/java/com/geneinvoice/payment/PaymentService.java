@@ -30,9 +30,13 @@ public class PaymentService {
         Customer customer = customerRepository.findById(req.customerId())
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
 
+        // Lock every invoice this payment will read and settle before touching
+        // any of them (canonical invoiceDate-then-id acquisition order), so a
+        // concurrent credit-note issuance or another payment cannot race the
+        // balance check in applyTo.
         List<Invoice> targets;
         if (req.invoiceIds() != null && !req.invoiceIds().isEmpty()) {
-            targets = invoiceRepository.findAllById(req.invoiceIds());
+            targets = invoiceRepository.findAllByIdInForUpdate(req.invoiceIds());
             for (Invoice inv : targets) {
                 if (!inv.getCustomer().getId().equals(customer.getId())) {
                     throw new BadRequestException(
@@ -40,7 +44,7 @@ public class PaymentService {
                 }
             }
         } else {
-            targets = invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customer.getId());
+            targets = invoiceRepository.findByCustomerIdForUpdate(customer.getId());
         }
 
         Payment payment = Payment.builder()
@@ -94,9 +98,21 @@ public class PaymentService {
         if (p.getStatus() == PaymentStatus.VOIDED) {
             throw new BadRequestException("Payment already voided");
         }
+        lockAllocatedInvoices(p);
         reverseAllocations(p);
         p.setStatus(PaymentStatus.VOIDED);
         return paymentRepository.save(p);
+    }
+
+    /** Write-lock every invoice this payment's allocations touch before reversing them. */
+    private void lockAllocatedInvoices(Payment p) {
+        List<Long> invoiceIds = p.getAllocations().stream()
+                .map(a -> a.getInvoice().getId())
+                .distinct()
+                .toList();
+        if (!invoiceIds.isEmpty()) {
+            invoiceRepository.findAllByIdInForUpdate(invoiceIds);
+        }
     }
 
     /** Reverse allocations only (does NOT mark status). Used both for void and for re-recording. */
@@ -132,11 +148,13 @@ public class PaymentService {
         if (newAmount == null || newAmount.signum() <= 0) {
             throw new BadRequestException("Amount must be positive");
         }
+        // Acquire the complete locked customer invoice set BEFORE reversing
+        // anything, in canonical order — never lock overlapping sets in phases.
+        List<Invoice> targets = invoiceRepository.findByCustomerIdForUpdate(p.getCustomer().getId());
         reverseAllocations(p);
         p.setAmount(newAmount);
         if (method != null) p.setMethod(method);
         if (notes != null) p.setNotes(notes);
-        List<Invoice> targets = invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(p.getCustomer().getId());
         applyTo(p, targets, newAmount);
         return paymentRepository.save(p);
     }
