@@ -186,9 +186,11 @@ public class DisputeService {
     private Object snapshotTarget(Dispute d) {
         return switch (d.getTargetType()) {
             case INVOICE -> invoiceRepository.findById(d.getTargetId())
-                    .map(InvoiceDtos.InvoiceDto::from).orElse(null);
+                    .map(i -> InvoiceDtos.InvoiceDto.from(i, invoiceService.creditedAmount(i.getId())))
+                    .orElse(null);
             case PAYMENT -> paymentRepository.findById(d.getTargetId())
-                    .map(PaymentDtos.PaymentDto::from).orElse(null);
+                    .map(p -> PaymentDtos.PaymentDto.from(p, invoiceService::creditedAmount))
+                    .orElse(null);
         };
     }
 

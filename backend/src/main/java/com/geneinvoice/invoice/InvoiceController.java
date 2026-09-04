@@ -19,24 +19,29 @@ public class InvoiceController {
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public List<InvoiceDtos.InvoiceSummary> list(@RequestParam(required = false) Long customerId) {
         var invoices = customerId != null ? service.listByCustomer(customerId) : service.list();
-        return invoices.stream().map(InvoiceDtos.InvoiceSummary::from).toList();
+        return invoices.stream()
+                .map(inv -> InvoiceDtos.InvoiceSummary.from(inv, service.creditedAmount(inv.getId())))
+                .toList();
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public InvoiceDtos.InvoiceDto get(@PathVariable Long id) {
-        return InvoiceDtos.InvoiceDto.from(service.get(id));
+        Invoice inv = service.get(id);
+        return InvoiceDtos.InvoiceDto.from(inv, service.creditedAmount(inv.getId()));
     }
 
     @PostMapping
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
     public InvoiceDtos.InvoiceDto create(@Valid @RequestBody InvoiceDtos.CreateInvoiceRequest req) {
-        return InvoiceDtos.InvoiceDto.from(service.create(req));
+        Invoice inv = service.create(req);
+        return InvoiceDtos.InvoiceDto.from(inv, service.creditedAmount(inv.getId()));
     }
 
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
     public InvoiceDtos.InvoiceDto cancel(@PathVariable Long id) {
-        return InvoiceDtos.InvoiceDto.from(service.cancel(id));
+        Invoice inv = service.cancel(id);
+        return InvoiceDtos.InvoiceDto.from(inv, service.creditedAmount(inv.getId()));
     }
 }

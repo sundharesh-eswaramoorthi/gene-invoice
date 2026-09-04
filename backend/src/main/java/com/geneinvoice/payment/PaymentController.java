@@ -4,6 +4,7 @@ import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.invoice.InvoiceService;
 import com.geneinvoice.privilege.Privileges;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
     private final CustomerRepository customerRepository;
+    private final InvoiceService invoiceService;
     private final CurrentUser currentUser;
 
     @GetMapping
@@ -36,7 +38,9 @@ public class PaymentController {
         } else {
             effective = customerId;
         }
-        return paymentService.list(effective).stream().map(PaymentDtos.PaymentDto::from).toList();
+        return paymentService.list(effective).stream()
+                .map(p -> PaymentDtos.PaymentDto.from(p, invoiceService::creditedAmount))
+                .toList();
     }
 
     @GetMapping("/{id}")
@@ -47,13 +51,13 @@ public class PaymentController {
         if (callerCustomer != null && !callerCustomer.equals(p.getCustomer().getId())) {
             throw new AccessDeniedException("Not allowed");
         }
-        return PaymentDtos.PaymentDto.from(p);
+        return PaymentDtos.PaymentDto.from(p, invoiceService::creditedAmount);
     }
 
     @PostMapping
     @PreAuthorize("hasAuthority('" + Privileges.PAYMENT_MANAGE + "')")
     public PaymentDtos.PaymentDto create(@Valid @RequestBody PaymentDtos.CreatePaymentRequest req) {
-        return PaymentDtos.PaymentDto.from(paymentService.record(req));
+        return PaymentDtos.PaymentDto.from(paymentService.record(req), invoiceService::creditedAmount);
     }
 
     public record CustomerCreditDto(Long customerId, String customerName, BigDecimal creditBalance) {}

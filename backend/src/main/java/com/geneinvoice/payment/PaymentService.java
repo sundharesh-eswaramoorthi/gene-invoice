@@ -1,5 +1,6 @@
 package com.geneinvoice.payment;
 
+import com.geneinvoice.creditnote.CreditNoteRepository;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.customer.Customer;
@@ -23,7 +24,7 @@ public class PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final CustomerRepository customerRepository;
-    private final InvoiceRepository invoiceRepository;
+    private final InvoiceRepository invoiceRepository;    private final CreditNoteRepository creditNoteRepository;
 
     @Transactional
     public Payment record(PaymentDtos.CreatePaymentRequest req) {
@@ -66,11 +67,12 @@ public class PaymentService {
         BigDecimal remaining = amount;
         for (Invoice inv : outstanding) {
             if (remaining.signum() <= 0) break;
-            BigDecimal balance = inv.getBalance();
+            BigDecimal credited = creditNoteRepository.sumActiveAmountByInvoiceId(inv.getId());
+            BigDecimal balance = InvoiceService.outstandingOf(inv, credited);
             if (balance.signum() <= 0) continue;
             BigDecimal toApply = balance.min(remaining);
             inv.setPaidAmount(inv.getPaidAmount().add(toApply));
-            InvoiceService.recomputeStatus(inv);
+            InvoiceService.recomputeStatus(inv, credited);
             invoiceRepository.save(inv);
             payment.getAllocations().add(PaymentAllocation.builder()
                     .payment(payment).invoice(inv).amount(toApply).build());
@@ -105,7 +107,8 @@ public class PaymentService {
             Invoice inv = alloc.getInvoice();
             inv.setPaidAmount(inv.getPaidAmount().subtract(alloc.getAmount()));
             if (inv.getPaidAmount().signum() < 0) inv.setPaidAmount(BigDecimal.ZERO);
-            InvoiceService.recomputeStatus(inv);
+            BigDecimal credited = creditNoteRepository.sumActiveAmountByInvoiceId(inv.getId());
+            InvoiceService.recomputeStatus(inv, credited);
             invoiceRepository.save(inv);
         }
         p.getAllocations().clear();

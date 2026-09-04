@@ -9,6 +9,7 @@ import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
+import 'credit_notes.dart';
 import '../customer_scope/customer_scope.dart';
 import '../disputes/dispute_create_dialog.dart';
 
@@ -69,6 +70,9 @@ class InvoicesScreen extends ConsumerWidget {
                     children: [
                       Text('Total ${inv.total.toStringAsFixed(2)}',
                           style: const TextStyle(fontWeight: FontWeight.w600)),
+                      if (inv.creditedAmount > 0)
+                        Text('Cr ${inv.creditedAmount.toStringAsFixed(2)}',
+                            style: TextStyle(color: Theme.of(context).colorScheme.secondary)),
                       if (inv.balance > 0)
                         Text('Bal ${inv.balance.toStringAsFixed(2)}',
                             style: TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -99,6 +103,7 @@ class _InvoiceDetailDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(invoiceDetailProvider(id));
     final user = ref.watch(currentUserProvider);
+    final canManage = user?.has(Privileges.invoiceManage) ?? false;
     final canDispute = user?.has(Privileges.disputeCreate) ?? false;
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
     return Dialog(
@@ -135,6 +140,7 @@ class _InvoiceDetailDialog extends ConsumerWidget {
                 const Divider(height: 24),
                 _row('Total', inv.total),
                 _row('Paid', inv.paidAmount),
+                _row('Credited', inv.creditedAmount),
                 _row('Balance', inv.balance, bold: true),
                 if (inv.notes != null && inv.notes!.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -150,6 +156,20 @@ class _InvoiceDetailDialog extends ConsumerWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
+                    TextButton.icon(
+                      icon: const Icon(Icons.receipt_long_outlined),
+                      label: const Text('Credit notes'),
+                      onPressed: () => showCreditNoteHistory(
+                        context,
+                        invoiceId: inv.id,
+                        invoiceNumber: inv.invoiceNumber,
+                        canManage: canManage,
+                        onMutated: () {
+                          ref.invalidate(invoiceDetailProvider(id));
+                          ref.invalidate(invoicesProvider);
+                        },
+                      ),
+                    ),
                     if (canDispute)
                       TextButton.icon(
                         icon: const Icon(Icons.flag_outlined),

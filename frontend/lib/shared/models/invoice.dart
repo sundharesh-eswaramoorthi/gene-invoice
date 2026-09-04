@@ -22,6 +22,7 @@ class InvoiceSummary {
   final DateTime invoiceDate;
   final double total;
   final double paidAmount;
+  final double creditedAmount;
   final double balance;
   final InvoiceStatus status;
 
@@ -33,6 +34,7 @@ class InvoiceSummary {
     required this.invoiceDate,
     required this.total,
     required this.paidAmount,
+    required this.creditedAmount,
     required this.balance,
     required this.status,
   });
@@ -45,6 +47,7 @@ class InvoiceSummary {
         invoiceDate: DateTime.parse(json['invoiceDate'] as String),
         total: (json['total'] as num).toDouble(),
         paidAmount: (json['paidAmount'] as num).toDouble(),
+        creditedAmount: (json['creditedAmount'] as num?)?.toDouble() ?? 0.0,
         balance: (json['balance'] as num).toDouble(),
         status: parseStatus(json['status'] as String?),
       );
@@ -89,6 +92,7 @@ class InvoiceDetail extends InvoiceSummary {
     required super.invoiceDate,
     required super.total,
     required super.paidAmount,
+    required super.creditedAmount,
     required super.balance,
     required super.status,
     required this.notes,
@@ -103,6 +107,7 @@ class InvoiceDetail extends InvoiceSummary {
         invoiceDate: DateTime.parse(json['invoiceDate'] as String),
         total: (json['total'] as num).toDouble(),
         paidAmount: (json['paidAmount'] as num).toDouble(),
+        creditedAmount: (json['creditedAmount'] as num?)?.toDouble() ?? 0.0,
         balance: (json['balance'] as num).toDouble(),
         status: parseStatus(json['status'] as String?),
         notes: json['notes'] as String?,

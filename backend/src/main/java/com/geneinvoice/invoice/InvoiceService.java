@@ -1,6 +1,7 @@
 package com.geneinvoice.invoice;
 
 import com.geneinvoice.auth.CurrentUser;
+import com.geneinvoice.creditnote.CreditNoteRepository;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.customer.Customer;
@@ -27,6 +28,7 @@ public class InvoiceService {
     private final InvoiceRepository invoiceRepository;
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
+    private final CreditNoteRepository creditNoteRepository;
     private final CurrentUser currentUser;
 
     @Transactional
@@ -58,7 +60,7 @@ public class InvoiceService {
         invoice.setItems(items);
         invoice.setTotal(total);
         applyCustomerCreditIfAny(invoice);
-        recomputeStatus(invoice);
+        recomputeStatus(invoice, BigDecimal.ZERO);
         return invoiceRepository.save(invoice);
     }
 
@@ -72,11 +74,31 @@ public class InvoiceService {
         customerRepository.save(c);
     }
 
-    public static void recomputeStatus(Invoice inv) {
+    /** Active (non-voided) credited amount of an invoice; zero when the invoice has no active credit notes. */
+    public BigDecimal creditedAmount(Long invoiceId) {
+        return creditNoteRepository.sumActiveAmountByInvoiceId(invoiceId);
+    }
+
+    /**
+     * The single shared invoice position: outstanding = total - successful paid amount - active
+     * credited amount, floored at zero. The floor is a presentation invariant only - validation
+     * decisions use this same value via the serialized lifecycle and refuse rather than clamp.
+     */
+    public static BigDecimal outstandingOf(Invoice inv, BigDecimal credited) {
+        BigDecimal raw = inv.getTotal().subtract(inv.getPaidAmount()).subtract(credited);
+        return raw.signum() < 0 ? BigDecimal.ZERO : raw;
+    }
+
+    /**
+     * Derive paid state from the shared position in both directions; CANCELLED stays authoritative.
+     * FULLY_PAID exactly when outstanding reaches zero, PARTIALLY_PAID when successful payments
+     * plus active credits are positive, UNPAID otherwise.
+     */
+    public static void recomputeStatus(Invoice inv, BigDecimal credited) {
         if (inv.getStatus() == InvoiceStatus.CANCELLED) return;
-        BigDecimal balance = inv.getBalance();
-        if (balance.signum() <= 0) inv.setStatus(InvoiceStatus.FULLY_PAID);
-        else if (inv.getPaidAmount().signum() > 0) inv.setStatus(InvoiceStatus.PARTIALLY_PAID);
+        BigDecimal raw = inv.getTotal().subtract(inv.getPaidAmount()).subtract(credited);
+        if (raw.signum() <= 0) inv.setStatus(InvoiceStatus.FULLY_PAID);
+        else if (inv.getPaidAmount().add(credited).signum() > 0) inv.setStatus(InvoiceStatus.PARTIALLY_PAID);
         else inv.setStatus(InvoiceStatus.UNPAID);
     }
 
@@ -190,7 +212,7 @@ public class InvoiceService {
             customerRepository.save(c);
             inv.setPaidAmount(total);
         }
-        recomputeStatus(inv);
+        recomputeStatus(inv, creditedAmount(inv.getId()));
         return invoiceRepository.save(inv);
     }
 }

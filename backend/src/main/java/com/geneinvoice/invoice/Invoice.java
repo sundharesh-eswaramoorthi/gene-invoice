@@ -62,8 +62,4 @@ public class Invoice {
             this.invoiceDate = this.createdAt;
         }
     }
-
-    public BigDecimal getBalance() {
-        return total.subtract(paidAmount);
-    }
 }

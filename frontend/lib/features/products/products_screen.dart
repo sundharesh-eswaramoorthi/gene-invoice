@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -12,11 +14,86 @@ final productsProvider = FutureProvider.autoDispose<List<Product>>((ref) async {
   return (res.data as List).cast<Map<String, dynamic>>().map(Product.fromJson).toList();
 });
 
-class ProductsScreen extends ConsumerWidget {
+class ProductsScreen extends ConsumerStatefulWidget {
   const ProductsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProductsScreen> createState() => _ProductsScreenState();
+}
+
+class _ProductsScreenState extends ConsumerState<ProductsScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  int _generation = 0;
+
+  /// The list returned by the last successful search; null when no filter is
+  /// active, in which case the shared [productsProvider] result is displayed.
+  List<Product>? _lastSuccessfulList;
+  String? _searchError;
+  bool _searchPending = false;
+
+  String get _currentQuery => _searchController.text.trim();
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _generation++;
+    _debounce?.cancel();
+    final query = value.trim();
+    if (query.isEmpty) {
+      // An empty or whitespace-only box means no filtering: restore the
+      // unfiltered all-products source immediately, without a request.
+      setState(() {
+        _lastSuccessfulList = null;
+        _searchError = null;
+        _searchPending = false;
+      });
+      return;
+    }
+    setState(() => _searchPending = true);
+    final generation = _generation;
+    _debounce = Timer(
+      const Duration(milliseconds: 300),
+      () => _runSearch(query, generation),
+    );
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    _onSearchChanged(_searchController.text);
+  }
+
+  Future<void> _runSearch(String query, int generation) async {
+    bool isCurrent() => generation == _generation && query == _currentQuery;
+    try {
+      final dio = ref.read(dioProvider);
+      final res = await dio.get('/api/products', queryParameters: {'search': query});
+      if (!mounted || !isCurrent()) return; // superseded: discard silently
+      setState(() {
+        _lastSuccessfulList = (res.data as List)
+            .cast<Map<String, dynamic>>()
+            .map(Product.fromJson)
+            .toList();
+        _searchError = null;
+        _searchPending = false;
+      });
+    } catch (e) {
+      if (!mounted || !isCurrent()) return; // superseded: discard silently
+      setState(() {
+        // _lastSuccessfulList is left untouched and no retry is scheduled.
+        _searchError = apiErrorMessage(e);
+        _searchPending = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.productManage) ?? false;
     final async = ref.watch(productsProvider);
@@ -29,38 +106,89 @@ class ProductsScreen extends ConsumerWidget {
               onPressed: () => _openForm(context, ref, null),
             )
           : null,
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Failed: $e')),
-        data: (list) {
-          if (list.isEmpty) return const Center(child: Text('No products yet'));
-          return RefreshIndicator(
-            onRefresh: () async => ref.refresh(productsProvider.future),
-            child: ListView.separated(
-              padding: const EdgeInsets.all(8),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final p = list[i];
-                return ListTile(
-                  title: Text(p.name),
-                  subtitle: Text(p.description ?? ''),
-                  trailing: Wrap(
-                    spacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(p.price.toStringAsFixed(2),
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      if (!p.active) const Chip(label: Text('Inactive')),
-                      if (canManage)
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _openForm(context, ref, p),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onSearchChanged,
+              decoration: InputDecoration(
+                hintText: 'Search products',
+                prefixIcon: const Icon(Icons.search),
+                border: const OutlineInputBorder(),
+                suffixIcon: _searchPending
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
-                    ],
+                      )
+                    : _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear),
+                            onPressed: _clearSearch,
+                          )
+                        : null,
+              ),
+            ),
+          ),
+          if (_searchError != null)
+            Container(
+              width: double.infinity,
+              color: Theme.of(context).colorScheme.errorContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Text(
+                _searchError!,
+                style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+              ),
+            ),
+          Expanded(
+            child: _lastSuccessfulList != null
+                ? _buildList(context, ref, _lastSuccessfulList!, canManage)
+                : async.when(
+                    loading: () => const Center(child: CircularProgressIndicator()),
+                    error: (e, _) => Center(child: Text('Failed: $e')),
+                    data: (list) => _buildList(context, ref, list, canManage),
                   ),
-                );
-              },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildList(BuildContext context, WidgetRef ref, List<Product> list, bool canManage) {
+    if (list.isEmpty) {
+      return Center(
+        child: Text(_currentQuery.isEmpty ? 'No products yet' : 'No products match your search'),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: () async => ref.refresh(productsProvider.future),
+      child: ListView.separated(
+        padding: const EdgeInsets.all(8),
+        itemCount: list.length,
+        separatorBuilder: (_, __) => const Divider(height: 1),
+        itemBuilder: (context, i) {
+          final p = list[i];
+          return ListTile(
+            title: Text(p.name),
+            subtitle: Text(p.description ?? ''),
+            trailing: Wrap(
+              spacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(p.price.toStringAsFixed(2),
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                if (!p.active) const Chip(label: Text('Inactive')),
+                if (canManage)
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    onPressed: () => _openForm(context, ref, p),
+                  ),
+              ],
             ),
           );
         },

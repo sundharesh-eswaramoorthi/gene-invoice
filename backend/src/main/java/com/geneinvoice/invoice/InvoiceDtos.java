@@ -34,13 +34,15 @@ public class InvoiceDtos {
 
     public record InvoiceDto(
             Long id, String invoiceNumber, Long customerId, String customerName,
-            Instant invoiceDate, BigDecimal total, BigDecimal paidAmount, BigDecimal balance,
+            Instant invoiceDate, BigDecimal total, BigDecimal paidAmount, BigDecimal creditedAmount,
+            BigDecimal balance,
             InvoiceStatus status, String notes, List<InvoiceLineDto> items
     ) {
-        public static InvoiceDto from(Invoice inv) {
+        public static InvoiceDto from(Invoice inv, BigDecimal credited) {
             return new InvoiceDto(inv.getId(), inv.getInvoiceNumber(),
                     inv.getCustomer().getId(), inv.getCustomer().getName(),
-                    inv.getInvoiceDate(), inv.getTotal(), inv.getPaidAmount(), inv.getBalance(),
+                    inv.getInvoiceDate(), inv.getTotal(), inv.getPaidAmount(), credited,
+                    InvoiceService.outstandingOf(inv, credited),
                     inv.getStatus(), inv.getNotes(),
                     inv.getItems().stream().map(InvoiceLineDto::from).toList());
         }
@@ -48,13 +50,15 @@ public class InvoiceDtos {
 
     public record InvoiceSummary(
             Long id, String invoiceNumber, Long customerId, String customerName,
-            Instant invoiceDate, BigDecimal total, BigDecimal paidAmount, BigDecimal balance,
+            Instant invoiceDate, BigDecimal total, BigDecimal paidAmount, BigDecimal creditedAmount,
+            BigDecimal balance,
             InvoiceStatus status
     ) {
-        public static InvoiceSummary from(Invoice inv) {
+        public static InvoiceSummary from(Invoice inv, BigDecimal credited) {
             return new InvoiceSummary(inv.getId(), inv.getInvoiceNumber(),
                     inv.getCustomer().getId(), inv.getCustomer().getName(),
-                    inv.getInvoiceDate(), inv.getTotal(), inv.getPaidAmount(), inv.getBalance(),
+                    inv.getInvoiceDate(), inv.getTotal(), inv.getPaidAmount(), credited,
+                    InvoiceService.outstandingOf(inv, credited),
                     inv.getStatus());
         }
     }
