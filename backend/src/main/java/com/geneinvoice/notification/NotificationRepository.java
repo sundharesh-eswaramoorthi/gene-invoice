@@ -8,7 +8,10 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface NotificationRepository extends JpaRepository<Notification, Long> {
-    List<Notification> findByUserIdOrderByCreatedAtDesc(Long userId);
+    /** Fetch-joins structured invoice items so the DTO mapping can read them lazily-free. */
+    @Query("select distinct n from Notification n left join fetch n.invoiceItems " +
+            "where n.userId = :userId order by n.createdAt desc")
+    List<Notification> findByUserIdOrderByCreatedAtDesc(@Param("userId") Long userId);
     long countByUserIdAndReadFalse(Long userId);
 
     @Modifying

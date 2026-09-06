@@ -68,6 +68,21 @@ class _NotificationTile extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (notification.message != null) Text(notification.message!),
+          // Strategy notifications carry an optional structured invoice list; rows
+          // without items (e.g. disputes) render exactly as before.
+          if (notification.invoiceItems != null &&
+              notification.invoiceItems!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final item in notification.invoiceItems!)
+                    Text('Invoice ${item.invoiceNumber}',
+                        style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+            ),
           Text(df.format(notification.createdAt.toLocal()),
               style: Theme.of(context).textTheme.bodySmall),
         ],

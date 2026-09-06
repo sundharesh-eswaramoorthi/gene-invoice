@@ -13,6 +13,10 @@ import '../features/invoices/invoices_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/payments/payments_screen.dart';
 import '../features/products/products_screen.dart';
+import '../features/strategies/strategies_providers.dart';
+import '../features/strategies/strategies_screen.dart';
+import '../features/strategies/strategy_form_screen.dart';
+import '../shared/models/notification_strategy.dart';
 import '../features/users/roles_screen.dart';
 import '../features/users/users_screen.dart';
 import '../shared/widgets/app_shell.dart';
@@ -28,6 +32,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       final goingToLogin = state.matchedLocation == '/login';
       if (!loggedIn && !goingToLogin) return '/login';
       if (loggedIn && goingToLogin) return '/';
+      // Strategy administration is admin-only: a signed-in non-admin is redirected
+      // away even on a direct URL, matching the backend's ROLE_ADMIN enforcement.
+      if (loggedIn &&
+          state.matchedLocation.startsWith('/strategies') &&
+          !(auth.user!.isAdmin)) {
+        return '/';
+      }
       return null;
     },
     routes: [
@@ -48,7 +59,32 @@ final routerProvider = Provider<GoRouter>((ref) {
               id: int.parse(s.pathParameters['id']!),
             ),
           ),
-          GoRoute(path: '/notifications', builder: (c, s) => const NotificationsScreen()),
+          GoRoute(path: '/notifications', builder: (c, s) => const NotificationsScreen()),          GoRoute(path: '/strategies', builder: (c, s) => const StrategiesScreen()),
+          GoRoute(path: '/strategies/new', builder: (c, s) => const StrategyFormScreen()),
+          GoRoute(
+            path: '/strategies/:id/edit',
+            builder: (c, s) {
+              final id = int.parse(s.pathParameters['id']!);
+              return FutureBuilder<List<NotificationStrategy>>(
+                future: ProviderScope.containerOf(c).read(strategiesProvider.future),
+                builder: (context, snapshot) {
+                  final match =
+                      snapshot.data?.where((st) => st.id == id).firstOrNull;
+                  if (snapshot.hasData && match == null) {
+                    return Scaffold(
+                      appBar: AppBar(title: const Text('Edit strategy')),
+                      body: const Center(child: Text('Strategy not found')),
+                    );
+                  }
+                  if (match == null) {
+                    return const Scaffold(
+                        body: Center(child: CircularProgressIndicator()));
+                  }
+                  return StrategyFormScreen(existing: match);
+                },
+              );
+            },
+          ),
           GoRoute(path: '/users', builder: (c, s) => const UsersScreen()),
           GoRoute(path: '/roles', builder: (c, s) => const RolesScreen()),
         ],

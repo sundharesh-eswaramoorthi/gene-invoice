@@ -14,8 +14,9 @@ class _NavEntry {
   final String path;
   final List<String> requiredAnyOf;
   final bool hideForCustomer;
+  final bool requiresAdmin;
   const _NavEntry(this.label, this.icon, this.path, this.requiredAnyOf,
-      {this.hideForCustomer = false});
+      {this.hideForCustomer = false, this.requiresAdmin = false});
 }
 
 const _entries = <_NavEntry>[
@@ -32,6 +33,8 @@ const _entries = <_NavEntry>[
   _NavEntry('Products', Icons.inventory_2_outlined, '/products',
       [Privileges.productView, Privileges.productManage],
       hideForCustomer: true),
+  _NavEntry('Strategies', Icons.rule_folder_outlined, '/strategies', [],
+      requiresAdmin: true),
   _NavEntry('Users', Icons.manage_accounts_outlined, '/users',
       [Privileges.userView, Privileges.userManage]),
   _NavEntry('Roles', Icons.admin_panel_settings_outlined, '/roles',
@@ -50,6 +53,7 @@ class AppShell extends ConsumerWidget {
 
     final isCustomer = user?.isCustomer ?? false;
     final visible = _entries.where((e) {
+      if (e.requiresAdmin && !(user?.isAdmin ?? false)) return false;
       if (isCustomer && e.hideForCustomer) return false;
       if (e.requiredAnyOf.isEmpty) return true;
       return user != null && user.hasAny(e.requiredAnyOf);

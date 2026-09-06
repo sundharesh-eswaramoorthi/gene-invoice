@@ -18,11 +18,18 @@ public class NotificationController {
     private final NotificationService service;
     private final CurrentUser currentUser;
 
+    public record InvoiceItemDto(Long invoiceId, String invoiceNumber) {}
+
     public record NotificationDto(Long id, String type, String title, String message,
-                                  String link, boolean read, Instant createdAt) {
+                                  String link, boolean read, Instant createdAt,
+                                  List<InvoiceItemDto> invoiceItems) {
         static NotificationDto from(Notification n) {
             return new NotificationDto(n.getId(), n.getType(), n.getTitle(), n.getMessage(),
-                    n.getLink(), n.isRead(), n.getCreatedAt());
+                    n.getLink(), n.isRead(), n.getCreatedAt(),
+                    n.getInvoiceItems() == null ? List.of()
+                            : n.getInvoiceItems().stream()
+                            .map(i -> new InvoiceItemDto(i.getInvoiceId(), i.getInvoiceNumber()))
+                            .toList());
         }
     }
 

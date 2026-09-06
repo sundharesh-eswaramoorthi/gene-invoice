@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "notifications", indexes = {
@@ -35,6 +37,11 @@ public class Notification {
 
     @Column(length = 300)
     private String link;
+
+    /** Structured invoice snapshots; empty for dispute and other plain notifications. */
+    @OneToMany(mappedBy = "notification", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<NotificationInvoiceItem> invoiceItems = new ArrayList<>();
 
     @Column(name = "is_read", nullable = false)
     @Builder.Default
