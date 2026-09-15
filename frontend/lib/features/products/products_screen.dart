@@ -53,7 +53,6 @@ class ProductsScreen extends ConsumerWidget {
         parse: Product.fromJson,
         idOf: (p) => p.id,
         canExport: canExport,
-        selectable: canManage,
         emptyMessage: 'No products match this filter',
         onRowTap: canManage ? (context, p) => _openForm(context, ref, p) : null,
         bulkActions: canManage
@@ -68,8 +67,11 @@ class ProductsScreen extends ConsumerWidget {
           TableColumnSpec(label: 'Name', sortKey: 'name', cell: (context, p) => Text(p.name)),
           TableColumnSpec(
               label: 'Description',
-              cell: (context, p) =>
-                  Text(p.description ?? '—', maxLines: 2, overflow: TextOverflow.ellipsis)),
+              maxWidth: 320,
+              cell: (context, p) => Tooltip(
+                    message: p.description ?? '',
+                    child: Text(p.description ?? '—', maxLines: 2, overflow: TextOverflow.ellipsis),
+                  )),
           TableColumnSpec(
               label: 'Price',
               sortKey: 'price',

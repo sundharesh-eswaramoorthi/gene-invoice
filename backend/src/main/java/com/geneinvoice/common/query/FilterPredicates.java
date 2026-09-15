@@ -50,10 +50,11 @@ final class FilterPredicates {
                     (Comparable) ValueCoercion.coerce(javaType, spec.first(), column));
             case LT -> cb.lessThan((Expression<Comparable>) path,
                     (Comparable) ValueCoercion.coerce(javaType, spec.first(), column));
-            case LTE -> cb.lessThanOrEqualTo((Expression<Comparable>) path, (Comparable) upperBound(javaType, spec.first(), column));
-            case BETWEEN -> cb.between((Expression<Comparable>) path,
-                    (Comparable) ValueCoercion.coerce(javaType, spec.values().get(0), column),
-                    (Comparable) upperBound(javaType, spec.values().get(1), column));
+            case LTE -> atMost(path, javaType, spec.first(), column, cb);
+            case BETWEEN -> cb.and(
+                    cb.greaterThanOrEqualTo((Expression<Comparable>) path,
+                            (Comparable) ValueCoercion.coerce(javaType, spec.values().get(0), column)),
+                    atMost(path, javaType, spec.values().get(1), column, cb));
             case RELATIVE -> relative(spec, def, path, cb);
         };
     }
@@ -73,25 +74,39 @@ final class FilterPredicates {
             parts.add(cb.greaterThanOrEqualTo((Expression<Comparable>) path, (Comparable) lo));
         }
         if (range.toInclusive() != null) {
-            Comparable<?> hi = javaType == LocalDate.class
-                    ? range.toInclusive()
-                    : (Instant) range.toInclusive().plusDays(1).atStartOfDay(ZoneOffset.UTC)
-                            .toInstant().minusNanos(1);
-            parts.add(cb.lessThanOrEqualTo((Expression<Comparable>) path, (Comparable) hi));
+            parts.add(javaType == LocalDate.class
+                    ? cb.lessThanOrEqualTo((Expression<Comparable>) path, (Comparable) range.toInclusive())
+                    : cb.lessThan((Expression<Comparable>) path, (Comparable) range.toInclusive()
+                            .plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant()));
         }
         return parts.isEmpty() ? cb.conjunction() : cb.and(parts.toArray(new Predicate[0]));
     }
 
-    /** For `lte`/`between` on a timestamp column, a bare date must include the whole day. */
-    private static Comparable<?> upperBound(Class<?> javaType, String raw, String column) {
-        if (javaType == Instant.class) {
-            try {
-                return ValueCoercion.endOfDayIfDateOnly(raw.trim());
-            } catch (RuntimeException e) {
-                throw new BadRequestException("Invalid date for column " + column + ": " + raw);
-            }
+    /**
+     * {@code <= raw}. A bare date on a timestamp column means "through the end of that day", and is
+     * compared as {@code < the next day's start}: an end-of-day instant such as 23:59:59.999999999
+     * rounds up to midnight in a microsecond column and would catch the next day's first rows.
+     */
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static Predicate atMost(Expression<?> path, Class<?> javaType, String raw, String column,
+                                    CriteriaBuilder cb) {
+        if (isDateOnlyInstant(javaType, raw)) {
+            return cb.lessThan((Expression<Comparable>) path, (Comparable) nextDayStart(raw, column));
         }
-        return ValueCoercion.coerce(javaType, raw, column);
+        return cb.lessThanOrEqualTo((Expression<Comparable>) path,
+                (Comparable) ValueCoercion.coerce(javaType, raw, column));
+    }
+
+    private static boolean isDateOnlyInstant(Class<?> javaType, String raw) {
+        return javaType == Instant.class && raw != null && ValueCoercion.isDateOnly(raw.trim());
+    }
+
+    private static Instant nextDayStart(String raw, String column) {
+        try {
+            return LocalDate.parse(raw.trim()).plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        } catch (RuntimeException e) {
+            throw new BadRequestException("Invalid date for column " + column + ": " + raw);
+        }
     }
 
     private static List<?> coerceAll(Class<?> javaType, List<String> values, String column) {

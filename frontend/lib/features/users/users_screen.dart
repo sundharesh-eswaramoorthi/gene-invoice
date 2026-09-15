@@ -57,7 +57,6 @@ class UsersScreen extends ConsumerWidget {
         parse: AppUser.fromJson,
         idOf: (u) => u.id,
         canExport: canExport,
-        selectable: canManage,
         emptyMessage: 'No users match this filter',
         onRowTap: canManage ? (context, u) => _openForm(context, ref, u) : null,
         bulkActions: canManage

@@ -7,7 +7,7 @@ import 'poc_providers.dart';
 
 /// Searchable picker for a point of contact. Only offers users whose role carries the
 /// matching assignability privilege, and only while they are active (AC-A3).
-class PocPicker extends ConsumerStatefulWidget {
+class PocPicker extends StatelessWidget {
   final PocType type;
   final PocUser? value;
   final ValueChanged<PocUser?> onChanged;
@@ -28,35 +28,14 @@ class PocPicker extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<PocPicker> createState() => _PocPickerState();
-}
-
-class _PocPickerState extends ConsumerState<PocPicker> {
-  String _search = '';
-  Timer? _debounce;
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    super.dispose();
-  }
-
-  void _onSearchChanged(String value) {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 250), () {
-      if (mounted) setState(() => _search = value.trim());
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final label = widget.labelOverride ?? pocTypeLabel(widget.type);
+    final label = labelOverride ?? pocTypeLabel(type);
     final theme = Theme.of(context);
 
-    if (!widget.enabled) {
+    if (!enabled) {
       return InputDecorator(
         decoration: InputDecoration(labelText: label, border: InputBorder.none),
-        child: Text(widget.value?.display ?? '—'),
+        child: Text(value?.display ?? '—'),
       );
     }
 
@@ -64,13 +43,13 @@ class _PocPickerState extends ConsumerState<PocPicker> {
       onTap: () => _openPicker(context),
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: widget.required ? '$label *' : label,
-          errorText: widget.errorText,
-          suffixIcon: widget.value != null && !widget.required
+          labelText: required ? '$label *' : label,
+          errorText: errorText,
+          suffixIcon: value != null && !required
               ? IconButton(
                   tooltip: 'Clear',
                   icon: const Icon(Icons.clear, size: 18),
-                  onPressed: () => widget.onChanged(null),
+                  onPressed: () => onChanged(null),
                 )
               : const Icon(Icons.arrow_drop_down),
         ),
@@ -78,14 +57,12 @@ class _PocPickerState extends ConsumerState<PocPicker> {
           children: [
             Expanded(
               child: Text(
-                widget.value?.display ?? 'Select…',
-                style: widget.value == null
-                    ? TextStyle(color: theme.hintColor)
-                    : null,
+                value?.display ?? 'Select…',
+                style: value == null ? TextStyle(color: theme.hintColor) : null,
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (widget.value != null && !widget.value!.active)
+            if (value != null && !value!.active)
               const Padding(
                 padding: EdgeInsets.only(left: 6),
                 child: Chip(
@@ -103,80 +80,106 @@ class _PocPickerState extends ConsumerState<PocPicker> {
   Future<void> _openPicker(BuildContext context) async {
     final selected = await showDialog<PocUser>(
       context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text('Choose ${pocTypeLabel(widget.type)}'),
-          content: SizedBox(
-            width: 420,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Search by name, username or email',
-                    prefixIcon: Icon(Icons.search),
-                  ),
-                  onChanged: (v) {
-                    _onSearchChanged(v);
-                    setDialogState(() {});
-                  },
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 280,
-                  child: Consumer(
-                    builder: (context, ref, _) {
-                      final async = ref.watch(
-                          assignablePocsProvider(AssignableQuery(widget.type, _search)));
-                      return async.when(
-                        loading: () => const Center(child: CircularProgressIndicator()),
-                        error: (e, _) => Center(child: Text('Failed to load: $e')),
-                        data: (users) {
-                          if (users.isEmpty) {
-                            return const Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(16),
-                                child: Text(
-                                  'Nobody matches. Only active users whose role can hold this '
-                                  'POC appear here.',
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            );
-                          }
-                          return ListView.builder(
-                            itemCount: users.length,
-                            itemBuilder: (context, i) {
-                              final u = users[i];
-                              return ListTile(
-                                leading: CircleAvatar(
-                                    child: Text(u.display.characters.first.toUpperCase())),
-                                title: Text(u.display),
-                                subtitle: Text('@${u.username}${u.role == null ? '' : ' • ${u.role}'}'),
-                                selected: u.id == widget.value?.id,
-                                onTap: () => Navigator.of(context).pop(u),
-                              );
-                            },
-                          );
-                        },
+      builder: (_) => _PocPickerDialog(type: type, selectedId: value?.id),
+    );
+    if (selected != null) onChanged(selected);
+  }
+}
+
+class _PocPickerDialog extends ConsumerStatefulWidget {
+  final PocType type;
+  final int? selectedId;
+  const _PocPickerDialog({required this.type, this.selectedId});
+
+  @override
+  ConsumerState<_PocPickerDialog> createState() => _PocPickerDialogState();
+}
+
+class _PocPickerDialogState extends ConsumerState<_PocPickerDialog> {
+  String _search = '';
+  Timer? _debounce;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  // The dialog owns the search, so the list always answers what is in the box now. Held by the
+  // field behind the dialog, it rebuilt the field but not the dialog: one keystroke behind.
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      setState(() {
+        _search = value.trim();
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final async = ref.watch(assignablePocsProvider(AssignableQuery(widget.type, _search)));
+    return AlertDialog(
+      title: Text('Choose ${pocTypeLabel(widget.type)}'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Search by name, username or email',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onChanged: _onSearchChanged,
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 280,
+              child: async.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('Failed to load: $e')),
+                data: (users) {
+                  if (users.isEmpty) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Nobody matches. Only active users whose role can hold this '
+                          'POC appear here.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    itemCount: users.length,
+                    itemBuilder: (context, i) {
+                      final u = users[i];
+                      return ListTile(
+                        leading: CircleAvatar(child: Text(u.display.characters.first.toUpperCase())),
+                        title: Text(u.display),
+                        subtitle: Text('@${u.username}${u.role == null ? '' : ' • ${u.role}'}'),
+                        selected: u.id == widget.selectedId,
+                        onTap: () => Navigator.of(context).pop(u),
                       );
                     },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
+                  );
+                },
+              ),
             ),
           ],
         ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
     );
-    if (selected != null) widget.onChanged(selected);
   }
 }
 

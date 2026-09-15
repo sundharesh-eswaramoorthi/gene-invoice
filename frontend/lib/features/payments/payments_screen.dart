@@ -58,7 +58,6 @@ class PaymentsScreen extends ConsumerWidget {
         parse: PaymentRecord.fromJson,
         idOf: (p) => p.id,
         canExport: canExport,
-        selectable: canManage,
         emptyMessage: 'No payments match this filter',
         onRowTap: (context, p) => context.go('/payments/${p.id}'),
         tiles: (context, s) => Wrap(
@@ -85,7 +84,8 @@ class PaymentsScreen extends ConsumerWidget {
         ),
         bulkActions: [
           // Voiding moves money, so it stays a one-at-a-time action through the dispute flow.
-          if (canAssignPoc)
+          // Bulk changes need PAYMENT_MANAGE as well as the right to assign POCs.
+          if (canManage && canAssignPoc)
             BulkActionSpec(
               action: 'REASSIGN_COLLECTION_POC',
               label: 'Reassign Collection POC',

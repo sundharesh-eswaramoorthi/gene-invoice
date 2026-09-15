@@ -13,6 +13,10 @@ class TableColumnSpec<T> {
   final String label;
   final String? sortKey;
   final bool numeric;
+
+  /// Caps the column's width on the desktop table, for free text that would otherwise stretch
+  /// the column to its longest value. The cell wraps and ends in an ellipsis within it.
+  final double? maxWidth;
   final Widget Function(BuildContext context, T row) cell;
 
   const TableColumnSpec({
@@ -20,6 +24,7 @@ class TableColumnSpec<T> {
     required this.cell,
     this.sortKey,
     this.numeric = false,
+    this.maxWidth,
   });
 }
 
@@ -62,6 +67,9 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
   final Widget Function(BuildContext context, Map<String, dynamic> summary)? tiles;
   final List<BulkActionSpec> bulkActions;
   final bool canExport;
+
+  /// Lets a screen switch row selection off. It is off anyway when the caller has neither a bulk
+  /// action nor export, since a selection would lead nowhere.
   final bool selectable;
 
   final String emptyMessage;
@@ -101,6 +109,17 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
   final Set<int> _selected = {};
   bool _selectAllMatching = false;
   bool _busy = false;
+  final _hScroll = ScrollController();
+
+  /// Rows are selectable whenever there is something to do with a selection — a bulk action or
+  /// export — so a role that may export but not manage can still reach "Export selected".
+  bool get _selectable => widget.selectable && (widget.bulkActions.isNotEmpty || widget.canExport);
+
+  @override
+  void dispose() {
+    _hScroll.dispose();
+    super.dispose();
+  }
 
   TableRequest get _request => TableRequest(
         entity: widget.entity,
@@ -189,6 +208,16 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
             loading: () => const _LoadingState(),
             error: (e, _) => _ErrorState(message: apiErrorMessage(e), onRetry: _refresh),
             data: (page) {
+              // An empty page with rows behind it is a page past the end (an old link, or the
+              // last page emptied by a bulk action) — not a filter that matches nothing.
+              if (page.isEmpty && page.totalElements > 0) {
+                return _PastTheEndState(
+                  totalElements: page.totalElements,
+                  totalPages: page.totalPages,
+                  onLastPage: () =>
+                      widget.onQueryChanged(widget.query.copyWith(page: page.totalPages - 1)),
+                );
+              }
               if (page.isEmpty) {
                 return _EmptyState(
                   message: widget.query.hasFilters
@@ -231,65 +260,80 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         ? null
         : widget.columns.indexWhere((c) => c.sortKey == sortField);
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.vertical,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minWidth: MediaQuery.sizeOf(context).width - 24),
-          child: DataTable(
-            showCheckboxColumn: widget.selectable,
-            sortColumnIndex: (sortIndex != null && sortIndex >= 0) ? sortIndex : null,
-            sortAscending: ascending,
-            columns: [
-              for (final c in widget.columns)
-                DataColumn(
-                  label: Text(c.label,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  numeric: c.numeric,
-                  onSort: c.sortKey == null
-                      ? null
-                      : (index, asc) => widget.onQueryChanged(
-                          widget.query.withSort('${c.sortKey},${asc ? 'asc' : 'desc'}')),
-                ),
-              if (widget.rowActions != null)
-                const DataColumn(label: Text('')),
-            ],
-            rows: [
-              for (final row in rows)
-                DataRow(
-                  selected: _selected.contains(widget.idOf(row)),
-                  onSelectChanged: widget.selectable
-                      ? (on) => setState(() {
-                            _selectAllMatching = false;
-                            if (on == true) {
-                              _selected.add(widget.idOf(row));
-                            } else {
-                              _selected.remove(widget.idOf(row));
-                            }
-                          })
-                      : null,
-                  cells: [
-                    for (final c in widget.columns)
-                      DataCell(
-                        c.cell(context, row),
-                        onTap: widget.onRowTap == null
-                            ? null
-                            : () => widget.onRowTap!(context, row),
-                      ),
-                    if (widget.rowActions != null)
-                      DataCell(Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: widget.rowActions!(context, row),
-                      )),
-                  ],
-                ),
-            ],
+    // Sized to the space the table actually has — beside the navigation rail, not the whole
+    // window — so the last columns and the row actions start on screen. When the columns need
+    // more room, a scrollbar that is always visible says so.
+    return LayoutBuilder(
+      builder: (context, constraints) => Scrollbar(
+        controller: _hScroll,
+        thumbVisibility: true,
+        notificationPredicate: (n) => n.depth == 1,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            controller: _hScroll,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                showCheckboxColumn: _selectable,
+                sortColumnIndex: (sortIndex != null && sortIndex >= 0) ? sortIndex : null,
+                sortAscending: ascending,
+                columns: [
+                  for (final c in widget.columns)
+                    DataColumn(
+                      label: _capped(c, Text(c.label,
+                          style: const TextStyle(fontWeight: FontWeight.w600))),
+                      numeric: c.numeric,
+                      onSort: c.sortKey == null
+                          ? null
+                          : (index, asc) => widget.onQueryChanged(
+                              widget.query.withSort('${c.sortKey},${asc ? 'asc' : 'desc'}')),
+                    ),
+                  if (widget.rowActions != null)
+                    const DataColumn(label: Text('')),
+                ],
+                rows: [
+                  for (final row in rows)
+                    DataRow(
+                      selected: _selected.contains(widget.idOf(row)),
+                      onSelectChanged: _selectable
+                          ? (on) => setState(() {
+                                _selectAllMatching = false;
+                                if (on == true) {
+                                  _selected.add(widget.idOf(row));
+                                } else {
+                                  _selected.remove(widget.idOf(row));
+                                }
+                              })
+                          : null,
+                      cells: [
+                        for (final c in widget.columns)
+                          DataCell(
+                            _capped(c, c.cell(context, row)),
+                            onTap: widget.onRowTap == null
+                                ? null
+                                : () => widget.onRowTap!(context, row),
+                          ),
+                        if (widget.rowActions != null)
+                          DataCell(Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: widget.rowActions!(context, row),
+                          )),
+                      ],
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
+
+  Widget _capped(TableColumnSpec<T> c, Widget child) => c.maxWidth == null
+      ? child
+      : ConstrainedBox(constraints: BoxConstraints(maxWidth: c.maxWidth!), child: child);
 
   Widget _cardList(List<T> rows) {
     return ListView.separated(
@@ -308,7 +352,7 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (widget.selectable)
+                  if (_selectable)
                     Checkbox(
                       value: _selected.contains(id),
                       onChanged: (on) => setState(() {
@@ -821,7 +865,10 @@ class _PaginationBar extends StatelessWidget {
                 IconButton(
                   tooltip: 'Previous page',
                   icon: const Icon(Icons.chevron_left),
-                  onPressed: page.page == 0 ? null : () => onPage(page.page - 1),
+                  // From a page past the end, "previous" means the last real page.
+                  onPressed: page.page == 0
+                      ? null
+                      : () => onPage(page.page - 1 < page.totalPages ? page.page - 1 : page.totalPages - 1),
                 ),
                 IconButton(
                   tooltip: 'Next page',
@@ -883,6 +930,34 @@ class _EmptyState extends StatelessWidget {
               const SizedBox(height: 8),
               TextButton(onPressed: onClearFilters, child: const Text('Clear all filters')),
             ],
+          ],
+        ),
+      );
+}
+
+class _PastTheEndState extends StatelessWidget {
+  final int totalElements;
+  final int totalPages;
+  final VoidCallback onLastPage;
+  const _PastTheEndState({
+    required this.totalElements,
+    required this.totalPages,
+    required this.onLastPage,
+  });
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.last_page, size: 44, color: Theme.of(context).colorScheme.outline),
+            const SizedBox(height: 12),
+            Text('This page is past the end', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 4),
+            Text('$totalElements ${totalElements == 1 ? 'row' : 'rows'} on '
+                '$totalPages ${totalPages == 1 ? 'page' : 'pages'}'),
+            const SizedBox(height: 8),
+            TextButton(onPressed: onLastPage, child: const Text('Go to last page')),
           ],
         ),
       );

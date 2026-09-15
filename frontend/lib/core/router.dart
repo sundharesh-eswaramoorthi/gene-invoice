@@ -20,6 +20,7 @@ import '../features/promises/promises_screen.dart';
 import '../features/users/roles_screen.dart';
 import '../features/users/users_screen.dart';
 import '../shared/widgets/app_shell.dart';
+import '../shared/widgets/detail_scaffold.dart';
 import 'table/route_query.dart';
 import 'table/table_providers.dart';
 import 'unsaved_changes.dart';
@@ -38,6 +39,14 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     initialLocation: '/',
+    // An unknown path — a mistyped link, or an old notification's /admin/... link — gets the same
+    // "not found" page as a missing record, with a way home.
+    errorBuilder: (context, state) => Scaffold(
+      body: RecordUnavailable(
+        message: 'That page does not exist.',
+        onBack: () => context.go('/'),
+      ),
+    ),
     refreshListenable: _RouterRefresh(ref),
     redirect: (context, state) {
       final loggedIn = auth.user != null;
@@ -68,11 +77,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/customers/:id',
             onExit: mayLeave,
-            builder: (c, s) => CustomerDetailScreen(
-              key: ValueKey('customer-${s.pathParameters['id']}'),
-              id: int.parse(s.pathParameters['id']!),
-              initialTab: s.uri.queryParameters['tab'],
-            ),
+            builder: (c, s) => pageForId(s,
+                noun: 'customer',
+                backTo: '/customers',
+                build: (id) => CustomerDetailScreen(
+                      key: ValueKey('customer-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
           ),
 
           GoRoute(
@@ -92,11 +104,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/invoices/:id',
             onExit: mayLeave,
-            builder: (c, s) => InvoiceDetailScreen(
-              key: ValueKey('invoice-${s.pathParameters['id']}'),
-              id: int.parse(s.pathParameters['id']!),
-              initialTab: s.uri.queryParameters['tab'],
-            ),
+            builder: (c, s) => pageForId(s,
+                noun: 'invoice',
+                backTo: '/invoices',
+                build: (id) => InvoiceDetailScreen(
+                      key: ValueKey('invoice-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
           ),
 
           GoRoute(
@@ -108,11 +123,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/payments/:id',
             onExit: mayLeave,
-            builder: (c, s) => PaymentDetailScreen(
-              key: ValueKey('payment-${s.pathParameters['id']}'),
-              id: int.parse(s.pathParameters['id']!),
-              initialTab: s.uri.queryParameters['tab'],
-            ),
+            builder: (c, s) => pageForId(s,
+                noun: 'payment',
+                backTo: '/payments',
+                build: (id) => PaymentDetailScreen(
+                      key: ValueKey('payment-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
           ),
 
           GoRoute(
@@ -124,10 +142,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           // A promise notification deep-links here; the promise lives on its customer's screen.
           GoRoute(
             path: '/promises/:id',
-            builder: (c, s) => PromiseRedirectScreen(
-              key: ValueKey('promise-${s.pathParameters['id']}'),
-              id: int.parse(s.pathParameters['id']!),
-            ),
+            builder: (c, s) => pageForId(s,
+                noun: 'promise',
+                backTo: '/promises',
+                build: (id) => PromiseRedirectScreen(key: ValueKey('promise-$id'), id: id)),
           ),
 
           GoRoute(
@@ -138,10 +156,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/disputes/:id',
-            builder: (c, s) => DisputeDetailScreen(
-              key: ValueKey('dispute-${s.pathParameters['id']}'),
-              id: int.parse(s.pathParameters['id']!),
-            ),
+            builder: (c, s) => pageForId(s,
+                noun: 'dispute',
+                backTo: '/disputes',
+                build: (id) => DisputeDetailScreen(key: ValueKey('dispute-$id'), id: id)),
           ),
 
           GoRoute(
@@ -167,6 +185,22 @@ final routerProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+/// A detail page for the record id in the URL. An id that is not a number — a mistyped or cut-off
+/// link — shows the same "not found" state as a record that does not exist, never an error box.
+Widget pageForId(GoRouterState state,
+    {required String noun, required String backTo, required Widget Function(int id) build}) {
+  final id = int.tryParse(state.pathParameters['id'] ?? '');
+  if (id == null) {
+    return Builder(
+      builder: (context) => RecordUnavailable(
+        message: 'That $noun does not exist.',
+        onBack: () => context.go(backTo),
+      ),
+    );
+  }
+  return build(id);
+}
 
 /// Rebuilds the routes when sign-in changes, and again once the remembered page sizes have
 /// loaded — they feed the defaults a route is built with.

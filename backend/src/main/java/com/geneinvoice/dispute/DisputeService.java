@@ -153,12 +153,12 @@ public class DisputeService {
     }
 
     public DisputeDtos.DisputeDto toDto(Dispute d) {
-        String summary = buildTargetSummary(d);
+        Target target = describeTarget(d);
         String customerName = customerRepository.findById(d.getCustomerId())
                 .map(Customer::getName).orElse(null);
         return new DisputeDtos.DisputeDto(
                 d.getId(), d.getCustomerId(), customerName, d.getOpenedByUserId(),
-                d.getTargetType(), d.getTargetId(), summary,
+                d.getTargetType(), d.getTargetId(), target.summary(), target.number(), target.amount(),
                 d.getReason(), d.getProposedChangeJson(),
                 d.getStatus(), d.getAdminNotes(),
                 // The staff member who resolved it is not the customer's to see (AC-A8).
@@ -203,14 +203,22 @@ public class DisputeService {
         };
     }
 
-    private String buildTargetSummary(Dispute d) {
+    /**
+     * What a dispute is about: the record's number and amount, for the client to format, and the
+     * plain summary older clients read. Number and amount are null once the record is gone.
+     */
+    private record Target(String number, BigDecimal amount, String summary) {}
+
+    private Target describeTarget(Dispute d) {
         return switch (d.getTargetType()) {
             case INVOICE -> invoiceRepository.findById(d.getTargetId())
-                    .map(i -> i.getInvoiceNumber() + " — " + i.getTotal())
-                    .orElse("Invoice #" + d.getTargetId());
+                    .map(i -> new Target(i.getInvoiceNumber(), i.getTotal(),
+                            i.getInvoiceNumber() + " — " + i.getTotal()))
+                    .orElse(new Target(null, null, "Invoice #" + d.getTargetId()));
             case PAYMENT -> paymentRepository.findById(d.getTargetId())
-                    .map(p -> "Payment #" + p.getId() + " — " + p.getAmount())
-                    .orElse("Payment #" + d.getTargetId());
+                    .map(p -> new Target("#" + p.getId(), p.getAmount(),
+                            "Payment #" + p.getId() + " — " + p.getAmount()))
+                    .orElse(new Target(null, null, "Payment #" + d.getTargetId()));
         };
     }
 

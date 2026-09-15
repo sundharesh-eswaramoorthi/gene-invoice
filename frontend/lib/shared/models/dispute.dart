@@ -1,4 +1,20 @@
+import '../../core/format.dart';
+
 enum DisputeTargetType { INVOICE, PAYMENT }
+
+String disputeTargetLabel(DisputeTargetType t) => switch (t) {
+      DisputeTargetType.INVOICE => 'Invoice',
+      DisputeTargetType.PAYMENT => 'Payment',
+    };
+
+/// "Invoice INV-20260915-0003 — ₹4,51,234.50" or "Payment #158 — ₹1,000.00". Falls back to the
+/// server's plain summary when the record is gone and has no number.
+String disputeTargetText(Dispute d) {
+  final number = d.targetNumber;
+  if (number == null) return d.targetSummary ?? '${disputeTargetLabel(d.targetType)} #${d.targetId}';
+  final label = '${disputeTargetLabel(d.targetType)} $number';
+  return d.targetAmount == null ? label : '$label — ${formatMoney(d.targetAmount)}';
+}
 
 DisputeTargetType parseDisputeTarget(String? s) =>
     DisputeTargetType.values.firstWhere((e) => e.name == s, orElse: () => DisputeTargetType.INVOICE);
@@ -22,6 +38,8 @@ class Dispute {
   final DisputeTargetType targetType;
   final int targetId;
   final String? targetSummary;
+  final String? targetNumber;
+  final double? targetAmount;
   final String reason;
   final String? proposedChangeJson;
   final DisputeStatus status;
@@ -39,6 +57,8 @@ class Dispute {
     required this.targetType,
     required this.targetId,
     required this.targetSummary,
+    this.targetNumber,
+    this.targetAmount,
     required this.reason,
     required this.proposedChangeJson,
     required this.status,
@@ -57,6 +77,8 @@ class Dispute {
         targetType: parseDisputeTarget(json['targetType'] as String?),
         targetId: (json['targetId'] as num).toInt(),
         targetSummary: json['targetSummary'] as String?,
+        targetNumber: json['targetNumber'] as String?,
+        targetAmount: (json['targetAmount'] as num?)?.toDouble(),
         reason: json['reason'] as String,
         proposedChangeJson: json['proposedChangeJson'] as String?,
         status: parseDisputeStatus(json['status'] as String?),

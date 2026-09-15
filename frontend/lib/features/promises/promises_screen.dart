@@ -38,7 +38,6 @@ class PromisesScreen extends ConsumerWidget {
         parse: PaymentPromise.fromJson,
         idOf: (p) => p.id,
         canExport: canExport,
-        selectable: canManage,
         emptyMessage: 'No promises match this filter',
         onRowTap: (context, p) => context.go('/customers/${p.customerId}?tab=promises'),
         tiles: (context, s) => Wrap(

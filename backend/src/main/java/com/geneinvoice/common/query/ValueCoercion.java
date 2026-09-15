@@ -39,17 +39,14 @@ final class ValueCoercion {
 
     /** Accepts a full ISO instant or a bare yyyy-MM-dd, which is read as UTC start of day. */
     static Instant parseInstant(String v) {
-        if (v.length() == 10 && v.charAt(4) == '-') {
+        if (isDateOnly(v)) {
             return LocalDate.parse(v).atStartOfDay(ZoneOffset.UTC).toInstant();
         }
         return Instant.parse(v);
     }
 
-    /** The upper bound of a date-only value, so `lte 2026-01-31` includes all of the 31st. */
-    static Instant endOfDayIfDateOnly(String v) {
-        if (v.length() == 10 && v.charAt(4) == '-') {
-            return LocalDate.parse(v).plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant().minusNanos(1);
-        }
-        return Instant.parse(v);
+    /** A bare yyyy-MM-dd rather than a full instant. */
+    static boolean isDateOnly(String v) {
+        return v.length() == 10 && v.charAt(4) == '-';
     }
 }

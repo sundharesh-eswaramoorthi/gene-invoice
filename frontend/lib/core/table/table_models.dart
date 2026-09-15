@@ -175,8 +175,9 @@ class PagedResult<T> {
       );
 
   bool get isEmpty => content.isEmpty;
-  int get firstRowNumber => totalElements == 0 ? 0 : page * size + 1;
-  int get lastRowNumber => (page * size + content.length);
+  /// Row numbers for "1–20 of 45"; both are 0 on an empty page, even one past the end.
+  int get firstRowNumber => content.isEmpty ? 0 : page * size + 1;
+  int get lastRowNumber => content.isEmpty ? 0 : page * size + content.length;
 }
 
 enum ColumnType { text, enumeration, boolean, number, money, date, reference, unknown }

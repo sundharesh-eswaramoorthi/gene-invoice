@@ -67,7 +67,6 @@ class CustomersScreen extends ConsumerWidget {
         parse: Customer.fromJson,
         idOf: (c) => c.id,
         canExport: canExport,
-        selectable: canManage,
         emptyMessage: 'No customers match this filter',
         onRowTap: (context, c) => context.go('/customers/${c.id}'),
         tiles: (context, s) => Wrap(
@@ -97,7 +96,8 @@ class CustomersScreen extends ConsumerWidget {
           ],
         ),
         bulkActions: [
-          if (canAssignPoc)
+          // Bulk changes need CUSTOMER_MANAGE as well as the right to assign POCs.
+          if (canManage && canAssignPoc)
             const BulkActionSpec(
               action: 'ADD_POC',
               label: 'Add POC',

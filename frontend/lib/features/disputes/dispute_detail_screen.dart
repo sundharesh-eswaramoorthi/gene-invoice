@@ -114,7 +114,7 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
             children: [
               Expanded(
                 child: Text(
-                  '${d.targetType.name} ${d.targetSummary ?? '#${d.targetId}'}',
+                  disputeTargetText(d),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
@@ -200,7 +200,8 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
           ],
           const SizedBox(height: 24),
           const Divider(),
-          Text('${d.targetType.name} history', style: Theme.of(context).textTheme.titleMedium),
+          Text('${disputeTargetLabel(d.targetType)} history',
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           AuditHistoryPanel(entityType: d.targetType.name, entityId: d.targetId),
         ],

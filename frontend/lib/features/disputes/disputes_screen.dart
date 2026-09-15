@@ -28,15 +28,13 @@ class DisputesScreen extends ConsumerWidget {
         parse: Dispute.fromJson,
         idOf: (d) => d.id,
         canExport: canExport,
-        selectable: canExport,
         emptyMessage: 'No disputes match this filter',
         onRowTap: (context, d) => context.go('/disputes/${d.id}'),
         columns: [
           TableColumnSpec(
             label: 'Target',
             sortKey: 'targetType',
-            cell: (context, d) =>
-                Text('${d.targetType.name} ${d.targetSummary ?? '#${d.targetId}'}'),
+            cell: (context, d) => Text(disputeTargetText(d)),
           ),
           TableColumnSpec(
             label: 'Customer',
@@ -54,8 +52,11 @@ class DisputesScreen extends ConsumerWidget {
           ),
           TableColumnSpec(
             label: 'Reason',
-            cell: (context, d) =>
-                Text(d.reason, maxLines: 2, overflow: TextOverflow.ellipsis),
+            maxWidth: 360,
+            cell: (context, d) => Tooltip(
+              message: d.reason,
+              child: Text(d.reason, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
           ),
         ],
         rowActions: (context, d) => [

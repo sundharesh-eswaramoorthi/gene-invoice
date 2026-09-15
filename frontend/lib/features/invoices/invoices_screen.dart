@@ -53,7 +53,6 @@ class InvoicesScreen extends ConsumerWidget {
         parse: InvoiceSummary.fromJson,
         idOf: (i) => i.id,
         canExport: canExport,
-        selectable: canManage,
         emptyMessage: 'No invoices match this filter',
         onRowTap: (context, inv) => context.go('/invoices/${inv.id}'),
         tiles: (context, s) => Wrap(
@@ -86,7 +85,8 @@ class InvoicesScreen extends ConsumerWidget {
               icon: Icons.block,
               destructive: true,
             ),
-          if (canAssignPoc)
+          // Bulk changes need INVOICE_MANAGE as well as the right to assign POCs.
+          if (canManage && canAssignPoc)
             BulkActionSpec(
               action: 'REASSIGN_SALES_POC',
               label: 'Reassign Sales POC',

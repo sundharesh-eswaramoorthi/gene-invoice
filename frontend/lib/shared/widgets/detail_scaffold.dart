@@ -183,30 +183,53 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final back = onBack == null
+        ? null
+        : IconButton(tooltip: 'Back', icon: const Icon(Icons.arrow_back), onPressed: onBack);
+    final titleBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: Theme.of(context).textTheme.headlineSmall,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis),
+        if (subtitle != null)
+          Text(subtitle!,
+              style: Theme.of(context).textTheme.bodyMedium,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
+      ],
+    );
+    final trailingWrap = Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: trailing,
+    );
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 16, 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          if (onBack != null)
-            IconButton(
-              tooltip: 'Back',
-              icon: const Icon(Icons.arrow_back),
-              onPressed: onBack,
-            ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: Theme.of(context).textTheme.headlineSmall),
-                if (subtitle != null)
-                  Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
-              ],
-            ),
-          ),
-          Wrap(spacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: trailing),
-        ],
-      ),
+      child: LayoutBuilder(builder: (context, constraints) {
+        // On a phone the chips and buttons took the width the title needed, until an invoice
+        // number broke mid-token; there they get a line of their own under the title.
+        if (constraints.maxWidth < 600) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [if (back != null) back, Expanded(child: titleBlock)]),
+              if (trailing.isNotEmpty)
+                Padding(
+                  padding: EdgeInsets.only(left: back == null ? 0 : 48, top: 4),
+                  child: trailingWrap,
+                ),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [if (back != null) back, Expanded(child: titleBlock), trailingWrap],
+        );
+      }),
     );
   }
 }

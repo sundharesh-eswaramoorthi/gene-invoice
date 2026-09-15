@@ -47,7 +47,6 @@ class RolesScreen extends ConsumerWidget {
         parse: AppRole.fromJson,
         idOf: (r) => r.id,
         canExport: canExport,
-        selectable: canExport,
         emptyMessage: 'No roles match this filter',
         onRowTap: canManage ? (context, r) => _openForm(context, ref, r) : null,
         columns: [

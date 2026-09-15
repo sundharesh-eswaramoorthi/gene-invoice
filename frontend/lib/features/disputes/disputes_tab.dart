@@ -88,7 +88,7 @@ class DisputesTab extends ConsumerWidget {
                 itemBuilder: (context, i) {
                   final d = disputes[i];
                   return ListTile(
-                    title: Text('${d.targetType.name} ${d.targetSummary ?? '#${d.targetId}'}'),
+                    title: Text(disputeTargetText(d)),
                     subtitle: Text('${formatDateTime(d.createdAt)}\n${d.reason}',
                         maxLines: 3, overflow: TextOverflow.ellipsis),
                     isThreeLine: true,
