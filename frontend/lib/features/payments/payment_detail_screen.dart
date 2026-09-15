@@ -188,6 +188,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                   builder: (context) => PromisesTab(
                     customerId: payment.customerId,
                     customerName: payment.customerName,
+                    paymentId: payment.id,
                   ),
                 ),
               if (canViewAudit)

@@ -32,6 +32,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -58,9 +59,14 @@ public class PaymentService {
         // Mandatory on create, enforced here rather than only in the form (AC-A2).
         User collectionPoc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION);
 
+        List<Long> chosen = req.invoiceIds() == null ? List.of() : req.invoiceIds();
+        // The invoices of promises the cashier ticked are paid first, so the payment counts towards
+        // those promises (US-B3); a ticked promise the chosen invoices cannot serve is refused.
+        Set<Long> payFirst = promiseService.invoicesToPayFirst(req.promiseIds(), customer.getId(),
+                Set.copyOf(chosen));
         List<Invoice> targets;
-        if (req.invoiceIds() != null && !req.invoiceIds().isEmpty()) {
-            targets = invoiceRepository.findAllById(req.invoiceIds());
+        if (!chosen.isEmpty()) {
+            targets = new ArrayList<>(invoiceRepository.findAllById(chosen));
             for (Invoice inv : targets) {
                 if (!inv.getCustomer().getId().equals(customer.getId())) {
                     throw new BadRequestException(
@@ -68,8 +74,9 @@ public class PaymentService {
                 }
             }
         } else {
-            targets = invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customer.getId());
+            targets = new ArrayList<>(invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customer.getId()));
         }
+        targets.sort(Comparator.comparing((Invoice i) -> !payFirst.contains(i.getId())).thenComparing(OLDEST_FIRST));
 
         Payment payment = Payment.builder()
                 .customer(customer)
@@ -88,7 +95,6 @@ public class PaymentService {
 
         pocService.notifyAssignee(collectionPoc, PocType.COLLECTION,
                 "payment #" + saved.getId(), "/payments/" + saved.getId());
-        promiseService.attachPayment(req.promiseIds(), saved);
         promiseService.reevaluateForCustomer(customer.getId());
         return saved;
     }
@@ -150,15 +156,17 @@ public class PaymentService {
         }
     }
 
+    private static final Comparator<Invoice> OLDEST_FIRST = Comparator.comparing(Invoice::getInvoiceDate);
+
     /**
-     * Apply `amount` to outstanding invoices oldest-first; leftover goes to credit. Returns what
-     * landed on each invoice, for the caller to audit once the payment has an id.
+     * Apply `amount` to the outstanding invoices in the order given (the caller's order: oldest
+     * first, or a ticked promise's invoices first); leftover goes to credit. Returns what landed
+     * on each invoice, for the caller to audit once the payment has an id.
      */
     private List<Movement> applyTo(Payment payment, List<Invoice> targets, BigDecimal amount) {
         Customer customer = payment.getCustomer();
         List<Invoice> outstanding = new ArrayList<>(targets.stream()
                 .filter(i -> i.getStatus() != InvoiceStatus.FULLY_PAID && i.getStatus() != InvoiceStatus.CANCELLED)
-                .sorted(Comparator.comparing(Invoice::getInvoiceDate))
                 .toList());
 
         List<Movement> moves = new ArrayList<>();
@@ -250,7 +258,9 @@ public class PaymentService {
         p.setAmount(newAmount);
         if (method != null) p.setMethod(method);
         if (notes != null) p.setNotes(notes);
-        List<Invoice> targets = invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(p.getCustomer().getId());
+        List<Invoice> targets = new ArrayList<>(
+                invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(p.getCustomer().getId()));
+        targets.sort(OLDEST_FIRST);
         List<Movement> applied = applyTo(p, targets, newAmount);
         Payment saved = paymentRepository.save(p);
         auditMovements(saved, applied, "PAYMENT_APPLIED");

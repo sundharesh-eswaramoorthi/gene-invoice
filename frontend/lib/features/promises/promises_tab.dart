@@ -63,11 +63,16 @@ class PromisesTab extends ConsumerWidget {
   /// When set, the tab shows only promises covering this invoice and pre-scopes new ones.
   final int? invoiceId;
 
+  /// When set, the tab shows only the promises this payment counts towards. Promises are raised
+  /// from the customer or an invoice, so the tab offers no "Raise promise" here.
+  final int? paymentId;
+
   const PromisesTab({
     super.key,
     required this.customerId,
     this.customerName,
     this.invoiceId,
+    this.paymentId,
   });
 
   @override
@@ -75,12 +80,12 @@ class PromisesTab extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.promiseManage) ?? false;
     final canOverride = user?.has(Privileges.promiseOverride) ?? false;
-    final scope = PromiseScope(customerId: customerId, invoiceId: invoiceId);
+    final scope = PromiseScope(customerId: customerId, invoiceId: invoiceId, paymentId: paymentId);
     final async = ref.watch(scopedPromisesProvider(scope));
 
     return Column(
       children: [
-        if (canManage)
+        if (canManage && paymentId == null)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Align(

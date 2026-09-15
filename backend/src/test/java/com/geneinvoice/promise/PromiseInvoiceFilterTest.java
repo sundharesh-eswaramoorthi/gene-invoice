@@ -7,6 +7,9 @@ import com.geneinvoice.customer.Customer;
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceDtos;
 import com.geneinvoice.invoice.InvoiceService;
+import com.geneinvoice.payment.Payment;
+import com.geneinvoice.payment.PaymentDtos;
+import com.geneinvoice.payment.PaymentService;
 import com.geneinvoice.poc.PocService;
 import com.geneinvoice.poc.PocType;
 import com.geneinvoice.product.Product;
@@ -32,6 +35,7 @@ class PromiseInvoiceFilterTest extends IntegrationTestBase {
     @Autowired PaymentPromiseService promiseService;
     @Autowired InvoiceService invoiceService;
     @Autowired PocService pocService;
+    @Autowired PaymentService paymentService;
 
     User admin;
     Customer acme;
@@ -100,6 +104,24 @@ class PromiseInvoiceFilterTest extends IntegrationTestBase {
 
         assertThat(ids(result)).containsExactlyInAnyOrder(onA, onBoth);
         assertThat(result.get("totalElements").asLong()).isEqualTo(2);
+    }
+
+    @Test
+    void thePaymentPromisesTabListsOnlyThePromisesThatPaymentIsLinkedTo() throws Exception {
+        User collections = userRepository.findByUsername("cara.collections").orElseThrow();
+        Payment payment = paymentService.record(new PaymentDtos.CreatePaymentRequest(acme.getId(),
+                new BigDecimal("50.00"), "Cash", null, List.of(b.getId()), collections.getId(), null));
+
+        // The exact request the Payment Details "Payment Promise" tab sends (D-26): the promises
+        // covering invoice B, which the payment paid — not the whole customer's list.
+        JsonNode result = page(get("/api/promises")
+                .param("size", "50")
+                .param("customerId", acme.getId().toString())
+                .param("paymentId", payment.getId().toString()));
+
+        assertThat(ids(result)).containsExactlyInAnyOrder(onBoth, onB);
+        assertThat(ids(filtered("paymentId:eq:" + payment.getId()))).containsExactlyInAnyOrder(onBoth, onB);
+        assertThat(ids(filtered("paymentId:isEmpty:"))).containsExactlyInAnyOrder(onA, general);
     }
 
     @Test

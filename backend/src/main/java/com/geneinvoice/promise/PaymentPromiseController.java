@@ -46,9 +46,21 @@ public class PaymentPromiseController {
             @RequestParam(required = false) String sort,
             HttpServletRequest request,
             @RequestParam(required = false) Long customerId,
-            @RequestParam(required = false) Long invoiceId) {
+            @RequestParam(required = false) Long invoiceId,
+            @RequestParam(required = false) Long paymentId) {
         return service.page(TableQuery.parse(schema(), page, size, sort,
-                withContext(FilterParams.from(request), customerId, invoiceId)));
+                withContext(FilterParams.from(request), customerId, invoiceId, paymentId)));
+    }
+
+    /**
+     * Re-evaluates every live promise under the current fulfilment rules. {@code apply=false}
+     * previews what would change; {@code apply=true} saves it, audited, without notifications.
+     */
+    @PostMapping("/recompute")
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<PaymentPromiseService.RecomputeChange> recompute(
+            @RequestParam(defaultValue = "false") boolean apply) {
+        return service.recomputeAll(apply);
     }
 
     @GetMapping("/summary")
@@ -57,7 +69,7 @@ public class PaymentPromiseController {
             HttpServletRequest request,
             @RequestParam(required = false) Long customerId) {
         return service.tiles(TableQuery.parseUnpaged(schema(), null,
-                withContext(FilterParams.from(request), customerId, null)));
+                withContext(FilterParams.from(request), customerId, null, null)));
     }
 
     @GetMapping("/{id}")
@@ -162,11 +174,12 @@ public class PaymentPromiseController {
     }
 
     /** Turns the convenience query params into ordinary FilterParams.from(request) chips, so scoping still applies. */
-    private List<String> withContext(List<String> chips, Long customerId, Long invoiceId) {
-        if (customerId == null && invoiceId == null) return chips;
+    private List<String> withContext(List<String> chips, Long customerId, Long invoiceId, Long paymentId) {
+        if (customerId == null && invoiceId == null && paymentId == null) return chips;
         List<String> merged = new ArrayList<>(chips == null ? List.of() : chips);
         if (customerId != null) merged.add("customerId:eq:" + customerId);
         if (invoiceId != null) merged.add("invoiceId:eq:" + invoiceId);
+        if (paymentId != null) merged.add("paymentId:eq:" + paymentId);
         return merged;
     }
 }

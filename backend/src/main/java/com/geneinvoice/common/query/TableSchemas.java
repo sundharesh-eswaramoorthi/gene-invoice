@@ -195,7 +195,13 @@ public final class TableSchemas {
             ColumnDef.of("invoiceId", "Invoice", ColumnType.REFERENCE)
                     .reference("invoice").notSortable()
                     .path((root, q, cb) -> root.get("id"))
-                    .filter(TableSchemas::promiseInvoicePredicate)
+                    .filter((spec, root, q, cb) -> promiseLinkPredicate("invoices", spec, root, q, cb))
+                    .build(),
+            // Backs the Promises tab on Payment Details: the promises that payment counts towards.
+            ColumnDef.of("paymentId", "Payment", ColumnType.REFERENCE)
+                    .reference("payment").notSortable()
+                    .path((root, q, cb) -> root.get("id"))
+                    .filter((spec, root, q, cb) -> promiseLinkPredicate("payments", spec, root, q, cb))
                     .build(),
             ColumnDef.of("createdAt", "Created", ColumnType.DATE).build());
 
@@ -209,15 +215,16 @@ public final class TableSchemas {
     }
 
     /**
-     * A promise covers any number of invoices through its link table, so "is" means "covers this
-     * invoice" and "is empty" means "a general promise against the account". Matching through an
-     * EXISTS subquery keeps a promise that covers several invoices to one row and one count.
+     * A promise covers any number of invoices, and counts any number of payments, through link
+     * tables ({@code association} is "invoices" or "payments"). So "is" means "linked to this one",
+     * and "is empty" means none — for invoices, a general promise against the account. Matching
+     * through an EXISTS subquery keeps a promise with several links to one row and one count.
      */
-    private static Predicate promiseInvoicePredicate(FilterSpec spec, Root<?> root, CriteriaQuery<?> q,
-                                                     CriteriaBuilder cb) {
+    private static Predicate promiseLinkPredicate(String association, FilterSpec spec, Root<?> root,
+                                                  CriteriaQuery<?> q, CriteriaBuilder cb) {
         Subquery<Long> sq = q.subquery(Long.class);
         Root<PaymentPromise> promise = sq.from(PaymentPromise.class);
-        Join<PaymentPromise, Invoice> invoice = promise.join("invoices");
+        Join<PaymentPromise, ?> invoice = promise.join(association);
         sq.select(cb.literal(1L));
         Predicate base = cb.equal(promise.get("id"), root.get("id"));
 
@@ -244,7 +251,7 @@ public final class TableSchemas {
                 yield cb.exists(sq);
             }
             default -> throw new BadRequestException(
-                    "Operator " + spec.operator().wire() + " is not valid for the invoice column");
+                    "Operator " + spec.operator().wire() + " is not valid for the " + association + " column");
         };
     }
 

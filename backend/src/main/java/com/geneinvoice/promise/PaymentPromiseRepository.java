@@ -15,6 +15,10 @@ public interface PaymentPromiseRepository extends JpaRepository<PaymentPromise, 
             + "and p.status <> com.geneinvoice.promise.PromiseStatus.CANCELLED")
     List<PaymentPromise> findLiveByCustomer(@Param("customerId") Long customerId);
 
+    @Query("select distinct p.customer.id from PaymentPromise p "
+            + "where p.status <> com.geneinvoice.promise.PromiseStatus.CANCELLED")
+    List<Long> findCustomerIdsWithLivePromises();
+
     @Query("select distinct p from PaymentPromise p join p.invoices i where i.id = :invoiceId")
     List<PaymentPromise> findByInvoiceId(@Param("invoiceId") Long invoiceId);
 

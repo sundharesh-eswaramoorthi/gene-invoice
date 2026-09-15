@@ -563,6 +563,143 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(p.collectionPoc().id()).isEqualTo(cole.getId());
     }
 
+    // ---- AC-B12: one payment is shared out once across the promises it could serve ------
+
+    private BigDecimal fulfilledOf(Long id) {
+        return promiseRepository.findById(id).orElseThrow().getFulfilledAmount();
+    }
+
+    private BigDecimal fulfilledTotal() {
+        return promiseRepository.findAll().stream().map(PaymentPromise::getFulfilledAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    @Test
+    void twoPromisesOnOneInvoiceCountOnePaymentOnce() {
+        Invoice inv = invoice("100.00", 1);
+        PromiseDtos.PromiseDto first = promise("100.00", TOMORROW, List.of(inv.getId()));
+        PromiseDtos.PromiseDto second = promise("100.00", TOMORROW.plusDays(1), List.of(inv.getId()));
+
+        pay("100.00", List.of(inv.getId()));
+
+        // Both are kept, since the invoice they cover is settled (AC-B3), but the money counts once.
+        assertThat(statusOf(first.id())).isEqualTo(PromiseStatus.KEPT);
+        assertThat(statusOf(second.id())).isEqualTo(PromiseStatus.KEPT);
+        assertThat(fulfilledOf(first.id())).isEqualByComparingTo("100.00");
+        assertThat(fulfilledOf(second.id())).isEqualByComparingTo("0");
+        assertThat(fulfilledTotal()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void twoGeneralPromisesShareOnePaymentEarliestDateFirst() {
+        invoice("300.00", 1);
+        PromiseDtos.PromiseDto later = promise("100.00", TOMORROW.plusDays(2), null);
+        PromiseDtos.PromiseDto earlier = promise("100.00", TOMORROW, null);
+
+        pay("100.00", null);
+
+        assertThat(statusOf(earlier.id())).isEqualTo(PromiseStatus.KEPT);
+        assertThat(statusOf(later.id())).isEqualTo(PromiseStatus.OPEN);
+        assertThat(fulfilledTotal()).isEqualByComparingTo("100.00");
+    }
+
+    @Test
+    void moneyOnAPromisedInvoiceGoesToThatPromiseNotAnUnrelatedGeneralOne() {
+        Invoice promised = invoice("250.00", 1);
+        invoice("75.00", 1);
+        PromiseDtos.PromiseDto scoped = promise("250.00", TOMORROW, List.of(promised.getId()));
+        PromiseDtos.PromiseDto general = promise("75.00", TOMORROW, null);
+
+        pay("250.00", List.of(promised.getId()));
+
+        assertThat(statusOf(scoped.id())).isEqualTo(PromiseStatus.KEPT);
+        assertThat(fulfilledOf(scoped.id())).isEqualByComparingTo("250.00");
+        assertThat(statusOf(general.id())).isEqualTo(PromiseStatus.OPEN);
+        assertThat(fulfilledOf(general.id())).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void lateMoneyGoesToAPromiseStillInTimeAndTheMissedOneStaysBroken() {
+        Invoice inv = invoice("100.00", 1);
+        PromiseDtos.PromiseDto missed = promise("100.00", YESTERDAY, List.of(inv.getId()));
+        PromiseDtos.PromiseDto current = promise("100.00", TOMORROW, List.of(inv.getId()));
+
+        pay("100.00", List.of(inv.getId()));
+
+        // The money cannot keep yesterday's promise, so it counts for the one it can still keep.
+        assertThat(statusOf(current.id())).isEqualTo(PromiseStatus.KEPT);
+        assertThat(fulfilledOf(current.id())).isEqualByComparingTo("100.00");
+        // The invoice is settled, but only after yesterday: that promise was still broken.
+        assertThat(statusOf(missed.id())).isEqualTo(PromiseStatus.BROKEN);
+        assertThat(fulfilledOf(missed.id())).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void cancellingAPromiseFreesItsShareForTheNextOne() {
+        Invoice inv = invoice("100.00", 1);
+        PromiseDtos.PromiseDto first = promise("100.00", TOMORROW, null);
+        PromiseDtos.PromiseDto second = promise("100.00", TOMORROW.plusDays(1), null);
+        pay("100.00", List.of(inv.getId()));
+        assertThat(statusOf(second.id())).isNotEqualTo(PromiseStatus.KEPT);
+
+        promiseService.cancel(first.id(), "raised twice");
+
+        assertThat(fulfilledOf(second.id())).isEqualByComparingTo("100.00");
+    }
+
+    // ---- D-35: a ticked promise gets the money ------------------------------------------
+
+    @Test
+    void aPaymentTickedToAPromisePaysThatPromisesInvoicesFirst() {
+        Invoice older = invoice("100.00", 1);
+        Invoice promised = invoice("100.00", 1);
+        PromiseDtos.PromiseDto p = promise("100.00", TOMORROW, List.of(promised.getId()));
+
+        paymentService.record(new PaymentDtos.CreatePaymentRequest(acme.getId(), new BigDecimal("100.00"),
+                "Cash", null, null, collections.getId(), List.of(p.id())));
+
+        assertThat(invoiceRepository.findById(promised.getId()).orElseThrow().getPaidAmount())
+                .isEqualByComparingTo("100.00");
+        assertThat(invoiceRepository.findById(older.getId()).orElseThrow().getPaidAmount())
+                .isEqualByComparingTo("0");
+        assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.KEPT);
+    }
+
+    @Test
+    void aTickedPromiseTheChosenInvoicesCannotServeIsRefused() {
+        Invoice older = invoice("100.00", 1);
+        Invoice promised = invoice("100.00", 1);
+        PromiseDtos.PromiseDto p = promise("100.00", TOMORROW, List.of(promised.getId()));
+
+        assertThatThrownBy(() -> paymentService.record(new PaymentDtos.CreatePaymentRequest(acme.getId(),
+                new BigDecimal("100.00"), "Cash", null, List.of(older.getId()), collections.getId(),
+                List.of(p.id()))))
+                .hasMessageContaining("covers none of the chosen invoices");
+    }
+
+    // ---- recomputing existing promises under the new rules --------------------------------
+
+    @Test
+    void aRecomputePreviewReportsChangesAndOnlyApplyingKeepsThem() {
+        Invoice inv = invoice("100.00", 1);
+        promise("100.00", TOMORROW, List.of(inv.getId()));
+        PromiseDtos.PromiseDto second = promise("100.00", TOMORROW.plusDays(1), List.of(inv.getId()));
+        pay("100.00", List.of(inv.getId()));
+        // As the old rule left it: the one payment counted in full by both promises.
+        PaymentPromise stored = promiseRepository.findById(second.id()).orElseThrow();
+        stored.setFulfilledAmount(new BigDecimal("100.00"));
+        promiseRepository.save(stored);
+
+        List<PaymentPromiseService.RecomputeChange> preview = promiseService.recomputeAll(false);
+        assertThat(preview).extracting(PaymentPromiseService.RecomputeChange::promiseId).contains(second.id());
+        assertThat(fulfilledOf(second.id())).isEqualByComparingTo("100.00");
+
+        promiseService.recomputeAll(true);
+        assertThat(fulfilledOf(second.id())).isEqualByComparingTo("0");
+        assertThat(notificationRepository.findByUserIdOrderByCreatedAtDesc(collections.getId()))
+                .noneMatch(n -> n.getType().equals("PROMISE_BROKEN"));
+    }
+
     @Test
     void withNoActiveCollectionPocAPromiseAsksForOne() {
         collections.setActive(false);

@@ -64,6 +64,18 @@ final referenceOptionsProvider =
           .map((m) => ReferenceOption((m['id'] as num).toInt(), m['invoiceNumber'] as String,
               subtitle: m['customerName'] as String?))
           .toList();
+    case 'payment':
+      // Payments have no name to search by; a typed number finds that payment.
+      final id = int.tryParse(q.search.replaceAll('#', '').trim());
+      final res = await dio.get('/api/payments', queryParameters: {
+        'size': 20,
+        if (id != null) 'filter': ['id:eq:$id'],
+      });
+      return ((res.data as Map)['content'] as List)
+          .cast<Map<String, dynamic>>()
+          .map((m) => ReferenceOption((m['id'] as num).toInt(), 'Payment #${m['id']}',
+              subtitle: m['customerName'] as String?))
+          .toList();
     case 'customer':
     default:
       final res = await dio.get('/api/customers', queryParameters: {
