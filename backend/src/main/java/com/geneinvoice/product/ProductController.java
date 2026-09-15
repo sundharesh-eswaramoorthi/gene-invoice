@@ -3,6 +3,8 @@ package com.geneinvoice.product;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.FieldLimits;
+import com.geneinvoice.common.Money;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.BulkExecutor;
@@ -15,9 +17,11 @@ import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.privilege.Privileges;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -46,9 +50,10 @@ public class ProductController {
     }
 
     public record ProductUpsert(
-            @NotBlank String name,
-            String description,
-            @NotNull @PositiveOrZero BigDecimal price,
+            @NotBlank @Size(max = FieldLimits.PRODUCT_NAME) String name,
+            @Size(max = FieldLimits.PRODUCT_DESCRIPTION) String description,
+            @NotNull @PositiveOrZero @Digits(integer = 12, fraction = 2, message = Money.CENTS_MESSAGE)
+            BigDecimal price,
             Boolean active
     ) {}
 

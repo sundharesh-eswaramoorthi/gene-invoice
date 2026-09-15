@@ -139,7 +139,7 @@ public class CustomerController {
         if (userId == null || type == null) {
             throw new BadRequestException("ADD_POC requires params.userId and params.pocType");
         }
-        PocType pocType = PocType.valueOf(type.toUpperCase());
+        PocType pocType = PocType.parse(type);
         boolean makePrimary = Boolean.parseBoolean(String.valueOf(req.stringParam("primary")));
         return bulkExecutor.run(req.action(), ids, truncated, id -> {
             try {

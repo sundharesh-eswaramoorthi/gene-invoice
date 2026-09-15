@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
@@ -221,7 +222,10 @@ public class DisputeService {
         try {
             node = objectMapper.readTree(changeJson);
         } catch (Exception e) {
-            throw new BadRequestException("Invalid change JSON: " + e.getMessage());
+            throw new BadRequestException("The change is not valid JSON");
+        }
+        if (node == null || !node.isObject()) {
+            throw new BadRequestException("The change must be a JSON object");
         }
         String action = node.path("action").asText("");
 
@@ -239,20 +243,18 @@ public class DisputeService {
                 if (!itemsNode.isArray() || itemsNode.isEmpty()) {
                     throw new BadRequestException("replace_items requires non-empty items array");
                 }
+                // Quantity and price rules are the invoice's own; replaceItems enforces them.
                 List<InvoiceDtos.LineInput> items = new ArrayList<>();
                 for (JsonNode it : itemsNode) {
-                    Long productId = it.path("productId").asLong();
-                    int qty = it.path("quantity").asInt();
-                    JsonNode unit = it.get("unitPrice");
-                    BigDecimal unitPrice = unit == null || unit.isNull() ? null : new BigDecimal(unit.asText());
-                    items.add(new InvoiceDtos.LineInput(productId, qty, unitPrice));
+                    items.add(new InvoiceDtos.LineInput(wholeNumber(it, "productId"),
+                            wholeInt(it, "quantity"), decimal(it, "unitPrice")));
                 }
-                String notes = node.hasNonNull("notes") ? node.get("notes").asText() : null;
-                invoiceService.replaceItems(invoiceId, items, notes);
+                invoiceService.replaceItems(invoiceId, items,
+                        text(node, "notes", FieldLimits.INVOICE_NOTES));
             }
             case "update_notes" -> {
                 Invoice inv = invoiceService.getInternal(invoiceId);
-                inv.setNotes(node.hasNonNull("notes") ? node.get("notes").asText() : null);
+                inv.setNotes(text(node, "notes", FieldLimits.INVOICE_NOTES));
                 invoiceRepository.save(inv);
             }
             default -> throw new BadRequestException("Unknown invoice action: " + action);
@@ -263,23 +265,75 @@ public class DisputeService {
         switch (action) {
             case "void" -> paymentService.voidPayment(paymentId);
             case "update_amount" -> {
-                if (!node.hasNonNull("amount")) {
+                BigDecimal amount = decimal(node, "amount");
+                if (amount == null) {
                     throw new BadRequestException("update_amount requires amount");
                 }
-                BigDecimal amount = new BigDecimal(node.get("amount").asText());
-                String method = node.hasNonNull("method") ? node.get("method").asText() : null;
-                String notes = node.hasNonNull("notes") ? node.get("notes").asText() : null;
-                paymentService.updateAmount(paymentId, amount, method, notes);
+                paymentService.updateAmount(paymentId, amount,
+                        text(node, "method", FieldLimits.PAYMENT_METHOD),
+                        text(node, "notes", FieldLimits.PAYMENT_NOTES));
             }
             case "update_meta" -> {
                 Payment p = paymentRepository.findById(paymentId)
                         .orElseThrow(() -> new NotFoundException("Payment not found"));
-                if (node.hasNonNull("method")) p.setMethod(node.get("method").asText());
-                if (node.hasNonNull("notes")) p.setNotes(node.get("notes").asText());
+                String method = text(node, "method", FieldLimits.PAYMENT_METHOD);
+                String notes = text(node, "notes", FieldLimits.PAYMENT_NOTES);
+                if (method != null) p.setMethod(method);
+                if (notes != null) p.setNotes(notes);
                 paymentRepository.save(p);
             }
             default -> throw new BadRequestException("Unknown payment action: " + action);
         }
+    }
+
+    // ---- reading an approved change strictly: a bad value is the approver's mistake, a 400 ----
+
+    /** A required whole number, written as a JSON number or a numeric string. */
+    private static long wholeNumber(JsonNode node, String field) {
+        JsonNode v = node.get(field);
+        if (v != null && v.isIntegralNumber() && v.canConvertToLong()) return v.asLong();
+        if (v != null && v.isTextual()) {
+            try {
+                return Long.parseLong(v.asText().trim());
+            } catch (NumberFormatException ignored) {
+                // reported below
+            }
+        }
+        throw new BadRequestException(field + " must be a whole number");
+    }
+
+    private static int wholeInt(JsonNode node, String field) {
+        long value = wholeNumber(node, field);
+        if (value < Integer.MIN_VALUE || value > Integer.MAX_VALUE) {
+            throw new BadRequestException(field + " is out of range");
+        }
+        return (int) value;
+    }
+
+    /** An optional amount, written as a JSON number or a numeric string; null when absent. */
+    private static BigDecimal decimal(JsonNode node, String field) {
+        JsonNode v = node.get(field);
+        if (v == null || v.isNull()) return null;
+        if (v.isNumber()) return v.decimalValue();
+        if (v.isTextual()) {
+            try {
+                return new BigDecimal(v.asText().trim());
+            } catch (NumberFormatException ignored) {
+                // reported below
+            }
+        }
+        throw new BadRequestException(field + " must be a number");
+    }
+
+    /** Optional text; null when absent, refused when longer than the column that stores it. */
+    private static String text(JsonNode node, String field, int maxLength) {
+        JsonNode v = node.get(field);
+        if (v == null || v.isNull()) return null;
+        String value = v.asText();
+        if (value.length() > maxLength) {
+            throw new BadRequestException(field + " must be at most " + maxLength + " characters");
+        }
+        return value;
     }
 
     private void notifyCustomerOfResolution(Dispute d, String type, String title) {

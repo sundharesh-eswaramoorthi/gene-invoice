@@ -89,7 +89,7 @@ public class PaymentController {
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.PAYMENT_MANAGE + "')")
     public PaymentDtos.PaymentDto update(@PathVariable Long id,
-                                         @RequestBody PaymentDtos.UpdatePaymentRequest req) {
+                                         @Valid @RequestBody PaymentDtos.UpdatePaymentRequest req) {
         // Whether the POC may change is decided by the service, which knows the current one.
         return PaymentDtos.PaymentDto.from(paymentService.update(id, req), scopeResolver.canSeePoc());
     }

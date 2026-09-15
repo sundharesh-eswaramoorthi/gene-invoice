@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/field_limits.dart';
 import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
@@ -245,6 +247,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                 ? TextField(
                     controller: _notes,
                     maxLines: 2,
+                    inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.invoiceNotes)],
                     decoration: const InputDecoration(hintText: 'Internal notes'),
                     onChanged: (_) => setState(() => _dirty = true),
                   )

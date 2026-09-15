@@ -1,8 +1,12 @@
 package com.geneinvoice.promise;
 
+import com.geneinvoice.common.FieldLimits;
+import com.geneinvoice.common.Money;
 import com.geneinvoice.poc.PocDtos;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -13,29 +17,31 @@ public class PromiseDtos {
 
     public record CreatePromiseRequest(
             @NotNull Long customerId,
-            @NotNull @Positive BigDecimal amount,
+            @NotNull @Positive @Digits(integer = 12, fraction = 2, message = Money.CENTS_MESSAGE)
+            BigDecimal amount,
             @NotNull LocalDate promisedDate,
             /** Optional: when absent the customer's primary Collection POC is used. */
             Long collectionPocUserId,
-            String notes,
+            @Size(max = FieldLimits.PROMISE_NOTES) String notes,
             /** Optional: empty means a general promise against the account. */
             List<Long> invoiceIds
     ) {}
 
     public record UpdatePromiseRequest(
-            @NotNull @Positive BigDecimal amount,
+            @NotNull @Positive @Digits(integer = 12, fraction = 2, message = Money.CENTS_MESSAGE)
+            BigDecimal amount,
             @NotNull LocalDate promisedDate,
             Long collectionPocUserId,
-            String notes,
+            @Size(max = FieldLimits.PROMISE_NOTES) String notes,
             List<Long> invoiceIds
     ) {}
 
     public record OverrideStatusRequest(
             @NotNull PromiseStatus status,
-            @NotNull String reason
+            @NotNull @Size(max = FieldLimits.REASON) String reason
     ) {}
 
-    public record CancelPromiseRequest(String reason) {}
+    public record CancelPromiseRequest(@Size(max = FieldLimits.REASON) String reason) {}
 
     public record PromiseInvoiceDto(Long id, String invoiceNumber, BigDecimal total,
                                     BigDecimal balance, String status) {}

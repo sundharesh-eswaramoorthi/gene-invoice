@@ -58,9 +58,25 @@ bool _isExpiredSession(DioException e) {
 String apiErrorMessage(Object error) {
   if (error is DioException) {
     final data = error.response?.data;
-    if (data is Map && data['message'] is String) return data['message'] as String;
+    if (data is Map) {
+      // "One or more fields are invalid" gives the user nothing to act on; name each field.
+      final fields = data['fieldErrors'];
+      if (fields is Map && fields.isNotEmpty) {
+        return fields.entries.map((e) => '${_fieldLabel('${e.key}')} ${e.value}').join('\n');
+      }
+      if (data['message'] is String) return data['message'] as String;
+    }
     if (error.message != null) return error.message!;
     return 'Network error';
   }
   return error.toString();
+}
+
+/// A request field's name as a label: "collectionPocUserId" → "Collection poc user id",
+/// "items[0].quantity" → "Items[0] quantity".
+String _fieldLabel(String path) {
+  final words = path
+      .replaceAll('.', ' ')
+      .replaceAllMapped(RegExp(r'(?<=[a-z0-9])([A-Z])'), (m) => ' ${m[1]!.toLowerCase()}');
+  return words.isEmpty ? words : words[0].toUpperCase() + words.substring(1);
 }

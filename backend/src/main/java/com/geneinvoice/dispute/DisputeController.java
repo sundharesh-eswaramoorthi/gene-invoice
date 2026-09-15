@@ -66,14 +66,14 @@ public class DisputeController {
     @PostMapping("/{id}/approve")
     @PreAuthorize("hasAuthority('" + Privileges.DISPUTE_MANAGE + "')")
     public DisputeDtos.DisputeDto approve(@PathVariable Long id,
-                                          @RequestBody(required = false) DisputeDtos.ResolveDisputeRequest req) {
+                                          @Valid @RequestBody(required = false) DisputeDtos.ResolveDisputeRequest req) {
         return service.toDto(service.approve(id, req));
     }
 
     @PostMapping("/{id}/deny")
     @PreAuthorize("hasAuthority('" + Privileges.DISPUTE_MANAGE + "')")
     public DisputeDtos.DisputeDto deny(@PathVariable Long id,
-                                       @RequestBody(required = false) DisputeDtos.ResolveDisputeRequest req) {
+                                       @Valid @RequestBody(required = false) DisputeDtos.ResolveDisputeRequest req) {
         return service.toDto(service.deny(id, req));
     }
 

@@ -1,10 +1,15 @@
 package com.geneinvoice.invoice;
 
+import com.geneinvoice.common.FieldLimits;
+import com.geneinvoice.common.Money;
 import com.geneinvoice.poc.PocDtos;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -15,7 +20,7 @@ public class InvoiceDtos {
     public record CreateInvoiceRequest(
             @NotNull Long customerId,
             Instant invoiceDate,
-            String notes,
+            @Size(max = FieldLimits.INVOICE_NOTES) String notes,
             /** Mandatory on create; enforced in the service so the rule holds for every caller. */
             Long salesPocUserId,
             @NotEmpty @Valid List<LineInput> items
@@ -23,13 +28,14 @@ public class InvoiceDtos {
 
     /** Inline edit of the fields the detail screen exposes on an existing invoice. */
     public record UpdateInvoiceRequest(
-            String notes,
+            @Size(max = FieldLimits.INVOICE_NOTES) String notes,
             Long salesPocUserId
     ) {}
 
     public record LineInput(
             @NotNull Long productId,
             @Positive int quantity,
+            @PositiveOrZero @Digits(integer = 12, fraction = 2, message = Money.CENTS_MESSAGE)
             BigDecimal unitPrice
     ) {}
 

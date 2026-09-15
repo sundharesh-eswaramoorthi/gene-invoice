@@ -3,6 +3,7 @@ package com.geneinvoice.invoice;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Money;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.query.Aggregates;
 import com.geneinvoice.common.query.PageResponse;
@@ -67,22 +68,9 @@ public class InvoiceService {
                 .salesPoc(salesPoc)
                 .build();
 
-        BigDecimal total = BigDecimal.ZERO;
-        List<InvoiceItem> items = new ArrayList<>();
-        for (InvoiceDtos.LineInput in : req.items()) {
-            Product p = productRepository.findById(in.productId())
-                    .orElseThrow(() -> new NotFoundException("Product not found: " + in.productId()));
-            BigDecimal unitPrice = in.unitPrice() != null ? in.unitPrice() : p.getPrice();
-            if (unitPrice.signum() < 0) throw new BadRequestException("Unit price cannot be negative");
-            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(in.quantity()));
-            items.add(InvoiceItem.builder()
-                    .invoice(invoice).product(p)
-                    .quantity(in.quantity()).unitPrice(unitPrice).lineTotal(lineTotal)
-                    .build());
-            total = total.add(lineTotal);
-        }
+        List<InvoiceItem> items = buildLines(invoice, req.items());
         invoice.setItems(items);
-        invoice.setTotal(total);
+        invoice.setTotal(totalOf(items));
         // Saved before any credit is booked against it: an allocation needs the invoice's id.
         Invoice saved = invoiceRepository.save(invoice);
         List<CreditLedger.CreditMove> fromCredit = creditLedger.applyTo(saved);
@@ -135,6 +123,34 @@ public class InvoiceService {
     @Transactional
     public Invoice reassignSalesPoc(Long id, Long userId) {
         return update(id, new InvoiceDtos.UpdateInvoiceRequest(null, userId));
+    }
+
+    /**
+     * Prices line items against their products. Shared by create and by a dispute that replaces
+     * the items, so both refuse the same bad input: no product, a quantity below one, or a
+     * negative or sub-cent unit price.
+     */
+    private List<InvoiceItem> buildLines(Invoice invoice, List<InvoiceDtos.LineInput> inputs) {
+        List<InvoiceItem> lines = new ArrayList<>();
+        for (InvoiceDtos.LineInput in : inputs) {
+            if (in.productId() == null) throw new BadRequestException("Each line needs a product");
+            if (in.quantity() < 1) throw new BadRequestException("Quantity must be positive");
+            Product p = productRepository.findById(in.productId())
+                    .orElseThrow(() -> new NotFoundException("Product not found: " + in.productId()));
+            BigDecimal unitPrice = in.unitPrice() != null ? in.unitPrice() : p.getPrice();
+            if (unitPrice.signum() < 0) throw new BadRequestException("Unit price cannot be negative");
+            Money.requireCents(unitPrice, "Unit price");
+            lines.add(InvoiceItem.builder()
+                    .invoice(invoice).product(p)
+                    .quantity(in.quantity()).unitPrice(unitPrice)
+                    .lineTotal(unitPrice.multiply(BigDecimal.valueOf(in.quantity())))
+                    .build());
+        }
+        return lines;
+    }
+
+    private static BigDecimal totalOf(List<InvoiceItem> lines) {
+        return lines.stream().map(InvoiceItem::getLineTotal).reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     public static void recomputeStatus(Invoice inv) {
@@ -271,20 +287,10 @@ public class InvoiceService {
             throw new BadRequestException("Cannot edit a cancelled invoice");
         }
 
+        List<InvoiceItem> lines = buildLines(inv, newItems);
         inv.getItems().clear();
-        BigDecimal total = BigDecimal.ZERO;
-        for (InvoiceDtos.LineInput in : newItems) {
-            Product p = productRepository.findById(in.productId())
-                    .orElseThrow(() -> new NotFoundException("Product not found: " + in.productId()));
-            BigDecimal unitPrice = in.unitPrice() != null ? in.unitPrice() : p.getPrice();
-            if (unitPrice.signum() < 0) throw new BadRequestException("Unit price cannot be negative");
-            BigDecimal lineTotal = unitPrice.multiply(BigDecimal.valueOf(in.quantity()));
-            inv.getItems().add(InvoiceItem.builder()
-                    .invoice(inv).product(p)
-                    .quantity(in.quantity()).unitPrice(unitPrice).lineTotal(lineTotal)
-                    .build());
-            total = total.add(lineTotal);
-        }
+        inv.getItems().addAll(lines);
+        BigDecimal total = totalOf(lines);
         inv.setTotal(total);
         if (notes != null) inv.setNotes(notes);
 

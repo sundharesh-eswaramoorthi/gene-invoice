@@ -1,6 +1,7 @@
 package com.geneinvoice.role;
 
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.Csv;
@@ -12,9 +13,11 @@ import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.privilege.Privilege;
 import com.geneinvoice.privilege.PrivilegeRepository;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.user.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -33,6 +36,7 @@ public class RoleController {
 
     private final RoleRepository roleRepository;
     private final PrivilegeRepository privilegeRepository;
+    private final UserRepository userRepository;
     private final TableQueryExecutor queryExecutor;
 
     public record RoleDto(Long id, String name, String description, List<String> privileges) {
@@ -43,8 +47,8 @@ public class RoleController {
     }
 
     public record RoleUpsert(
-            @NotBlank String name,
-            String description,
+            @NotBlank @Size(max = FieldLimits.ROLE_NAME) String name,
+            @Size(max = FieldLimits.ROLE_DESCRIPTION) String description,
             List<String> privileges
     ) {}
 
@@ -94,8 +98,12 @@ public class RoleController {
     @PostMapping
     @PreAuthorize("hasAuthority('" + Privileges.ROLE_MANAGE + "')")
     public RoleDto create(@Valid @RequestBody RoleUpsert in) {
+        String name = in.name().trim();
+        if (roleRepository.existsByNameIgnoreCase(name)) {
+            throw new BadRequestException("Role name already exists");
+        }
         Role r = Role.builder()
-                .name(in.name()).description(in.description())
+                .name(name).description(in.description())
                 .privileges(resolvePrivileges(in.privileges()))
                 .build();
         return RoleDto.from(roleRepository.save(r));
@@ -105,16 +113,27 @@ public class RoleController {
     @PreAuthorize("hasAuthority('" + Privileges.ROLE_MANAGE + "')")
     public RoleDto update(@PathVariable Long id, @Valid @RequestBody RoleUpsert in) {
         Role r = roleRepository.findById(id).orElseThrow(() -> new NotFoundException("Role not found"));
-        r.setName(in.name());
+        String name = in.name().trim();
+        if (!name.equalsIgnoreCase(r.getName()) && roleRepository.existsByNameIgnoreCaseAndIdNot(name, id)) {
+            throw new BadRequestException("Role name already exists");
+        }
+        r.setName(name);
         r.setDescription(in.description());
         r.setPrivileges(resolvePrivileges(in.privileges()));
         return RoleDto.from(roleRepository.save(r));
     }
 
+    /** A role still held by users cannot go: their accounts would be left without privileges. */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.ROLE_MANAGE + "')")
     public void delete(@PathVariable Long id) {
-        roleRepository.deleteById(id);
+        Role r = roleRepository.findById(id).orElseThrow(() -> new NotFoundException("Role not found"));
+        long holders = userRepository.countByRoleId(id);
+        if (holders > 0) {
+            throw new BadRequestException("Role is assigned to " + holders
+                    + (holders == 1 ? " user" : " users") + "; move them to another role first");
+        }
+        roleRepository.delete(r);
     }
 
     private Set<Privilege> resolvePrivileges(List<String> names) {

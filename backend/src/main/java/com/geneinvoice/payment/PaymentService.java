@@ -3,6 +3,7 @@ package com.geneinvoice.payment;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Money;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.query.Aggregates;
 import com.geneinvoice.common.query.PageResponse;
@@ -242,6 +243,7 @@ public class PaymentService {
         if (newAmount == null || newAmount.signum() <= 0) {
             throw new BadRequestException("Amount must be positive");
         }
+        Money.requireCents(newAmount, "Amount");
         reverseAllocations(p);
         p.setAmount(newAmount);
         if (method != null) p.setMethod(method);

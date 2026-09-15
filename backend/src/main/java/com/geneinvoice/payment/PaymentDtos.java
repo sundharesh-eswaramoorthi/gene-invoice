@@ -2,9 +2,13 @@ package com.geneinvoice.payment;
 
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceStatus;
+import com.geneinvoice.common.FieldLimits;
+import com.geneinvoice.common.Money;
 import com.geneinvoice.poc.PocDtos;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -14,9 +18,10 @@ public class PaymentDtos {
 
     public record CreatePaymentRequest(
             @NotNull Long customerId,
-            @NotNull @Positive BigDecimal amount,
-            String method,
-            String notes,
+            @NotNull @Positive @Digits(integer = 12, fraction = 2, message = Money.CENTS_MESSAGE)
+            BigDecimal amount,
+            @Size(max = FieldLimits.PAYMENT_METHOD) String method,
+            @Size(max = FieldLimits.PAYMENT_NOTES) String notes,
             List<Long> invoiceIds,
             /** Mandatory on create; enforced in the service (AC-A2). */
             Long collectionPocUserId,
@@ -26,7 +31,7 @@ public class PaymentDtos {
 
     /** Inline edit from the detail screen: notes and the Collection POC. */
     public record UpdatePaymentRequest(
-            String notes,
+            @Size(max = FieldLimits.PAYMENT_NOTES) String notes,
             Long collectionPocUserId
     ) {}
 

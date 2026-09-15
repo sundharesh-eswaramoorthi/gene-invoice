@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/field_limits.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
 import '../../core/table/data_table_scaffold.dart';
@@ -199,12 +201,21 @@ class _UserFormState extends ConsumerState<_UserForm> {
                   controller: _username,
                   decoration: const InputDecoration(labelText: 'Username'),
                   enabled: isNew,
+                  inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.username)],
                   validator: (v) => isNew && (v == null || v.trim().isEmpty) ? 'Required' : null,
                 ),
                 const SizedBox(height: 8),
-                TextFormField(controller: _email, decoration: const InputDecoration(labelText: 'Email')),
+                TextFormField(
+                  controller: _email,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.email)],
+                ),
                 const SizedBox(height: 8),
-                TextFormField(controller: _fullName, decoration: const InputDecoration(labelText: 'Full name')),
+                TextFormField(
+                  controller: _fullName,
+                  decoration: const InputDecoration(labelText: 'Full name'),
+                  inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.fullName)],
+                ),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _password,

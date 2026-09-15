@@ -1,7 +1,10 @@
 package com.geneinvoice.customer;
 
+import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.poc.PocDtos;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -22,19 +25,19 @@ public class CustomerDtos {
     ) {}
 
     public record CustomerCreateRequest(
-            @NotBlank String name,
-            String phone,
-            String email,
-            String address,
-            @NotBlank String username,
+            @NotBlank @Size(max = FieldLimits.FULL_NAME) String name,
+            @Size(max = FieldLimits.PHONE) String phone,
+            @Email @Size(max = FieldLimits.EMAIL) String email,
+            @Size(max = FieldLimits.ADDRESS) String address,
+            @NotBlank @Size(max = FieldLimits.USERNAME) String username,
             @NotBlank String password
     ) {}
 
     public record CustomerUpdateRequest(
-            @NotBlank String name,
-            String phone,
-            String email,
-            String address,
+            @NotBlank @Size(max = FieldLimits.FULL_NAME) String name,
+            @Size(max = FieldLimits.PHONE) String phone,
+            @Email @Size(max = FieldLimits.EMAIL) String email,
+            @Size(max = FieldLimits.ADDRESS) String address,
             String password
     ) {}
 

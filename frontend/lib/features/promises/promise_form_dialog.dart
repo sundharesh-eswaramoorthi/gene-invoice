@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/field_limits.dart';
 import '../../core/format.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/promise.dart';
@@ -117,9 +119,9 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
   }
 
   Future<void> _submit() async {
-    final amount = double.tryParse(_amount.text.trim());
+    final amount = parseMoneyInput(_amount.text);
     if (amount == null || amount <= 0) {
-      setState(() => _error = 'Enter an amount greater than zero');
+      setState(() => _error = 'Enter an amount greater than zero, with at most 2 decimal places');
       return;
     }
     if (_date == null) {
@@ -283,6 +285,7 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
               TextField(
                 controller: _notes,
                 maxLines: 2,
+                inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.promiseNotes)],
                 decoration: const InputDecoration(labelText: 'Notes'),
               ),
               if (_error != null)

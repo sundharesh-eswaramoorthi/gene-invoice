@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/field_limits.dart';
 import '../../core/format.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/invoice.dart';
@@ -80,9 +82,9 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
       setState(() => _error = 'Pick a customer');
       return;
     }
-    final amount = double.tryParse(_amountCtrl.text.trim());
+    final amount = parseMoneyInput(_amountCtrl.text);
     if (amount == null || amount <= 0) {
-      setState(() => _error = 'Enter a positive amount');
+      setState(() => _error = 'Enter an amount greater than zero, with at most 2 decimal places');
       return;
     }
     if (_collectionPoc == null) {
@@ -164,11 +166,13 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
               const SizedBox(height: 8),
               TextField(
                 controller: _methodCtrl,
+                inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.paymentMethod)],
                 decoration: const InputDecoration(labelText: 'Method (cash/card/transfer)'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _notesCtrl,
+                inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.paymentNotes)],
                 decoration: const InputDecoration(labelText: 'Notes'),
               ),
               if (_error != null)

@@ -11,6 +11,14 @@ String formatMoney(Object? value) {
   return parsed == null ? value.toString() : _money.format(parsed);
 }
 
+/// Reads an amount the user typed: digits with at most two decimals, the way the backend stores
+/// money. Returns null for anything else, so a form can say so before the server does.
+double? parseMoneyInput(String text) {
+  final t = text.trim();
+  if (!RegExp(r'^\d+(\.\d{1,2})?$').hasMatch(t)) return null;
+  return double.parse(t);
+}
+
 String formatMoneyCompact(Object? value) {
   final parsed = value is num ? value : num.tryParse(value?.toString() ?? '') ?? 0;
   if (parsed.abs() >= 10000000) return '₹${(parsed / 10000000).toStringAsFixed(2)}Cr';

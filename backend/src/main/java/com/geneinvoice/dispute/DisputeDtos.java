@@ -1,7 +1,9 @@
 package com.geneinvoice.dispute;
 
+import com.geneinvoice.common.FieldLimits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 
@@ -10,12 +12,12 @@ public class DisputeDtos {
     public record CreateDisputeRequest(
             @NotNull DisputeTargetType targetType,
             @NotNull Long targetId,
-            @NotBlank String reason,
+            @NotBlank @Size(max = FieldLimits.DISPUTE_TEXT) String reason,
             String proposedChangeJson
     ) {}
 
     public record ResolveDisputeRequest(
-            String adminNotes,
+            @Size(max = FieldLimits.DISPUTE_TEXT) String adminNotes,
             String appliedChangeJson
     ) {}
 

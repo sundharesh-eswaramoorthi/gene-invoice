@@ -1,5 +1,6 @@
 package com.geneinvoice.common.bulk;
 
+import com.geneinvoice.common.BadRequestException;
 import jakarta.validation.constraints.NotBlank;
 
 import java.util.List;
@@ -27,7 +28,12 @@ public class BulkDtos {
         public Long longParam(String key) {
             Object v = params == null ? null : params.get(key);
             if (v == null) return null;
-            return v instanceof Number n ? n.longValue() : Long.valueOf(v.toString());
+            if (v instanceof Number n) return n.longValue();
+            try {
+                return Long.valueOf(v.toString().trim());
+            } catch (NumberFormatException e) {
+                throw new BadRequestException("params." + key + " must be a whole number");
+            }
         }
 
         public String stringParam(String key) {

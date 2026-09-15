@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/field_limits.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
 import '../../core/table/data_table_scaffold.dart';
@@ -149,47 +151,63 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
         width: 480,
         child: Form(
           key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextFormField(
-                  controller: _name,
-                  decoration: const InputDecoration(labelText: 'Name'),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                ),
-                const SizedBox(height: 8),
-                TextFormField(controller: _description, decoration: const InputDecoration(labelText: 'Description')),
-                const SizedBox(height: 12),
-                Text('Privileges', style: Theme.of(context).textTheme.titleSmall),
-                privs.when(
-                  loading: () => const Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator()),
-                  error: (e, _) => Text('Failed: $e'),
-                  data: (list) => Column(
-                    children: list.map((name) {
-                      return CheckboxListTile(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(name),
-                        value: _selected.contains(name),
-                        onChanged: (v) => setState(() {
-                          if (v == true) {
-                            _selected.add(name);
-                          } else {
-                            _selected.remove(name);
-                          }
-                        }),
-                      );
-                    }).toList(),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextFormField(
+                        controller: _name,
+                        decoration: const InputDecoration(labelText: 'Name'),
+                        inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.roleName)],
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _description,
+                        decoration: const InputDecoration(labelText: 'Description'),
+                        inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.roleDescription)],
+                      ),
+                      const SizedBox(height: 12),
+                      Text('Privileges', style: Theme.of(context).textTheme.titleSmall),
+                      privs.when(
+                        loading: () => const Padding(
+                            padding: EdgeInsets.all(12), child: LinearProgressIndicator()),
+                        error: (e, _) => Text('Failed: $e'),
+                        data: (list) => Column(
+                          children: list.map((name) {
+                            return CheckboxListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(name),
+                              value: _selected.contains(name),
+                              onChanged: (v) => setState(() {
+                                if (v == true) {
+                                  _selected.add(name);
+                                } else {
+                                  _selected.remove(name);
+                                }
+                              }),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                if (_error != null) Padding(
+              ),
+              // Outside the scrolling privilege list, so an error shows by Save, not below it.
+              if (_error != null)
+                Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                 ),
-              ],
-            ),
+            ],
           ),
         ),
       ),

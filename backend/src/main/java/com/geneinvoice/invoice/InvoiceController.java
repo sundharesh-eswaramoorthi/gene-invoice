@@ -80,7 +80,7 @@ public class InvoiceController {
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
     public InvoiceDtos.InvoiceDto update(@PathVariable Long id,
-                                         @RequestBody InvoiceDtos.UpdateInvoiceRequest req) {
+                                         @Valid @RequestBody InvoiceDtos.UpdateInvoiceRequest req) {
         // Whether the POC may change is decided by the service, which knows the current one.
         return InvoiceDtos.InvoiceDto.from(service.update(id, req), scopeResolver.canSeePoc());
     }

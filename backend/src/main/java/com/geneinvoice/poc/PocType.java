@@ -1,6 +1,9 @@
 package com.geneinvoice.poc;
 
+import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.privilege.Privileges;
+
+import java.util.Arrays;
 
 /** The three kinds of point-of-contact this app tracks. */
 public enum PocType {
@@ -23,5 +26,14 @@ public enum PocType {
 
     public String label() {
         return label;
+    }
+
+    /** Reads a POC type sent as text, e.g. in a bulk action's params; an unknown one is a 400. */
+    public static PocType parse(String raw) {
+        String wanted = raw == null ? "" : raw.trim();
+        for (PocType t : values()) {
+            if (t.name().equalsIgnoreCase(wanted)) return t;
+        }
+        throw new BadRequestException("pocType must be one of " + Arrays.toString(values()));
     }
 }

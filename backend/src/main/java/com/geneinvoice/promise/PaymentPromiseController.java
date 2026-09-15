@@ -82,7 +82,7 @@ public class PaymentPromiseController {
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('" + Privileges.PROMISE_MANAGE + "')")
     public PromiseDtos.PromiseDto cancel(@PathVariable Long id,
-                                         @RequestBody(required = false) PromiseDtos.CancelPromiseRequest req) {
+                                         @Valid @RequestBody(required = false) PromiseDtos.CancelPromiseRequest req) {
         return service.cancel(id, req == null ? null : req.reason());
     }
 

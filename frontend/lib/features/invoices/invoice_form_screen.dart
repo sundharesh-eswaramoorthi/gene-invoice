@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/field_limits.dart';
 import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/customer.dart';
@@ -180,6 +182,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                 controller: _notesCtrl,
                 decoration: const InputDecoration(labelText: 'Notes'),
                 maxLines: 2,
+                inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.invoiceNotes)],
               ),
               const SizedBox(height: 16),
               Row(

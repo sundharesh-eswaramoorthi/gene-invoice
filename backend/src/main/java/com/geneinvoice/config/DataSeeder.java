@@ -43,6 +43,9 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
+        int blankEmails = userRepository.clearBlankEmails();
+        if (blankEmails > 0) log.info("Cleared {} blank user email(s) to null", blankEmails);
+
         Set<Privilege> all = new HashSet<>();
         for (String name : Privileges.ALL) {
             Privilege p = privilegeRepository.findByName(name)

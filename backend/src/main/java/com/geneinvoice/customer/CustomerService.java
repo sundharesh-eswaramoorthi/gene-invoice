@@ -3,6 +3,7 @@ package com.geneinvoice.customer;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Emails;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.query.Aggregates;
 import com.geneinvoice.common.query.PageResponse;
@@ -180,16 +181,21 @@ public class CustomerService {
         if (userRepository.existsByUsername(in.username())) {
             throw new BadRequestException("Username already taken");
         }
+        // The login shares the customer's email, and user emails are unique.
+        String email = Emails.normalize(in.email());
+        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
+            throw new BadRequestException("Email already exists");
+        }
         Role customerRole = roleRepository.findByName("CUSTOMER")
                 .orElseThrow(() -> new IllegalStateException("CUSTOMER role not seeded"));
 
         Customer c = repository.save(Customer.builder()
-                .name(in.name()).phone(in.phone()).email(in.email()).address(in.address())
+                .name(in.name()).phone(in.phone()).email(email).address(in.address())
                 .build());
 
         userRepository.save(User.builder()
                 .username(in.username())
-                .email(in.email())
+                .email(email)
                 .fullName(in.name())
                 .password(passwordEncoder.encode(in.password()))
                 .role(customerRole)
@@ -207,16 +213,22 @@ public class CustomerService {
         Customer c = repository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
         Object before = snapshot(c);
+        String email = Emails.normalize(in.email());
+        User linked = userRepository.findByCustomerId(id).orElse(null);
+        // The login shares the customer's email, and user emails are unique.
+        if (linked != null && email != null && !email.equalsIgnoreCase(linked.getEmail())
+                && userRepository.existsByEmailIgnoreCaseAndIdNot(email, linked.getId())) {
+            throw new BadRequestException("Email already exists");
+        }
         c.setName(in.name());
         c.setPhone(in.phone());
-        c.setEmail(in.email());
+        c.setEmail(email);
         c.setAddress(in.address());
         Customer saved = repository.save(c);
 
-        User linked = userRepository.findByCustomerId(id).orElse(null);
         if (linked != null) {
             linked.setFullName(in.name());
-            linked.setEmail(in.email());
+            linked.setEmail(email);
             if (in.password() != null && !in.password().isBlank()) {
                 linked.setPassword(passwordEncoder.encode(in.password()));
             }

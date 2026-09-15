@@ -3,6 +3,8 @@ package com.geneinvoice.user;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Emails;
+import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.BulkExecutor;
@@ -21,8 +23,10 @@ import com.geneinvoice.promise.PaymentPromiseRepository;
 import com.geneinvoice.role.Role;
 import com.geneinvoice.role.RoleRepository;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -65,17 +69,17 @@ public class UserController {
     }
 
     public record CreateUserRequest(
-            @NotBlank String username,
-            String email,
-            String fullName,
+            @NotBlank @Size(max = FieldLimits.USERNAME) String username,
+            @Email @Size(max = FieldLimits.EMAIL) String email,
+            @Size(max = FieldLimits.FULL_NAME) String fullName,
             @NotBlank String password,
             @NotNull Long roleId,
             Boolean active
     ) {}
 
     public record UpdateUserRequest(
-            String email,
-            String fullName,
+            @Email @Size(max = FieldLimits.EMAIL) String email,
+            @Size(max = FieldLimits.FULL_NAME) String fullName,
             String password,
             Long roleId,
             Boolean active
@@ -107,6 +111,10 @@ public class UserController {
         if (userRepository.existsByUsername(in.username())) {
             throw new BadRequestException("Username already exists");
         }
+        String email = Emails.normalize(in.email());
+        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
+            throw new BadRequestException("Email already exists");
+        }
         Role role = roleRepository.findById(in.roleId())
                 .orElseThrow(() -> new NotFoundException("Role not found"));
         if ("CUSTOMER".equalsIgnoreCase(role.getName())) {
@@ -114,7 +122,7 @@ public class UserController {
         }
         User u = User.builder()
                 .username(in.username())
-                .email(in.email())
+                .email(email)
                 .fullName(in.fullName())
                 .password(passwordEncoder.encode(in.password()))
                 .role(role)
@@ -125,10 +133,19 @@ public class UserController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.USER_MANAGE + "')")
-    public UserDto update(@PathVariable Long id, @RequestBody UpdateUserRequest in) {
+    public UserDto update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest in) {
         User u = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not found"));
         Object before = UserDto.from(u);
-        if (in.email() != null) u.setEmail(in.email());
+        if (in.email() != null) {
+            // Blank clears the email. Uniqueness is checked only on a change, so an account can
+            // always be re-saved as it is.
+            String email = Emails.normalize(in.email());
+            if (email != null && !email.equalsIgnoreCase(u.getEmail())
+                    && userRepository.existsByEmailIgnoreCaseAndIdNot(email, id)) {
+                throw new BadRequestException("Email already exists");
+            }
+            u.setEmail(email);
+        }
         if (in.fullName() != null) u.setFullName(in.fullName());
         if (in.password() != null && !in.password().isBlank()) {
             u.setPassword(passwordEncoder.encode(in.password()));
