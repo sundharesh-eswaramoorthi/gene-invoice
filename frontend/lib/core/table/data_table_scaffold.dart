@@ -157,9 +157,8 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
             if (widget.actions.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(0, 8, 12, 8),
-                // The app theme makes filled buttons full-width (Size.fromHeight), which inside
-                // this Row asks for infinite width and squeezes the filter bar to nothing. Page
-                // actions are sized to their content instead.
+                // Page actions sit beside the filter bar, so they take a compact height that
+                // lines up with its chips.
                 child: Theme(
                   data: Theme.of(context).copyWith(
                     filledButtonTheme: FilledButtonThemeData(

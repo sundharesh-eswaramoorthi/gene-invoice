@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,15 +12,19 @@ import '../../shared/models/privileges.dart';
 import '../../shared/models/product.dart';
 import '../auth/auth_controller.dart';
 
-/// Active products, for the invoice line pickers.
-final productsProvider = FutureProvider.autoDispose<List<Product>>((ref) async {
-  final dio = ref.watch(dioProvider);
-  final res = await dio.get('/api/products', queryParameters: {'size': 50, 'sort': 'name,asc'});
+/// Active products whose name contains [search], first page by name, for the invoice line
+/// pickers. An inactive product cannot go on a new invoice, so it is never offered.
+Future<List<Product>> searchActiveProducts(Dio dio, String search) async {
+  final res = await dio.get('/api/products', queryParameters: {
+    'size': 20,
+    'sort': 'name,asc',
+    'filter': ['active:eq:true', if (search.isNotEmpty) 'name:contains:$search'],
+  });
   return ((res.data as Map)['content'] as List)
       .cast<Map<String, dynamic>>()
       .map(Product.fromJson)
       .toList();
-});
+}
 
 class ProductsScreen extends ConsumerWidget {
   final TableQuery query;
@@ -95,7 +100,6 @@ class ProductsScreen extends ConsumerWidget {
     );
     if (saved == true) {
       ref.invalidate(tablePageProvider);
-      ref.invalidate(productsProvider);
     }
   }
 }

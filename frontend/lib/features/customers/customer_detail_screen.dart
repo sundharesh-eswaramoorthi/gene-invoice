@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
+import '../../core/unsaved_changes.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
@@ -36,9 +37,17 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
   bool _saving = false;
   String? _error;
   final Map<String, String?> _fieldErrors = {};
+  late final UnsavedChanges _unsaved;
+
+  @override
+  void initState() {
+    super.initState();
+    _unsaved = ref.read(unsavedChangesProvider)..register(_confirmDiscard);
+  }
 
   @override
   void dispose() {
+    _unsaved.unregister(_confirmDiscard);
     _name.dispose();
     _phone.dispose();
     _email.dispose();
@@ -93,7 +102,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         'address': _address.text.trim(),
       });
       ref.invalidate(customerDetailProvider(widget.id));
-      ref.invalidate(allCustomersProvider);
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);
       ref.invalidate(auditHistoryProvider);
@@ -132,19 +140,14 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         _seed(customer);
         return PopScope(
           canPop: !_dirty,
-          onPopInvokedWithResult: (didPop, _) async {
-            if (didPop) return;
-            if (!await _confirmDiscard()) return;
-            if (!context.mounted) return;
-            setState(() => _dirty = false);
-            context.go('/customers');
+          // Every way out goes through the route's onExit, which asks about unsaved edits once.
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) context.go('/customers');
           },
           child: DetailScaffold(
             title: customer.name,
             subtitle: customer.username == null ? null : '@${customer.username}',
-            onBack: () async {
-              if (await _confirmDiscard() && context.mounted) context.go('/customers');
-            },
+            onBack: () => context.go('/customers'),
             titleTrailing: [
               if (canSeePoc && customer.pocMissing) const PocMissingBadge(),
             ],

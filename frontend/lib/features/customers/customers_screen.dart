@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,15 +16,19 @@ import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
 
-/// Every customer, for the dropdowns that still need a full list (invoice and payment forms).
-final allCustomersProvider = FutureProvider.autoDispose<List<Customer>>((ref) async {
-  final dio = ref.watch(dioProvider);
-  final res = await dio.get('/api/customers', queryParameters: {'size': 50, 'sort': 'name,asc'});
+/// Customers whose name contains [search], first page by name, for the customer pickers on the
+/// invoice form and the Record payment dialog.
+Future<List<Customer>> searchCustomers(Dio dio, String search) async {
+  final res = await dio.get('/api/customers', queryParameters: {
+    'size': 20,
+    'sort': 'name,asc',
+    if (search.isNotEmpty) 'filter': ['name:contains:$search'],
+  });
   return ((res.data as Map)['content'] as List)
       .cast<Map<String, dynamic>>()
       .map(Customer.fromJson)
       .toList();
-});
+}
 
 final customerDetailProvider =
     FutureProvider.autoDispose.family<Customer, int>((ref, id) async {
@@ -176,7 +181,6 @@ class CustomersScreen extends ConsumerWidget {
     if (saved == true) {
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);
-      ref.invalidate(allCustomersProvider);
     }
   }
 }

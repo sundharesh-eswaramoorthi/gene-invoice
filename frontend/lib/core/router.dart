@@ -22,12 +22,19 @@ import '../features/users/users_screen.dart';
 import '../shared/widgets/app_shell.dart';
 import 'table/route_query.dart';
 import 'table/table_providers.dart';
+import 'unsaved_changes.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authControllerProvider);
 
   /// The page size this user last chose for a table, or the default.
   int sizeFor(String entity) => ref.read(pageSizeStoreProvider)[entity] ?? 20;
+
+  /// Leaving an editable detail screen asks about its unsaved edits first, however the user
+  /// leaves (AC-C3). A sign-out is never held up: the session is already gone.
+  Future<bool> mayLeave(BuildContext context, GoRouterState state) async =>
+      ref.read(authControllerProvider).user == null ||
+      await ref.read(unsavedChangesProvider).mayLeave();
 
   return GoRouter(
     initialLocation: '/',
@@ -60,6 +67,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           // A tab change keeps the same id, so it still reuses the screen.
           GoRoute(
             path: '/customers/:id',
+            onExit: mayLeave,
             builder: (c, s) => CustomerDetailScreen(
               key: ValueKey('customer-${s.pathParameters['id']}'),
               id: int.parse(s.pathParameters['id']!),
@@ -83,6 +91,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/invoices/:id',
+            onExit: mayLeave,
             builder: (c, s) => InvoiceDetailScreen(
               key: ValueKey('invoice-${s.pathParameters['id']}'),
               id: int.parse(s.pathParameters['id']!),
@@ -98,6 +107,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/payments/:id',
+            onExit: mayLeave,
             builder: (c, s) => PaymentDetailScreen(
               key: ValueKey('payment-${s.pathParameters['id']}'),
               id: int.parse(s.pathParameters['id']!),

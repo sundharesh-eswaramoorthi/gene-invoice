@@ -47,6 +47,9 @@ class AppShell extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 900;
+    // On a phone the account label crowds out the title and pushes the actions over the menu
+    // button, so only the icon shows there; the name and role head the account menu instead.
+    final showAccountLabel = width >= 600;
 
     final isCustomer = user?.isCustomer ?? false;
     final visible = _entries.where((e) {
@@ -78,16 +81,25 @@ class AppShell extends ConsumerWidget {
                     break;
                 }
               },
-              itemBuilder: (_) => const [
+              itemBuilder: (_) => [
                 PopupMenuItem(
+                  enabled: false,
+                  child: ListTile(
+                    leading: const Icon(Icons.account_circle_outlined),
+                    title: Text(user.username),
+                    subtitle: Text(user.role),
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
                   value: 'change_password',
                   child: ListTile(
                     leading: Icon(Icons.key_outlined),
                     title: Text('Change password'),
                   ),
                 ),
-                PopupMenuDivider(),
-                PopupMenuItem(
+                const PopupMenuDivider(),
+                const PopupMenuItem(
                   value: 'logout',
                   child: ListTile(
                     leading: Icon(Icons.logout),
@@ -98,10 +110,17 @@ class AppShell extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.account_circle_outlined),
-                    const SizedBox(width: 6),
-                    Text('${user.username} • ${user.role}'),
+                    if (showAccountLabel) ...[
+                      const SizedBox(width: 6),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 200),
+                        child: Text('${user.username} • ${user.role}',
+                            maxLines: 1, overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
                     const Icon(Icons.arrow_drop_down),
                   ],
                 ),

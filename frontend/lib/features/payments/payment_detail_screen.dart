@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
+import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/payment.dart';
@@ -36,9 +37,17 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
   bool _dirty = false;
   bool _saving = false;
   String? _error;
+  late final UnsavedChanges _unsaved;
+
+  @override
+  void initState() {
+    super.initState();
+    _unsaved = ref.read(unsavedChangesProvider)..register(_confirmDiscard);
+  }
 
   @override
   void dispose() {
+    _unsaved.unregister(_confirmDiscard);
     _notes.dispose();
     super.dispose();
   }
@@ -124,19 +133,14 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
         _seed(payment);
         return PopScope(
           canPop: !_dirty,
-          onPopInvokedWithResult: (didPop, _) async {
-            if (didPop) return;
-            if (!await _confirmDiscard()) return;
-            if (!context.mounted) return;
-            setState(() => _dirty = false);
-            context.go('/payments');
+          // Every way out goes through the route's onExit, which asks about unsaved edits once.
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) context.go('/payments');
           },
           child: DetailScaffold(
             title: 'Payment #${payment.id}',
             subtitle: '${payment.customerName} • ${formatDateTime(payment.paidAt)}',
-            onBack: () async {
-              if (await _confirmDiscard() && context.mounted) context.go('/payments');
-            },
+            onBack: () => context.go('/payments'),
             titleTrailing: [
               if (canSeePoc && payment.pocMissing) const PocMissingBadge(),
               Chip(

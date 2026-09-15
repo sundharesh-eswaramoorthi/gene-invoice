@@ -7,6 +7,7 @@ import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/product.dart';
+import '../../shared/widgets/search_picker_field.dart';
 import '../customers/customers_screen.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
@@ -109,8 +110,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final customers = ref.watch(allCustomersProvider);
-    final products = ref.watch(productsProvider);
     final scope = ref.watch(myPocScopeProvider).valueOrNull;
     final canSeePoc = ref.watch(canSeePocProvider);
 
@@ -129,21 +128,15 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
             children: [
               Text('New invoice', style: Theme.of(context).textTheme.headlineSmall),
               const SizedBox(height: 16),
-              customers.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('Failed to load customers: ${apiErrorMessage(e)}'),
-                data: (list) => DropdownButtonFormField<Customer>(
-                  decoration: InputDecoration(
-                    labelText: 'Customer *',
-                    errorText:
-                        _submitted && _customer == null ? 'Pick a customer' : null,
-                  ),
-                  initialValue: _customer,
-                  items: list
-                      .map((c) => DropdownMenuItem(value: c, child: Text(c.name)))
-                      .toList(),
-                  onChanged: (c) => setState(() => _customer = c),
-                ),
+              SearchPickerField<Customer>(
+                label: 'Customer',
+                required: true,
+                value: _customer,
+                labelOf: (c) => c.name,
+                subtitleOf: (c) => c.email,
+                search: (q) => searchCustomers(ref.read(dioProvider), q),
+                errorText: _submitted && _customer == null ? 'Pick a customer' : null,
+                onChanged: (c) => setState(() => _customer = c),
               ),
               const SizedBox(height: 12),
               // Mandatory: the backend rejects an invoice without one too (AC-A2).
@@ -160,31 +153,27 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
               const SizedBox(height: 16),
               Text('Items', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
-              products.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('Failed to load products: ${apiErrorMessage(e)}'),
-                data: (productList) => Column(
-                  children: [
-                    for (var i = 0; i < _lines.length; i++)
-                      _LineRow(
-                        key: ValueKey(_lines[i]),
-                        line: _lines[i],
-                        products: productList,
-                        onChanged: () => setState(() {}),
-                        onRemove: _lines.length == 1
-                            ? null
-                            : () => setState(() => _lines.removeAt(i).dispose()),
-                      ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add line'),
-                        onPressed: () => setState(() => _lines.add(_LineDraft())),
-                      ),
+              Column(
+                children: [
+                  for (var i = 0; i < _lines.length; i++)
+                    _LineRow(
+                      key: ValueKey(_lines[i]),
+                      line: _lines[i],
+                      searchProducts: (q) => searchActiveProducts(ref.read(dioProvider), q),
+                      onChanged: () => setState(() {}),
+                      onRemove: _lines.length == 1
+                          ? null
+                          : () => setState(() => _lines.removeAt(i).dispose()),
                     ),
-                  ],
-                ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      icon: const Icon(Icons.add),
+                      label: const Text('Add line'),
+                      onPressed: () => setState(() => _lines.add(_LineDraft())),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
               TextField(
@@ -238,14 +227,14 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
 
 class _LineRow extends StatelessWidget {
   final _LineDraft line;
-  final List<Product> products;
+  final Future<List<Product>> Function(String search) searchProducts;
   final VoidCallback onChanged;
   final VoidCallback? onRemove;
 
   const _LineRow({
     super.key,
     required this.line,
-    required this.products,
+    required this.searchProducts,
     required this.onChanged,
     this.onRemove,
   });
@@ -259,13 +248,12 @@ class _LineRow extends StatelessWidget {
         children: [
           Expanded(
             flex: 4,
-            child: DropdownButtonFormField<Product>(
-              decoration: const InputDecoration(labelText: 'Product'),
-              initialValue: line.product,
-              items: products
-                  .where((p) => p.active)
-                  .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
-                  .toList(),
+            child: SearchPickerField<Product>(
+              label: 'Product',
+              value: line.product,
+              labelOf: (p) => p.name,
+              subtitleOf: (p) => formatMoney(p.price),
+              search: searchProducts,
               onChanged: (p) {
                 line.product = p;
                 onChanged();

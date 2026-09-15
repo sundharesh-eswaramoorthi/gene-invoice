@@ -6,6 +6,7 @@ import '../../core/format.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/promise.dart';
+import '../../shared/widgets/search_picker_field.dart';
 import '../customers/customers_screen.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
@@ -109,7 +110,6 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final customers = ref.watch(allCustomersProvider);
     final canSeePoc = ref.watch(canSeePocProvider);
     if (_customer != null) {
       ref.watch(customerPocsProvider(_customer!.id)).whenData(
@@ -126,22 +126,20 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              customers.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('Failed: ${apiErrorMessage(e)}'),
-                data: (list) => DropdownButtonFormField<Customer>(
-                  decoration: const InputDecoration(labelText: 'Customer *'),
-                  initialValue: _customer,
-                  items: list
-                      .map((c) => DropdownMenuItem(value: c, child: Text(c.name)))
-                      .toList(),
-                  onChanged: (c) => setState(() {
-                    _customer = c;
-                    _selectedInvoices.clear();
-                    _selectedPromises.clear();
-                    _pocResolvedFor = null;
-                  }),
-                ),
+              SearchPickerField<Customer>(
+                label: 'Customer',
+                required: true,
+                value: _customer,
+                labelOf: (c) => c.name,
+                subtitleOf: (c) => c.email,
+                search: (q) => searchCustomers(ref.read(dioProvider), q),
+                errorText: _submitted && _customer == null ? 'Pick a customer' : null,
+                onChanged: (c) => setState(() {
+                  _customer = c;
+                  _selectedInvoices.clear();
+                  _selectedPromises.clear();
+                  _pocResolvedFor = null;
+                }),
               ),
               const SizedBox(height: 12),
               if (canSeePoc)
