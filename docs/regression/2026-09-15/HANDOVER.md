@@ -6,15 +6,17 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
 
 - **The feature** — POC ownership, Payment Promises, and the list/detail table framework
   ([PRD](../../requirements/poc-payment-promise-and-tables.md),
-  [design notes](../../implementation/poc-payment-promise-and-tables.md)) — is implemented in the
-  working tree. **Nothing is committed**; everything sits uncommitted on `main` on top of
-  `Initial commit`. Ask the user before committing.
+  [design notes](../../implementation/poc-payment-promise-and-tables.md)) — is implemented and
+  committed on `main` (`87c502c`). **Nothing is pushed**; ask the user before pushing.
 - **A full regression run finished on 15 Sep 2026:** 503 cases across 10 areas (API and UI, all
   7 roles plus customer logins, desktop and phone width). 375 passed, 128 failed as reported.
   After every failure was reproduced by an independent verifier and duplicates were merged:
   **67 confirmed defects — 12 high, 27 medium, 28 low.** Verdict: **not ready for release.**
-- Automated suites are green: backend `mvn test` 123/123, `flutter analyze` clean, `flutter test` 19/19.
-- **Waiting on the user:** whether to start fixing the 12 high-severity defects (listed below).
+- **All 12 high-severity defects are fixed**, committed (not pushed) with regression tests, and
+  re-verified against the rebuilt regression environment — see "High-severity fixes" below and the
+  Status column in `defects.md`.
+- Automated suites are green: backend `mvn test` 144/144, `flutter analyze` clean, `flutter test` 28/28.
+- **Waiting on the user:** whether to take the medium defects next (shared-cause wins first).
 
 ## What is in this folder
 
@@ -31,7 +33,7 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
 | `data/suspected-issues-static-review.md` | 62 issues suspected from reading the code before testing (leads, not facts; some since fixed or confirmed) |
 | `scripts/` | The testers' and verifiers' Node scripts, the shared helper `lib.js`, and `TESTER-RULES.md` (how the run was organised and how to drive this Flutter app) |
 
-## The 12 high-severity defects (fix these first)
+## The 12 high-severity defects (all fixed — see "High-severity fixes")
 
 | ID | Defect |
 |---|---|
@@ -53,7 +55,45 @@ Shared causes behind many medium defects (cheap, broad wins): missing 400 handle
 (D-14 — `BulkActionTest` currently asserts the drop), table width that ignores the nav rail
 (D-19, D-20), the `PocPicker` debounce (D-18).
 
-## What this session changed (all uncommitted)
+## High-severity fixes (second 15 Sep session)
+
+Committed on `main`, not pushed. Every commit carries its own regression tests.
+
+| Commit | Defects | What changed |
+|---|---|---|
+| `51619ef` | D-01, D-02, D-08 | `JwtAuthFilter` no longer authenticates a disabled or locked account, so old tokens get 401. Every `/export` also needs the table's `*_VIEW`. `TableSchema.visibleTo(customerScoped)` drops POC columns for customer logins; list, summary, bulk, export and `/api/table-schemas` all use it. |
+| `1e4d127` | D-03, D-05 | New `payment/CreditLedger`: a dispute refund moves the invoice's allocations back into the paying payments' `creditApplied` (newest first); a new invoice paid from credit gets allocations from the payments holding it (oldest first, audited as `PAYMENT_APPLIED`). Invariant: an active payment's `amount = allocations + creditApplied`. New `invoice/InvoiceNumbers` draws numbers from one locked row (`invoice_number_sequence`, created by ddl-auto, seeded at startup) — it must stay the first thing `InvoiceService.create` does, before any write, or concurrent creates can deadlock. `DataIntegrityViolationException` → 409 without SQL. |
+| `691c39d` | D-07, D-09, D-10 | Invoice, payment and promise updates check the POC (and POC_ASSIGN) only when it actually changes; the detail screens send the POC only when changed. A general promise answers for invoices dated by its promised date **or already raised when it was made** (`owedUnderPromise`). An already-linked cancelled invoice stays acceptable on promise edit, and the edit dialog lists it so it can be unticked. |
+| `a04c5e8`, `8ffed8f` | D-04, D-06, D-11, D-12 | Theme `FilledButton` minimum size `Size(64, 46)`. `shared/widgets/search_picker_field.dart` (server-side search; the dialog owns its search text) replaces the 50-item customer and product dropdowns. `core/unsaved_changes.dart`: detail screens register their discard prompt; `GoRoute.onExit` on `/customers/:id`, `/invoices/:id`, `/payments/:id` covers browser Back; in-app links use `goGuarded()`, which asks before `go()`. App bar shows only the account icon below 600px and caps the label at 200px above. |
+
+Behaviour to know about:
+
+- A payment's "Credit applied" is now the part of it still sitting in customer credit. It drops when
+  a later invoice is paid from it, and that invoice then appears in the payment's invoice list and
+  History. Credit from before the ledger has no source payment; a void keeps the old floor-at-zero
+  behaviour for that part only.
+- Invoice numbers continue from the sequence row, not from a count, so a deleted invoice's number
+  is never reused.
+
+Verification: `scripts/verify-high-fixes/api.js` (V-01…V-12, all pass against 8083 on Postgres) and
+`scripts/verify-high-fixes/ui/` (U-01…U-25, a real browser against 8084, all pass; results in
+`ui-results.json`, first-run evidence in `run1/`). The screenshots (`*.png`, about 33 MB) are kept
+on disk but not committed.
+
+Found while verifying, not yet logged in `defects.md`:
+
+- The bell's unread badge is stacked on top of the bell button and swallows taps on the icon's
+  centre (`shared/widgets/app_shell.dart`, the `Positioned` badge — wrapping it in `IgnorePointer`
+  should do).
+- The promise card still shows "₹… left" for a cancelled invoice (`features/promises/promises_tab.dart:186`)
+  while the edit dialog says "no longer owed".
+- Only customer logins may open disputes (`DisputeService`: "Only customers can open disputes"), so
+  `POST /api/disputes` as admin is 403 and the scripts use the customer login. But the seeded ADMIN
+  role holds DISPUTE_CREATE, so admin detail screens still offer "Raise dispute", which can only fail.
+- D-18 (POC picker one keystroke behind) and D-38 (phone header breaks the invoice number) are
+  confirmed still present.
+
+## What the first 15 Sep session changed (now in `87c502c`)
 
 User-reported bugs, fixed:
 
@@ -161,10 +201,17 @@ cd docs/regression/2026-09-15/scripts && npm install      # playwright-core; dri
   colon (`invoiceId:isEmpty:`).
 - Backend tests run on H2; the app runs on Postgres — date bounds and SQL errors differ.
 - The dev JWT secret is the default in `application.yml`; tokens last 24 h.
+- A navigation refused in `GoRoute.onExit` still leaves a duplicate browser-history entry
+  (go_router 14.8.1), which swallows the next Back press. Ask before `go()` — use `goGuarded()`.
+- `setState(() => _future = load())` returns the Future and trips a debug assertion, so the state
+  never updates; use a block body.
+- Parallel shell commands share one working directory: use absolute paths (or `npm --prefix`).
 
 ## Suggested next steps
 
-1. Fix the 12 high-severity defects, each with a regression test (the security ones have none today).
-2. Take the shared-cause medium fixes listed above.
-3. Re-run the affected regression areas and update `defects.md`.
-4. Ask the user whether to commit, and how to split the commits.
+1. Take the shared-cause medium fixes listed above (D-13, D-27, D-29 in `GlobalExceptionHandler`;
+   D-14; D-19/D-20; D-18), then the rest of the medium list.
+2. Log the four findings under "High-severity fixes" in `defects.md`.
+3. After backend changes to auth, exports, credit, invoices or promises, re-run
+   `scripts/verify-high-fixes/api.js` (it creates its own data on 8083).
+4. Nothing is pushed; ask the user before pushing.

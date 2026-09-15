@@ -2,22 +2,22 @@
 
 67 confirmed defects after independent re-verification and de-duplication (12 high, 27 medium, 28 low). Severity: high = core flow, money or security wrong; medium = partly wrong or confusing; low = cosmetic or minor.
 
-Status column is for tracking fixes in later sessions (all OPEN as of this run).
+Status column is for tracking fixes in later sessions (all OPEN as of this run). High-severity fixes were re-verified on 15 Sep 2026 against the rebuilt regression environment: API checks in `scripts/verify-high-fixes/api.js` (results in `api-results.json`, ids V-01…V-12), UI checks in `scripts/verify-high-fixes/ui/`.
 
 | ID | Severity | Kind | Area | Title | Status |
 |---|---|---|---|---|---|
-| D-01 | high | API | auth-users-roles | A deactivated user's existing JWT keeps full read/write API access for up to 24h | OPEN |
-| D-02 | high | API | permissions-scoping | Export endpoints check only EXPORT_DATA, so roles without the view privilege can export all users, roles, disputes and products | OPEN |
-| D-03 | high | API | payments-credit | Voiding a payment doesn't reverse money that already moved through customer credit, so credit the customer can spend (or paid invoices with no payment) is left behind | OPEN |
-| D-04 | high | UI | disputes-notifications | The FilledButton theme forces infinite width: dispute Approve/Deny and the Payment/Invoice 'Save changes' button are not painted, and a click on the blank row approves | OPEN |
-| D-05 | high | API | invoices | Creating invoices at the same time fails with 500 duplicate invoice number | OPEN |
-| D-06 | high | UI | customers-products | The invoice form and Record payment dialog offer only the first 50 customers and products by name, so later customers can't be invoiced or paid from the UI | OPEN |
-| D-07 | high | API+UI | invoices | Notes-only saves on Invoice and Payment details fail when the POC has been deactivated or the role lacks POC_ASSIGN | OPEN |
-| D-08 | high | API | table-framework | Customer logins can filter and sort on POC-restricted columns, and the match counts reveal who their Sales and Collection POCs are | OPEN |
-| D-09 | high | API | promises | A KEPT general promise flips to BROKEN, and notifies the POC, when a later invoice is raised | OPEN |
-| D-10 | high | API+UI | promises | A promise can't be edited once one of its invoices is cancelled | OPEN |
-| D-11 | high | UI | detail-history-dashboard | The unsaved-changes guard only covers the Back arrow: sidebar, browser Back, the bell and in-page links drop edits without a prompt | OPEN |
-| D-12 | high | UI | ui-sweep | On phones, a long 'username • ROLE' chip pushes the Notifications bell over the hamburger, so a tap opens Notifications instead of the drawer; the app title is hidden | OPEN |
+| D-01 | high | API | auth-users-roles | A deactivated user's existing JWT keeps full read/write API access for up to 24h | FIXED (51619ef; V-01, V-02 pass) |
+| D-02 | high | API | permissions-scoping | Export endpoints check only EXPORT_DATA, so roles without the view privilege can export all users, roles, disputes and products | FIXED (51619ef; V-03 pass) |
+| D-03 | high | API | payments-credit | Voiding a payment doesn't reverse money that already moved through customer credit, so credit the customer can spend (or paid invoices with no payment) is left behind | FIXED (1e4d127; V-04, V-05, V-06 pass) |
+| D-04 | high | UI | disputes-notifications | The FilledButton theme forces infinite width: dispute Approve/Deny and the Payment/Invoice 'Save changes' button are not painted, and a click on the blank row approves | FIXED (a04c5e8; U-01…U-04 pass) |
+| D-05 | high | API | invoices | Creating invoices at the same time fails with 500 duplicate invoice number | FIXED (1e4d127; V-07 pass) |
+| D-06 | high | UI | customers-products | The invoice form and Record payment dialog offer only the first 50 customers and products by name, so later customers can't be invoiced or paid from the UI | FIXED (a04c5e8; U-05…U-09 pass) |
+| D-07 | high | API+UI | invoices | Notes-only saves on Invoice and Payment details fail when the POC has been deactivated or the role lacks POC_ASSIGN | FIXED (691c39d; V-08, V-09, U-10, U-11 pass) |
+| D-08 | high | API | table-framework | Customer logins can filter and sort on POC-restricted columns, and the match counts reveal who their Sales and Collection POCs are | FIXED (51619ef; V-10 pass) |
+| D-09 | high | API | promises | A KEPT general promise flips to BROKEN, and notifies the POC, when a later invoice is raised | FIXED (691c39d; V-11 pass) |
+| D-10 | high | API+UI | promises | A promise can't be edited once one of its invoices is cancelled | FIXED (691c39d; V-12, U-12, U-13 pass) |
+| D-11 | high | UI | detail-history-dashboard | The unsaved-changes guard only covers the Back arrow: sidebar, browser Back, the bell and in-page links drop edits without a prompt | FIXED (a04c5e8, 8ffed8f; U-14…U-19, U-23…U-25 pass) |
+| D-12 | high | UI | ui-sweep | On phones, a long 'username • ROLE' chip pushes the Notifications bell over the hamburger, so a tap opens Notifications instead of the drawer; the app title is hidden | FIXED (a04c5e8; U-20…U-22 pass) |
 | D-13 | medium | API | table-framework | Malformed client input (bad JSON, bad enum or number, non-numeric id or param, missing param) returns 500 with internal class names instead of 400 | OPEN |
 | D-14 | medium | API | table-framework | Bulk actions silently drop ids that are unknown or outside the caller's scope or filter | OPEN |
 | D-15 | medium | API | permissions-scoping | The SALES_POC locked book applies only to lists and bulk: another rep's invoice can be read, edited and cancelled by id, and seats can be edited on customers outside the book | OPEN |

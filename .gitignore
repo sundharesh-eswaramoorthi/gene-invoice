@@ -25,6 +25,9 @@ frontend/android/app/.cxx/
 frontend/.pub-cache/
 frontend/pubspec.lock
 
+# Node (regression scripts under docs/regression/*/scripts)
+node_modules/
+
 # Local env
 .env
 *.local
