@@ -1,0 +1,16 @@
+[
+  {
+    "id": "PRM-UI16",
+    "title": "Bulk cancel from the Promises list: select rows, toolbar action, confirm with exact count, result",
+    "status": "BLOCKED",
+    "actual": "Error: no node Cancel promises on screen:\n[null] 85 @1168,23 13x16\n[button] Notifications @1166,28 40x40\n[button] Account / admin • ADMIN @1278,28 176x24\n[null] Promises @354,88 146x16\n[null] Open @545,88 128x16\n[null] Kept @727,88 128x16\n[null] Partially kept @909,88 128x16\n[null] Broken @1091,88 128x16\n[null] Promised total @1264,88 146x16\n[null] 2 @287,116 12x28\n[null] 2 • ₹23.00 @512,116 97x28\n[null] 0 • ₹0.00 @687,116 85x28\n[null] 0 • ₹0.00 @869,116 85x28\n[null] 0 • ₹0.00 @1051,116 85x28\n[null] ₹23.00 @1224,116 67x28\n[checkbox:false] Add filter @325,171 112x34\n[checkbox:false] Customer is 167 @466,171 158x34\n[button] Delete @525,171 32x32\n[button] Clear all @588,171 75x32\n[columnheader] Customer @425,224 217x56\n[columnheader] Amount @599,224 130x56\n[columnheader] Promised by @743,224 158x56\n[columnheader] Status @882,224 120x56\n[columnheader] Fulfilled @1008,224 130x56\n[columnheader] Remaining @1146,224 147x56\n[columnheader] Collection POC @1293,224 147x56\n[cell] promisesui-mu2tex2qcc4e @425,276 217x48\n[cell] ₹12.00 @599,276 130x48\n[cell] 2026-09-21 @743,276 158x48\n[cell] Open @882,276 120x48\n[cell] ₹0.00 @1008,276 130x48\n[cell] ₹12.00 @1146,276 147x48\n[cell] PROMISES-MU2TEX0O6162 @1293,276 147x48\n[button] Open customer @1509,276 40x40\n[button] Override status @1549,276 40x40\n[cell] promisesui-mu2tex2qcc4e @425,324 217x48\n[cell] ₹11.00 @599,324 130x48\n[cell] 2026-09-20 @743,324 158x48\n[cell] Open @882,324 120x48\n[cell] ₹0.00 @1008,324 130x48\n[cell] ₹11.00 @1146,324 147x48\n[cell] PROMISES-MU2TEX0O6162 @1293,324 147x48\n[button] Open customer @1509,324 40x40\n[button] Override status @1549,324 40x40\n[null] Rows @964,1070 35x20\n[button] 20 @1009,1070 42x48\n[null] 1–2 of 2 @1069,1070 55x20\n[null] Page 1 of 1 @1145,1070 73x20\n[button] First page @1214,1070 40x40\n[button] Previous page @1254,1070 40x40\n[button] Next page @1294,1070 40x40\n[button] Last page @1334,1070 40x40\n    at Object.tapLast (/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/uih.js:25:24)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:472:9)\n    at async /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/ui5.js:28:5\n    at async tc (/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/harness.js:8:17)\n    at async /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/ui5.js:22:3",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-UI17",
+    "title": "Export selected promises opens the copyable CSV dialog",
+    "status": "FAIL",
+    "actual": "dialog 'Exported CSV'=true; CSV header + row present=false; ",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui5-17-export.png"
+  }
+]

@@ -1,0 +1,187 @@
+{
+  "prod": 129,
+  "sales": 590,
+  "coll": 591,
+  "cust": {
+    "id": 279,
+    "username": "vdhd-cust-mu2uw86pb9ab",
+    "password": "Passw0rd!"
+  },
+  "V1": 396,
+  "V2": 397,
+  "P1": 159,
+  "PR1": 150,
+  "PR2": 151,
+  "D1": 140,
+  "adminId": 1,
+  "HIST006": {
+    "status": 200,
+    "denied": {
+      "actorHidden": true,
+      "changedByUserId": null,
+      "changedByUsername": null,
+      "afterJson": "{\"id\":140,\"customerId\":279,\"customerName\":\"vdhd-cust-mu2uw86pb9ab\",\"openedByUserId\":592,\"targetType\":\"INVOICE\",\"targetId\":396,\"targetSummary\":\"INV-20260915-0376 — 200.00\",\"reason\":\"VD1 reason\",\"proposedChangeJson\":null,\"status\":\"DENIED\",\"adminNotes\":\"VD1 denied by admin\",\"resolvedByUserId\":1,\"resolvedAt\":\"2026-09-15T15:58:24.808795Z\",\"createdAt\":\"2026-09-15T15:58:24.794912Z\",\"updatedAt\":\"2026-09-15T15:58:24.794912Z\"}"
+    },
+    "openedAfter": "{\"id\":140,\"customerId\":279,\"customerName\":\"vdhd-cust-mu2uw86pb9ab\",\"openedByUserId\":592,\"targetType\":\"INVOICE\",\"targetId\":396,\"targetSummary\":\"INV-20260915-0376 — 200.00\",\"reason\":\"VD1 reason\",\"proposedChangeJson\":null,\"status\":\"PENDING\",\"adminNotes\":null,\"resolvedByUserId\":null,\"resolvedAt\":null,\"createdAt\":\"2026-09-15T15:58:24.794912Z\",\"updatedAt\":\"2026-09-15T15:58:24.794912Z\"}",
+    "customerDisputeGet": {
+      "status": 200,
+      "resolvedByUserId": 1,
+      "openedByUserId": 592
+    },
+    "customerDisputeList": {
+      "status": 200,
+      "row": {
+        "id": 140,
+        "customerId": 279,
+        "customerName": "vdhd-cust-mu2uw86pb9ab",
+        "openedByUserId": 592,
+        "targetType": "INVOICE",
+        "targetId": 396,
+        "targetSummary": "INV-20260915-0376 — 200.00",
+        "reason": "VD1 reason",
+        "proposedChangeJson": null,
+        "status": "DENIED",
+        "adminNotes": "VD1 denied by admin",
+        "resolvedByUserId": 1,
+        "resolvedAt": "2026-09-15T15:58:24.808795Z",
+        "createdAt": "2026-09-15T15:58:24.794912Z",
+        "updatedAt": "2026-09-15T15:58:24.810174Z"
+      }
+    },
+    "customerUsersGet": {
+      "status": 403
+    },
+    "invoiceTimelineDenied": {
+      "actorHidden": true,
+      "changedByUserId": null,
+      "afterJson": "{\"id\":140,\"customerId\":279,\"customerName\":\"vdhd-cust-mu2uw86pb9ab\",\"openedByUserId\":592,\"targetType\":\"INVOICE\",\"targetId\":396,\"targetSummary\":\"INV-20260915-0376 — 200.00\",\"reason\":\"VD1 reason\",\"proposedChangeJson\":null,\"status\":\"DENIED\",\"adminNotes\":\"VD1 denied by admin\",\"resolvedByUserId\":1,\"resolvedAt\":\"2026-09-15T15:58:24.808795Z\",\"createdAt\":\"2026-09-15T15:58:24.794912Z\",\"updatedAt\":\"2026-09-15T15:58:24.794912Z\"}"
+    }
+  },
+  "API500": {
+    "/api/invoices/abc": {
+      "status": 500,
+      "body": "{\"timestamp\":\"2026-09-15T15:58:24.847998Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'id': Failed to convert value of type 'java.lang.String' to required type 'java.lang.Long'; For input string: \\\"abc\\\"\",\"path\":\"/api/invoices/abc"
+    },
+    "/api/customers/abc": {
+      "status": 500,
+      "body": "{\"timestamp\":\"2026-09-15T15:58:24.849874Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'id': Failed to convert value of type 'java.lang.String' to required type 'java.lang.Long'; For input string: \\\"abc\\\"\",\"path\":\"/api/customers/ab"
+    },
+    "/api/payments/abc": {
+      "status": 500,
+      "body": "{\"timestamp\":\"2026-09-15T15:58:24.851221Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'id': Failed to convert value of type 'java.lang.String' to required type 'java.lang.Long'; For input string: \\\"abc\\\"\",\"path\":\"/api/payments/abc"
+    },
+    "/api/disputes/abc": {
+      "status": 500,
+      "body": "{\"timestamp\":\"2026-09-15T15:58:24.852487Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'id': Failed to convert value of type 'java.lang.String' to required type 'java.lang.Long'; For input string: \\\"abc\\\"\",\"path\":\"/api/disputes/abc"
+    },
+    "/api/promises/abc": {
+      "status": 500,
+      "body": "{\"timestamp\":\"2026-09-15T15:58:24.853903Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'id': Failed to convert value of type 'java.lang.String' to required type 'java.lang.Long'; For input string: \\\"abc\\\"\",\"path\":\"/api/promises/abc"
+    },
+    "/api/audit?entityType=CUSTOMER&entityId=abc": {
+      "status": 500,
+      "body": "{\"timestamp\":\"2026-09-15T15:58:24.855118Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'entityId': Failed to convert value of type 'java.lang.String' to required type 'java.lang.Long'; For input string: \\\"abc\\\"\",\"path\":\"/api/audit\""
+    },
+    "/api/invoices/99999999": {
+      "status": 404,
+      "body": "{\"timestamp\":\"2026-09-15T15:58:24.856735Z\",\"status\":404,\"error\":\"Not Found\",\"message\":\"Invoice not found\",\"path\":\"/api/invoices/99999999\",\"fieldErrors\":null}"
+    },
+    "/api/invoices?size=abc": {
+      "status": 500,
+      "body": "{\"timestamp\":\"2026-09-15T15:58:24.857873Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'size': Failed to convert value of type 'java.lang.String' to required type 'java.lang.Integer'; For input string: \\\"abc\\\"\",\"path\":\"/api/invoice"
+    }
+  },
+  "DET006": {
+    "promiseLinks": {
+      "150": {
+        "status": "OPEN",
+        "payments": [],
+        "invoiceIds": [
+          396
+        ]
+      },
+      "151": {
+        "status": "OPEN",
+        "payments": [],
+        "invoiceIds": [
+          397
+        ]
+      }
+    },
+    "rawPR1": {
+      "id": 150,
+      "customerId": 279,
+      "customerName": "vdhd-cust-mu2uw86pb9ab",
+      "amount": 100,
+      "fulfilledAmount": 0,
+      "remainingAmount": 100,
+      "promisedDate": "2026-09-25",
+      "status": "OPEN",
+      "statusOverridden": false,
+      "overrideReason": null,
+      "overriddenByUserId": null,
+      "overriddenAt": null,
+      "collectionPoc": {
+        "id": 591,
+        "username": "vdhd-coll-mu2uw84j7db5",
+        "fullName": "VDHD-COLL-MU2UW84J7DB5",
+        "email": "vdhd-coll-mu2uw84j7db5@rt.local",
+        "role": "COLLECTION_POC",
+        "active": true
+      },
+      "notes": "PR1 on V1",
+      "invoices": [
+        {
+          "id": 396,
+          "invoiceNumber": "INV-20260915-0376",
+          "total": 200,
+          "balance": 150,
+          "status": "PARTIALLY_PAID"
+        }
+      ],
+      "payments": [],
+      "createdByUserId": 1,
+      "createdAt": "2026-09-15T15:58:24.730380Z",
+      "updatedAt": "2026-09-15T15:58:24.730380Z"
+    },
+    "customerPromises": [
+      151,
+      150
+    ],
+    "paymentIdFilter": {
+      "status": 200,
+      "body": "{\"content\":[{\"id\":45,\"customerId\":103,\"customerName\":\"promises-mu2stij0a000\",\"amount\":30.00,\"fulfilledAmount\":0.00,\"remainingAmount\":30.00,\"promisedDate\":\"2026-10-25\",\"status\":\"OPEN\",\"statusOverridden"
+    }
+  },
+  "DASH006": {
+    "status": 200,
+    "keys": [
+      "total",
+      "openCount",
+      "openAmount",
+      "keptCount",
+      "keptAmount",
+      "partiallyKeptCount",
+      "partiallyKeptAmount",
+      "brokenCount",
+      "brokenAmount",
+      "cancelledCount",
+      "promisedAmount",
+      "fulfilledAmount"
+    ],
+    "sample": {
+      "total": 151,
+      "openCount": 63,
+      "openAmount": 6992,
+      "keptCount": 43,
+      "keptAmount": 4455,
+      "partiallyKeptCount": 18,
+      "partiallyKeptAmount": 2550,
+      "brokenCount": 12,
+      "brokenAmount": 2949,
+      "cancelledCount": 15,
+      "promisedAmount": 16946,
+      "fulfilledAmount": 5303
+    }
+  }
+}

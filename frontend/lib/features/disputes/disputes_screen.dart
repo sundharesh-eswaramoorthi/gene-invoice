@@ -1,100 +1,68 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
+import '../../core/format.dart';
+import '../../core/table/data_table_scaffold.dart';
+import '../../core/table/route_query.dart';
+import '../../core/table/table_models.dart';
 import '../../shared/models/dispute.dart';
+import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
-import 'disputes_providers.dart';
 
-class DisputesScreen extends ConsumerStatefulWidget {
-  const DisputesScreen({super.key});
-  @override
-  ConsumerState<DisputesScreen> createState() => _DisputesScreenState();
-}
-
-class _DisputesScreenState extends ConsumerState<DisputesScreen> {
-  DisputeStatus? _filter;
+class DisputesScreen extends ConsumerWidget {
+  final TableQuery query;
+  const DisputesScreen({super.key, required this.query});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final isAdmin = user?.isAdmin ?? false;
-    final async = ref.watch(disputesProvider);
-    final df = DateFormat.yMMMd().add_jm();
+    final canExport = user?.has(Privileges.exportData) ?? false;
 
     return Scaffold(
-      body: Column(
-        children: [
-          if (isAdmin)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Row(
-                children: [
-                  const Text('Filter: '),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('All'),
-                    selected: _filter == null,
-                    onSelected: (_) => setState(() => _filter = null),
-                  ),
-                  const SizedBox(width: 4),
-                  ChoiceChip(
-                    label: const Text('Pending'),
-                    selected: _filter == DisputeStatus.PENDING,
-                    onSelected: (_) => setState(() => _filter = DisputeStatus.PENDING),
-                  ),
-                  const SizedBox(width: 4),
-                  ChoiceChip(
-                    label: const Text('Approved'),
-                    selected: _filter == DisputeStatus.APPROVED,
-                    onSelected: (_) => setState(() => _filter = DisputeStatus.APPROVED),
-                  ),
-                  const SizedBox(width: 4),
-                  ChoiceChip(
-                    label: const Text('Denied'),
-                    selected: _filter == DisputeStatus.DENIED,
-                    onSelected: (_) => setState(() => _filter = DisputeStatus.DENIED),
-                  ),
-                ],
-              ),
-            ),
-          Expanded(
-            child: async.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text('Failed: $e')),
-              data: (list) {
-                final filtered = _filter == null
-                    ? list
-                    : list.where((d) => d.status == _filter).toList();
-                if (filtered.isEmpty) return const Center(child: Text('No disputes'));
-                return RefreshIndicator(
-                  onRefresh: () async => ref.refresh(disputesProvider.future),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(8),
-                    itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (context, i) {
-                      final d = filtered[i];
-                      return ListTile(
-                        title: Text(
-                          '${d.targetType.name} ${d.targetSummary ?? '#${d.targetId}'}',
-                        ),
-                        subtitle: Text(
-                          '${isAdmin && d.customerName != null ? "${d.customerName} • " : ""}'
-                          '${df.format(d.createdAt.toLocal())}\n${d.reason}',
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        isThreeLine: true,
-                        trailing: Chip(label: Text(disputeStatusLabel(d.status))),
-                        onTap: () => context.go('/disputes/${d.id}'),
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
+      body: DataTableScaffold<Dispute>(
+        entity: 'disputes',
+        path: '/api/disputes',
+        query: query,
+        onQueryChanged: (q) => RouteQuery(context, '/disputes').push(q),
+        parse: Dispute.fromJson,
+        idOf: (d) => d.id,
+        canExport: canExport,
+        selectable: canExport,
+        emptyMessage: 'No disputes match this filter',
+        onRowTap: (context, d) => context.go('/disputes/${d.id}'),
+        columns: [
+          TableColumnSpec(
+            label: 'Target',
+            sortKey: 'targetType',
+            cell: (context, d) =>
+                Text('${d.targetType.name} ${d.targetSummary ?? '#${d.targetId}'}'),
+          ),
+          TableColumnSpec(
+            label: 'Customer',
+            cell: (context, d) => Text(d.customerName ?? '—'),
+          ),
+          TableColumnSpec(
+            label: 'Status',
+            sortKey: 'status',
+            cell: (context, d) => Chip(label: Text(disputeStatusLabel(d.status))),
+          ),
+          TableColumnSpec(
+            label: 'Opened',
+            sortKey: 'createdAt',
+            cell: (context, d) => Text(formatDateTime(d.createdAt)),
+          ),
+          TableColumnSpec(
+            label: 'Reason',
+            cell: (context, d) =>
+                Text(d.reason, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+        rowActions: (context, d) => [
+          IconButton(
+            tooltip: 'Open',
+            icon: const Icon(Icons.open_in_new, size: 18),
+            onPressed: () => context.go('/disputes/${d.id}'),
           ),
         ],
       ),

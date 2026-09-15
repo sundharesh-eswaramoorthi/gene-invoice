@@ -1,0 +1,199 @@
+[null] "71" @1168,23 13x16
+[button] "Notifications" @1166,28 40x40
+[button] "Account\nadmin • ADMIN" @1278,28 176x24
+[null] "Customers" @354,88 146x16
+[null] "Total outstanding" @536,88 146x16
+[null] "Total credit" @718,88 146x16
+[null] "No Success POC" @909,88 128x16
+[null] "No Collection POC" @1091,88 128x16
+[null] "141" @300,116 37x28
+[null] "₹15,272.37" @517,116 108x28
+[null] "₹2,471.62" @693,116 96x28
+[null] "118" @846,116 37x28
+[null] "79" @1021,116 25x28
+[checkbox] "Add filter" @325,171 112x34
+[button] "New customer" @1275,170 158x32
+[columnheader] "Name" @483,224 344x56
+[columnheader] "Phone" @714,224 117x56
+[columnheader] "Email" @928,224 313x56
+[columnheader] "Outstanding" @1161,224 151x56
+[columnheader] "Credit" @1292,224 112x56
+[columnheader] "Success POC" @1357,224 18x56
+[columnheader] "Collection POC" @1661,224 214x56
+[cell] "apaycr-mu2sscpo6ab0\nPOC missing" @483,276 344x48
+[cell] "555-0100" @714,276 117x48
+[cell] "apaycr-mu2sscpo6ab0@rt.local" @928,276 313x48
+[cell] "₹475.00" @1161,276 151x48
+[cell] "₹0.00" @1292,276 112x48
+[cell] "—" @1357,276 18x48
+[cell] "UIPC-MU2SSCEO4E95" @1661,276 214x48
+[button] "Open" @1816,276 40x40
+[button] "Raise promise" @1856,276 40x40
+[cell] "aurc-mu2soynne6b1\nPOC missing" @483,324 344x48
+[cell] "555-0100" @714,324 117x48
+[cell] "aurc-mu2soynne6b1@rt.local" @928,324 313x48
+[cell] "₹10.00" @1161,324 151x48
+[cell] "₹0.00" @1292,324 112x48
+[cell] "Full cs" @1357,324 18x48
+[cell] "—" @1661,324 214x48
+[button] "Open" @1816,324 40x40
+[button] "Raise promise" @1856,324 40x40
+[cell] "aurjwtc-mu2spwmm1c9d\nPOC missing" @483,372 344x48
+[cell] "555" @714,372 117x48
+[cell] "aurjwtc-mu2spwmm3eef@rt.local" @928,372 313x48
+[cell] "₹0.00" @1161,372 151x48
+[cell] "₹0.00" @1292,372 112x48
+[cell] "—" @1357,372 18x48
+[cell] "—" @1661,372 214x48
+[button] "Open" @1816,372 40x40
+[cell] "aursb-mu2sreqz029c\nPOC missing" @483,420 344x48
+[cell] "555-0100" @714,420 117x48
+[cell] "aursb-mu2sreqz029c@rt.local" @928,420 313x48
+[cell] "₹0.00" @1161,420 151x48
+[cell] "₹0.00" @1292,420 112x48
+[cell] "—" @1357,420 18x48
+[cell] "—" @1661,420 214x48
+[button] "Open" @1816,420 40x40
+[cell] "cp-mu2sqkltc327 alpha2" @483,468 344x48
+[cell] "555-0003" @714,468 117x48
+[cell] "cp-mu2sqkltc327-c@rt.local" @928,468 313x48
+[cell] "₹0.00" @1161,468 151x48
+[cell] "₹0.00" @1292,468 112x48
+[cell] "CPCS-MU2SQKPVAEF5" @1357,468 18x48
+[cell] "CPCOL-MU2SQKTTB519" @1661,468 214x48
+[button] "Open" @1816,468 40x40
+[cell] "cp-mu2sqkltc327 bravo" @483,516 344x48
+[cell] "555-0001" @714,516 117x48
+[cell] "cp-mu2sqkltc327-a@rt.local" @928,516 313x48
+[cell] "₹300.00" @1161,516 151x48
+[cell] "₹0.00" @1292,516 112x48
+[cell] "CPCS-MU2SQKPVAEF5" @1357,516 18x48
+[cell] "CPCOL-MU2SQKRV3476" @1661,516 214x48
+[button] "Open" @1816,516 40x40
+[button] "Raise promise" @1856,516 40x40
+[cell] "cp-mu2sqkltc327 bycashier" @483,564 344x48
+[cell] "555-0002" @714,564 117x48
+[cell] "cp-mu2sqkltc327-b@rt.local" @928,564 313x48
+[cell] "₹100.00" @1161,564 151x48
+[cell] "₹0.00" @1292,564 112x48
+[cell] "CPCS-MU2SQKLU67A2" @1357,564 18x48
+[cell] "CPCOL-MU2SQKRV3476" @1661,564 214x48
+[button] "Open" @1816,564 40x40
+[button] "Raise promise" @1856,564 40x40
+[cell] "cp-mu2sqkltc327 delta" @483,612 344x48
+[cell] "₹0.00" @1161,612 151x48
+[cell] "₹50.00" @1292,612 112x48
+[cell] "CPCS-MU2SQKNX6B46" @1357,612 18x48
+[cell] "CPCOL-MU2SQKRV3476" @1661,612 214x48
+[button] "Open" @1816,612 40x40
+[cell] "cprr-mu2sscar5229\nPOC missing" @483,660 344x48
+[cell] "555-0100" @714,660 117x48
+[cell] "cprr-mu2sscar5229@rt.local" @928,660 313x48
+[cell] "₹0.00" @1161,660 151x48
+[cell] "₹0.00" @1292,660 112x48
+[cell] "CPRR-MU2SSCFC5334" @1357,660 18x48
+[cell] "—" @1661,660 214x48
+[button] "Open" @1816,660 40x40
+[cell] "cprr-mu2sscd12261\nPOC missing" @483,708 344x48
+[cell] "555-0100" @714,708 117x48
+[cell] "cprr-mu2sscd12261@rt.local" @928,708 313x48
+[cell] "₹0.00" @1161,708 151x48
+[cell] "₹0.00" @1292,708 112x48
+[cell] "CPRR-MU2SSCHU94E8" @1357,708 18x48
+[cell] "—" @1661,708 214x48
+[button] "Open" @1816,708 40x40
+[cell] "cpui-mu2ssz55cfab one\nPOC missing" @483,756 344x48
+[cell] "555-7" @714,756 117x48
+[cell] "cpui-mu2ssz55cfab-one@rt.local" @928,756 313x48
+[cell] "₹120.00" @1161,756 151x48
+[cell] "₹0.00" @1292,756 112x48
+[cell] "—" @1357,756 18x48
+[cell] "—" @1661,756 214x48
+[button] "Open" @1816,756 40x40
+[button] "Raise promise" @1856,756 40x40
+[cell] "cpui-mu2ssz55cfab three\nPOC missing" @483,804 344x48
+[cell] "555-3333" @714,804 117x48
+[cell] "cpui-mu2ssz55cfab-three@rt.local" @928,804 313x48
+[cell] "₹0.00" @1161,804 151x48
+[cell] "₹0.00" @1292,804 112x48
+[cell] "—" @1357,804 18x48
+[cell] "—" @1661,804 214x48
+[button] "Open" @1816,804 40x40
+[cell] "cpui-mu2ssz55cfab two edited\nPOC missing" @483,852 344x48
+[cell] "555-2222" @714,852 117x48
+[cell] "cpui-mu2ssz55cfab-two-edited@rt.local" @928,852 313x48
+[cell] "₹0.00" @1161,852 151x48
+[cell] "₹0.00" @1292,852 112x48
+[cell] "—" @1357,852 18x48
+[cell] "—" @1661,852 214x48
+[button] "Open" @1816,852 40x40
+[cell] "dnA-mu2sqa17ba82\nPOC missing" @483,900 344x48
+[cell] "555-0100" @714,900 117x48
+[cell] "dnA-mu2sqa17ba82@rt.local" @928,900 313x48
+[cell] "₹200.00" @1161,900 151x48
+[cell] "₹0.00" @1292,900 112x48
+[cell] "—" @1357,900 18x48
+[cell] "—" @1661,900 214x48
+[button] "Open" @1816,900 40x40
+[button] "Raise promise" @1856,900 40x40
+[cell] "dnA-mu2srhirfc54\nPOC missing" @483,948 344x48
+[cell] "555-0100" @714,948 117x48
+[cell] "dnA-mu2srhirfc54@rt.local" @928,948 313x48
+[cell] "₹200.00" @1161,948 151x48
+[cell] "₹0.00" @1292,948 112x48
+[cell] "—" @1357,948 18x48
+[cell] "—" @1661,948 214x48
+[button] "Open" @1816,948 40x40
+[button] "Raise promise" @1856,948 40x40
+[cell] "dnA-mu2st5pk8385\nPOC missing" @483,996 344x48
+[cell] "555-0100" @714,996 117x48
+[cell] "dnA-mu2st5pk8385@rt.local" @928,996 313x48
+[cell] "₹200.00" @1161,996 151x48
+[cell] "₹0.00" @1292,996 112x48
+[cell] "—" @1357,996 18x48
+[cell] "—" @1661,996 214x48
+[button] "Open" @1816,996 40x40
+[button] "Raise promise" @1856,996 40x40
+[cell] "dnB-mu2sqa4qac56\nPOC missing" @483,1044 344x48
+[cell] "555-0100" @714,1044 117x48
+[cell] "dnB-mu2sqa4qac56@rt.local" @928,1044 313x48
+[cell] "₹60.00" @1161,1044 151x48
+[cell] "₹0.00" @1292,1044 112x48
+[cell] "—" @1357,1044 18x48
+[cell] "—" @1661,1044 214x48
+[button] "Open" @1816,1044 40x40
+[button] "Raise promise" @1856,1044 40x40
+[cell] "dnB-mu2srhm6e1ed\nPOC missing" @483,1092 344x48
+[cell] "555-0100" @714,1092 117x48
+[cell] "dnB-mu2srhm6e1ed@rt.local" @928,1092 313x48
+[cell] "₹60.00" @1161,1092 151x48
+[cell] "₹0.00" @1292,1092 112x48
+[cell] "—" @1357,1092 18x48
+[cell] "—" @1661,1092 214x48
+[button] "Open" @1816,1092 40x40
+[button] "Raise promise" @1856,1092 40x40
+[cell] "dnB-mu2st5sy33db\nPOC missing" @483,1128 344x24
+[cell] "555-0100" @714,1128 117x24
+[cell] "dnB-mu2st5sy33db@rt.local" @928,1128 313x24
+[cell] "₹60.00" @1161,1128 151x24
+[cell] "₹0.00" @1292,1128 112x24
+[cell] "—" @1357,1128 18x24
+[cell] "—" @1661,1140 214x48
+[button] "Open" @1816,1140 40x40
+[button] "Raise promise" @1856,1140 40x40
+[cell] "dnC-mu2srhvi72f4\nPOC missing" @483,1188 344x48
+[cell] "555-0100" @714,1188 117x48
+[cell] "dnC-mu2srhvi72f4@rt.local" @928,1188 313x48
+[cell] "₹0.00" @1161,1188 151x48
+[cell] "₹150.00" @1292,1188 112x48
+[cell] "—" @1451,1188 207x48
+[cell] "—" @1661,1188 214x48
+[button] "Open" @1816,1188 40x40
+[null] "Rows" @940,1170 35x20
+[button] "20" @985,1170 42x48
+[null] "1–20 of 141" @1057,1170 79x20
+[null] "Page 1 of 8" @1145,1170 73x20
+[button] "First page" @1214,1170 40x40
+[button] "Previous page" @1254,1170 40x40
+[button] "Next page" @1294,1170 40x40
+[button] "Last page" @1334,1170 40x40

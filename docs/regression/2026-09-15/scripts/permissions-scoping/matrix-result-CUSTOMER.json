@@ -1,0 +1,539 @@
+{
+  "CUSTOMER": [
+    {
+      "name": "GET customers",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET customers/summary",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET customers/{A}",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET customers/{A}/pocs",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST customers",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "PUT customers/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST customers/{id}/pocs",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "DELETE customers/{id}/pocs/{seat}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST customers/bulk ADD_POC",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "DELETE customers/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET products",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET products/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST products",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "PUT products/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST products/bulk DEACTIVATE",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "DELETE products/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET invoices",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET invoices/summary",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET invoices/{A1}",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET invoices/assignable-check",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "POST invoices",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "PATCH invoices/{X1} notes",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST invoices/{id}/cancel",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST invoices/bulk REASSIGN_SALES_POC",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET payments",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET payments/summary",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET payments/{A}",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET payments/credits/{A}",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "POST payments",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "PATCH payments/{X} notes",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST payments/bulk REASSIGN_COLLECTION_POC",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET promises",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET promises/summary",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET promises/{A}",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "POST promises",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "PUT promises/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST promises/{id}/override",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "DELETE promises/{id}/override",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST promises/bulk REASSIGN_COLLECTION_POC",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST promises/{id}/cancel",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET disputes",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET disputes/{A}",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "POST disputes",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "POST disputes/{id}/deny",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET users",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET users/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST users",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "PUT users/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST users/bulk DEACTIVATE",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "DELETE users/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET roles",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET roles/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET privileges",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "POST roles",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "PUT roles/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "DELETE roles/{id}",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET notifications",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET notifications/unread-count",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "POST notifications/bulk MARK_READ all",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET audit INVOICE A1",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET pocs/assignable",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET pocs/types",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET pocs/my-scope",
+      "exp": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true
+    },
+    {
+      "name": "GET table-schemas/invoices",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "GET auth/me",
+      "exp": "ALLOW",
+      "act": "ALLOW",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "name": "EXPORT customers",
+      "exp": "DENY",
+      "expAnnotation": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true,
+      "rows": null,
+      "head": "{\"timestamp\":\"2026-09-15T15:04:30.220202Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for th"
+    },
+    {
+      "name": "EXPORT products",
+      "exp": "DENY",
+      "expAnnotation": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true,
+      "rows": null,
+      "head": "{\"timestamp\":\"2026-09-15T15:04:30.221043Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for th"
+    },
+    {
+      "name": "EXPORT invoices",
+      "exp": "DENY",
+      "expAnnotation": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true,
+      "rows": null,
+      "head": "{\"timestamp\":\"2026-09-15T15:04:30.221835Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for th"
+    },
+    {
+      "name": "EXPORT payments",
+      "exp": "DENY",
+      "expAnnotation": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true,
+      "rows": null,
+      "head": "{\"timestamp\":\"2026-09-15T15:04:30.222613Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for th"
+    },
+    {
+      "name": "EXPORT promises",
+      "exp": "DENY",
+      "expAnnotation": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true,
+      "rows": null,
+      "head": "{\"timestamp\":\"2026-09-15T15:04:30.223290Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for th"
+    },
+    {
+      "name": "EXPORT users",
+      "exp": "DENY",
+      "expAnnotation": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true,
+      "rows": null,
+      "head": "{\"timestamp\":\"2026-09-15T15:04:30.224044Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for th"
+    },
+    {
+      "name": "EXPORT roles",
+      "exp": "DENY",
+      "expAnnotation": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true,
+      "rows": null,
+      "head": "{\"timestamp\":\"2026-09-15T15:04:30.224867Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for th"
+    },
+    {
+      "name": "EXPORT disputes",
+      "exp": "DENY",
+      "expAnnotation": "DENY",
+      "act": "DENY",
+      "status": 403,
+      "ok": true,
+      "rows": null,
+      "head": "{\"timestamp\":\"2026-09-15T15:04:30.225561Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for th"
+    }
+  ]
+}

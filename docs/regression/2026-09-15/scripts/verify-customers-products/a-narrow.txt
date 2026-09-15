@@ -1,0 +1,31 @@
+[button] "Open navigation menu" @28,28 40x40
+[null] "91" @202,23 13x16
+[button] "Notifications" @200,28 40x40
+[button] "Account\nadmin • ADMIN" @312,28 176x24
+[null] "Customers" @97,88 146x16
+[null] "Total outstanding" @279,88 146x16
+[null] "2" @30,116 12x28
+[null] "₹0.00" @233,116 54x28
+[null] "Total credit" @97,174 146x16
+[null] "No Success POC" @288,174 128x16
+[null] "₹0.00" @51,202 54x28
+[null] "2" @212,202 12x28
+[null] "No Collection POC" @106,260 128x16
+[null] "2" @30,288 12x28
+[checkbox] "Add filter" @68,343 112x34
+[button] "New customer" @309,342 158x32
+[checkbox] "Name contains vcpui-mu2tpgeu93ec" @115,383 206x34
+[button] "Delete" @199,383 32x32
+[button] "Clear all" @50,422 75x32
+[group] "Name\nvcpui-mu2tpgeu93ec one\nPOC missing\nPhone\n555-7\nEmail\nvcpui-mu2tpgeu93ec-one@rt.local\nOutstanding\n₹0.00\nCredit\n₹0.00\nSuccess POC\n—\nCollection POC\n—" @200,560 384x212
+[button] "Open" @360,486 40x40
+[group] "Name\nvcpui-mu2tpgeu93ec two\nPOC missing\nPhone\n555-7\nEmail\nvcpui-mu2tpgeu93ec-two@rt.local\nOutstanding\n₹0.00\nCredit\n₹0.00\nSuccess POC\n—\nCollection POC\n—" @200,684 384x24
+[button] "Open" @360,690 40x12
+[null] "Rows" @170,726 35x20
+[button] "20" @215,726 42x48
+[null] "1–2 of 2" @275,726 55x20
+[null] "Page 1 of 1" @351,726 73x20
+[button] "First page" @248,774 40x40
+[button] "Previous page" @288,774 40x40
+[button] "Next page" @328,774 40x40
+[button] "Last page" @368,774 40x40

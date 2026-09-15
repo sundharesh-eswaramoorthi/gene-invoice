@@ -1,0 +1,226 @@
+[
+  {
+    "id": "PRM-V01",
+    "title": "Create rejects amount 0 and negative amount",
+    "status": "PASS",
+    "actual": "amount 0 -> 400 {\"timestamp\":\"2026-09-15T14:57:58.177079Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/promises\",\"fieldErrors\":{\"amount\":\"must be greater than 0\"}} ; amount -5 -> 400 {\"timestamp\":\"2026-09-15T14:57:58.180137Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/promises\",\"fieldErrors\":{\"amount\":\"must be greater than 0\"}}",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-V02",
+    "title": "Create rejects a missing promisedDate",
+    "status": "PASS",
+    "actual": "400 {\"timestamp\":\"2026-09-15T14:57:58.182756Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/promises\",\"fieldErrors\":{\"promisedDate\":\"must not be null\"}}",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-V03",
+    "title": "Create rejects missing / unknown customer",
+    "status": "PASS",
+    "actual": "missing -> 400 {\"timestamp\":\"2026-09-15T14:57:58.184752Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/promises\",\"fieldErrors\":{\"customerId\":\"must not be null\"}} ; unknown -> 404 {\"timestamp\":\"2026-09-15T14:57:58.187113Z\",\"status\":404,\"error\":\"Not Found\",\"message\":\"Customer not found\",\"path\":\"/api/promises\",\"fieldErrors\":null}",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-V04",
+    "title": "Create rejects an invoice belonging to another customer",
+    "status": "PASS",
+    "actual": "400 {\"timestamp\":\"2026-09-15T14:57:58.192423Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Invoice INV-20260915-0063 belongs to a different customer\",\"path\":\"/api/promises\",\"fieldErrors\":null}",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-V05",
+    "title": "Create rejects a CANCELLED invoice",
+    "status": "PASS",
+    "actual": "invoice cancel -> 200; promise -> 400 {\"timestamp\":\"2026-09-15T14:57:58.196687Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Invoice INV-20260915-0064 is cancelled and cannot be promised against\",\"path\":\"/api/promises\",\"fieldErrors\":null}",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-V06",
+    "title": "Create rejects an unknown invoice id",
+    "status": "PASS",
+    "actual": "404 {\"timestamp\":\"2026-09-15T14:57:58.200526Z\",\"status\":404,\"error\":\"Not Found\",\"message\":\"One or more invoices were not found\",\"path\":\"/api/promises\",\"fieldErrors\":null}",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-D01",
+    "title": "Collection POC defaults to the customer's primary when omitted",
+    "status": "PASS",
+    "actual": "200 collectionPoc=promises-mu2sqhj14dc3 (expected promises-mu2sqhj14dc3) status=OPEN",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-D02",
+    "title": "Collection POC required when the customer has no primary",
+    "status": "PASS",
+    "actual": "no poc -> 400 {\"timestamp\":\"2026-09-15T14:57:58.210805Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"A Collection POC is required — this customer has no primary Collection POC, so pick one explicitly\",\"path\":\"/api/promises\",\"fieldEr ; explicit collB -> 200 poc=promises-mu2sqhl70027",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-D03",
+    "title": "An explicit POC not assignable as Collection (a SALES_POC user) is rejected",
+    "status": "PASS",
+    "actual": "400 {\"timestamp\":\"2026-09-15T14:57:58.221290Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"User promises-mu2sqhn8f677 is not assignable as Collection POC\",\"path\":\"/api/promises\",\"fieldErrors\":null}",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-K01",
+    "title": "Payment fully settling the promised invoice auto-links and marks KEPT (Collection POC creates it)",
+    "status": "PASS",
+    "actual": "create by COLLECTION_POC -> 200 OPEN; payment 200 #18; promise now KEPT fulfilled=100 remaining=0 payments=[18]",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-K02",
+    "title": "Partial payment marks PARTIALLY_KEPT and records remainingAmount",
+    "status": "PASS",
+    "actual": "payment 200; promise PARTIALLY_KEPT fulfilled=50 remaining=150",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-K03",
+    "title": "Promised amount may exceed / fall short of the invoice balance (AC-B2, not blocked)",
+    "status": "PASS",
+    "actual": "excess 999 vs balance 150 -> 200 OPEN; shortfall 1 -> 200 OPEN",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-G01",
+    "title": "General promise (no invoices) tracks payments: 40 -> PARTIALLY_KEPT, +60 -> KEPT",
+    "status": "PASS",
+    "actual": "create 200 OPEN invoices=0; after 40: PARTIALLY_KEPT rem=60; after +60: KEPT fulfilled=100 payments=2",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-B01",
+    "title": "Promise with a past date and no payment is BROKEN; Collection POC gets ONE notification deep-linking to it",
+    "status": "PASS",
+    "actual": "create 200 status=BROKEN poc=promises-mu2sqhl70027; PROMISE_BROKEN notifications for collB = 1",
+    "evidence": "Promise broken — promises-mu2sqi6fcd9f | promises-mu2sqi6fcd9f promised 100 by 2026-09-13 and it has not been paid. | link /promises/18"
+  },
+  {
+    "id": "PRM-B02",
+    "title": "Re-evaluation (new invoice, promise edit) does not send a second broken notification",
+    "status": "PASS",
+    "actual": "PUT 200; status BROKEN; notifications 1",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-B03",
+    "title": "Paying after the date does not un-break the promise but is recorded in fulfilledAmount",
+    "status": "PASS",
+    "actual": "status BROKEN fulfilled=100 remaining=0 notifications=1",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-B04",
+    "title": "General promise past its date with an unpaid balance is BROKEN",
+    "status": "PASS",
+    "actual": "status BROKEN; notifications 1",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-A01",
+    "title": "Every status change writes an audit entry (AC-B9)",
+    "status": "PASS",
+    "actual": "200 actions=[\"PROMISE_UPDATED\",\"PROMISE_STATUS_CHANGED\",\"PROMISE_CREATED\"]",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-O01",
+    "title": "Override requires a reason and refuses CANCELLED / unknown status",
+    "status": "FAIL",
+    "actual": "no reason 400 {\"timestamp\":\"2026-09-15T14:57:58.728829Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/promises/20/override\",\"fieldErrors\":{\"reason\":\"must not be null\"}} | blank 400 {\"timestamp\":\"2026-09-15T14:57:58.731755Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"An override requires a reason\",\"path\":\"/api/promises/20/override\",\"fieldErrors\":null} | CANCELLED 400 {\"timestamp\":\"2026-09-15T14:57:58.733903Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Use cancel to withdraw a promise\",\"path\":\"/api/promises/20/override\",\"fieldErrors\":null} | FOO 500; still overridden=false",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-O02",
+    "title": "Override OPEN -> KEPT with a reason records who/when/why and an audit row",
+    "status": "PASS",
+    "actual": "200 status=KEPT overridden=true reason=Customer showed wire receipt by=1 at=2026-09-15T14:57:58.742286Z; audit=[\"PROMISE_STATUS_OVERRIDDEN\",\"PROMISE_CREATED\"]",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-O03",
+    "title": "An override pins the status while fulfilment keeps being tracked",
+    "status": "PASS",
+    "actual": "status KEPT overridden=true fulfilled=30",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-O04",
+    "title": "DELETE /override hands back to automatic tracking (-> PARTIALLY_KEPT) and audits it",
+    "status": "PASS",
+    "actual": "200 status=PARTIALLY_KEPT overridden=false reason=null; audit has CLEARED=true; second DELETE (no override) -> 200",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-O05",
+    "title": "Override to BROKEN notifies the Collection POC once",
+    "status": "PASS",
+    "actual": "override 200/200 status=BROKEN; notifications to collB=1",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-O06",
+    "title": "CASHIER (no PROMISE_MANAGE/OVERRIDE) can view but cannot create, override or clear",
+    "status": "PASS",
+    "actual": "view 200 create 403 override 403 clear 403",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-C01",
+    "title": "Cancel unlinks payments without altering the payment or its allocations",
+    "status": "PASS",
+    "actual": "before KEPT links=1; cancel 200 -> CANCELLED links=0 fulfilled=0; payment before={\"a\":100,\"s\":\"ACTIVE\",\"c\":0,\"inv\":[[70,100]]} after={\"a\":100,\"s\":\"ACTIVE\",\"c\":0,\"inv\":[[70,100]]}; invoice before={\"paid\":100,\"bal\":0,\"s\":\"FULLY_PAID\"} after={\"paid\":100,\"bal\":0,\"s\":\"FULLY_PAID\"}",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-C02",
+    "title": "A cancelled promise cannot be cancelled again or edited; re-evaluation never resurrects it",
+    "status": "PASS",
+    "actual": "cancel again 400 {\"timestamp\":\"2026-09-15T14:57:58.954717Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Promise is already cancelled\",\"path\":\"/api/promises/21/cancel\",\"fieldErrors\":null} | PUT 400 {\"timestamp\":\"2026-09-15T14:57:58.957865Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"A cancelled promise cannot be edited\",\"path\":\"/api/promises/21\",\"fieldErrors\":null} | after new payment status=CANCELLED links=0",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-C03",
+    "title": "Override on a CANCELLED promise is refused (lead #20)",
+    "status": "FAIL",
+    "actual": "override on CANCELLED -> 200 status=OPEN ; then DELETE override -> 200 status=KEPT links=[24] fulfilled=100",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-C04",
+    "title": "Cancel with no body is accepted (reason optional)",
+    "status": "PASS",
+    "actual": "200 {\"id\":22,\"customerId\":49,\"customerName\":\"promises-mu2sqii68b2e\",\"amount\":10.00,\"fulfilledAmount\":0,\"remainingAmount\":10.00,\"promisedDate\":\"2026-09-19\",\"status\":\"CANCELLED\",\"statusOverridden\":false,\"overrideReason\":null,\"",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-U01",
+    "title": "PUT validation: amount 0 -> 400, missing promisedDate -> 400",
+    "status": "PASS",
+    "actual": "amount 0 400 {\"timestamp\":\"2026-09-15T14:57:58.991471Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/promises/11\",\"fieldErrors\":{\"amount\":\"must be greater than 0\"}} | no date 400 {\"timestamp\":\"2026-09-15T14:57:58.993448Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/promises/11\",\"fieldErrors\":{\"promisedDate\":\"must not be null\"}}",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-U02",
+    "title": "PUT moving the date into the past with nothing paid re-evaluates to BROKEN",
+    "status": "PASS",
+    "actual": "before OPEN; PUT 200 -> BROKEN; notifications=1",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-U03",
+    "title": "PUT reassigning the Collection POC changes it and notifies the new POC",
+    "status": "PASS",
+    "actual": "200 poc=promises-mu2sqhl70027; notifications to collB for this promise=1 You are now Collection POC",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-P01",
+    "title": "GET unknown promise -> 404",
+    "status": "PASS",
+    "actual": "404 {\"timestamp\":\"2026-09-15T14:57:59.096001Z\",\"status\":404,\"error\":\"Not Found\",\"message\":\"Payment promise not found\",\"path\":\"/api/promises/987654321\",\"fieldErrors\":null}",
+    "evidence": ""
+  }
+]

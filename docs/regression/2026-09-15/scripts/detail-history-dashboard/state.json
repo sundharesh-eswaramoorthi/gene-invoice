@@ -1,0 +1,626 @@
+{
+  "prod": {
+    "id": 76,
+    "name": "dhd-prod-mu2te2k53309",
+    "description": "rt",
+    "price": 100,
+    "active": true
+  },
+  "sales": {
+    "id": 342,
+    "username": "dhd-sales-mu2te2kf0d96",
+    "email": "dhd-sales-mu2te2kf0d96@rt.local",
+    "fullName": "DHD-SALES-MU2TE2KF0D96",
+    "active": true,
+    "role": "SALES_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_SALES",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW"
+    ],
+    "password": "Passw0rd!"
+  },
+  "coll": {
+    "id": 343,
+    "username": "dhd-coll-mu2te2mkf903",
+    "email": "dhd-coll-mu2te2mkf903@rt.local",
+    "fullName": "DHD-COLL-MU2TE2MKF903",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "coll2": {
+    "id": 344,
+    "username": "dhd-coll2-mu2te2orc7d0",
+    "email": "dhd-coll2-mu2te2orc7d0@rt.local",
+    "fullName": "DHD-COLL2-MU2TE2ORC7D0",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "succ": {
+    "id": 345,
+    "username": "dhd-succ-mu2te2r05d36",
+    "email": "dhd-succ-mu2te2r05d36@rt.local",
+    "fullName": "DHD-SUCC-MU2TE2R05D36",
+    "active": true,
+    "role": "CUSTOMER_SUCCESS_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_MANAGE",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_SUCCESS",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "custA": {
+    "id": 164,
+    "name": "dhd-custA-mu2te2t7f180",
+    "phone": "555-0100",
+    "email": "dhd-custA-mu2te2t7f180@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "dhd-custA-mu2te2t7f180",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T15:16:18.238839Z",
+    "password": "Passw0rd!"
+  },
+  "custB": {
+    "id": 165,
+    "name": "dhd-custB-mu2te2v3877f",
+    "phone": "555-0100",
+    "email": "dhd-custB-mu2te2v3877f@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "dhd-custB-mu2te2v3877f",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T15:16:18.306649Z",
+    "password": "Passw0rd!"
+  },
+  "custC": {
+    "id": 166,
+    "name": "dhd-custC-mu2te2wz413f",
+    "phone": "555-0100",
+    "email": "dhd-custC-mu2te2wz413f@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "dhd-custC-mu2te2wz413f",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T15:16:18.374735Z",
+    "password": "Passw0rd!"
+  },
+  "seatColl": {
+    "id": 118,
+    "pocType": "COLLECTION",
+    "primary": true,
+    "user": {
+      "id": 343,
+      "username": "dhd-coll-mu2te2mkf903",
+      "fullName": "DHD-COLL-MU2TE2MKF903",
+      "email": "dhd-coll-mu2te2mkf903@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "createdAt": "2026-09-15T15:16:18.444118Z"
+  },
+  "seatSucc": {
+    "id": 119,
+    "pocType": "SUCCESS",
+    "primary": true,
+    "user": {
+      "id": 345,
+      "username": "dhd-succ-mu2te2r05d36",
+      "fullName": "DHD-SUCC-MU2TE2R05D36",
+      "email": "dhd-succ-mu2te2r05d36@rt.local",
+      "role": "CUSTOMER_SUCCESS_POC",
+      "active": true
+    },
+    "createdAt": "2026-09-15T15:16:18.453831Z"
+  },
+  "seatColl2": {
+    "id": 120,
+    "pocType": "COLLECTION",
+    "primary": false,
+    "user": {
+      "id": 344,
+      "username": "dhd-coll2-mu2te2orc7d0",
+      "fullName": "DHD-COLL2-MU2TE2ORC7D0",
+      "email": "dhd-coll2-mu2te2orc7d0@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "createdAt": "2026-09-15T15:16:18.463895Z"
+  },
+  "A1": {
+    "id": 248,
+    "invoiceNumber": "INV-20260915-0238",
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "invoiceDate": "2026-09-15T15:16:18.531841Z",
+    "total": 200,
+    "paidAmount": 0,
+    "balance": 200,
+    "status": "UNPAID",
+    "notes": "A1 notes original",
+    "items": [
+      {
+        "id": 249,
+        "productId": 76,
+        "productName": "dhd-prod-mu2te2k53309",
+        "quantity": 2,
+        "unitPrice": 100,
+        "lineTotal": 200
+      }
+    ],
+    "salesPoc": {
+      "id": 342,
+      "username": "dhd-sales-mu2te2kf0d96",
+      "fullName": "DHD-SALES-MU2TE2KF0D96",
+      "email": "dhd-sales-mu2te2kf0d96@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T15:16:18.532860Z"
+  },
+  "A2": {
+    "id": 249,
+    "invoiceNumber": "INV-20260915-0239",
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "invoiceDate": "2026-09-15T15:16:18.540612Z",
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "UNPAID",
+    "notes": "A2 notes original",
+    "items": [
+      {
+        "id": 250,
+        "productId": 76,
+        "productName": "dhd-prod-mu2te2k53309",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 342,
+      "username": "dhd-sales-mu2te2kf0d96",
+      "fullName": "DHD-SALES-MU2TE2KF0D96",
+      "email": "dhd-sales-mu2te2kf0d96@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T15:16:18.541390Z"
+  },
+  "B1": {
+    "id": 250,
+    "invoiceNumber": "INV-20260915-0240",
+    "customerId": 165,
+    "customerName": "dhd-custB-mu2te2v3877f",
+    "invoiceDate": "2026-09-15T15:16:18.547797Z",
+    "total": 300,
+    "paidAmount": 0,
+    "balance": 300,
+    "status": "UNPAID",
+    "notes": "B1 notes original",
+    "items": [
+      {
+        "id": 251,
+        "productId": 76,
+        "productName": "dhd-prod-mu2te2k53309",
+        "quantity": 3,
+        "unitPrice": 100,
+        "lineTotal": 300
+      }
+    ],
+    "salesPoc": {
+      "id": 342,
+      "username": "dhd-sales-mu2te2kf0d96",
+      "fullName": "DHD-SALES-MU2TE2KF0D96",
+      "email": "dhd-sales-mu2te2kf0d96@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T15:16:18.548382Z"
+  },
+  "C1": {
+    "id": 251,
+    "invoiceNumber": "INV-20260915-0241",
+    "customerId": 166,
+    "customerName": "dhd-custC-mu2te2wz413f",
+    "invoiceDate": "2026-09-15T15:16:18.554940Z",
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "UNPAID",
+    "notes": "C1 notes",
+    "items": [
+      {
+        "id": 252,
+        "productId": 76,
+        "productName": "dhd-prod-mu2te2k53309",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 342,
+      "username": "dhd-sales-mu2te2kf0d96",
+      "fullName": "DHD-SALES-MU2TE2KF0D96",
+      "email": "dhd-sales-mu2te2kf0d96@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T15:16:18.555877Z"
+  },
+  "PA1": {
+    "id": 109,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "amount": 50,
+    "creditApplied": 0,
+    "method": "CASH",
+    "notes": "PA1 notes original",
+    "paidAt": "2026-09-15T15:16:18.566458Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 248,
+        "invoiceNumber": "INV-20260915-0238",
+        "total": 200,
+        "paidAmount": 50,
+        "balance": 150,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 50
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 343,
+      "username": "dhd-coll-mu2te2mkf903",
+      "fullName": "DHD-COLL-MU2TE2MKF903",
+      "email": "dhd-coll-mu2te2mkf903@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "PA2": {
+    "id": 110,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "amount": 20,
+    "creditApplied": 0,
+    "method": "CASH",
+    "notes": "PA2 to be voided",
+    "paidAt": "2026-09-15T15:16:18.574682Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 248,
+        "invoiceNumber": "INV-20260915-0238",
+        "total": 200,
+        "paidAmount": 70,
+        "balance": 130,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 20
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 343,
+      "username": "dhd-coll-mu2te2mkf903",
+      "fullName": "DHD-COLL-MU2TE2MKF903",
+      "email": "dhd-coll-mu2te2mkf903@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "PA3": {
+    "id": 111,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "amount": 10,
+    "creditApplied": 0,
+    "method": "CASH",
+    "notes": "PA3 on A2",
+    "paidAt": "2026-09-15T15:16:18.585384Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 249,
+        "invoiceNumber": "INV-20260915-0239",
+        "total": 100,
+        "paidAmount": 10,
+        "balance": 90,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 10
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 343,
+      "username": "dhd-coll-mu2te2mkf903",
+      "fullName": "DHD-COLL-MU2TE2MKF903",
+      "email": "dhd-coll-mu2te2mkf903@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "PB1": {
+    "id": 112,
+    "customerId": 165,
+    "customerName": "dhd-custB-mu2te2v3877f",
+    "amount": 30,
+    "creditApplied": 0,
+    "method": "CASH",
+    "notes": "PB1 notes original",
+    "paidAt": "2026-09-15T15:16:18.594605Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 250,
+        "invoiceNumber": "INV-20260915-0240",
+        "total": 300,
+        "paidAmount": 30,
+        "balance": 270,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 30
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 343,
+      "username": "dhd-coll-mu2te2mkf903",
+      "fullName": "DHD-COLL-MU2TE2MKF903",
+      "email": "dhd-coll-mu2te2mkf903@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "PR1": {
+    "id": 104,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "amount": 100,
+    "fulfilledAmount": 0,
+    "remainingAmount": 100,
+    "promisedDate": "2026-09-25",
+    "status": "OPEN",
+    "statusOverridden": false,
+    "overrideReason": null,
+    "overriddenByUserId": null,
+    "overriddenAt": null,
+    "collectionPoc": {
+      "id": 344,
+      "username": "dhd-coll2-mu2te2orc7d0",
+      "fullName": "DHD-COLL2-MU2TE2ORC7D0",
+      "email": "dhd-coll2-mu2te2orc7d0@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "notes": "PR1 on A1",
+    "invoices": [
+      {
+        "id": 248,
+        "invoiceNumber": "INV-20260915-0238",
+        "total": 200,
+        "balance": 130,
+        "status": "PARTIALLY_PAID"
+      }
+    ],
+    "payments": [],
+    "createdByUserId": 1,
+    "createdAt": "2026-09-15T15:16:18.610057Z",
+    "updatedAt": "2026-09-15T15:16:18.610057Z"
+  },
+  "PR2": {
+    "id": 105,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "amount": 60,
+    "fulfilledAmount": 0,
+    "remainingAmount": 60,
+    "promisedDate": "2026-09-27",
+    "status": "OPEN",
+    "statusOverridden": false,
+    "overrideReason": null,
+    "overriddenByUserId": null,
+    "overriddenAt": null,
+    "collectionPoc": {
+      "id": 344,
+      "username": "dhd-coll2-mu2te2orc7d0",
+      "fullName": "DHD-COLL2-MU2TE2ORC7D0",
+      "email": "dhd-coll2-mu2te2orc7d0@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "notes": "PR2 general",
+    "invoices": [],
+    "payments": [],
+    "createdByUserId": 1,
+    "createdAt": "2026-09-15T15:16:18.621479Z",
+    "updatedAt": "2026-09-15T15:16:18.621479Z"
+  },
+  "PR3": {
+    "id": 106,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "amount": 10,
+    "fulfilledAmount": 0,
+    "remainingAmount": 10,
+    "promisedDate": "2026-09-27",
+    "status": "OPEN",
+    "statusOverridden": false,
+    "overrideReason": null,
+    "overriddenByUserId": null,
+    "overriddenAt": null,
+    "collectionPoc": {
+      "id": 344,
+      "username": "dhd-coll2-mu2te2orc7d0",
+      "fullName": "DHD-COLL2-MU2TE2ORC7D0",
+      "email": "dhd-coll2-mu2te2orc7d0@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "notes": "PR3 on A2",
+    "invoices": [
+      {
+        "id": 249,
+        "invoiceNumber": "INV-20260915-0239",
+        "total": 100,
+        "balance": 90,
+        "status": "PARTIALLY_PAID"
+      }
+    ],
+    "payments": [],
+    "createdByUserId": 1,
+    "createdAt": "2026-09-15T15:16:18.633363Z",
+    "updatedAt": "2026-09-15T15:16:18.633363Z"
+  },
+  "D1": {
+    "id": 82,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "openedByUserId": 346,
+    "targetType": "INVOICE",
+    "targetId": 248,
+    "targetSummary": "INV-20260915-0238 — 200.00",
+    "reason": "D1 short reason",
+    "proposedChangeJson": null,
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T15:16:18.739398Z",
+    "updatedAt": "2026-09-15T15:16:18.739398Z"
+  },
+  "D2": {
+    "id": 83,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "openedByUserId": 346,
+    "targetType": "INVOICE",
+    "targetId": 248,
+    "targetSummary": "INV-20260915-0238 — 200.00",
+    "reason": "LONG-REASON xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx END",
+    "proposedChangeJson": null,
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T15:16:18.757467Z",
+    "updatedAt": "2026-09-15T15:16:18.757467Z"
+  },
+  "D3": {
+    "id": 84,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "openedByUserId": 346,
+    "targetType": "PAYMENT",
+    "targetId": 110,
+    "targetSummary": "Payment #110 — 20.00",
+    "reason": "D3 duplicate payment",
+    "proposedChangeJson": "{\"action\":\"void\"}",
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T15:16:18.763877Z",
+    "updatedAt": "2026-09-15T15:16:18.763877Z"
+  },
+  "D4": {
+    "id": 85,
+    "customerId": 164,
+    "customerName": "dhd-custA-mu2te2t7f180",
+    "openedByUserId": 346,
+    "targetType": "INVOICE",
+    "targetId": 249,
+    "targetSummary": "INV-20260915-0239 — 100.00",
+    "reason": "D4 yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+    "proposedChangeJson": "{\"action\":\"update_notes\",\"notes\":\"A2 notes via dispute\"}",
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T15:16:18.781249Z",
+    "updatedAt": "2026-09-15T15:16:18.781249Z"
+  },
+  "longReason": "LONG-REASON xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx END"
+}

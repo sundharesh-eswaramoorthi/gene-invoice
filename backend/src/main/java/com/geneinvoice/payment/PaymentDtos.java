@@ -2,6 +2,7 @@ package com.geneinvoice.payment;
 
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceStatus;
+import com.geneinvoice.poc.PocDtos;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
@@ -16,7 +17,17 @@ public class PaymentDtos {
             @NotNull @Positive BigDecimal amount,
             String method,
             String notes,
-            List<Long> invoiceIds
+            List<Long> invoiceIds,
+            /** Mandatory on create; enforced in the service (AC-A2). */
+            Long collectionPocUserId,
+            /** Optional promises this payment should be counted against (US-B3). */
+            List<Long> promiseIds
+    ) {}
+
+    /** Inline edit from the detail screen: notes and the Collection POC. */
+    public record UpdatePaymentRequest(
+            String notes,
+            Long collectionPocUserId
     ) {}
 
     public record PaidInvoiceDto(Long id, String invoiceNumber, BigDecimal total,
@@ -33,9 +44,16 @@ public class PaymentDtos {
             Long id, Long customerId, String customerName,
             BigDecimal amount, BigDecimal creditApplied, String method, String notes,
             Instant paidAt, PaymentStatus status, List<PaidInvoiceDto> invoices,
-            BigDecimal customerCreditBalance
+            BigDecimal customerCreditBalance,
+            /** Null for a customer-scoped caller, who never sees POC identity (AC-A8). */
+            PocDtos.PocUserDto collectionPoc,
+            Boolean pocMissing
     ) {
         public static PaymentDto from(Payment p) {
+            return from(p, true);
+        }
+
+        public static PaymentDto from(Payment p, boolean includePoc) {
             return new PaymentDto(
                     p.getId(),
                     p.getCustomer().getId(),
@@ -47,8 +65,20 @@ public class PaymentDtos {
                     p.getPaidAt(),
                     p.getStatus(),
                     p.getAllocations().stream().map(PaidInvoiceDto::from).toList(),
-                    p.getCustomer().getCreditBalance()
+                    p.getCustomer().getCreditBalance(),
+                    includePoc ? PocDtos.PocUserDto.from(p.getCollectionPoc()) : null,
+                    includePoc ? p.getCollectionPoc() == null : null
             );
         }
     }
+
+    /** Filter-aware tiles for the payments list (Feature E). */
+    public record PaymentSummaryTiles(
+            long count,
+            BigDecimal totalCollected,
+            BigDecimal creditApplied,
+            long activeCount,
+            long voidedCount,
+            long pocMissingCount
+    ) {}
 }

@@ -1,0 +1,68 @@
+{
+  "header": [
+    {
+      "role": null,
+      "t": "INV-20260915-0376",
+      "x": 85,
+      "y": 116,
+      "w": 75,
+      "h": 96
+    },
+    {
+      "role": "checkbox",
+      "t": "Partially paid",
+      "x": 181,
+      "y": 156,
+      "w": 116,
+      "h": 34
+    },
+    {
+      "role": "button",
+      "t": "Raise dispute",
+      "x": 314,
+      "y": 156,
+      "w": 139,
+      "h": 32
+    },
+    {
+      "role": "button",
+      "t": "Raise dispute",
+      "x": 200,
+      "y": 817,
+      "w": 376,
+      "h": 38
+    },
+    {
+      "role": "button",
+      "t": "INVOICE INV-20260915-0376 — 200.00\n15 Sep 2026, 9:28 PM\nVD1 ",
+      "x": 200,
+      "y": 849,
+      "w": 376,
+      "h": 2
+    },
+    {
+      "role": "tab",
+      "t": "Disputes",
+      "x": 44,
+      "y": 753,
+      "w": 87,
+      "h": 74
+    },
+    {
+      "role": "tab",
+      "t": "Payment Promise",
+      "x": 159,
+      "y": 753,
+      "w": 144,
+      "h": 74
+    },
+    {
+      "role": "tab",
+      "t": "History",
+      "x": 270,
+      "y": 753,
+      "w": 77,
+      "h": 74
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+[group] "Dismiss" @683,450 1366x900
+[null] "Edit product" @683,287 380x32
+[switch] "Active" @683,511 380x48
+[button] "Cancel" @839,575 67x32
+[button] "Save" @683,610 380x38

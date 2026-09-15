@@ -1,0 +1,6 @@
+[group] "Dismiss" @683,600 1366x1200
+[null] "Add Customer Success POC" @683,501 420x32
+[button] "Customer Success POC *\nCPUICS-MU2T3BZO9230" @683,553 420x40
+[checkbox] "Make primary" @683,597 420x48
+[button] "Cancel" @859,661 67x32
+[button] "Add" @683,696 420x38

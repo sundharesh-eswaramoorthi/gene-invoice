@@ -1,0 +1,282 @@
+[
+ {
+  "i": 4,
+  "role": null,
+  "label": null,
+  "text": "99+",
+  "x": 1165,
+  "y": 23,
+  "w": 19,
+  "h": 16
+ },
+ {
+  "i": 5,
+  "role": "button",
+  "label": null,
+  "text": "Notifications",
+  "x": 1166,
+  "y": 28,
+  "w": 40,
+  "h": 40
+ },
+ {
+  "i": 6,
+  "role": "button",
+  "label": null,
+  "text": "Account\nadmin • ADMIN",
+  "x": 1278,
+  "y": 28,
+  "w": 176,
+  "h": 24
+ },
+ {
+  "i": 9,
+  "role": "button",
+  "label": null,
+  "text": "Back",
+  "x": 285,
+  "y": 94,
+  "w": 40,
+  "h": 40
+ },
+ {
+  "i": 10,
+  "role": null,
+  "label": null,
+  "text": "@vdhd-cust-mu2uw86pb9ab",
+  "x": 397,
+  "y": 110,
+  "w": 184,
+  "h": 20
+ },
+ {
+  "i": 11,
+  "role": null,
+  "label": null,
+  "text": "vdhd-cust-mu2uw86pb9ab",
+  "x": 447,
+  "y": 84,
+  "w": 284,
+  "h": 32
+ },
+ {
+  "i": 12,
+  "role": null,
+  "label": null,
+  "text": "POC missing",
+  "x": 1309,
+  "y": 94,
+  "w": 66,
+  "h": 16
+ },
+ {
+  "i": 14,
+  "role": null,
+  "label": null,
+  "text": "Outstanding",
+  "x": 320,
+  "y": 148,
+  "w": 71,
+  "h": 16
+ },
+ {
+  "i": 15,
+  "role": null,
+  "label": null,
+  "text": "Credit balance",
+  "x": 509,
+  "y": 148,
+  "w": 84,
+  "h": 16
+ },
+ {
+  "i": 16,
+  "role": null,
+  "label": null,
+  "text": "₹250.00",
+  "x": 324,
+  "y": 174,
+  "w": 79,
+  "h": 28
+ },
+ {
+  "i": 17,
+  "role": null,
+  "label": null,
+  "text": "₹0.00",
+  "x": 494,
+  "y": 174,
+  "w": 54,
+  "h": 28
+ },
+ {
+  "i": 18,
+  "role": null,
+  "label": null,
+  "text": "Name",
+  "x": 348,
+  "y": 238,
+  "w": 150,
+  "h": 20
+ },
+ {
+  "i": 20,
+  "role": null,
+  "label": null,
+  "text": "Phone",
+  "x": 348,
+  "y": 290,
+  "w": 150,
+  "h": 20
+ },
+ {
+  "i": 22,
+  "role": null,
+  "label": null,
+  "text": "Email",
+  "x": 348,
+  "y": 342,
+  "w": 150,
+  "h": 20
+ },
+ {
+  "i": 24,
+  "role": null,
+  "label": null,
+  "text": "Address",
+  "x": 348,
+  "y": 394,
+  "w": 150,
+  "h": 20
+ },
+ {
+  "i": 26,
+  "role": null,
+  "label": null,
+  "text": "Customer Success POCs",
+  "x": 348,
+  "y": 498,
+  "w": 150,
+  "h": 28
+ },
+ {
+  "i": 27,
+  "role": "checkbox",
+  "label": "Add",
+  "text": "",
+  "x": 463,
+  "y": 509,
+  "w": 79,
+  "h": 6
+ },
+ {
+  "i": 28,
+  "role": null,
+  "label": null,
+  "text": "No Customer Success POC yet",
+  "x": 898,
+  "y": 490,
+  "w": 905,
+  "h": 20
+ },
+ {
+  "i": 29,
+  "role": null,
+  "label": null,
+  "text": "Collection POCs",
+  "x": 348,
+  "y": 572,
+  "w": 150,
+  "h": 20
+ },
+ {
+  "i": 30,
+  "role": "checkbox",
+  "label": "VDHD-COLL-MU2UW84J7DB5",
+  "text": "",
+  "x": 554,
+  "y": 569,
+  "w": 263,
+  "h": 34
+ },
+ {
+  "i": 31,
+  "role": "button",
+  "label": null,
+  "text": "Delete",
+  "x": 667,
+  "y": 569,
+  "w": 32,
+  "h": 32
+ },
+ {
+  "i": 32,
+  "role": "checkbox",
+  "label": "Add",
+  "text": "",
+  "x": 731,
+  "y": 569,
+  "w": 79,
+  "h": 34
+ },
+ {
+  "i": 33,
+  "role": "button",
+  "label": null,
+  "text": "Save changes",
+  "x": 820,
+  "y": 623,
+  "w": 1093,
+  "h": 38
+ },
+ {
+  "i": 36,
+  "role": "tab",
+  "label": "Disputes",
+  "text": "",
+  "x": 301,
+  "y": 550,
+  "w": 87,
+  "h": 74
+ },
+ {
+  "i": 37,
+  "role": "tab",
+  "label": "Payment Promise",
+  "text": "",
+  "x": 416,
+  "y": 550,
+  "w": 144,
+  "h": 74
+ },
+ {
+  "i": 38,
+  "role": "tab",
+  "label": "History",
+  "text": "",
+  "x": 527,
+  "y": 550,
+  "w": 77,
+  "h": 74
+ },
+ {
+  "i": 44,
+  "role": "button",
+  "label": "INVOICE INV-20260915-0376 — 200.00\n15 Sep 2026, 9:28 PM\nVD1 reason",
+  "text": "",
+  "x": 812,
+  "y": 640,
+  "w": 1085,
+  "h": 80
+ },
+ {
+  "i": 45,
+  "role": "checkbox",
+  "label": "Denied",
+  "text": "",
+  "x": 1291,
+  "y": 625,
+  "w": 78,
+  "h": 34
+ }
+]

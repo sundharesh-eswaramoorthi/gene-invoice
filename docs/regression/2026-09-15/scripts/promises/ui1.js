@@ -1,0 +1,33 @@
+// UI exploration: list tiles, Customer Details promise tab, Invoice Details promise tab.
+const fx = require('./fx'); const { rt, addDays } = fx;
+const fs = require('fs');
+const dump = (nodes) => nodes.map((n) => `[${n.role}] ${(n.label || n.text).replace(/\n/g, ' / ')} @${n.x},${n.y}`).join('\n');
+(async () => {
+  const adm = await fx.admin();
+  const coll = await rt.createStaff(adm, 'COLLECTION_POC', 'promises');
+  const cu = await rt.createCustomer(adm, 'promisesui');
+  await fx.addPoc(cu.id, coll.id, true);
+  const invA = await fx.invoice(cu.id, 100);
+  const invB = await fx.invoice(cu.id, 250);
+  const pOpen = (await fx.promise({ customerId: cu.id, amount: 75, promisedDate: addDays(10), notes: 'general ui promise' })).json;
+  const pPart = (await fx.promise({ customerId: cu.id, amount: 250, promisedDate: addDays(12), invoiceIds: [invB.id] })).json;
+  await fx.pay(cu.id, 100, { invoiceIds: [invB.id] });
+  const ids = { cu: cu.id, cuName: cu.name, cuUser: cu.username, coll: coll.id, collUser: coll.username, invA: invA.id, invANum: invA.invoiceNumber, invB: invB.id, invBNum: invB.invoiceNumber, pOpen: pOpen.id, pPart: pPart.id };
+  fs.writeFileSync(__dirname + '/ui-ids.json', JSON.stringify(ids, null, 1));
+  console.log('ids', JSON.stringify(ids));
+  const s = (await rt.api('GET', `/api/promises/summary?customerId=${cu.id}`, { token: adm })).json;
+  console.log('API summary', JSON.stringify(s));
+  const app = await rt.openApp({ token: adm });
+  const { page } = app;
+  await rt.go(page, `#/promises?filter=${encodeURIComponent('customerId:eq:' + cu.id)}`, 5000);
+  console.log('shot', await rt.shot(page, __dirname, 'ui1-list-filtered'));
+  console.log('--- list semantics\n' + dump(await rt.semantics(page)));
+  await rt.go(page, `#/customers/${cu.id}?tab=promises`, 5000);
+  console.log('shot', await rt.shot(page, __dirname, 'ui1-customer-promises'));
+  console.log('--- customer semantics\n' + dump(await rt.semantics(page)));
+  await rt.go(page, `#/invoices/${invB.id}?tab=promises`, 5000);
+  console.log('shot', await rt.shot(page, __dirname, 'ui1-invoice-promises'));
+  console.log('--- invoice semantics\n' + dump(await rt.semantics(page)));
+  console.log('apiErrors', JSON.stringify(app.apiErrors), 'pageErrors', JSON.stringify(app.pageErrors));
+  await app.close();
+})().catch((e) => { console.error('FATAL', e); process.exit(1); });

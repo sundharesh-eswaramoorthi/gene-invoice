@@ -1,0 +1,27 @@
+[null] "69" @1168,23 13x16
+[button] "Notifications" @1166,28 40x40
+[button] "Account\nadmin • ADMIN" @1278,28 176x24
+[button] "Back" @285,94 40x40
+[null] "@cpui-mu2ssz55cfab-two" @389,110 168x20
+[null] "cpui-mu2ssz55cfab two" @433,84 256x32
+[null] "POC missing" @1309,94 66x16
+[null] "Outstanding" @320,148 71x16
+[null] "Credit balance" @509,148 84x16
+[null] "₹0.00" @312,174 54x28
+[null] "₹0.00" @494,174 54x28
+[null] "Name" @348,238 150x20
+[null] "Phone" @348,290 150x20
+[null] "Email" @348,342 150x20
+[null] "Address" @348,394 150x20
+[null] "Customer Success POCs" @348,504 150x40
+[checkbox] "Add" @463,523 79x34
+[null] "No Customer Success POC yet" @898,490 905x20
+[null] "Collection POCs" @348,572 150x20
+[null] "No Collection POC yet" @898,568 905x20
+[checkbox] "Add" @463,601 79x34
+[button] "Save changes" @820,649 1093x26
+[null] "Unsaved changes" @313,133 112x18
+[tab] "Disputes" @301,700 87x74
+[tab] "Payment Promise" @416,700 144x74
+[tab] "History" @527,700 77x74
+[tabpanel] "No disputes on this record" @812,969 1109x463

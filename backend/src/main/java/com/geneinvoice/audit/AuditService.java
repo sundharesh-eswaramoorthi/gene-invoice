@@ -27,8 +27,22 @@ public class AuditService {
                 .afterJson(toJson(after))
                 .changedByUserId(userId)
                 .disputeId(disputeId)
-                .reason(reason)
+                .reason(fit(reason))
                 .build());
+    }
+
+    /** The width of {@code audit_logs.reason}. */
+    static final int REASON_MAX = 500;
+
+    /**
+     * Callers pass free text — a dispute reason, admin notes — that may be longer than the column.
+     * Shortening it keeps an over-long note from failing the change being audited; the full text
+     * stays in the snapshot JSON.
+     */
+    private static String fit(String reason) {
+        return reason == null || reason.length() <= REASON_MAX
+                ? reason
+                : reason.substring(0, REASON_MAX - 1) + "…";
     }
 
     @Transactional(readOnly = true)

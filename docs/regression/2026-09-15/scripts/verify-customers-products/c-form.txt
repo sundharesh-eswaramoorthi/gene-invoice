@@ -1,0 +1,14 @@
+[null] "94" @1168,23 13x16
+[button] "Notifications" @1166,28 40x40
+[button] "Account\nadmin • ADMIN" @1278,28 176x24
+[null] "New invoice" @338,88 129x32
+[button] "Customer *" @673,140 800x40
+[button] "Sales POC *\nSelect…" @673,192 800x40
+[null] "Items" @294,240 41x24
+[button] "Product" @459,280 372x40
+[null] "₹0.00" @940,282 186x20
+[button] "Add line" @326,320 105x32
+[null] "Total" @294,443 41x26
+[null] "₹0.00" @1048,443 51x29
+[button] "Cancel" @470,492 394x32
+[button] "Create invoice" @876,492 394x38

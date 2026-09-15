@@ -1,0 +1,92 @@
+{
+  "rep": {
+    "id": 408,
+    "username": "vtf-mu2tpei0f056",
+    "email": "vtf-mu2tpei0f056@rt.local",
+    "fullName": "VTF-MU2TPEI0F056",
+    "active": true,
+    "role": "SALES_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_SALES",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW"
+    ],
+    "password": "Passw0rd!"
+  },
+  "coll": {
+    "id": 409,
+    "username": "vtf-mu2tpejz645f",
+    "email": "vtf-mu2tpejz645f@rt.local",
+    "fullName": "VTF-MU2TPEJZ645F",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "cust": {
+    "id": 184,
+    "name": "vtf-mu2tpelze84b",
+    "phone": "555-0100",
+    "email": "vtf-mu2tpelze84b@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "vtf-mu2tpelze84b",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T15:25:06.748858Z",
+    "password": "Passw0rd!"
+  },
+  "p1": {
+    "id": 92,
+    "name": "vtf-prod-mu2tpeo38def-01",
+    "description": null,
+    "price": 10,
+    "active": true
+  },
+  "p2": {
+    "id": 93,
+    "name": "vtf-prod-mu2tpeo38def-02",
+    "description": null,
+    "price": 10,
+    "active": true
+  },
+  "pname": "vtf-prod-mu2tpeo38def",
+  "invToday": 289,
+  "invYest": 290,
+  "invPaid": 291,
+  "invCanc": 292,
+  "pay": 200,
+  "canc": 200,
+  "prom": 200,
+  "promId": 112
+}

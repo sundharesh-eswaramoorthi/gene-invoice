@@ -1,0 +1,26 @@
+[null] "72" @1168,23 13x16
+[button] "Notifications" @1166,28 40x40
+[button] "Account\nadmin • ADMIN" @1278,28 176x24
+[menu] "Popup menu" @463,478 412x748
+[menuitem] "permscpd-mu2su6r43586" @463,-131 412x30
+[menuitem] "permscpd-mu2su740e891" @463,-92 412x48
+[menuitem] "permscpd-mu2su7gpc128" @463,-44 412x48
+[menuitem] "permscpd-mu2su7y55713" @463,4 412x48
+[menuitem] "permscpd-mu2su8htecca" @463,52 412x48
+[menuitem] "permscpd-mu2syw9i90f4" @463,114 412x20
+[menuitem] "permscp-mu2ssfpq9296" @463,148 412x48
+[menuitem] "permscp-mu2su68jf6dc" @463,196 412x48
+[menuitem] "permscp-mu2su6r2ea00" @463,244 412x48
+[menuitem] "permscp-mu2su73v9c0f" @463,292 412x48
+[menuitem] "permscp-mu2su7gk59ea" @463,340 412x48
+[menuitem] "permscp-mu2su7y22fff" @463,388 412x48
+[menuitem] "permscp-mu2su8hqafb2" @463,436 412x48
+[menuitem] "permscp-mu2syw9d6754" @463,484 412x48
+[menuitem] "permscprod-mu2sq4lid66a" @463,532 412x48
+[menuitem] "promises-prod-mu2sqhyp5c32" @463,580 412x48
+[menuitem] "promises-prod-mu2sthrh0774" @463,628 412x48
+[menuitem] "promises-prod-mu2stneic654" @463,676 412x48
+[menuitem] "promises-prod-mu2suq01b029" @463,724 412x48
+[menuitem] "promises-prod-mu2svckr39a3" @463,772 412x48
+[menuitem] "promises-prod-mu2t0u7008b0" @463,820 412x48
+[button] "Dismiss" @812,478 1109x844

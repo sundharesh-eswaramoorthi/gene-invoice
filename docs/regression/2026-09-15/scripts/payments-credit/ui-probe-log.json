@@ -1,0 +1,82 @@
+[
+  [
+    "invoice Save node",
+    [
+      {
+        "l": "Save changes",
+        "x": 820,
+        "y": 473,
+        "h": 38
+      }
+    ]
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/p01-invoice-detail.png"
+  ],
+  [
+    "customer Save node",
+    [
+      {
+        "l": "Save changes",
+        "x": 820,
+        "y": 623,
+        "h": 38
+      }
+    ]
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/p02-customer-detail.png"
+  ],
+  [
+    "payment Save/Unsaved nodes",
+    [
+      {
+        "l": "Save changes",
+        "x": 820,
+        "y": 499,
+        "h": 26
+      },
+      {
+        "l": "Unsaved changes",
+        "x": 313,
+        "y": 133,
+        "h": 18
+      }
+    ]
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/p03-payment-dirty-hover-tab.png"
+  ],
+  [
+    "payment Save/Unsaved nodes @1920x1300",
+    [
+      {
+        "l": "Save changes",
+        "x": 1097,
+        "y": 505,
+        "h": 38
+      },
+      {
+        "l": "Unsaved changes",
+        "x": 313,
+        "y": 133,
+        "h": 18
+      }
+    ]
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/p04-payment-dirty-1920.png"
+  ],
+  [
+    "apiErrors",
+    []
+  ],
+  [
+    "pageErrors",
+    []
+  ]
+]

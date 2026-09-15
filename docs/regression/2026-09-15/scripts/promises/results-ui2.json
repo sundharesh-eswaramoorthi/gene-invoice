@@ -1,0 +1,65 @@
+[
+  {
+    "id": "PRM-UI01",
+    "title": "Promises list tiles reflect the filtered set (customerId chip) and match the API summary",
+    "status": "PASS",
+    "actual": "tiles on screen [total, open, kept, partial, broken, promised]=[\"2\",\"1 • ₹80.00\",\"0 • ₹0.00\",\"1 • ₹250.00\",\"0 • ₹0.00\",\"₹330.00\"]; pager '1–2 of 2' shown=true; API summary total=2 open=1/80 partial=1/250 promised=330; screen: 76 | Notifications | Account\nadmin • ADMIN | Promises | Open | Kept | Partially kept | Broken | Promised total | 2 | 1 • ₹80.00 | 0 • ₹0.00 | 1 • ₹250.00 | 0 • ₹0.00 | ₹330.00 | Add filter | Customer is 158 | Delete | Clear all | Customer | Amount | Promised by | Status | Fulfilled | Remaining | Collection POC | promisesui-mu2tatiedb81 | ₹250.00 | 2026-09-27 | Partially kept | ₹100.00 | ₹150.00 | PROMISES-MU2TATG00458 | Open customer | Override status | promisesui-mu2tatiedb81 | ₹80.00 | 2026-09-25 | Open | ₹0.00 | ₹80.00 | PROMISES-MU2TATG00458 | Open customer | Override status | Rows | 20 | ",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-01-list-filtered.png"
+  },
+  {
+    "id": "PRM-UI02",
+    "title": "Raise promise from Customer Details -> Payment Promise tab (POC defaults to primary, invoice ticked, excess shown)",
+    "status": "PASS",
+    "actual": "dialog: POC default shown=true, excess text shown=true; saved=true invoices=INV-20260915-0227 poc=promises-mu2tatg00458 date=2026-09-22 status=OPEN; new card on tab=true",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-02-raise-excess.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-02b-after-raise.png"
+  },
+  {
+    "id": "PRM-UI03",
+    "title": "Raise dialog shows the shortfall against the ticked invoice; dialog Cancel saves nothing",
+    "status": "PASS",
+    "actual": "shortfall text present=true (Promised ₹100.00 less than those invoices owe. ); promises before=3 after=3; still on customer page=true",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-03-raise-shortfall.png"
+  },
+  {
+    "id": "PRM-UI04",
+    "title": "Raise promise from Invoice Details -> Payment Promise tab is pre-scoped to that invoice",
+    "status": "PASS",
+    "actual": "promise-tab API errors=[]; invoice INV-20260915-0229 pre-ticked=true; checkboxes [\"INV-20260915-0229=true\",\"INV-20260915-0228=false\",\"INV-20260915-0227=false\"]; saved invoices=INV-20260915-0229; invoice tab cards=[\"₹80.00 by 2026-09-25\",\"₹30.00 by 2026-09-22\"]",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-04-invoice-raise.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-04b-invoice-tab-after.png"
+  },
+  {
+    "id": "PRM-UI05",
+    "title": "Edit a promise from its card (amount 120 -> 130)",
+    "status": "PASS",
+    "actual": "dialog title Edit promise=true; API amount=130 invoices=INV-20260915-0227; card updated=true",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-05-edit.png"
+  },
+  {
+    "id": "PRM-UI06",
+    "title": "Override status dialog: empty reason blocked; Kept + reason pins status and card shows the reason",
+    "status": "PASS",
+    "actual": "'A reason is required' shown=true; API status=KEPT overridden=true reason=Customer confirmed by phone; card: Status was set by hand, not worked out from payments / ₹130.00 by 2026-09-22 / Kept / Fulfilled ₹0.00 / Remaining ₹130.00 / POC: PROMISES-MU2TATG00458 / Overridden: Customer confirmed by phone",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-06a-override-no-reason.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-06b-override-filled.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-06c-after-override.png"
+  },
+  {
+    "id": "PRM-UI07",
+    "title": "Clear override from the Override dialog hands back to automatic status",
+    "status": "PASS",
+    "actual": "API status=OPEN overridden=false; card: ₹130.00 by 2026-09-22 / Open / Fulfilled ₹0.00 / Remaining ₹130.00 / POC: PROMISES-MU2TATG00458",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-UI08",
+    "title": "Cancel dialog: 'Keep it' closes only the dialog (regression) and the promise stays live",
+    "status": "PASS",
+    "actual": "dialog opened=true; after Keep it: dialog still open=false; hash #/customers/158?tab=promises -> #/customers/158?tab=promises; tab + card still shown=true; API status=OPEN",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-08a-cancel-dialog.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-08b-after-keep-it.png"
+  },
+  {
+    "id": "PRM-UI09",
+    "title": "Cancel promise with a reason: status Cancelled, card loses Edit/Override/Cancel",
+    "status": "PASS",
+    "actual": "API status=CANCELLED; audit PROMISE_CANCELLED reason=\"Raised in error\"; card=₹130.00 by 2026-09-22 / Cancelled / Fulfilled ₹0.00 / Remaining ₹130.00 / POC: PROMISES-MU2TATG00458; card buttons=[]",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui2-09-cancelled.png"
+  }
+]

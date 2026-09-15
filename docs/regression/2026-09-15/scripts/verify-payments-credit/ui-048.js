@@ -1,0 +1,42 @@
+// PAYCR-048: the Save row is in the semantics tree but is it drawn? Click at its position and check the result.
+const rt = require('../lib.js');
+const fs = require('fs');
+const path = require('path');
+const { make } = require('../payments-credit/uilib.js');
+const D = JSON.parse(fs.readFileSync(path.join(__dirname, 'ui-data.json')));
+const log = [];
+(async () => {
+  const admin = await rt.adminToken();
+  const api = (m, p, body) => rt.api(m, p, { token: admin, body });
+  const app = await rt.openApp({ token: admin });
+  const { page } = app;
+  const u = make(page, __dirname, log);
+  const consoleMsgs = [];
+  page.on('console', (m) => consoleMsgs.push(`${m.type()}: ${m.text().slice(0, 200)}`));
+  const isSave = (n) => n.label === 'Save changes' || n.text === 'Save changes';
+  await rt.go(page, '#/payments', 3000);
+  await rt.go(page, `#/payments/${D.pay.id}`, 4000);
+  await u.clickInput((x) => x.tag === 'TEXTAREA');
+  await rt.typeText(page, 'blind save 048', { clear: true });
+  await page.waitForTimeout(1200);
+  await rt.enableSemantics(page);
+  const sem = await rt.semantics(page);
+  const save = sem.find(isSave);
+  const unsaved = sem.find((n) => /Unsaved changes/.test(`${n.label || ''} ${n.text || ''}`));
+  u.note('048 save node', save && { role: save.role, x: save.x, y: save.y, w: save.w, h: save.h });
+  u.note('048 unsaved node', unsaved && { x: unsaved.x, y: unsaved.y, w: unsaved.w, h: unsaved.h });
+  await u.shot('v048x-dirty');
+  if (!save) throw new Error('no save node');
+  // The FilledButton sits at the left of the Row; click near the left end of the row node.
+  const bx = save.x - save.w / 2 + 60;
+  await page.mouse.move(bx, save.y); await page.waitForTimeout(600);
+  await u.shot('v048x-hover');
+  await rt.clickAt(page, bx, save.y, 2500);
+  await rt.enableSemantics(page);
+  u.note('048 after mouse click at the Save node', { snackbar: await u.has(/Payment saved/), apiNotes: (await api('GET', `/api/payments/${D.pay.id}`)).json.notes });
+  await u.shot('v048x-after-click');
+  u.note('console', consoleMsgs.filter((m) => !/^log: /.test(m) || /error|exception/i.test(m)).slice(0, 10));
+  u.note('pageErrors', app.pageErrors);
+  fs.writeFileSync(path.join(__dirname, 'ui-048-log.json'), JSON.stringify(log, null, 2));
+  await app.close();
+})().catch((e) => { console.error('ERR', e.message.slice(0, 2500)); process.exit(1); });

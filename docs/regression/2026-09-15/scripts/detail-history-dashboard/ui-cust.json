@@ -1,0 +1,180 @@
+[
+ {
+  "id": "C-LAZY-1",
+  "title": "customer detail opens on Disputes; only disputes tab data fetched (no audit, no promises list)",
+  "pass": true,
+  "detail": {
+   "selected": "Disputes",
+   "requests": [
+    "/api/customers/164",
+    "/api/disputes?size=50&customerId=164"
+   ]
+  }
+ },
+ {
+  "id": "C-TAB-URL",
+  "title": "tapping History writes ?tab=history, fetches /api/audit once, does not refetch the customer",
+  "pass": true,
+  "detail": {
+   "hash": "#/customers/164?tab=history",
+   "requests": [
+    "/api/audit?entityType=CUSTOMER&entityId=164&includeRelated=true"
+   ]
+  }
+ },
+ {
+  "id": "C-HIST-CHIPS",
+  "title": "History shows filter chips All/Customer/Invoices/Payments/Promises/Disputes with counts",
+  "pass": true,
+  "detail": [
+   "[checkbox] All (26) @319,617 100x34",
+   "[checkbox] Customer (7) @433,617 117x34",
+   "[checkbox] Invoices (7) @552,617 108x34",
+   "[checkbox] Payments (4) @671,617 118x34",
+   "[checkbox] Promises (3) @793,617 115x34",
+   "[checkbox] Disputes (5) @912,617 111x34"
+  ]
+ },
+ {
+  "id": "C-HIST-FILTER",
+  "title": "each chip narrows rows to that record type (rows on screen <= count, all of that type)",
+  "pass": false,
+  "detail": {
+   "Invoices": {
+    "want": 7,
+    "shownRowsOnScreen": 0,
+    "sample": []
+   },
+   "Payments": {
+    "want": 4,
+    "shownRowsOnScreen": 0,
+    "sample": []
+   },
+   "Promises": {
+    "want": 3,
+    "shownRowsOnScreen": 0,
+    "sample": []
+   },
+   "Disputes": {
+    "want": 5,
+    "shownRowsOnScreen": 0,
+    "sample": []
+   },
+   "Customer": {
+    "want": 7,
+    "shownRowsOnScreen": 0,
+    "sample": []
+   }
+  }
+ },
+ {
+  "id": "C-HIST-LINK",
+  "title": "clicking \"Payment #109\" in a customer History row opens that payment",
+  "pass": false,
+  "detail": {
+   "ok": false,
+   "reason": "no payment row visible"
+  }
+ },
+ {
+  "id": "C-TAB-DEEP",
+  "title": "navigating to ?tab=promises opens Payment Promise; changing ?tab on the same record follows it",
+  "pass": true,
+  "detail": {
+   "promises": "Payment Promise",
+   "history": "History",
+   "disputes": "Disputes"
+  }
+ },
+ {
+  "id": "C-STALE",
+  "title": "moving from customer A to customer B shows B (title + fields; see screenshot c6b)",
+  "pass": true,
+  "detail": {
+   "hasB": true,
+   "hasA": false,
+   "shot": "shots/c6b-custB-after-A.png"
+  }
+ },
+ {
+  "id": "C-GUARD-BACK",
+  "title": "with unsaved edits the Back arrow prompts; Keep editing stays; Discard goes to /customers",
+  "pass": true,
+  "detail": {
+   "dirty": true,
+   "dlg": true,
+   "keep": {
+    "hash": "#/customers/164",
+    "stillDirty": true
+   },
+   "disc": {
+    "hash": "#/customers"
+   }
+  }
+ },
+ {
+  "id": "C-GUARD-TAB",
+  "title": "switching tab with unsaved edits keeps the edit and the \"Unsaved changes\" marker",
+  "pass": true,
+  "detail": {
+   "hash": "#/customers/164?tab=history",
+   "unsaved": true
+  }
+ },
+ {
+  "id": "C-GUARD-SIDEBAR",
+  "title": "sidebar navigation with unsaved customer edits should prompt (AC-C3)",
+  "pass": false,
+  "detail": {
+   "hashAfterClick": "#/invoices",
+   "dialogShown": false
+  }
+ },
+ {
+  "id": "C-GUARD-SIDEBAR-NOSAVE",
+  "title": "the silently dropped edit was not saved to the server",
+  "pass": true,
+  "detail": {
+   "phone": "555-0199"
+  }
+ },
+ {
+  "id": "C-GUARD-BROWSERBACK",
+  "title": "browser Back with unsaved customer edits (observation)",
+  "pass": false,
+  "detail": {
+   "hash": "#/invoices",
+   "dialogShown": false
+  }
+ },
+ {
+  "id": "C-404",
+  "title": "#/customers/999999 shows \"That customer does not exist.\" with Go back",
+  "pass": true,
+  "detail": " 91 |  Notifications |  Account\nadmin • ADMIN |  That customer does not exist. |  Go back"
+ },
+ {
+  "id": "C-MALFORMED",
+  "title": "#/customers/abc shows a clean not-found state (AC-C8)",
+  "pass": false,
+  "detail": {
+   "text": " 91 |  Notifications |  Account\nadmin • ADMIN",
+   "newPageErrors": []
+  }
+ },
+ {
+  "id": "C-ERRORS",
+  "title": "API errors / page errors during customer UI run (info)",
+  "pass": true,
+  "detail": {
+   "apiErrors": [
+    {
+     "status": 404,
+     "method": "GET",
+     "url": "/api/customers/999999"
+    }
+   ],
+   "pageErrors": []
+  }
+ }
+]

@@ -1,0 +1,20 @@
+UI06 API GET other dispute as C1: 403
+UI06 own dispute nodes: Notifications | Account
+vdnui06-mu2u13nw3022 • CUSTOMER | Dispute #122 | INVOICE INV-20260915-0352 — 100.00 | Pending | Opened Sep 15, 2026 9:04 PM by vdnui06-mu2u13nw3022 | Reason | my own reason | Proposed change (JSON) | INVOICE history | Invoice created · ₹100.00
+Sep 15, 2026 9:04 PM
+UI06 other dispute nodes: Notifications | Account
+vdnui06-mu2u13nw3022 • CUSTOMER | Dispute #121 | Failed: DioException [bad response]: This exception was thrown because the response has a status code of 403 and RequestOptions.validateStatus was configured to throw for this status code.
+The status code of 403 has the following meaning: "Client error - the request contains bad syntax or cannot be fulfilled"
+Read more about status codes at https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+In order to resolve this exception you typically have either to verify and fix your request code or you have to fix the server code.
+UI06 leaked secret? false
+/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/verify-disputes-notifications/shots/ui06-other-dispute-r1.png
+UI06 control other invoice nodes: Notifications | Account
+vdnui06-mu2u13nw3022 • CUSTOMER | You do not have permission to view this invoice. | Go back
+/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/verify-disputes-notifications/shots/ui06-control-other-invoice-r1.png
+UI06 nonexistent dispute nodes: Notifications | Account
+vdnui06-mu2u13nw3022 • CUSTOMER | Dispute #99999999 | Failed: DioException [bad response]: This exception was thrown because the response has a status code of 404 and RequestOptions.validateStatus was configured to throw for this status code.
+The status code of 404 has the following meaning: "Client error - the request contains bad syntax or cannot be fulfilled"
+Read more a
+/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/verify-disputes-notifications/shots/ui06-nonexistent-r1.png
+UI06 pageErrors []

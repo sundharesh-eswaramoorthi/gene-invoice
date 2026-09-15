@@ -2,68 +2,88 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/format.dart';
+import '../../core/table/data_table_scaffold.dart';
+import '../../core/table/route_query.dart';
+import '../../core/table/table_models.dart';
+import '../../core/table/table_providers.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/product.dart';
 import '../auth/auth_controller.dart';
 
+/// Active products, for the invoice line pickers.
 final productsProvider = FutureProvider.autoDispose<List<Product>>((ref) async {
   final dio = ref.watch(dioProvider);
-  final res = await dio.get('/api/products');
-  return (res.data as List).cast<Map<String, dynamic>>().map(Product.fromJson).toList();
+  final res = await dio.get('/api/products', queryParameters: {'size': 50, 'sort': 'name,asc'});
+  return ((res.data as Map)['content'] as List)
+      .cast<Map<String, dynamic>>()
+      .map(Product.fromJson)
+      .toList();
 });
 
 class ProductsScreen extends ConsumerWidget {
-  const ProductsScreen({super.key});
+  final TableQuery query;
+  const ProductsScreen({super.key, required this.query});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.productManage) ?? false;
-    final async = ref.watch(productsProvider);
+    final canExport = user?.has(Privileges.exportData) ?? false;
 
     return Scaffold(
-      floatingActionButton: canManage
-          ? FloatingActionButton.extended(
+      body: DataTableScaffold<Product>(
+        entity: 'products',
+        actions: [
+          if (canManage)
+            FilledButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('New product'),
               onPressed: () => _openForm(context, ref, null),
-            )
-          : null,
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Failed: $e')),
-        data: (list) {
-          if (list.isEmpty) return const Center(child: Text('No products yet'));
-          return RefreshIndicator(
-            onRefresh: () async => ref.refresh(productsProvider.future),
-            child: ListView.separated(
-              padding: const EdgeInsets.all(8),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final p = list[i];
-                return ListTile(
-                  title: Text(p.name),
-                  subtitle: Text(p.description ?? ''),
-                  trailing: Wrap(
-                    spacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(p.price.toStringAsFixed(2),
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      if (!p.active) const Chip(label: Text('Inactive')),
-                      if (canManage)
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _openForm(context, ref, p),
-                        ),
-                    ],
-                  ),
-                );
-              },
             ),
-          );
-        },
+        ],
+        path: '/api/products',
+        query: query,
+        onQueryChanged: (q) => RouteQuery(context, '/products').push(q),
+        parse: Product.fromJson,
+        idOf: (p) => p.id,
+        canExport: canExport,
+        selectable: canManage,
+        emptyMessage: 'No products match this filter',
+        onRowTap: canManage ? (context, p) => _openForm(context, ref, p) : null,
+        bulkActions: canManage
+            ? const [
+                BulkActionSpec(
+                    action: 'ACTIVATE', label: 'Activate', icon: Icons.check_circle_outline),
+                BulkActionSpec(
+                    action: 'DEACTIVATE', label: 'Deactivate', icon: Icons.block),
+              ]
+            : const [],
+        columns: [
+          TableColumnSpec(label: 'Name', sortKey: 'name', cell: (context, p) => Text(p.name)),
+          TableColumnSpec(
+              label: 'Description',
+              cell: (context, p) =>
+                  Text(p.description ?? '—', maxLines: 2, overflow: TextOverflow.ellipsis)),
+          TableColumnSpec(
+              label: 'Price',
+              sortKey: 'price',
+              numeric: true,
+              cell: (context, p) => Text(formatMoney(p.price))),
+          TableColumnSpec(
+              label: 'Active',
+              sortKey: 'active',
+              cell: (context, p) => Text(p.active ? 'Yes' : 'No')),
+        ],
+        rowActions: canManage
+            ? (context, p) => [
+                  IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    onPressed: () => _openForm(context, ref, p),
+                  ),
+                ]
+            : null,
       ),
     );
   }
@@ -73,7 +93,10 @@ class ProductsScreen extends ConsumerWidget {
       context: context,
       builder: (_) => _ProductForm(existing: existing),
     );
-    if (saved == true) ref.invalidate(productsProvider);
+    if (saved == true) {
+      ref.invalidate(tablePageProvider);
+      ref.invalidate(productsProvider);
+    }
   }
 }
 
@@ -104,13 +127,18 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
 
   @override
   void dispose() {
-    _name.dispose(); _description.dispose(); _price.dispose();
+    _name.dispose();
+    _description.dispose();
+    _price.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() { _saving = true; _error = null; });
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
     try {
       final dio = ref.read(dioProvider);
       final body = {
@@ -173,19 +201,25 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                 value: _active,
                 onChanged: (v) => setState(() => _active = v),
               ),
-              if (_error != null) Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_error!,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                ),
             ],
           ),
         ),
       ),
       actions: [
-        TextButton(onPressed: _saving ? null : () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+        TextButton(
+            onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+            child: const Text('Cancel')),
         FilledButton(
           onPressed: _saving ? null : _submit,
-          child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),
+          child: _saving
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Save'),
         ),
       ],
     );

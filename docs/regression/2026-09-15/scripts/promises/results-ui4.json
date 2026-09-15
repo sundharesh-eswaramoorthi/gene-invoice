@@ -1,0 +1,30 @@
+[
+  {
+    "id": "PRM-UI11b",
+    "title": "Re-run: override from a Promises list row — row status and tiles after the dialog closes (lead #16)",
+    "status": "FAIL",
+    "actual": "API status=KEPT; immediately after the dialog: row=[\"Open\"] tiles before=[\"1\",\"1 • ₹60.00\",\"0 • ₹0.00\",\"0 • ₹0.00\",\"0 • ₹0.00\",\"₹60.00\"] after=[\"1\",\"1 • ₹60.00\",\"0 • ₹0.00\",\"0 • ₹0.00\",\"0 • ₹0.00\",\"₹60.00\"]; after navigating away and back: row=[] tiles=[\"1\",\"0 • ₹0.00\",\"1 • ₹60.00\",\"0 • ₹0.00\",\"0 • ₹0.00\",\"₹60.00\"]",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui4-11b-row-override-after.png"
+  },
+  {
+    "id": "PRM-UI15",
+    "title": "'Promise broken' notification link /promises/{id} lands on the customer's Payment Promise tab (AC-B10)",
+    "status": "PASS",
+    "actual": "notification found=true link=/promises/102; landed on #/customers/161?tab=promises; broken card visible=true (nothing on the tab singles out promise #102)",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui4-15-deeplink.png"
+  },
+  {
+    "id": "PRM-UI16",
+    "title": "Bulk cancel from the Promises list: select rows, toolbar action, confirm with exact count, result",
+    "status": "BLOCKED",
+    "actual": "Error: no node Cancel promises on screen:\n[group] Dismiss @683,550 1366x1100\n[null] Edit filter @683,288 440x32\n[button] Column / Customer @683,340 440x40\n[button] Condition / is @683,392 440x40\n[checkbox:false] 160 @502,441 78x34\n[button] Delete @522,441 32x32\n[button] aapromui-mu2t25cscdbf / aapromui-mu2t25cscdbf@rt.local @683,541 440x53\n[button] aapromui-mu2t7sdo0f34 / aapromui-mu2t7sdo0f34@rt.local @683,594 440x53\n[button] apaycr-mu2sscpo6ab0 / apaycr-mu2sscpo6ab0@rt.local @683,647 440x53\n[button] aurc-mu2soynne6b1 / aurc-mu2soynne6b1@rt.local @683,700 440x53\n[button] aurjwtc-mu2spwmm1c9d / aurjwtc-mu2spwmm3eef@rt.local @683,730 440x8\n[button] aursb-mu2sreqz029c / aursb-mu2sreqz029c@rt.local @683,806 440x53\n[button] cp-mu2sqkltc327 alpha2 / cp-mu2sqkltc327-c@rt.local @683,859 440x53\n[button] cp-mu2sqkltc327 bravo / cp-mu2sqkltc327-a@rt.local @683,912 440x53\n[button] cp-mu2sqkltc327 bycashier / cp-mu2sqkltc327-b@rt.local @683,961 440x46\n[button] Cancel @869,774 67x32\n[button] Apply @683,809 440x38\n    at Object.tapLast (/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/uih.js:25:24)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:472:9)\n    at async /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/ui4.js:68:5\n    at async tc (/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/harness.js:8:17)\n    at async /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/ui4.js:62:3",
+    "evidence": ""
+  },
+  {
+    "id": "PRM-UI17",
+    "title": "Export selected promises opens the copyable CSV dialog",
+    "status": "BLOCKED",
+    "actual": "Error: no node Export selected on screen:\n[group] Dismiss @683,550 1366x1100\n[null] Edit filter @683,288 440x32\n[button] Column / Customer @683,340 440x40\n[button] Condition / is @683,392 440x40\n[checkbox:false] 159 @502,441 78x34\n[button] Delete @522,441 32x32\n[button] aapromui-mu2t25cscdbf / aapromui-mu2t25cscdbf@rt.local @683,541 440x53\n[button] aapromui-mu2t7sdo0f34 / aapromui-mu2t7sdo0f34@rt.local @683,594 440x53\n[button] apaycr-mu2sscpo6ab0 / apaycr-mu2sscpo6ab0@rt.local @683,647 440x53\n[button] aurc-mu2soynne6b1 / aurc-mu2soynne6b1@rt.local @683,700 440x53\n[button] aurjwtc-mu2spwmm1c9d / aurjwtc-mu2spwmm3eef@rt.local @683,730 440x8\n[button] aursb-mu2sreqz029c / aursb-mu2sreqz029c@rt.local @683,806 440x53\n[button] cp-mu2sqkltc327 alpha2 / cp-mu2sqkltc327-c@rt.local @683,859 440x53\n[button] cp-mu2sqkltc327 bravo / cp-mu2sqkltc327-a@rt.local @683,912 440x53\n[button] cp-mu2sqkltc327 bycashier / cp-mu2sqkltc327-b@rt.local @683,961 440x46\n[button] Cancel @869,774 67x32\n[button] Apply @683,809 440x38\n    at Object.tapLast (/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/uih.js:25:24)\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:472:9)\n    at async /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/ui4.js:85:5\n    at async tc (/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/harness.js:8:17)\n    at async /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/ui4.js:81:3",
+    "evidence": ""
+  }
+]

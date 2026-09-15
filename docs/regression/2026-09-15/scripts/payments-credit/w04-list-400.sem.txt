@@ -1,0 +1,32 @@
+[button] "Open navigation menu" @28,28 40x40
+[null] "64" @202,23 13x16
+[button] "Notifications" @200,28 40x40
+[button] "Account\nadmin • ADMIN" @312,28 176x24
+[null] "Payments" @97,88 146x16
+[null] "Total collected" @288,88 128x16
+[null] "2" @30,116 12x28
+[null] "₹125.00" @245,116 79x28
+[null] "Credit applied" @97,174 146x16
+[null] "Voided" @279,174 146x16
+[null] "₹0.00" @51,202 54x28
+[null] "0" @212,202 12x28
+[null] "POC missing" @106,260 128x16
+[null] "0" @30,288 12x28
+[checkbox] "Add filter" @68,343 112x34
+[button] "Record payment" @304,342 169x32
+[checkbox] "Customer is 78" @87,383 150x34
+[button] "Delete" @143,383 32x32
+[button] "Clear all" @50,422 75x32
+[group] "Payment\n#68\nCustomer\napaycr-mu2sscpo6ab0\nAmount\n₹5.00\nCredit applied\n₹0.00\nMethod\nCash\nPaid at\n15 Sep 2026, 8:29 PM\nStatus\nActive\nCollection POC\nUIPC-MU2SSCJHD67B" @200,562 384x216
+[button] "Open" @360,486 40x40
+[group] "Payment\n#67\nCustomer\napaycr-mu2sscpo6ab0\nAmount\n₹120.00\nCredit applied\n₹0.00\nMethod\nCash\nPaid at\n15 Sep 2026, 8:29 PM\nStatus\nActive\nCollection POC\nUIPC-MU2SSCEO4E95" @200,716 384x80
+[button] "Open" @360,708 40x40
+[null] "Rows" @170,786 35x20
+[button] "10" @215,786 42x48
+[null] "1–2 of 2" @275,786 55x20
+[null] "Page 1 of 1" @351,786 73x20
+[button] "First page" @248,834 40x40
+[button] "Previous page" @288,834 40x40
+[button] "Next page" @328,834 40x40
+[button] "Last page" @368,834 40x40
+--inputs--

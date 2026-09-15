@@ -1,0 +1,12 @@
+/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/verify-disputes-notifications/shots/ui11b-134-before-click.png
+  REQUEST POST /api/disputes/134/approve
+dispute 134 (11b-1330): one real click at (1330,769) -> hash #/disputes status APPROVED
+/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/verify-disputes-notifications/shots/ui11b-135-before-click.png
+  REQUEST POST /api/disputes/135/approve
+dispute 135 (11b-400): one real click at (400,769) -> hash #/disputes status APPROVED
+/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/verify-disputes-notifications/shots/ui11b-136-before-click.png
+  REQUEST POST /api/disputes/136/deny
+dispute 136 (11b-deny-rect): one real click at (274,121) -> hash #/disputes status DENIED
+/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/verify-disputes-notifications/shots/ui11b-137-before-click.png
+dispute 137 (11b-title-text): one real click at (300,144) -> hash #/disputes/137 status PENDING
+pageErrors []

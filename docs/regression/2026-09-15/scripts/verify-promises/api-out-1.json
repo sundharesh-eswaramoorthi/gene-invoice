@@ -1,0 +1,524 @@
+{
+ "O07 override FOO": [
+  [
+   500,
+   "{\"timestamp\":\"2026-09-15T15:32:59.637252Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"JSON parse error: Cannot deserialize value of type `com.geneinvoice.promise.PromiseStatus` from String \\\"FOO\\\": not one of the values accepted for Enum class: [C"
+  ]
+ ],
+ "O07 override missing status": [
+  [
+   400,
+   "{\"timestamp\":\"2026-09-15T15:32:59.639855Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/promises/118/override\",\"fieldErrors\":{\"status\":\"must not be "
+  ]
+ ],
+ "O07 create bad date (same handler path)": [
+  [
+   500,
+   "{\"timestamp\":\"2026-09-15T15:32:59.641615Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"JSON parse error: Cannot deserialize value of type `java.time.LocalDate` from String \\\"not-a-date\\\": "
+  ]
+ ],
+ "C03 after pay": [
+  [
+   {
+    "id": 119,
+    "status": "KEPT",
+    "amt": 100,
+    "f": 100,
+    "links": [
+     140
+    ],
+    "inv": [
+     "INV-20260915-0306/FULLY_PAID"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   },
+   "payment",
+   140
+  ]
+ ],
+ "C03 cancel": [
+  [
+   200,
+   {
+    "id": 119,
+    "status": "CANCELLED",
+    "amt": 100,
+    "f": 0,
+    "links": [],
+    "inv": [
+     "INV-20260915-0306/FULLY_PAID"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "C03 PUT on cancelled": [
+  [
+   400,
+   "A cancelled promise cannot be edited"
+  ]
+ ],
+ "C03 override OPEN on cancelled": [
+  [
+   200,
+   {
+    "id": 119,
+    "status": "OPEN",
+    "amt": 100,
+    "f": 0,
+    "links": [],
+    "inv": [
+     "INV-20260915-0306/FULLY_PAID"
+    ],
+    "ov": true,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "C03 clear override": [
+  [
+   200,
+   {
+    "id": 119,
+    "status": "KEPT",
+    "amt": 100,
+    "f": 100,
+    "links": [
+     140
+    ],
+    "inv": [
+     "INV-20260915-0306/FULLY_PAID"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "C03 audit": [
+  [
+   200,
+   [
+    "PROMISE_OVERRIDE_CLEARED",
+    "PROMISE_STATUS_CHANGED",
+    "PROMISE_STATUS_OVERRIDDEN",
+    "PROMISE_CANCELLED",
+    "PROMISE_STATUS_CHANGED",
+    "PROMISE_CREATED"
+   ]
+  ]
+ ],
+ "R04 cancel B": [
+  [
+   200,
+   "CANCELLED",
+   "promise now",
+   {
+    "id": 120,
+    "status": "OPEN",
+    "amt": 200,
+    "f": 0,
+    "links": [],
+    "inv": [
+     "INV-20260915-0307/UNPAID",
+     "INV-20260915-0308/CANCELLED"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "R04 PUT (dialog body, both ids)": [
+  [
+   400,
+   "Invoice INV-20260915-0308 is cancelled and cannot be promised against"
+  ]
+ ],
+ "R04 PUT (only live id)": [
+  [
+   200,
+   {
+    "id": 120,
+    "status": "OPEN",
+    "amt": 200,
+    "f": 0,
+    "links": [],
+    "inv": [
+     "INV-20260915-0307/UNPAID"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "R04 PUT (no invoiceIds)": [
+  [
+   200,
+   {
+    "id": 120,
+    "status": "OPEN",
+    "amt": 200,
+    "f": 0,
+    "links": [],
+    "inv": [
+     "INV-20260915-0307/UNPAID"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "R04 dialog checklist source": [
+  [
+   200,
+   [
+    "INV-20260915-0307/UNPAID"
+   ]
+  ]
+ ],
+ "R04": {
+  "customerId": 231,
+  "promiseId": 120,
+  "a": "INV-20260915-0307",
+  "b": "INV-20260915-0308"
+ },
+ "M03 p1": [
+  [
+   {
+    "id": 121,
+    "status": "KEPT",
+    "amt": 100,
+    "f": 100,
+    "links": [
+     141
+    ],
+    "inv": [
+     "INV-20260915-0309/FULLY_PAID"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   },
+   "p2",
+   {
+    "id": 122,
+    "status": "KEPT",
+    "amt": 100,
+    "f": 100,
+    "links": [
+     141
+    ],
+    "inv": [
+     "INV-20260915-0309/FULLY_PAID"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "M03 promise summary": [
+  [
+   {
+    "total": 2,
+    "openCount": 0,
+    "openAmount": 0,
+    "keptCount": 2,
+    "keptAmount": 200,
+    "partiallyKeptCount": 0,
+    "partiallyKeptAmount": 0,
+    "brokenCount": 0,
+    "brokenAmount": 0,
+    "cancelledCount": 0,
+    "promisedAmount": 200,
+    "fulfilledAmount": 200
+   },
+   "payments summary",
+   {
+    "count": 1,
+    "totalCollected": 100,
+    "creditApplied": 0,
+    "activeCount": 1,
+    "voidedCount": 0,
+    "pocMissingCount": 0
+   }
+  ]
+ ],
+ "M04 g1": [
+  [
+   {
+    "id": 123,
+    "status": "KEPT",
+    "amt": 100,
+    "f": 100,
+    "links": [
+     142
+    ],
+    "inv": [],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   },
+   "g2",
+   {
+    "id": 124,
+    "status": "KEPT",
+    "amt": 100,
+    "f": 100,
+    "links": [
+     142
+    ],
+    "inv": [],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "M04 promise summary": [
+  [
+   {
+    "total": 2,
+    "openCount": 0,
+    "openAmount": 0,
+    "keptCount": 2,
+    "keptAmount": 200,
+    "partiallyKeptCount": 0,
+    "partiallyKeptAmount": 0,
+    "brokenCount": 0,
+    "brokenAmount": 0,
+    "cancelledCount": 0,
+    "promisedAmount": 200,
+    "fulfilledAmount": 200
+   },
+   "payments summary",
+   {
+    "count": 1,
+    "totalCollected": 100,
+    "creditApplied": 0,
+    "activeCount": 1,
+    "voidedCount": 0,
+    "pocMissingCount": 0
+   }
+  ]
+ ],
+ "M04 mixed scoped": [
+  [
+   {
+    "id": 125,
+    "status": "KEPT",
+    "amt": 250,
+    "f": 250,
+    "links": [
+     143
+    ],
+    "inv": [
+     "INV-20260915-0312/FULLY_PAID"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   },
+   "general",
+   {
+    "id": 126,
+    "status": "KEPT",
+    "amt": 75,
+    "f": 250,
+    "links": [
+     143
+    ],
+    "inv": [],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   },
+   "payment",
+   143
+  ]
+ ],
+ "M04 mixed summary fulfilled": [
+  [
+   500,
+   "kept",
+   2,
+   325
+  ]
+ ],
+ "CU03 schema cols": [
+  [
+   200,
+   [
+    "id",
+    "customerId",
+    "customerName",
+    "amount",
+    "fulfilledAmount",
+    "remainingAmount",
+    "promisedDate",
+    "status",
+    "statusOverridden",
+    "notes",
+    "invoiceId",
+    "createdAt"
+   ]
+  ]
+ ],
+ "CU03 customer: own POC id": [
+  [
+   200,
+   1,
+   "| other id",
+   200,
+   0,
+   "| sort",
+   200,
+   "| name contains own",
+   200,
+   1,
+   "| name nope",
+   200,
+   0,
+   "| isEmpty",
+   200,
+   0
+  ]
+ ],
+ "CU03 customer row POC field": [
+  [
+   null,
+   "createdBy",
+   1
+  ]
+ ],
+ "CU03 customer invoices salesPocName filter": [
+  [
+   200
+  ]
+ ],
+ "L01 created": [
+  [
+   {
+    "id": 128,
+    "status": "KEPT",
+    "amt": 500,
+    "f": 0,
+    "links": [],
+    "inv": [],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "L01 after new invoice": [
+  [
+   {
+    "id": 128,
+    "status": "BROKEN",
+    "amt": 500,
+    "f": 0,
+    "links": [],
+    "inv": [],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   },
+   "notifs before",
+   0,
+   "after",
+   [
+    "PROMISE_BROKEN:Promise broken — vprm-mu2tzk3u7c86"
+   ],
+   "audit",
+   [
+    "PROMISE_STATUS_CHANGED",
+    "PROMISE_STATUS_CHANGED",
+    "PROMISE_CREATED"
+   ]
+  ]
+ ],
+ "L01 control (future-dated)": [
+  [
+   {
+    "id": 129,
+    "status": "OPEN",
+    "amt": 500,
+    "f": 0,
+    "links": [],
+    "inv": [],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   },
+   "->",
+   {
+    "id": 129,
+    "status": "OPEN",
+    "amt": 500,
+    "f": 0,
+    "links": [],
+    "inv": [],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "L02 payment": [
+  [
+   200,
+   [
+    "INV-20260915-0315:100"
+   ],
+   "older",
+   "INV-20260915-0315",
+   "newer(promised)",
+   "INV-20260915-0316"
+  ]
+ ],
+ "L02 promise": [
+  [
+   {
+    "id": 130,
+    "status": "OPEN",
+    "amt": 100,
+    "f": 0,
+    "links": [
+     144
+    ],
+    "inv": [
+     "INV-20260915-0316/UNPAID"
+    ],
+    "ov": false,
+    "poc": "vprm-mu2tzjbf6bc1"
+   }
+  ]
+ ],
+ "L03 delete user": [
+  [
+   200,
+   "{\"pocReferences\":1,\"deleted\":false,\"deactivated\":true}"
+  ]
+ ],
+ "L03 customer pocs": [
+  [
+   200,
+   [
+    "COLLECTION:vprm-mu2tzkc1c4e7:primary=true:active=false"
+   ]
+  ]
+ ],
+ "L03 promise default POC": [
+  [
+   200,
+   {
+    "id": 131,
+    "status": "OPEN",
+    "amt": 10,
+    "f": 0,
+    "links": [],
+    "inv": [],
+    "ov": false,
+    "poc": "vprm-mu2tzkc1c4e7(inactive)"
+   }
+  ]
+ ],
+ "L03 explicit same inactive POC": [
+  [
+   400,
+   "User vprm-mu2tzkc1c4e7 is inactive and cannot be assigned"
+  ]
+ ]
+}

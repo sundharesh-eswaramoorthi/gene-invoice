@@ -1,0 +1,375 @@
+{
+ "PS010": {
+  "cashier(own) users": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 403,
+   "sample": "1,admin,System Administrator,admin@geneinvoice.local,ADMIN,true\r"
+  },
+  "cashier(own) roles": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 44,
+   "sample": "1,ADMIN,Full system access,AUDIT_VIEW CUSTOMER_MANAGE CUSTOMER_VIEW DISPUTE_CREA"
+  },
+  "cashier(own) disputes": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 92,
+   "sample": "1,permsca-mu2sq4lq41d7,INVOICE,52,PENDING,2026-09-15T14:57:41.375371Z,,A pending"
+  },
+  "cashier(own) products": {
+   "GET": 200,
+   "EXPORT": 200,
+   "rows": 94,
+   "sample": "2,tfw-mu2sowlk11ca-prod-02,desc 1,25.50,true\r"
+  },
+  "cashier(seeded) users": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 403,
+   "sample": "1,admin,System Administrator,admin@geneinvoice.local,ADMIN,true\r"
+  },
+  "cashier(seeded) roles": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 44,
+   "sample": "1,ADMIN,Full system access,AUDIT_VIEW CUSTOMER_MANAGE CUSTOMER_VIEW DISPUTE_CREA"
+  },
+  "cashier(seeded) disputes": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 92,
+   "sample": "1,permsca-mu2sq4lq41d7,INVOICE,52,PENDING,2026-09-15T14:57:41.375371Z,,A pending"
+  },
+  "cashier(seeded) products": {
+   "GET": 200,
+   "EXPORT": 200,
+   "rows": 94,
+   "sample": "2,tfw-mu2sowlk11ca-prod-02,desc 1,25.50,true\r"
+  },
+  "SALES_POC users": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 403,
+   "sample": "1,admin,System Administrator,admin@geneinvoice.local,ADMIN,true\r"
+  },
+  "SALES_POC roles": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 44,
+   "sample": "1,ADMIN,Full system access,AUDIT_VIEW CUSTOMER_MANAGE CUSTOMER_VIEW DISPUTE_CREA"
+  },
+  "SALES_POC disputes": {
+   "GET": 200,
+   "EXPORT": 200,
+   "rows": 92,
+   "sample": "1,permsca-mu2sq4lq41d7,INVOICE,52,PENDING,2026-09-15T14:57:41.375371Z,,A pending"
+  },
+  "SALES_POC products": {
+   "GET": 200,
+   "EXPORT": 200,
+   "rows": 94,
+   "sample": "2,tfw-mu2sowlk11ca-prod-02,desc 1,25.50,true\r"
+  },
+  "CS_POC users": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 403,
+   "sample": "1,admin,System Administrator,admin@geneinvoice.local,ADMIN,true\r"
+  },
+  "CS_POC roles": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 44,
+   "sample": "1,ADMIN,Full system access,AUDIT_VIEW CUSTOMER_MANAGE CUSTOMER_VIEW DISPUTE_CREA"
+  },
+  "CS_POC disputes": {
+   "GET": 200,
+   "EXPORT": 200,
+   "rows": 92,
+   "sample": "1,permsca-mu2sq4lq41d7,INVOICE,52,PENDING,2026-09-15T14:57:41.375371Z,,A pending"
+  },
+  "CS_POC products": {
+   "GET": 200,
+   "EXPORT": 200,
+   "rows": 94,
+   "sample": "2,tfw-mu2sowlk11ca-prod-02,desc 1,25.50,true\r"
+  },
+  "COLLECTION_POC users": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 403,
+   "sample": "1,admin,System Administrator,admin@geneinvoice.local,ADMIN,true\r"
+  },
+  "COLLECTION_POC roles": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 44,
+   "sample": "1,ADMIN,Full system access,AUDIT_VIEW CUSTOMER_MANAGE CUSTOMER_VIEW DISPUTE_CREA"
+  },
+  "COLLECTION_POC disputes": {
+   "GET": 200,
+   "EXPORT": 200,
+   "rows": 92,
+   "sample": "1,permsca-mu2sq4lq41d7,INVOICE,52,PENDING,2026-09-15T14:57:41.375371Z,,A pending"
+  },
+  "COLLECTION_POC products": {
+   "GET": 403,
+   "EXPORT": 200,
+   "rows": 94,
+   "sample": "2,tfw-mu2sowlk11ca-prod-02,desc 1,25.50,true\r"
+  }
+ },
+ "PS018": {
+  "notif": {
+   "s2NotifId": 1075,
+   "s2NotifReadBefore": false,
+   "status": 200,
+   "result": {
+    "action": "MARK_READ",
+    "requested": 0,
+    "succeeded": [],
+    "failed": [],
+    "skipped": [],
+    "truncated": false,
+    "limit": 5000
+   },
+   "s2NotifReadAfter": false
+  },
+  "invoices": {
+   "requestedIds": [
+    296,
+    293
+   ],
+   "status": 200,
+   "result": {
+    "action": "REASSIGN_SALES_POC",
+    "requested": 1,
+    "succeeded": [
+     293
+    ],
+    "failed": [],
+    "skipped": [],
+    "truncated": false,
+    "limit": 5000
+   },
+   "y1SalesPocAfter": 416,
+   "s2": 416
+  }
+ },
+ "PS022": {
+  "schemaHasSalesPoc": false,
+  "invAll": 3,
+  "invS1": 2,
+  "invS2": 1,
+  "invC1": 0,
+  "invNameS2": 1,
+  "sortSalesPocName": 200,
+  "payC1": 1,
+  "payC2": 0,
+  "promC1": 1,
+  "promC2": 0,
+  "custSeatC1": 1,
+  "custSeatC2": 0,
+  "custSeatCs1": 1,
+  "unknownColumnControl": "400 {\"timestamp\":\"2026-09-15T15:25:16.320017Z\",\"status\":400,\"error\":\"Bad Request\",\"m",
+  "invDtoHasSalesPoc": false
+ },
+ "PS023": {
+  "promiseStatus": 200,
+  "createdByUserId": 1,
+  "overriddenByUserIdPresent": true,
+  "collectionPoc": null,
+  "disputeStatus": 200,
+  "resolvedByUserId": 1,
+  "openedByUserId": 422,
+  "promiseAudit": [
+   {
+    "action": "PROMISE_CREATED",
+    "changedByUserId": null,
+    "changedByUsername": null,
+    "actorHidden": true,
+    "afterHasCreatedBy": false
+   }
+  ]
+ },
+ "PS029": {
+  "listLocked": [
+   "salesPocUserId:eq:415"
+  ],
+  "listCount": 0,
+  "get": 200,
+  "getSalesPoc": "vpss2-mu2tpke175f3",
+  "patch": 200,
+  "notesAfter": "vps edited by s1 outside book",
+  "cancel": 200,
+  "y2StatusAfter": "CANCELLED",
+  "custListCount": 0,
+  "custLocked": [
+   "myBook:eq:415"
+  ],
+  "getCustomerY": 200,
+  "getCustomerYPocs": 200
+ },
+ "PS033": {
+  "s1Payments": {
+   "status": 200,
+   "total": 107,
+   "locked": []
+  },
+  "adminPayments": {
+   "status": 200,
+   "total": 107,
+   "locked": []
+  },
+  "s1Promises": {
+   "status": 200,
+   "total": 114,
+   "locked": []
+  },
+  "adminPromises": {
+   "status": 200,
+   "total": 114,
+   "locked": []
+  },
+  "s1Disputes": {
+   "status": 200,
+   "total": 92,
+   "locked": []
+  },
+  "adminDisputes": {
+   "status": 200,
+   "total": 92,
+   "locked": []
+  },
+  "s1SeesPromB": 1,
+  "s1Invoices": {
+   "status": 200,
+   "total": 2,
+   "locked": [
+    "salesPocUserId:eq:415"
+   ]
+  }
+ },
+ "PS034": {
+  "s1AddSeatOnY": 200,
+  "body": {
+   "id": 131,
+   "pocType": "SUCCESS",
+   "primary": true,
+   "user": {
+    "id": 419,
+    "username": "vpscs1-mu2tpkl0b5d5",
+    "fullName": "VPSCS1-MU2TPKL0B5D5",
+    "email": "vpscs1-mu2tpkl0b5d5@rt.local",
+    "role": "CUSTOMER_SUCCESS_POC",
+    "active": true
+   },
+   "createdAt": "2026-09-15T15:25:16.419954Z"
+  },
+  "seatsOnY": [
+   {
+    "id": 131,
+    "type": "SUCCESS",
+    "user": "vpscs1-mu2tpkl0b5d5",
+    "primary": true
+   }
+  ],
+  "c1AddSeatOnB": 200
+ },
+ "PS035": {
+  "s1": {
+   "status": 200,
+   "rows": 1,
+   "hasEmail": true,
+   "hasPrivileges": true
+  },
+  "c1": {
+   "status": 200,
+   "rows": 1,
+   "hasEmail": true,
+   "hasPrivileges": true
+  },
+  "cs1": {
+   "status": 200,
+   "rows": 1,
+   "hasEmail": true,
+   "hasPrivileges": true
+  },
+  "cashier": {
+   "status": 403,
+   "rows": null,
+   "hasEmail": false,
+   "hasPrivileges": false
+  },
+  "customerA": {
+   "status": 403,
+   "rows": null,
+   "hasEmail": false,
+   "hasPrivileges": false
+  },
+  "s1GetUser": 403,
+  "s1AuditAdmin": 200
+ },
+ "PS036": {
+  "rolePrivs": [
+   "CUSTOMER_VIEW",
+   "PAYMENT_MANAGE",
+   "PAYMENT_VIEW",
+   "PROMISE_MANAGE",
+   "PROMISE_VIEW"
+  ],
+  "put": 200,
+  "pocAfterPut": 418,
+  "bulk": 200,
+  "bulkBody": {
+   "action": "REASSIGN_COLLECTION_POC",
+   "requested": 1,
+   "succeeded": [
+    113
+   ],
+   "failed": [],
+   "skipped": [],
+   "truncated": false,
+   "limit": 5000
+  },
+  "pocAfterBulk": 418,
+  "c2": 418,
+  "paymentPatch": [
+   400,
+   "You may not change the Collection POC"
+  ],
+  "paymentBulk": [
+   400,
+   "You may not change the Collection POC"
+  ]
+ },
+ "PS039": {
+  "put": {
+   "deactivate": 200,
+   "activeAfter": false,
+   "relogin": [
+    401,
+    "{\"timestamp\":\"2026-09-15T15:25:16.810786Z\",\"status\":401,\"error\":\"Unauthorized\",\""
+   ],
+   "oldTokenInvoices": 200,
+   "oldTokenMe": 200
+  },
+  "del": {
+   "delete": [
+    200,
+    {
+     "pocReferences": 1,
+     "deleted": false,
+     "deactivated": true
+    }
+   ],
+   "d2ActiveAfter": false,
+   "patch": 200,
+   "notesAfter": "vps written by deactivated user",
+   "usersExport": 200
+  },
+  "expiredTokenControl": 401
+ }
+}

@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../shared/models/dispute.dart';
+import '../../core/table/table_providers.dart';
+import '../audit/audit_history_panel.dart';
 import 'disputes_providers.dart';
 
 /// Shows a modal dispute form for a specific invoice or payment.
@@ -116,7 +118,10 @@ class _DisputeCreateDialogState extends ConsumerState<_DisputeCreateDialog> {
         'reason': _reasonCtrl.text.trim(),
         if (proposed != null) 'proposedChangeJson': proposed,
       });
-      ref.invalidate(disputesProvider);
+      ref.invalidate(scopedDisputesProvider);
+      ref.invalidate(tablePageProvider);
+      // The invoice's or payment's History tab now shows "Dispute opened".
+      ref.invalidate(auditHistoryProvider);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       setState(() => _error = e is String ? e : apiErrorMessage(e));
@@ -148,7 +153,7 @@ class _DisputeCreateDialogState extends ConsumerState<_DisputeCreateDialog> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _action,
+                  initialValue: _action,
                   decoration: const InputDecoration(labelText: 'What should change?'),
                   items: _actionOptions,
                   onChanged: (v) => setState(() => _action = v ?? ''),

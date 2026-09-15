@@ -1,3 +1,5 @@
+import '../../features/poc/poc_providers.dart';
+
 enum InvoiceStatus { UNPAID, PARTIALLY_PAID, FULLY_PAID, CANCELLED }
 
 InvoiceStatus parseStatus(String? s) {
@@ -25,6 +27,12 @@ class InvoiceSummary {
   final double balance;
   final InvoiceStatus status;
 
+  /// Null for a self-service customer, who never receives POC identity (AC-A8).
+  final PocUser? salesPoc;
+
+  /// True when this record predates the POC field and still has none (AC-A9).
+  final bool pocMissing;
+
   const InvoiceSummary({
     required this.id,
     required this.invoiceNumber,
@@ -35,6 +43,8 @@ class InvoiceSummary {
     required this.paidAmount,
     required this.balance,
     required this.status,
+    this.salesPoc,
+    this.pocMissing = false,
   });
 
   factory InvoiceSummary.fromJson(Map<String, dynamic> json) => InvoiceSummary(
@@ -47,6 +57,10 @@ class InvoiceSummary {
         paidAmount: (json['paidAmount'] as num).toDouble(),
         balance: (json['balance'] as num).toDouble(),
         status: parseStatus(json['status'] as String?),
+        salesPoc: json['salesPoc'] == null
+            ? null
+            : PocUser.fromJson(json['salesPoc'] as Map<String, dynamic>),
+        pocMissing: json['pocMissing'] as bool? ?? false,
       );
 }
 
@@ -80,6 +94,7 @@ class InvoiceLine {
 class InvoiceDetail extends InvoiceSummary {
   final String? notes;
   final List<InvoiceLine> items;
+  final DateTime? createdAt;
 
   const InvoiceDetail({
     required super.id,
@@ -93,6 +108,9 @@ class InvoiceDetail extends InvoiceSummary {
     required super.status,
     required this.notes,
     required this.items,
+    super.salesPoc,
+    super.pocMissing,
+    this.createdAt,
   });
 
   factory InvoiceDetail.fromJson(Map<String, dynamic> json) => InvoiceDetail(
@@ -109,5 +127,12 @@ class InvoiceDetail extends InvoiceSummary {
         items: ((json['items'] as List?) ?? const [])
             .map((e) => InvoiceLine.fromJson(e as Map<String, dynamic>))
             .toList(),
+        salesPoc: json['salesPoc'] == null
+            ? null
+            : PocUser.fromJson(json['salesPoc'] as Map<String, dynamic>),
+        pocMissing: json['pocMissing'] as bool? ?? false,
+        createdAt: json['createdAt'] == null
+            ? null
+            : DateTime.parse(json['createdAt'] as String),
       );
 }

@@ -1,12 +1,24 @@
 package com.geneinvoice.invoice;
 
+import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.NotFoundException;
+import com.geneinvoice.common.query.Aggregates;
+import com.geneinvoice.common.query.PageResponse;
+import com.geneinvoice.common.query.TableQuery;
+import com.geneinvoice.common.query.TableQueryExecutor;
+import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.poc.PocService;
+import com.geneinvoice.poc.PocType;
+import com.geneinvoice.poc.ScopeResolver;
 import com.geneinvoice.product.Product;
 import com.geneinvoice.product.ProductRepository;
+import com.geneinvoice.promise.PaymentPromiseService;
+import com.geneinvoice.user.User;
+import jakarta.persistence.criteria.Expression;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -24,21 +36,32 @@ import java.util.List;
 @RequiredArgsConstructor
 public class InvoiceService {
 
+    public static final String ENTITY = "INVOICE";
+
     private final InvoiceRepository invoiceRepository;
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final CurrentUser currentUser;
+    private final PocService pocService;
+    private final ScopeResolver scopeResolver;
+    private final TableQueryExecutor queryExecutor;
+    private final AuditService auditService;
+    private final PaymentPromiseService promiseService;
 
     @Transactional
     public Invoice create(InvoiceDtos.CreateInvoiceRequest req) {
         Customer customer = customerRepository.findById(req.customerId())
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
 
+        // Mandatory on create, enforced here so every caller obeys it — not just the form (AC-A2).
+        User salesPoc = pocService.requireAssignable(req.salesPocUserId(), PocType.SALES);
+
         Invoice invoice = Invoice.builder()
                 .customer(customer)
                 .invoiceDate(req.invoiceDate() == null ? Instant.now() : req.invoiceDate())
                 .notes(req.notes())
                 .invoiceNumber(nextInvoiceNumber())
+                .salesPoc(salesPoc)
                 .build();
 
         BigDecimal total = BigDecimal.ZERO;
@@ -59,7 +82,47 @@ public class InvoiceService {
         invoice.setTotal(total);
         applyCustomerCreditIfAny(invoice);
         recomputeStatus(invoice);
-        return invoiceRepository.save(invoice);
+        Invoice saved = invoiceRepository.save(invoice);
+        // Leftover credit is the only thing that can have paid a brand-new invoice, so a non-zero
+        // paid amount here is exactly the credit it consumed.
+        BigDecimal creditUsed = saved.getPaidAmount();
+        auditService.record(ENTITY, saved.getId(), "INVOICE_CREATED", null,
+                InvoiceDtos.InvoiceDto.from(saved), currentUser.idOrNull(), null,
+                creditUsed.signum() > 0 ? "Customer credit applied: " + creditUsed.toPlainString() : null);
+
+        pocService.notifyAssignee(salesPoc, PocType.SALES,
+                "invoice " + saved.getInvoiceNumber(), "/invoices/" + saved.getId());
+        promiseService.reevaluateForCustomer(customer.getId());
+        return saved;
+    }
+
+    /** Inline edit from the detail screen: notes and the Sales POC. Line items stay dispute-only. */
+    @Transactional
+    public Invoice update(Long id, InvoiceDtos.UpdateInvoiceRequest req) {
+        Invoice inv = getInternal(id);
+        Object before = InvoiceDtos.InvoiceDto.from(inv);
+
+        if (req.notes() != null) inv.setNotes(req.notes());
+        if (req.salesPocUserId() != null) {
+            User poc = pocService.requireAssignable(req.salesPocUserId(), PocType.SALES);
+            User previous = inv.getSalesPoc();
+            if (previous == null || !previous.getId().equals(poc.getId())) {
+                inv.setSalesPoc(poc);
+                pocService.notifyAssignee(poc, PocType.SALES,
+                        "invoice " + inv.getInvoiceNumber(), "/invoices/" + inv.getId());
+            }
+        }
+        Invoice saved = invoiceRepository.save(inv);
+        auditService.record(ENTITY, id, "INVOICE_UPDATED", before,
+                InvoiceDtos.InvoiceDto.from(saved),
+                currentUser.require().getId(), null, null);
+        return saved;
+    }
+
+    /** Reassigns just the Sales POC. Used by the inline row action and the bulk action. */
+    @Transactional
+    public Invoice reassignSalesPoc(Long id, Long userId) {
+        return update(id, new InvoiceDtos.UpdateInvoiceRequest(null, userId));
     }
 
     private void applyCustomerCreditIfAny(Invoice invoice) {
@@ -103,32 +166,77 @@ public class InvoiceService {
                 .orElseThrow(() -> new NotFoundException("Invoice not found"));
     }
 
+    // ---- list, tiles ------------------------------------------------------------
+
     @Transactional(readOnly = true)
-    public List<Invoice> list() {
-        Long callerCustomer = currentUser.customerIdOrNull();
-        if (callerCustomer != null) {
-            return invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(callerCustomer);
-        }
-        return invoiceRepository.findAll();
+    public PageResponse<InvoiceDtos.InvoiceSummary> page(TableQuery query) {
+        ScopeResolver.Scope scope = scopeResolver.forInvoices();
+        boolean poc = scopeResolver.canSeePoc();
+        var page = queryExecutor.run(Invoice.class, TableSchemas.INVOICES, query,
+                scope.predicates(), List.of("customer", "salesPoc"));
+        return PageResponse.of(
+                page.content().stream().map(i -> InvoiceDtos.InvoiceSummary.from(i, poc)).toList(),
+                query, page.total(), scope.lockedFilters());
     }
 
     @Transactional(readOnly = true)
-    public List<Invoice> listByCustomer(Long customerId) {
-        Long callerCustomer = currentUser.customerIdOrNull();
-        if (callerCustomer != null && !callerCustomer.equals(customerId)) {
-            throw new AccessDeniedException("Not allowed");
-        }
-        return invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customerId);
+    public List<Long> idsMatching(TableQuery query, int limit) {
+        return queryExecutor.ids(Invoice.class, TableSchemas.INVOICES, query,
+                scopeResolver.forInvoices().predicates(), limit);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Invoice> allMatching(TableQuery query) {
+        return queryExecutor.run(Invoice.class, TableSchemas.INVOICES, query,
+                scopeResolver.forInvoices().predicates(), List.of("customer", "salesPoc")).content();
+    }
+
+    /** Tiles computed over the whole filtered set, never from the current page (AC-E1). */
+    @Transactional(readOnly = true)
+    public InvoiceDtos.InvoiceSummaryTiles tiles(TableQuery query) {
+        ScopeResolver.Scope scope = scopeResolver.forInvoices();
+        Object[] row = queryExecutor.aggregate(Invoice.class, TableSchemas.INVOICES, query,
+                scope.predicates(), (root, q, cb) -> {
+                    Expression<BigDecimal> total = root.get("total");
+                    Expression<BigDecimal> paid = root.get("paidAmount");
+                    Expression<BigDecimal> liveBalance = cb.<BigDecimal>selectCase()
+                            .when(cb.equal(root.get("status"), InvoiceStatus.CANCELLED),
+                                    cb.literal(BigDecimal.ZERO))
+                            .otherwise(cb.diff(total, paid));
+                    return List.of(
+                            cb.count(root.get("id")),
+                            cb.coalesce(cb.sum(total), BigDecimal.ZERO),
+                            cb.coalesce(cb.sum(paid), BigDecimal.ZERO),
+                            cb.coalesce(cb.sum(liveBalance), BigDecimal.ZERO),
+                            Aggregates.countWhen(cb, cb.equal(root.get("status"), InvoiceStatus.UNPAID)),
+                            Aggregates.countWhen(cb, cb.equal(root.get("status"), InvoiceStatus.PARTIALLY_PAID)),
+                            Aggregates.countWhen(cb, cb.equal(root.get("status"), InvoiceStatus.FULLY_PAID)),
+                            Aggregates.countWhen(cb, cb.equal(root.get("status"), InvoiceStatus.CANCELLED)),
+                            Aggregates.countWhen(cb, cb.isNull(root.get("salesPoc"))));
+                });
+        return new InvoiceDtos.InvoiceSummaryTiles(
+                Aggregates.asLong(row[0]), Aggregates.asMoney(row[1]), Aggregates.asMoney(row[2]),
+                Aggregates.asMoney(row[3]),
+                Aggregates.asLong(row[4]), Aggregates.asLong(row[5]), Aggregates.asLong(row[6]),
+                Aggregates.asLong(row[7]), Aggregates.asLong(row[8]));
     }
 
     @Transactional
     public Invoice cancel(Long id) {
         Invoice inv = getInternal(id);
+        if (inv.getStatus() == InvoiceStatus.CANCELLED) {
+            throw new BadRequestException("Invoice already cancelled");
+        }
         if (inv.getStatus() == InvoiceStatus.FULLY_PAID || inv.getPaidAmount().signum() > 0) {
             throw new BadRequestException("Cannot cancel an invoice with payments; refund first");
         }
+        Object before = InvoiceDtos.InvoiceDto.from(inv);
         inv.setStatus(InvoiceStatus.CANCELLED);
-        return invoiceRepository.save(inv);
+        Invoice saved = invoiceRepository.save(inv);
+        auditService.record(ENTITY, id, "INVOICE_CANCELLED", before,
+                InvoiceDtos.InvoiceDto.from(saved), currentUser.require().getId(), null, null);
+        promiseService.reevaluateForCustomer(inv.getCustomer().getId());
+        return saved;
     }
 
     /**
@@ -148,7 +256,9 @@ public class InvoiceService {
             inv.setPaidAmount(BigDecimal.ZERO);
         }
         inv.setStatus(InvoiceStatus.CANCELLED);
-        return invoiceRepository.save(inv);
+        Invoice saved = invoiceRepository.save(inv);
+        promiseService.reevaluateForCustomer(inv.getCustomer().getId());
+        return saved;
     }
 
     /**
@@ -191,6 +301,8 @@ public class InvoiceService {
             inv.setPaidAmount(total);
         }
         recomputeStatus(inv);
-        return invoiceRepository.save(inv);
+        Invoice saved = invoiceRepository.save(inv);
+        promiseService.reevaluateForCustomer(inv.getCustomer().getId());
+        return saved;
     }
 }

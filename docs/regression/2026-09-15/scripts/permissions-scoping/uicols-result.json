@@ -1,0 +1,100 @@
+{
+  "CUSTOMER": {
+    "invoices": [
+      "Popup menu",
+      "Id",
+      "Invoice #",
+      "Customer",
+      "Customer name",
+      "Date",
+      "Total",
+      "Paid",
+      "Balance",
+      "Status",
+      "Notes",
+      "Created"
+    ],
+    "invoices_shot": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/permissions-scoping/shots/CUSTOMER-invoices-columns.png",
+    "payments": [
+      "Popup menu",
+      "Id",
+      "Customer",
+      "Customer name",
+      "Amount",
+      "Credit applied",
+      "Method",
+      "Notes",
+      "Paid at",
+      "Status"
+    ],
+    "payments_shot": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/permissions-scoping/shots/CUSTOMER-payments-columns.png",
+    "promises": [
+      "Popup menu",
+      "Id",
+      "Customer",
+      "Customer name",
+      "Promised amount",
+      "Fulfilled",
+      "Remaining",
+      "Promised by",
+      "Status",
+      "Manually overridden",
+      "Notes",
+      "Invoice",
+      "Created"
+    ],
+    "promises_shot": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/permissions-scoping/shots/CUSTOMER-promises-columns.png"
+  },
+  "VIEWER": {
+    "invoices": [
+      "Popup menu",
+      "Id",
+      "Invoice #",
+      "Customer",
+      "Customer name",
+      "Date",
+      "Total",
+      "Paid",
+      "Balance",
+      "Status",
+      "Notes",
+      "Sales POC",
+      "Sales POC name",
+      "Created"
+    ],
+    "invoices_shot": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/permissions-scoping/shots/VIEWER-invoices-columns.png",
+    "payments": [
+      "Popup menu",
+      "Id",
+      "Customer",
+      "Customer name",
+      "Amount",
+      "Credit applied",
+      "Method",
+      "Notes",
+      "Paid at",
+      "Status",
+      "Collection POC",
+      "Collection POC name"
+    ],
+    "payments_shot": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/permissions-scoping/shots/VIEWER-payments-columns.png",
+    "promises": [
+      "Popup menu",
+      "Id",
+      "Customer",
+      "Customer name",
+      "Promised amount",
+      "Fulfilled",
+      "Remaining",
+      "Promised by",
+      "Status",
+      "Manually overridden",
+      "Collection POC",
+      "Collection POC name",
+      "Notes",
+      "Invoice",
+      "Created"
+    ],
+    "promises_shot": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/permissions-scoping/shots/VIEWER-promises-columns.png"
+  }
+}

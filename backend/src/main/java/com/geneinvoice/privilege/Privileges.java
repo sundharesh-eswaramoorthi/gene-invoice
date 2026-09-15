@@ -31,6 +31,35 @@ public final class Privileges {
 
     public static final String AUDIT_VIEW = "AUDIT_VIEW";
 
+    // ---- Point-of-contact (POC) ------------------------------------------------
+    /** May see POC identity fields, columns, filters and dropdowns. */
+    public static final String POC_VIEW = "POC_VIEW";
+    /** May change POC assignments on invoices, payments and customers. */
+    public static final String POC_ASSIGN = "POC_ASSIGN";
+    /**
+     * Assignability markers. A user is offered in a POC dropdown when their role carries the
+     * matching marker — this keeps the existing "one role per user" model intact while letting an
+     * admin compose a role that is assignable as several POC kinds at once.
+     */
+    public static final String POC_ASSIGNABLE_SALES = "POC_ASSIGNABLE_SALES";
+    public static final String POC_ASSIGNABLE_SUCCESS = "POC_ASSIGNABLE_SUCCESS";
+    public static final String POC_ASSIGNABLE_COLLECTION = "POC_ASSIGNABLE_COLLECTION";
+
+    /**
+     * May clear the "my records only" default scope on list pages. Without it the default POC
+     * filter is enforced server-side and rendered as a locked chip.
+     */
+    public static final String SCOPE_OVERRIDE = "SCOPE_OVERRIDE";
+
+    // ---- Payment promises ------------------------------------------------------
+    public static final String PROMISE_VIEW = "PROMISE_VIEW";
+    public static final String PROMISE_MANAGE = "PROMISE_MANAGE";
+    public static final String PROMISE_OVERRIDE = "PROMISE_OVERRIDE";
+
+    // ---- Tables ----------------------------------------------------------------
+    /** May export the current selection / filtered set as CSV. */
+    public static final String EXPORT_DATA = "EXPORT_DATA";
+
     public static final List<String> ALL = List.of(
             USER_VIEW, USER_MANAGE,
             ROLE_VIEW, ROLE_MANAGE,
@@ -40,6 +69,11 @@ public final class Privileges {
             PAYMENT_VIEW, PAYMENT_MANAGE,
             DISPUTE_CREATE, DISPUTE_VIEW, DISPUTE_MANAGE,
             NOTIFICATION_VIEW,
-            AUDIT_VIEW
+            AUDIT_VIEW,
+            POC_VIEW, POC_ASSIGN,
+            POC_ASSIGNABLE_SALES, POC_ASSIGNABLE_SUCCESS, POC_ASSIGNABLE_COLLECTION,
+            SCOPE_OVERRIDE,
+            PROMISE_VIEW, PROMISE_MANAGE, PROMISE_OVERRIDE,
+            EXPORT_DATA
     );
 }

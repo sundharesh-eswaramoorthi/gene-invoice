@@ -1,0 +1,8 @@
+[group] "Dismiss" @683,450 1366x900
+[null] "Record payment" @683,245 540x32
+[button] "Customer *" @683,297 540x40
+[group] "Collection POC *\nSelect…" @683,359 540x60
+[null] "A Collection POC is required before this payment can be saved" @607,381 356x16
+[null] "Pick a customer" @465,567 104x20
+[button] "Cancel" @919,617 67x32
+[button] "Record" @683,652 540x38

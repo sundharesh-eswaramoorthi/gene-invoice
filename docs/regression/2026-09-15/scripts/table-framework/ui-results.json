@@ -1,0 +1,155 @@
+{
+  "UI-05": {
+    "id": "UI-05",
+    "feature": "UI Invoices / paging",
+    "title": "Rows 20 -> 10 updates URL and pager; Next page -> page=1, rows 11–20",
+    "status": "PASS",
+    "expected": "default 1–20 of 24; after 10: 1–10 of 24 / Page 1 of 3; next: page=1, 11–20 of 24 / Page 2 of 3",
+    "actual": "before 1–20 of 24 / Page 1 of 2; after size http://localhost:8084/#/invoices?size=10&sort=invoiceDate,desc&f=customerId:eq:2 1–10 of 24 / Page 1 of 3; after next http://localhost:8084/#/invoices?page=1&size=10&sort=invoiceDate,desc&f=customerId:eq:2 11–20 of 24 / Page 2 of 3",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui05-invoices-page2-size10.png"
+  },
+  "UI-06": {
+    "id": "UI-06",
+    "feature": "UI Invoices / paging (AC-D1)",
+    "title": "Changing page fires exactly one backend request (tiles are not refetched)",
+    "status": "FAIL",
+    "expected": "1 GET /api/invoices, 0 GET /api/invoices/summary on Next page (AC-D1; tiles depend only on filters)",
+    "actual": "list requests 1, summary requests 1: /api/invoices?page=1&size=10&sort=invoiceDate,desc&filter=customerId:eq:2 ; /api/invoices/summary?filter=customerId:eq:2",
+    "evidence": ""
+  },
+  "UI-07": {
+    "id": "UI-07",
+    "feature": "UI Invoices / paging",
+    "title": "Chosen page size (10) is remembered when coming back to Invoices, and after a browser reload",
+    "status": "PASS",
+    "expected": "Rows 10 and 1–10 of N on return and after reload (D.1)",
+    "actual": "return: http://localhost:8084/#/invoices rows=10 1–10 of 229 / Page 1 of 23; after reload: http://localhost:8084/#/invoices rows=10 1–10 of 229 / Page 1 of 23",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui07-invoices-size-remembered.png"
+  },
+  "UI-08": {
+    "id": "UI-08",
+    "feature": "UI Invoices / sorting",
+    "title": "Clicking the sortable \"Total\" header sorts asc, clicking again sorts desc (URL + rows)",
+    "status": "PASS",
+    "expected": "sort=total,asc then total,desc; totals ascending then descending",
+    "actual": "http://localhost:8084/#/invoices?size=10&sort=total,asc&f=customerId:eq:2 [₹10.00 ₹35.00 ₹42.00 ₹50.00 ₹50.00 ₹50.00 ₹60.00 ₹60.00 ₹75.50 ₹99.99] ; http://localhost:8084/#/invoices?size=10&sort=total,desc&f=customerId:eq:2 []",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui08-invoices-sort-total-asc.png , /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui08-invoices-sort-total-desc.png"
+  },
+  "UI-09": {
+    "id": "UI-09",
+    "feature": "UI Invoices / states (AC-D11)",
+    "title": "Empty result shows \"No invoices match this filter\" with \"Clear all filters\", which clears the URL filters",
+    "status": "PASS",
+    "expected": "empty message + Clear all filters; no error or spinner; clicking clears f=",
+    "actual": "text has empty msg=true; after clear URL http://localhost:8084/#/invoices?size=10&sort=invoiceDate,desc",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui09-invoices-empty.png"
+  },
+  "UI-10": {
+    "id": "UI-10",
+    "feature": "UI Invoices / states (AC-D11)",
+    "title": "A failing request shows a distinct error state (\"Request failed\", server message, Retry) — not the empty state",
+    "status": "PASS",
+    "expected": "\"Request failed\" + message \"Operator contains is not valid…\" + Retry",
+    "actual": "Request failed | Operator contains is not valid for column total (MONEY) | Retry",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui10-invoices-error.png"
+  },
+  "UI-11": {
+    "id": "UI-11",
+    "feature": "UI Invoices / states (AC-D11)",
+    "title": "While the list request is in flight a distinct loading state (\"Loading…\" spinner) shows — not empty, not error",
+    "status": "PASS",
+    "expected": "\"Loading…\" with spinner",
+    "actual": "semantics: Loading… present",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui11-invoices-loading.png"
+  },
+  "UI-12": {
+    "id": "UI-12",
+    "feature": "UI Invoices / states (AC-D11)",
+    "title": "Opening a page beyond the end does not claim \"no rows match this filter\" when 24 rows match",
+    "status": "FAIL",
+    "expected": "a distinct \"page out of range\" / reset to last page, not the no-match empty state (AC-D11)",
+    "actual": "text: \"No invoices match this filter\" shown; pager \"991–990 of 24 / Page 100 of 3\"",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui12-invoices-page-out-of-range.png"
+  },
+  "UI-13": {
+    "id": "UI-13",
+    "feature": "UI Invoices / selection",
+    "title": "Ticking rows shows the selection toolbar with the count (\"1 selected\", \"2 selected\") and the bulk/export actions",
+    "status": "PASS",
+    "expected": "1 selected -> 2 selected; Select all 24…, Cancel unpaid, Reassign Sales POC, Export selected, Clear",
+    "actual": "after 1: true; after 2: 2 selected | Select all 24 matching this filter | Cancel unpaid | Reassign Sales POC | Export selected | Clear",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui13-invoices-2-selected.png"
+  },
+  "UI-14": {
+    "id": "UI-14",
+    "feature": "UI Invoices / export",
+    "title": "\"Export selected\" with 2 rows opens the \"Exported CSV\" dialog with exactly those 2 rows",
+    "status": "PASS",
+    "expected": "dialog \"Exported CSV\"; request ids = the 2 selected; CSV = header + 2 rows with those invoice numbers",
+    "actual": "dialog=true; request {\"action\":\"EXPORT\",\"ids\":[13,16],\"sort\":\"total,asc\",\"filters\":[\"customerId:eq:2\"]}; CSV rows 3: Invoice #,Customer,Date,Total,Paid,Balance,Status,Sales POC / INV-20260915-0013,tfw-mu2sowlk11ca-cust-01,2026-08-11T12:00:00Z,10.00,10.00,0.00,FULLY_PAID,tfw-mu2sowlk11cas-mu2sowlk0fbd / INV-20260915-0016,tfw-mu2sowlk11ca-cust-01,2026-06-07T12:00:00Z,35.00,0.00,35.00,UNPAID,tfw-mu2sowlk11cas-mu2sowlk0fbd",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui14-invoices-export-dialog.png"
+  },
+  "UI-15": {
+    "id": "UI-15",
+    "feature": "UI Invoices / select all matching (AC-D7)",
+    "title": "\"Select all 24 matching this filter\" -> \"24 selected\"; export sends selectAllMatchingFilter with the filter and returns 24 rows; bulk confirm states the exact count",
+    "status": "PASS",
+    "expected": "24 selected; export request selectAllMatchingFilter:true + filters; 24 CSV rows; confirm \"…to 24 records.\"",
+    "actual": "toolbar true; export req {\"action\":\"EXPORT\",\"selectAllMatchingFilter\":true,\"sort\":\"total,asc\",\"filters\":[\"customerId:eq:2\"]}; rows 24; confirm \"This will apply \"Cancel unpaid\" to 24 records.\n\nThis cannot be undone. \"",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui15-invoices-select-all-matching.png , /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui16-invoices-bulk-confirm-count.png"
+  },
+  "UI-16": {
+    "id": "UI-16",
+    "feature": "UI Invoices / selection",
+    "title": "Header checkbox selects the loaded page (\"10 selected\"); changing page clears the selection",
+    "status": "PASS",
+    "expected": "10 selected; after Next page no selection toolbar",
+    "actual": "header: 10 selected; after next: none",
+    "evidence": ""
+  },
+  "UI-17": {
+    "id": "UI-17",
+    "feature": "UI Customers / filters",
+    "title": "Customers: Add filter Name contains <prefix> -> chip, URL f=name:contains:<prefix>, count matches API",
+    "status": "PASS",
+    "expected": "URL f=…; chip; \"of 28\"",
+    "actual": "URL http://localhost:8084/#/customers?size=20&sort=name,asc&f=name:contains:tfw-mu2sowlk11ca; pager 1–20 of 28 / Page 1 of 2",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui17-customers-filter.png"
+  },
+  "UI-18": {
+    "id": "UI-18",
+    "feature": "UI Customers / paging",
+    "title": "Customers Rows 20 -> 50 (URL size=50, \"1–28 of 28\") and 50 is remembered on return (per table)",
+    "status": "PASS",
+    "expected": "size=50 now and on return",
+    "actual": "after: http://localhost:8084/#/customers?size=50&sort=name,asc&f=name:contains:tfw-mu2sowlk11ca 1–28 of 28 / Page 1 of 1; return: http://localhost:8084/#/customers rows=50 1–50 of 166 / Page 1 of 4",
+    "evidence": ""
+  },
+  "UI-19": {
+    "id": "UI-19",
+    "feature": "UI Customers / sorting (AC-D3)",
+    "title": "Sortable \"Name\" header toggles name,asc -> name,desc; unsortable \"Success POC\" header does nothing; \"Credit\" sorts by creditBalance",
+    "status": "FAIL",
+    "expected": "name,desc with cust-23 first; URL unchanged after Success POC; creditBalance,asc",
+    "actual": "start http://localhost:8084/#/customers?size=10&f=name:contains:tfw-mu2sowlk11ca-cust-; after Name http://localhost:8084/#/customers?size=10&sort=name,desc&f=name:contains:tfw-mu2sowlk11ca-cust- first=tfw-mu2sowlk11ca-cust-23\nPOC missing; after Success POC http://localhost:8084/#/customers?size=10&sort=name,desc&f=name:contains:tfw-mu2sowlk11ca-cust-; after Credit http://localhost:8084/#/customers?size=10&sort=creditBalance,asc&f=name:contains:tfw-mu2sowlk11ca-cust-",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui19-customers-sort.png"
+  },
+  "UI-20": {
+    "id": "UI-20",
+    "feature": "UI Customers / export",
+    "title": "Customers: select 1 row -> \"1 selected\" -> Export selected dialog shows header + that customer",
+    "status": "PASS",
+    "expected": "Exported CSV dialog with header + cust-01",
+    "actual": "dialog=true csv: Id,Name,Phone,Email,Credit balance,Outstanding,Customer Success POCs,Collection POCs / 2,tfw-mu2sowlk11ca-cust-01,,,0.00,2894.19,tfw-mu2sowlk11cax-mu2sowpy2e25 (primary),tfw-mu2sowlk11cak-mu2sownt364f (primary)",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui20-customers-export.png"
+  },
+  "UI-21": {
+    "id": "UI-21",
+    "feature": "UI Customers / states",
+    "title": "Customers empty filter result shows \"No customers match this filter\" and Clear all filters",
+    "status": "PASS",
+    "expected": "empty state text",
+    "actual": "88 | Notifications | Account\nadmin • ADMIN | Customers | Total outstanding | Total credit | No Success POC | No Collection POC | 0 | ₹0.00 | ₹0.00 | 0 | 0 | Add filter | Name contains zzzz-no-such-cus",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/table-framework/shots/ui21-customers-empty.png"
+  }
+}

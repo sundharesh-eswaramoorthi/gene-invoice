@@ -31,6 +31,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class DisputeService {
 
+    public static final String ENTITY = "DISPUTE";
+
     private static final String NOTIF_OPENED = "DISPUTE_OPENED";
     private static final String NOTIF_APPROVED = "DISPUTE_APPROVED";
     private static final String NOTIF_DENIED = "DISPUTE_DENIED";
@@ -71,6 +73,8 @@ public class DisputeService {
                 .status(DisputeStatus.PENDING)
                 .build();
         d = disputeRepository.save(d);
+        auditService.record(ENTITY, d.getId(), "DISPUTE_OPENED", null, toDto(d),
+                caller.getId(), d.getId(), req.reason());
 
         Customer cust = customerRepository.findById(callerCustomer).orElse(null);
         String custName = cust == null ? "customer" : cust.getName();
@@ -118,6 +122,11 @@ public class DisputeService {
         d.setResolvedByUserId(currentUser.require().getId());
         if (req != null && req.adminNotes() != null) d.setAdminNotes(req.adminNotes());
         d = disputeRepository.save(d);
+        // Approval is audited on the invoice or payment it changed; a denial changes nothing
+        // there, so it is recorded on the dispute itself.
+        auditService.record(ENTITY, d.getId(), "DISPUTE_DENIED", null, toDto(d),
+                d.getResolvedByUserId(), d.getId(),
+                d.getAdminNotes() == null ? d.getReason() : d.getAdminNotes());
 
         notifyCustomerOfResolution(d, NOTIF_DENIED, "Dispute denied");
         return d;

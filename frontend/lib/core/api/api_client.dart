@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/auth/auth_controller.dart';
 import '../storage/secure_storage.dart';
 
 /// Default API base URL. Override at build time with:
@@ -30,9 +31,14 @@ final dioProvider = Provider<Dio>((ref) {
       }
       handler.next(options);
     },
-    onError: (e, handler) {
+    onError: (e, handler) async {
       if (kDebugMode) {
         debugPrint('API error ${e.response?.statusCode} ${e.requestOptions.uri}: ${e.response?.data}');
+      }
+      if (_isExpiredSession(e)) {
+        // The token has expired or is no longer valid. Signing out sends the router back to the
+        // login screen, rather than leaving every screen failing on a dead session.
+        await ref.read(authControllerProvider.notifier).logout();
       }
       handler.next(e);
     },
@@ -40,6 +46,14 @@ final dioProvider = Provider<Dio>((ref) {
 
   return dio;
 });
+
+/// A 401 means the session is gone — except from the sign-in calls themselves (login, change
+/// password), which use it to report wrong credentials.
+bool _isExpiredSession(DioException e) {
+  if (e.response?.statusCode != 401) return false;
+  final path = e.requestOptions.path;
+  return !path.startsWith('/api/auth/') || path == '/api/auth/me';
+}
 
 String apiErrorMessage(Object error) {
   if (error is DioException) {

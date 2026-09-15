@@ -1,0 +1,53 @@
+[null] "64" @1722,23 13x16
+[button] "Notifications" @1720,28 40x40
+[button] "Account\nadmin • ADMIN" @1832,28 176x24
+[null] "Payments" @354,88 146x16
+[null] "Total collected" @545,88 128x16
+[null] "Credit applied" @718,88 146x16
+[null] "Voided" @900,88 146x16
+[null] "POC missing" @1091,88 128x16
+[null] "2" @287,116 12x28
+[null] "₹125.00" @502,116 79x28
+[null] "₹0.00" @672,116 54x28
+[null] "0" @833,116 12x28
+[null] "0" @1015,116 12x28
+[checkbox] "Add filter" @325,171 112x34
+[checkbox] "Customer is 78" @462,171 150x34
+[button] "Delete" @517,171 32x32
+[button] "Clear all" @580,171 75x32
+[button] "Record payment" @1824,170 169x32
+[columnheader] "Payment" @445,224 165x56
+[columnheader] "Customer" @654,224 254x56
+[columnheader] "Amount" @869,224 175x56
+[columnheader] "Credit applied" @1063,224 213x56
+[columnheader] "Method" @1256,224 174x56
+[columnheader] "Paid at" @1467,224 248x56
+[columnheader] "Status" @1674,224 166x56
+[columnheader] "Collection POC" @1839,224 163x56
+[cell] "#68" @445,276 165x48
+[cell] "apaycr-mu2sscpo6ab0" @654,276 254x48
+[cell] "₹5.00" @869,276 175x48
+[cell] "₹0.00" @1063,276 213x48
+[cell] "Cash" @1256,276 174x48
+[cell] "15 Sep 2026, 8:29 PM" @1467,276 248x48
+[cell] "Active" @1674,276 166x48
+[cell] "UIPC-MU2SSCJHD67B" @1839,276 163x48
+[button] "Open" @2058,276 40x40
+[cell] "#67" @445,324 165x48
+[cell] "apaycr-mu2sscpo6ab0" @654,324 254x48
+[cell] "₹120.00" @869,324 175x48
+[cell] "₹0.00" @1063,324 213x48
+[cell] "Cash" @1256,324 174x48
+[cell] "15 Sep 2026, 8:29 PM" @1467,324 248x48
+[cell] "Active" @1674,324 166x48
+[cell] "UIPC-MU2SSCEO4E95" @1839,324 163x48
+[button] "Open" @2058,324 40x40
+[null] "Rows" @1518,970 35x20
+[button] "10" @1563,970 42x48
+[null] "1–2 of 2" @1623,970 55x20
+[null] "Page 1 of 1" @1699,970 73x20
+[button] "First page" @1768,970 40x40
+[button] "Previous page" @1808,970 40x40
+[button] "Next page" @1848,970 40x40
+[button] "Last page" @1888,970 40x40
+--inputs--

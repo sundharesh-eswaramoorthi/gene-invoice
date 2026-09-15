@@ -1,0 +1,31 @@
+[null] "71" @1168,23 13x16
+[button] "Notifications" @1166,28 40x40
+[button] "Account\nadmin • ADMIN" @1278,28 176x24
+[checkbox] "Add filter" @325,81 112x34
+[checkbox] "Name contains cpui-mu2ssz55cfab" @526,81 278x34
+[button] "Delete" @645,81 32x32
+[button] "Clear all" @708,81 75x32
+[button] "New product" @1281,80 146x32
+[columnheader] "Name" @577,182 321x56
+[columnheader] "Description" @854,182 233x56
+[columnheader] "Price" @1077,182 213x56
+[columnheader] "Active" @1275,182 183x56
+[cell] "cpui-mu2ssz55cfab gadget" @577,234 321x48
+[cell] "UI made" @854,234 233x48
+[cell] "₹15.00" @1077,234 213x48
+[cell] "No" @1275,234 183x48
+[button] "Edit" @1450,234 40x40
+[cell] "cpui-mu2ssz55cfab prod" @577,282 321x48
+[cell] "—" @854,282 233x48
+[cell] "₹120.00" @1077,282 213x48
+[cell] "No" @1275,282 183x48
+[button] "Edit" @1450,282 40x40
+[null] "Rows" @964,870 35x20
+[button] "20" @1009,870 42x48
+[null] "1–2 of 2" @1069,870 55x20
+[null] "Page 1 of 1" @1145,870 73x20
+[button] "First page" @1214,870 40x40
+[button] "Previous page" @1254,870 40x40
+[button] "Next page" @1294,870 40x40
+[button] "Last page" @1334,870 40x40
+[null] "1 record updated" @683,876 1366x48

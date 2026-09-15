@@ -1,6 +1,7 @@
 package com.geneinvoice.invoice;
 
 import com.geneinvoice.customer.Customer;
+import com.geneinvoice.user.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -51,6 +52,14 @@ public class Invoice {
 
     @Column(length = 500)
     private String notes;
+
+    /**
+     * The salesperson who owns this invoice. Mandatory on create; stays null on invoices that
+     * predate the field, which surface a "POC missing" badge instead of being blocked.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sales_poc_user_id")
+    private User salesPoc;
 
     @Column(updatable = false)
     private Instant createdAt;

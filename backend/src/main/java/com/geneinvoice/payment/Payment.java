@@ -1,6 +1,7 @@
 package com.geneinvoice.payment;
 
 import com.geneinvoice.customer.Customer;
+import com.geneinvoice.user.User;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -41,6 +42,14 @@ public class Payment {
 
     @Column(nullable = false)
     private Instant paidAt;
+
+    /**
+     * Who collected this payment. Mandatory on create; stays null on payments that predate the
+     * field, which surface a "POC missing" badge instead of being blocked.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "collection_poc_user_id")
+    private User collectionPoc;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)

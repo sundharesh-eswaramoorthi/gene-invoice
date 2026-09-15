@@ -1,0 +1,50 @@
+[
+ {
+  "id": "R-CHIP-CUSTOMER-COUNT",
+  "title": "Customer chip count 7 = CUSTOMER_CREATED, CUSTOMER_UPDATED, 3x POC_ASSIGNED, POC_PRIMARY_CHANGED, POC_REMOVED (the 3 POC_ASSIGNED rows share one label)",
+  "pass": true,
+  "detail": [
+   "CUSTOMER_UPDATED",
+   "POC_REMOVED",
+   "POC_PRIMARY_CHANGED",
+   "POC_ASSIGNED",
+   "POC_ASSIGNED",
+   "POC_ASSIGNED",
+   "CUSTOMER_CREATED"
+  ]
+ },
+ {
+  "id": "R-LONG-REASON-ROW",
+  "title": "History row of the 616-char dispute expands (chevron) showing Note (truncated 500) + Details snapshot with full reason, no errors",
+  "pass": false,
+  "detail": {
+   "row": "Dispute opened / Dispute #83 / Sep 15, 2026 8:46 PM • by dhd-custA-mu2te2t7f180",
+   "exp": {
+    "click": [
+     1319,
+     777
+    ],
+    "hash": "#/disputes/83",
+    "hasNote": false,
+    "hasDetails": false,
+    "endInSnapshot": true,
+    "noteLen": 0
+   },
+   "pageErrors": []
+  }
+ },
+ {
+  "id": "R-CUST-APPLIED-LINKS",
+  "title": "customer timeline \"Payment applied\" row shows the invoice number link and Payment # link (showRecord + paymentId)",
+  "pass": false,
+  "detail": {
+   "rowLabel": "Payment applied · ₹50.00 · invoice now Partially Paid / Sep 15, 2026 8:46 PM • by admin",
+   "nodesInRow": [
+    "[group] Payment applied · ₹50.00 · invoice now Partially Paid / Sep 15, 2026 8:46 PM • by admin @812,700",
+    "[button] INV-20260915-0238 @385,702",
+    "[button] Payment #109 @509,702"
+   ],
+   "afterClickHash": "#/invoices/248"
+  }
+ }
+]

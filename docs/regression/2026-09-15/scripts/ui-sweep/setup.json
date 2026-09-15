@@ -1,0 +1,53 @@
+{
+  "viewer": {
+    "id": 338,
+    "username": "uisv-mu2tdohq9bf5"
+  },
+  "sales": {
+    "id": 339,
+    "username": "uiss-mu2tdok5344b"
+  },
+  "coll": {
+    "id": 340,
+    "username": "uisc-mu2tdomfddc2"
+  },
+  "cust": {
+    "id": 163,
+    "name": "uiscust-mu2tdooocdb6",
+    "username": "uiscust-mu2tdooocdb6"
+  },
+  "prod": {
+    "id": 74,
+    "name": "uisprod-mu2tdoqu3865"
+  },
+  "bigProd": {
+    "id": 75,
+    "name": "uisbig-mu2tdor2d618"
+  },
+  "seat": 117,
+  "inv1": {
+    "id": 246,
+    "number": "INV-20260915-0236",
+    "total": 2469,
+    "balance": 2469
+  },
+  "inv2": {
+    "id": 247,
+    "number": "INV-20260915-0237",
+    "total": 451234.5,
+    "balance": 451234.5
+  },
+  "pay": {
+    "id": 108,
+    "amount": 1000
+  },
+  "prom": {
+    "id": 103,
+    "status": "OPEN"
+  },
+  "disp": {
+    "id": 81,
+    "status": "PENDING"
+  },
+  "password": "Passw0rd!"
+}

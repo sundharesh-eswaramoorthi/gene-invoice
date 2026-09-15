@@ -5,3 +5,7 @@ linter:
     prefer_const_constructors: true
     prefer_const_constructors_in_immutables: true
     avoid_print: false
+    # Enum constants mirror the backend's wire values (UNPAID, PARTIALLY_KEPT, ...) so that
+    # parsing and serialisation are a straight name match. Renaming them to lowerCamelCase
+    # would mean hand-maintaining a mapping in both directions.
+    constant_identifier_names: false

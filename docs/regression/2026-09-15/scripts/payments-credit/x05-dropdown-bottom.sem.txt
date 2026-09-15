@@ -1,0 +1,25 @@
+[group] "Dismiss" @683,450 1366x900
+[menu] "Popup menu" @687,450 580x804
+[menuitem] "dnH-mu2sris62012" @687,-183 580x38
+[menuitem] "dnH-mu2st6wu2053" @687,-140 580x48
+[menuitem] "dnI-mu2srixae8d4" @687,-92 580x48
+[menuitem] "dnI-mu2st71s46c5" @687,-44 580x48
+[menuitem] "dnprobe-mu2sqney9f6b" @687,4 580x48
+[menuitem] "dnuiC-mu2ssk2d155d" @687,62 580x28
+[menuitem] "dnuiO-mu2ssk464305" @687,100 580x48
+[menuitem] "invA-mu2spf4942ca" @687,148 580x48
+[menuitem] "invB-mu2spf66d876" @687,196 580x48
+[menuitem] "invCr-mu2spf80f579" @687,244 580x48
+[menuitem] "invE-mu2spf9t7c0e" @687,292 580x48
+[menuitem] "invSA-mu2spg68a8be" @687,340 580x48
+[menuitem] "paycr-mu2sqqeh0141" @687,388 580x48
+[menuitem] "paycr-mu2sqqgb50b6" @687,436 580x48
+[menuitem] "paycr-mu2sqqi4de41" @687,484 580x48
+[menuitem] "paycr-mu2sqqjxc7c4" @687,532 580x48
+[menuitem] "paycr-mu2sqqlp18d0" @687,580 580x48
+[menuitem] "paycr-mu2srdq30473" @687,628 580x48
+[menuitem] "paycr-mu2srds17ad1" @687,676 580x48
+[menuitem] "paycr-mu2srdtw5cfd" @687,724 580x48
+[menuitem] "paycr-mu2srdvpbeee" @687,772 580x48
+[menuitem] "paycr-mu2srdxh74ac" @687,820 580x48
+--inputs--

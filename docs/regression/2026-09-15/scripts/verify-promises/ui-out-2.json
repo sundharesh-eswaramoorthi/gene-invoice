@@ -1,0 +1,119 @@
+{
+ "fixtures": {
+  "ce": 270,
+  "a": "INV-20260915-0359",
+  "b": "INV-20260915-0360",
+  "pe": 148,
+  "cr": 271,
+  "pr": 149
+ },
+ "r04_checkboxes": [
+  "INV-20260915-0359\nUnpaid • balance ₹100.00"
+ ],
+ "r04_dialogText": [
+  "Promised ₹100.00 more than those invoices owe."
+ ],
+ "r04_fields": [],
+ "r04_after": [
+  "Edit promise",
+  "Promised ₹100.00 more than those invoices owe.",
+  "Invoice INV-20260915-0360 is cancelled and cannot be promised against"
+ ],
+ "r04_puts": [
+  "{\"customerId\":270,\"amount\":200,\"promisedDate\":\"2026-09-21\",\"collectionPocUserId\":573,\"notes\":\"orig + notes only edit\",\"invoiceIds\":[379,380]}"
+ ],
+ "r04_apiErrors": [
+  {
+   "status": 400,
+   "method": "PUT",
+   "url": "/api/promises/148"
+  }
+ ],
+ "r04_promiseAfter": {
+  "id": 148,
+  "status": "OPEN",
+  "amt": 200,
+  "f": 0,
+  "links": [],
+  "inv": [
+   "INV-20260915-0359/UNPAID",
+   "INV-20260915-0360/CANCELLED"
+  ],
+  "ov": false,
+  "poc": "vprm-mu2u2n2m6af6"
+ },
+ "ui11_before": [
+  "Open",
+  "Kept",
+  "Partially kept",
+  "Broken",
+  "1 • ₹60.00",
+  "0 • ₹0.00",
+  "0 • ₹0.00",
+  "0 • ₹0.00",
+  "₹60.00",
+  "₹60.00",
+  "Open",
+  "₹0.00",
+  "₹60.00",
+  "Open customer"
+ ],
+ "ui11_api": {
+  "id": 149,
+  "status": "KEPT",
+  "amt": 60,
+  "f": 0,
+  "links": [],
+  "inv": [],
+  "ov": true,
+  "poc": "vprm-mu2u2n2m6af6"
+ },
+ "ui11_after": [
+  "Open",
+  "Kept",
+  "Partially kept",
+  "Broken",
+  "1 • ₹60.00",
+  "0 • ₹0.00",
+  "0 • ₹0.00",
+  "0 • ₹0.00",
+  "₹60.00",
+  "₹60.00",
+  "Open",
+  "₹0.00",
+  "₹60.00",
+  "Open customer"
+ ],
+ "ui11_afterWait": [
+  "Open",
+  "Kept",
+  "Partially kept",
+  "Broken",
+  "1 • ₹60.00",
+  "0 • ₹0.00",
+  "0 • ₹0.00",
+  "0 • ₹0.00",
+  "₹60.00",
+  "₹60.00",
+  "Open",
+  "₹0.00",
+  "₹60.00",
+  "Open customer"
+ ],
+ "ui11_afterNav": [
+  "Open",
+  "Kept",
+  "Partially kept",
+  "Broken",
+  "0 • ₹0.00",
+  "1 • ₹60.00",
+  "0 • ₹0.00",
+  "0 • ₹0.00",
+  "₹60.00",
+  "₹60.00",
+  "₹0.00",
+  "₹60.00",
+  "Open customer"
+ ],
+ "pageErrors": []
+}

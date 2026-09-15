@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/auth/auth_controller.dart';
 import '../../features/auth/change_password_dialog.dart';
-import '../../features/customer_scope/customer_scope.dart';
 import '../../features/notifications/notifications_providers.dart';
 import '../models/privileges.dart';
 
@@ -24,6 +23,7 @@ const _entries = <_NavEntry>[
       [Privileges.invoiceView, Privileges.invoiceManage]),
   _NavEntry('Payments', Icons.payments_outlined, '/payments',
       [Privileges.paymentView, Privileges.paymentManage]),
+  _NavEntry('Promises', Icons.handshake_outlined, '/promises', [Privileges.promiseView]),
   _NavEntry('Disputes', Icons.flag_outlined, '/disputes',
       [Privileges.disputeView, Privileges.disputeCreate, Privileges.disputeManage]),
   _NavEntry('Customers', Icons.people_outline, '/customers',
@@ -58,17 +58,9 @@ class AppShell extends ConsumerWidget {
     final currentPath = GoRouterState.of(context).matchedLocation;
     final selected = _selectedIndex(currentPath, visible);
 
-    final showScopeBar = user != null && !isCustomer && user.has(Privileges.customerView);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gene Invoice'),
-        bottom: showScopeBar
-            ? const PreferredSize(
-                preferredSize: Size.fromHeight(56),
-                child: _ScopeBar(),
-              )
-            : null,
         actions: [
           if (user != null) ...[
             if (user.has(Privileges.notificationView))
@@ -153,23 +145,6 @@ class AppShell extends ConsumerWidget {
       }
     }
     return best;
-  }
-}
-
-class _ScopeBar extends StatelessWidget {
-  const _ScopeBar();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      color: Theme.of(context).colorScheme.surface,
-      child: const Align(
-        alignment: Alignment.centerLeft,
-        child: CustomerScopePicker(),
-      ),
-    );
   }
 }
 

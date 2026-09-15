@@ -1,0 +1,58 @@
+[null] "64" @1168,23 13x16
+[button] "Notifications" @1166,28 40x40
+[button] "Account\nadmin • ADMIN" @1278,28 176x24
+[null] "Customers" @354,88 146x16
+[null] "Total outstanding" @536,88 146x16
+[null] "Total credit" @718,88 146x16
+[null] "No Success POC" @909,88 128x16
+[null] "No Collection POC" @1091,88 128x16
+[null] "3" @287,116 12x28
+[null] "₹120.00" @502,116 79x28
+[null] "₹0.00" @672,116 54x28
+[null] "3" @833,116 12x28
+[null] "3" @1015,116 12x28
+[checkbox] "Add filter" @325,171 112x34
+[checkbox] "Name contains cpui-mu2ssz55cfab" @526,171 278x34
+[button] "Delete" @645,171 32x32
+[button] "Clear all" @708,171 75x32
+[button] "New customer" @1275,170 158x32
+[columnheader] "Name" @466,224 309x56
+[columnheader] "Phone" @679,224 117x56
+[columnheader] "Email" @876,224 278x56
+[columnheader] "Outstanding" @1091,224 151x56
+[columnheader] "Credit" @1222,224 112x56
+[columnheader] "Success POC" @1322,224 88x56
+[columnheader] "Collection POC" @1494,224 151x56
+[cell] "cpui-mu2ssz55cfab one\nPOC missing" @466,276 309x48
+[cell] "555-7" @679,276 117x48
+[cell] "cpui-mu2ssz55cfab-one@rt.local" @876,276 278x48
+[cell] "₹120.00" @1091,276 151x48
+[cell] "₹0.00" @1222,276 112x48
+[cell] "—" @1322,276 88x48
+[cell] "—" @1494,276 151x48
+[button] "Open" @1617,276 40x40
+[button] "Raise promise" @1657,276 40x40
+[cell] "cpui-mu2ssz55cfab three\nPOC missing" @466,324 309x48
+[cell] "555-3333" @679,324 117x48
+[cell] "cpui-mu2ssz55cfab-three@rt.local" @876,324 278x48
+[cell] "₹0.00" @1091,324 151x48
+[cell] "₹0.00" @1222,324 112x48
+[cell] "—" @1322,324 88x48
+[cell] "—" @1494,324 151x48
+[button] "Open" @1617,324 40x40
+[cell] "cpui-mu2ssz55cfab two\nPOC missing" @466,372 309x48
+[cell] "555-7" @679,372 117x48
+[cell] "cpui-mu2ssz55cfab-two@rt.local" @876,372 278x48
+[cell] "₹0.00" @1091,372 151x48
+[cell] "₹0.00" @1222,372 112x48
+[cell] "—" @1322,372 88x48
+[cell] "—" @1494,372 151x48
+[button] "Open" @1617,372 40x40
+[null] "Rows" @964,870 35x20
+[button] "20" @1009,870 42x48
+[null] "1–3 of 3" @1069,870 55x20
+[null] "Page 1 of 1" @1145,870 73x20
+[button] "First page" @1214,870 40x40
+[button] "Previous page" @1254,870 40x40
+[button] "Next page" @1294,870 40x40
+[button] "Last page" @1334,870 40x40

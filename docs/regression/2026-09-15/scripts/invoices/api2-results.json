@@ -1,0 +1,272 @@
+[
+  {
+    "id": "R18",
+    "title": "non-numeric invoice id -> 400 (re-run)",
+    "pass": false,
+    "detail": {
+      "get": {
+        "status": 500,
+        "body": "{\"timestamp\":\"2026-09-15T14:58:51.862753Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'id': Failed to convert value of type 'java.lang.String' to required type 'java.lang.Long'; For input string: \\\"abc\\\"\",\"path\":\"/api/invoices/abc"
+      },
+      "cancel": {
+        "status": 500,
+        "body": "{\"timestamp\":\"2026-09-15T14:58:51.866888Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'id': Failed to convert value of type 'java.lang.String' to required type 'java.lang.Long'; For input string: \\\"abc\\\"\",\"path\":\"/api/invoices/abc"
+      }
+    }
+  },
+  {
+    "id": "R24",
+    "title": "notes-only save, unchanged inactive POC resent (re-run)",
+    "pass": false,
+    "detail": {
+      "status": 400,
+      "body": "{\"timestamp\":\"2026-09-15T14:58:51.874907Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"User inv-mu2spfso501f is inactive and cannot be assigned\",\"path\":\"/api/invoices/39\",\"fieldErrors\":null}"
+    }
+  },
+  {
+    "id": "R25",
+    "title": "INVOICE_MANAGE w/o POC_ASSIGN notes save with unchanged POC (re-run)",
+    "pass": false,
+    "detail": {
+      "patch": {
+        "status": 400,
+        "body": "{\"timestamp\":\"2026-09-15T14:58:51.878136Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"You may not change the Sales POC\",\"path\":\"/api/invoices/33\",\"fieldErrors\":null}"
+      },
+      "currentPoc": 70
+    }
+  },
+  {
+    "id": "R37",
+    "title": "bulk CANCEL ineligible rows land in skipped (re-run)",
+    "pass": false,
+    "detail": {
+      "action": "CANCEL",
+      "requested": 3,
+      "succeeded": [
+        110
+      ],
+      "failed": [
+        {
+          "id": 35,
+          "reason": "Cannot cancel an invoice with payments; refund first"
+        },
+        {
+          "id": 40,
+          "reason": "Invoice already cancelled"
+        }
+      ],
+      "skipped": [],
+      "truncated": false,
+      "limit": 5000
+    }
+  },
+  {
+    "id": "R39",
+    "title": "bulk unknown ids reported (re-run)",
+    "pass": false,
+    "detail": {
+      "action": "CANCEL",
+      "requested": 0,
+      "succeeded": [],
+      "failed": [],
+      "skipped": [],
+      "truncated": false,
+      "limit": 5000
+    }
+  },
+  {
+    "id": "R49",
+    "title": "CUSTOMER can filter by salesPocUserId / salesPocName (AC-A8: must be rejected)",
+    "pass": false,
+    "detail": {
+      "bySales": [
+        200,
+        7
+      ],
+      "bySales2": [
+        200,
+        1
+      ],
+      "byName": [
+        200,
+        8
+      ],
+      "tilesIsEmpty": [
+        200,
+        0
+      ]
+    }
+  },
+  {
+    "id": "A30b",
+    "title": "schema: invoice columns + sortable flags; POC columns hidden for customers",
+    "pass": true,
+    "detail": {
+      "cols": {
+        "id": true,
+        "invoiceNumber": true,
+        "customerId": false,
+        "customerName": true,
+        "invoiceDate": true,
+        "total": true,
+        "paidAmount": true,
+        "balance": true,
+        "status": true,
+        "notes": false,
+        "salesPocUserId": false,
+        "salesPocName": true,
+        "createdAt": true
+      },
+      "customerCols": [
+        "id",
+        "invoiceNumber",
+        "customerId",
+        "customerName",
+        "invoiceDate",
+        "total",
+        "paidAmount",
+        "balance",
+        "status",
+        "notes",
+        "createdAt"
+      ],
+      "presets": [
+        "today",
+        "yesterday",
+        "last7Days",
+        "last30Days",
+        "thisMonth",
+        "lastMonth",
+        "thisYear",
+        "past",
+        "future"
+      ]
+    }
+  },
+  {
+    "id": "A50",
+    "title": "SALES_POC list locked to own book (lockedFilters shown, only own invoices)",
+    "pass": true,
+    "detail": {
+      "locked": [
+        "salesPocUserId:eq:70"
+      ],
+      "count": 8,
+      "onlyMine": true
+    }
+  },
+  {
+    "id": "A51",
+    "title": "SALES_POC bulk CANCEL [mine, other rep's]: other rep's row not touched and reported as skipped (AC-D6)",
+    "pass": false,
+    "detail": {
+      "bulk": {
+        "action": "CANCEL",
+        "requested": 1,
+        "succeeded": [
+          111
+        ],
+        "failed": [],
+        "skipped": [],
+        "truncated": false,
+        "limit": 5000
+      },
+      "theirsStatus": "UNPAID"
+    }
+  },
+  {
+    "id": "A52",
+    "title": "SALES_POC without SCOPE_OVERRIDE cannot GET / PATCH / cancel another rep's invoice by id",
+    "pass": false,
+    "detail": {
+      "get": 200,
+      "patch": {
+        "status": 200,
+        "body": "{\"id\":113,\"invoiceNumber\":\"INV-20260915-0113\",\"customerId\":31,\"customerName\":\"invA-mu2spf4942ca\",\"invoiceDate\":\"2026-09-15T14:58:51.956078Z\",\"total\":25.50,\"paidAmount\":0.00,\"balance\":25.50,\"status\":\"UNPAID\",\"notes\":\"edited by other rep\",\"items\":[{\"id\":118,\"pro"
+      },
+      "cancel": {
+        "status": 200,
+        "body": "{\"id\":113,\"invoiceNumber\":\"INV-20260915-0113\",\"customerId\":31,\"customerName\":\"invA-mu2spf4942ca\",\"invoiceDate\":\"2026-09-15T14:58:51.956078Z\",\"total\":25.50,\"paidAmount\":0.00,\"balance\":25.50,\"status\":\"CANCELLED\",\"notes\":\"edited by other rep\",\"items\":[{\"id\":118,\""
+      }
+    }
+  },
+  {
+    "id": "A53",
+    "title": "six concurrent creates all succeed with unique sequential numbers",
+    "pass": false,
+    "detail": {
+      "statuses": [
+        500,
+        500,
+        200,
+        500,
+        500,
+        200
+      ],
+      "nums": [
+        "INV-20260915-0114",
+        "INV-20260915-0115"
+      ],
+      "errors": [
+        {
+          "status": 500,
+          "body": "{\"timestamp\":\"2026-09-15T14:58:51.979981Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"could not execute statement [ERROR: duplicate key value violates unique constraint \\\"ukl1x55mfsay7co0r3m9ynvipd5\\\"\\n  Detail: Key (invoice_number)=(INV-20260915-"
+        },
+        {
+          "status": 500,
+          "body": "{\"timestamp\":\"2026-09-15T14:58:51.979908Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"could not execute statement [ERROR: duplicate key value violates unique constraint \\\"ukl1x55mfsay7co0r3m9ynvipd5\\\"\\n  Detail: Key (invoice_number)=(INV-20260915-"
+        },
+        {
+          "status": 500,
+          "body": "{\"timestamp\":\"2026-09-15T14:58:51.979969Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"could not execute statement [ERROR: duplicate key value violates unique constraint \\\"ukl1x55mfsay7co0r3m9ynvipd5\\\"\\n  Detail: Key (invoice_number)=(INV-20260915-"
+        },
+        {
+          "status": 500,
+          "body": "{\"timestamp\":\"2026-09-15T14:58:51.980082Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"could not execute statement [ERROR: duplicate key value violates unique constraint \\\"ukl1x55mfsay7co0r3m9ynvipd5\\\"\\n  Detail: Key (invoice_number)=(INV-20260915-"
+        }
+      ]
+    }
+  },
+  {
+    "id": "A54",
+    "title": "notes longer than 500 chars -> 400 validation error (not 500)",
+    "pass": false,
+    "detail": {
+      "patch": {
+        "status": 500,
+        "body": "{\"timestamp\":\"2026-09-15T14:58:51.989828Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"could not execute statement [ERROR: value too long for type character varying(500)] [update invoices set customer_id=?,invoice_date=?,invoice_number=?,notes=?,pa"
+      },
+      "create": {
+        "status": 500,
+        "body": "{\"timestamp\":\"2026-09-15T14:58:51.993981Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"could not execute statement [ERROR: value too long for type character varying(500)] [insert into invoices (created_at,customer_id,invoice_date,invoice_number,not"
+      }
+    }
+  },
+  {
+    "id": "A55",
+    "title": "huge page number handled (empty page, not 500); invalid sort direction rejected (AC-D9)",
+    "pass": false,
+    "detail": {
+      "hugePage": {
+        "status": 500,
+        "body": "{\"timestamp\":\"2026-09-15T14:58:51.996947Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"first-result value cannot be negative : -1794967296\",\"path\":\"/api/invoices\",\"fieldErrors\":null}"
+      },
+      "sortSideways": {
+        "status": 200,
+        "sort": "total,asc"
+      }
+    }
+  },
+  {
+    "id": "A56",
+    "title": "cancelled invoice: DTO balance vs outstanding tile",
+    "pass": true,
+    "detail": {
+      "status": "CANCELLED",
+      "total": 102,
+      "paid": 0,
+      "balance": 102,
+      "tilesOutstandingCancelled": 0
+    }
+  }
+]

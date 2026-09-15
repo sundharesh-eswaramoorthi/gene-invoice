@@ -1,0 +1,26 @@
+[null] "71" @1168,23 13x16
+[button] "Notifications" @1166,28 40x40
+[button] "Account\nadmin • ADMIN" @1278,28 176x24
+[menu] "Popup menu" @463,478 412x748
+[menuitem] "aurp-mu2soypn805e" @463,136 412x48
+[menuitem] "cp-mu2sqkltc327 P-a" @463,184 412x48
+[menuitem] "cp-mu2sqkltc327 P-c" @463,232 412x48
+[menuitem] "cp-mu2sqkltc327 widget" @463,280 412x48
+[menuitem] "cprrP-mu2sscyg67dd b" @463,328 412x48
+[menuitem] "cprrP-mu2sscyg67dd c" @463,376 412x48
+[menuitem] "cpui-mu2ssz55cfab active-one" @463,424 412x48
+[menuitem] "dnP100-mu2sqa0sda0f" @463,472 412x48
+[menuitem] "dnP100-mu2srhidbefc" @463,520 412x48
+[menuitem] "dnP100-mu2st5p7d120" @463,568 412x48
+[menuitem] "dnP50-mu2sqa117c6c" @463,616 412x48
+[menuitem] "dnP50-mu2srhim1568" @463,664 412x48
+[menuitem] "dnP50-mu2st5pf4906" @463,712 412x48
+[menuitem] "dnreP-mu2swb9o75df" @463,760 412x48
+[menuitem] "dnui3P-mu2sxws70c9d" @463,808 412x48
+[menuitem] "dnuiP-mu2ssk260146" @463,842 412x20
+[menuitem] "invP1-mu2spfbl2d64" @463,904 412x48
+[menuitem] "invP2-mu2spfbr3f48" @463,952 412x48
+[menuitem] "paycr-prod-mu2sqqeb258a" @463,1000 412x48
+[menuitem] "paycr-prod-mu2srdpw83f1" @463,1048 412x48
+[menuitem] "permscmp-mu2su5spa201" @463,1087 412x30
+[button] "Dismiss" @812,478 1109x844

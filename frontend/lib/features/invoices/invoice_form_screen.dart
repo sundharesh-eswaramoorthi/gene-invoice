@@ -3,21 +3,25 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/format.dart';
+import '../../core/table/table_providers.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/product.dart';
-import '../customer_scope/customer_scope.dart';
 import '../customers/customers_screen.dart';
+import '../poc/poc_picker.dart';
+import '../poc/poc_providers.dart';
 import '../products/products_screen.dart';
-import 'invoices_screen.dart';
 
 class _LineDraft {
   Product? product;
-  int quantity;
+  int quantity = 1;
   double? unitPriceOverride;
-  _LineDraft({this.product, this.quantity = 1, this.unitPriceOverride});
+  final TextEditingController qtyController = TextEditingController(text: '1');
 
   double get effectiveUnitPrice => unitPriceOverride ?? product?.price ?? 0;
   double get lineTotal => effectiveUnitPrice * quantity;
+
+  void dispose() => qtyController.dispose();
 }
 
 class InvoiceFormScreen extends ConsumerStatefulWidget {
@@ -30,52 +34,70 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   Customer? _customer;
   final List<_LineDraft> _lines = [_LineDraft()];
   final _notesCtrl = TextEditingController();
+  PocUser? _salesPoc;
+  bool _pocPreselected = false;
   bool _saving = false;
+  bool _submitted = false;
   String? _error;
 
   @override
-  void initState() {
-    super.initState();
-    _customer = ref.read(customerScopeProvider);
-  }
-
-  @override
   void dispose() {
+    for (final l in _lines) {
+      l.dispose();
+    }
     _notesCtrl.dispose();
     super.dispose();
   }
 
   double get _total => _lines.fold<double>(0, (sum, l) => sum + l.lineTotal);
 
-  bool get _isValid {
-    if (_customer == null) return false;
-    if (_lines.isEmpty) return false;
-    return _lines.every((l) => l.product != null && l.quantity > 0);
+  /// Pre-selects the signed-in user when they are themselves assignable; otherwise the
+  /// field starts empty and blocks submission (US-A2).
+  void _preselectSelf(List<PocUser> assignable, int? myUserId) {
+    if (_pocPreselected || myUserId == null) return;
+    _pocPreselected = true;
+    for (final u in assignable) {
+      if (u.id == myUserId) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _salesPoc = u);
+        });
+        return;
+      }
+    }
   }
 
+  bool get _linesValid =>
+      _lines.isNotEmpty && _lines.every((l) => l.product != null && l.quantity > 0);
+
   Future<void> _submit() async {
-    if (!_isValid) {
-      setState(() => _error = 'Pick a customer and at least one product');
+    setState(() {
+      _submitted = true;
+      _error = null;
+    });
+    if (_customer == null || !_linesValid || _salesPoc == null) {
+      setState(() => _error = 'Fill in the customer, the Sales POC and at least one line');
       return;
     }
-    setState(() { _saving = true; _error = null; });
+    setState(() => _saving = true);
     try {
       final dio = ref.read(dioProvider);
-      final body = {
+      await dio.post('/api/invoices', data: {
         'customerId': _customer!.id,
         'notes': _notesCtrl.text.trim(),
-        'items': _lines.map((l) => {
-          'productId': l.product!.id,
-          'quantity': l.quantity,
-          if (l.unitPriceOverride != null) 'unitPrice': l.unitPriceOverride,
-        }).toList(),
-      };
-      await dio.post('/api/invoices', data: body);
-      ref.invalidate(invoicesProvider);
+        'salesPocUserId': _salesPoc!.id,
+        'items': _lines
+            .map((l) => {
+                  'productId': l.product!.id,
+                  'quantity': l.quantity,
+                  if (l.unitPriceOverride != null) 'unitPrice': l.unitPriceOverride,
+                })
+            .toList(),
+      });
+      ref.invalidate(tablePageProvider);
+      ref.invalidate(tableSummaryProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invoice created')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Invoice created')));
         context.go('/invoices');
       }
     } catch (e) {
@@ -87,8 +109,15 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final customers = ref.watch(customersProvider);
+    final customers = ref.watch(allCustomersProvider);
     final products = ref.watch(productsProvider);
+    final scope = ref.watch(myPocScopeProvider).valueOrNull;
+    final canSeePoc = ref.watch(canSeePocProvider);
+
+    if (canSeePoc && scope != null) {
+      ref.watch(assignablePocsProvider(const AssignableQuery(PocType.SALES, '')))
+          .whenData((users) => _preselectSelf(users, scope.userId));
+    }
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -102,30 +131,49 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
               const SizedBox(height: 16),
               customers.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('Failed to load customers: $e'),
+                error: (e, _) => Text('Failed to load customers: ${apiErrorMessage(e)}'),
                 data: (list) => DropdownButtonFormField<Customer>(
-                  decoration: const InputDecoration(labelText: 'Customer'),
-                  value: _customer,
-                  items: list.map((c) => DropdownMenuItem(value: c, child: Text(c.name))).toList(),
+                  decoration: InputDecoration(
+                    labelText: 'Customer *',
+                    errorText:
+                        _submitted && _customer == null ? 'Pick a customer' : null,
+                  ),
+                  initialValue: _customer,
+                  items: list
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c.name)))
+                      .toList(),
                   onChanged: (c) => setState(() => _customer = c),
                 ),
               ),
+              const SizedBox(height: 12),
+              // Mandatory: the backend rejects an invoice without one too (AC-A2).
+              if (canSeePoc)
+                PocPicker(
+                  type: PocType.SALES,
+                  value: _salesPoc,
+                  required: true,
+                  errorText: _submitted && _salesPoc == null
+                      ? 'A Sales POC is required before this invoice can be saved'
+                      : null,
+                  onChanged: (u) => setState(() => _salesPoc = u),
+                ),
               const SizedBox(height: 16),
               Text('Items', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
               products.when(
                 loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('Failed to load products: $e'),
+                error: (e, _) => Text('Failed to load products: ${apiErrorMessage(e)}'),
                 data: (productList) => Column(
                   children: [
                     for (var i = 0; i < _lines.length; i++)
                       _LineRow(
+                        key: ValueKey(_lines[i]),
                         line: _lines[i],
                         products: productList,
                         onChanged: () => setState(() {}),
-                        onRemove: _lines.length == 1 ? null : () {
-                          setState(() => _lines.removeAt(i));
-                        },
+                        onRemove: _lines.length == 1
+                            ? null
+                            : () => setState(() => _lines.removeAt(i).dispose()),
                       ),
                     Align(
                       alignment: Alignment.centerLeft,
@@ -149,14 +197,16 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                 children: [
                   const Text('Total', style: TextStyle(fontSize: 18)),
                   const Spacer(),
-                  Text(_total.toStringAsFixed(2),
+                  Text(formatMoney(_total),
                       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 ],
               ),
-              if (_error != null) Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-              ),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(_error!,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -171,7 +221,8 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                     child: FilledButton(
                       onPressed: _saving ? null : _submit,
                       child: _saving
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                           : const Text('Create invoice'),
                     ),
                   ),
@@ -190,12 +241,17 @@ class _LineRow extends StatelessWidget {
   final List<Product> products;
   final VoidCallback onChanged;
   final VoidCallback? onRemove;
-  const _LineRow({required this.line, required this.products,
-      required this.onChanged, this.onRemove});
+
+  const _LineRow({
+    super.key,
+    required this.line,
+    required this.products,
+    required this.onChanged,
+    this.onRemove,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final qtyCtrl = TextEditingController(text: line.quantity.toString());
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -205,9 +261,11 @@ class _LineRow extends StatelessWidget {
             flex: 4,
             child: DropdownButtonFormField<Product>(
               decoration: const InputDecoration(labelText: 'Product'),
-              value: line.product,
-              items: products.where((p) => p.active).map((p) =>
-                  DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+              initialValue: line.product,
+              items: products
+                  .where((p) => p.active)
+                  .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
+                  .toList(),
               onChanged: (p) {
                 line.product = p;
                 onChanged();
@@ -218,7 +276,7 @@ class _LineRow extends StatelessWidget {
           Expanded(
             flex: 2,
             child: TextFormField(
-              controller: qtyCtrl,
+              controller: line.qtyController,
               keyboardType: TextInputType.number,
               decoration: const InputDecoration(labelText: 'Qty'),
               onChanged: (v) {
@@ -233,7 +291,7 @@ class _LineRow extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Text(
-                line.lineTotal.toStringAsFixed(2),
+                formatMoney(line.lineTotal),
                 style: const TextStyle(fontWeight: FontWeight.w600),
                 textAlign: TextAlign.right,
               ),

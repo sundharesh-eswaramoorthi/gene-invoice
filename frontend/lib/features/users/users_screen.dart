@@ -4,60 +4,97 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
+import '../../core/table/data_table_scaffold.dart';
+import '../../core/table/route_query.dart';
+import '../../core/table/table_models.dart';
+import '../../core/table/table_providers.dart';
 import '../auth/auth_controller.dart';
 
 final usersProvider = FutureProvider.autoDispose<List<AppUser>>((ref) async {
   final dio = ref.watch(dioProvider);
-  final res = await dio.get('/api/users');
-  return (res.data as List).cast<Map<String, dynamic>>().map(AppUser.fromJson).toList();
+  final res = await dio.get('/api/users', queryParameters: {'size': 50, 'sort': 'username,asc'});
+  return ((res.data as Map)['content'] as List)
+      .cast<Map<String, dynamic>>()
+      .map(AppUser.fromJson)
+      .toList();
 });
 
 final rolesProvider = FutureProvider.autoDispose<List<AppRole>>((ref) async {
   final dio = ref.watch(dioProvider);
-  final res = await dio.get('/api/roles');
-  return (res.data as List).cast<Map<String, dynamic>>().map(AppRole.fromJson).toList();
+  final res = await dio.get('/api/roles', queryParameters: {'size': 50, 'sort': 'name,asc'});
+  return ((res.data as Map)['content'] as List)
+      .cast<Map<String, dynamic>>()
+      .map(AppRole.fromJson)
+      .toList();
 });
 
 class UsersScreen extends ConsumerWidget {
-  const UsersScreen({super.key});
+  final TableQuery query;
+  const UsersScreen({super.key, required this.query});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.userManage) ?? false;
-    final async = ref.watch(usersProvider);
+    final canExport = user?.has(Privileges.exportData) ?? false;
 
     return Scaffold(
-      floatingActionButton: canManage
-          ? FloatingActionButton.extended(
+      body: DataTableScaffold<AppUser>(
+        entity: 'users',
+        actions: [
+          if (canManage)
+            FilledButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('New user'),
               onPressed: () => _openForm(context, ref, null),
-            )
-          : null,
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Failed: $e')),
-        data: (list) => RefreshIndicator(
-          onRefresh: () async => ref.refresh(usersProvider.future),
-          child: ListView.separated(
-            padding: const EdgeInsets.all(8),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              final u = list[i];
-              return ListTile(
-                leading: CircleAvatar(child: Text(u.username[0].toUpperCase())),
-                title: Text(u.fullName?.isNotEmpty == true ? u.fullName! : u.username),
-                subtitle: Text('${u.username} • ${u.role ?? "-"}${u.active ? "" : " • inactive"}'),
-                trailing: canManage
-                    ? IconButton(icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => _openForm(context, ref, u))
-                    : null,
-              );
-            },
+            ),
+        ],
+        path: '/api/users',
+        query: query,
+        onQueryChanged: (q) => RouteQuery(context, '/users').push(q),
+        parse: AppUser.fromJson,
+        idOf: (u) => u.id,
+        canExport: canExport,
+        selectable: canManage,
+        emptyMessage: 'No users match this filter',
+        onRowTap: canManage ? (context, u) => _openForm(context, ref, u) : null,
+        bulkActions: canManage
+            ? const [
+                BulkActionSpec(
+                    action: 'ACTIVATE', label: 'Activate', icon: Icons.check_circle_outline),
+                BulkActionSpec(
+                    action: 'DEACTIVATE', label: 'Deactivate', icon: Icons.block, destructive: true),
+              ]
+            : const [],
+        columns: [
+          TableColumnSpec(
+            label: 'Username',
+            sortKey: 'username',
+            cell: (context, u) => Text(u.username,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
-        ),
+          TableColumnSpec(
+              label: 'Full name',
+              sortKey: 'fullName',
+              cell: (context, u) => Text(u.fullName ?? '—')),
+          TableColumnSpec(
+              label: 'Email', sortKey: 'email', cell: (context, u) => Text(u.email ?? '—')),
+          TableColumnSpec(
+              label: 'Role', sortKey: 'roleName', cell: (context, u) => Text(u.role ?? '—')),
+          TableColumnSpec(
+              label: 'Active',
+              sortKey: 'active',
+              cell: (context, u) => Text(u.active ? 'Yes' : 'No')),
+        ],
+        rowActions: canManage
+            ? (context, u) => [
+                  IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    onPressed: () => _openForm(context, ref, u),
+                  ),
+                ]
+            : null,
       ),
     );
   }
@@ -67,7 +104,10 @@ class UsersScreen extends ConsumerWidget {
       context: context,
       builder: (_) => _UserForm(existing: existing),
     );
-    if (saved == true) ref.invalidate(usersProvider);
+    if (saved == true) {
+      ref.invalidate(usersProvider);
+      ref.invalidate(tablePageProvider);
+    }
   }
 }
 
@@ -184,7 +224,7 @@ class _UserFormState extends ConsumerState<_UserForm> {
                             orElse: () => list.first);
                     return DropdownButtonFormField<AppRole>(
                       decoration: const InputDecoration(labelText: 'Role'),
-                      value: _role,
+                      initialValue: _role,
                       items: list.map((r) => DropdownMenuItem(value: r, child: Text(r.name))).toList(),
                       onChanged: (r) => setState(() => _role = r),
                     );

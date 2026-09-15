@@ -1,0 +1,823 @@
+{
+  "TAG": "cp-mu2sqkltc327",
+  "ids": {
+    "c1": 51,
+    "c2": 52,
+    "c3": 53,
+    "c4": 54,
+    "cs1": 115,
+    "cs2": 116,
+    "cs3": 117,
+    "col1": 118,
+    "col2": 119,
+    "prodInactive": 23,
+    "prodActive": 21
+  },
+  "users": {
+    "cs1": "cpcs-mu2sqklu67a2",
+    "cs2": "cpcs-mu2sqknx6b46",
+    "cs3": "cpcs-mu2sqkpvaef5",
+    "col1": "cpcol-mu2sqkrv3476",
+    "col2": "cpcol-mu2sqkttb519"
+  },
+  "results": [
+    {
+      "id": "CUS-001",
+      "title": "Create customer creates customer + CUSTOMER login",
+      "status": "PASS",
+      "evidence": {
+        "created": {
+          "id": 51,
+          "username": "cp-mu2sqkltc327-alpha",
+          "outstanding": 0,
+          "credit": 0,
+          "pocMissing": true
+        },
+        "loginUser": {
+          "customerId": 51,
+          "role": "CUSTOMER",
+          "fullName": "cp-mu2sqkltc327 alpha"
+        }
+      }
+    },
+    {
+      "id": "CUS-002",
+      "title": "Create with blank name -> 400 fieldErrors.name",
+      "status": "PASS",
+      "evidence": "400 {\"timestamp\":\"2026-09-15T14:58:02.347273Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/customers\",\"fieldErrors\":{\"name\":\"must not be blank\"}}"
+    },
+    {
+      "id": "CUS-003",
+      "title": "Create without username / password -> 400 with fieldErrors, nothing persisted",
+      "status": "PASS",
+      "evidence": {
+        "noUsername": "400 {\"timestamp\":\"2026-09-15T14:58:02.351745Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/customers\",\"fieldErrors\":{\"username\":\"must not be blank\"}}",
+        "noPassword": "400 {\"timestamp\":\"2026-09-15T14:58:02.354644Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/customers\",\"fieldErrors\":{\"password\":\"must not be blank\"}}",
+        "persisted": 0
+      }
+    },
+    {
+      "id": "CUS-004",
+      "title": "Duplicate username (customer's and seeded admin) -> 400 \"Username already taken\", no orphan customer row",
+      "status": "PASS",
+      "evidence": {
+        "dup": "400 {\"timestamp\":\"2026-09-15T14:58:02.362493Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Username already taken\",\"path\":\"/api/customers\",\"fieldErrors\":null}",
+        "orphanRows": 0,
+        "dupAdmin": "400 {\"timestamp\":\"2026-09-15T14:58:02.369645Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Username already taken\",\"path\":\"/api/customers\",\"fieldErrors\":null}"
+      }
+    },
+    {
+      "id": "CUS-005",
+      "title": "GET /api/customers/{id} 200; unknown id 404",
+      "status": "PASS",
+      "evidence": {
+        "ok": "200 name=cp-mu2sqkltc327 alpha username=cp-mu2sqkltc327-alpha",
+        "missing": "404 {\"timestamp\":\"2026-09-15T14:58:02.378026Z\",\"status\":404,\"error\":\"Not Found\",\"message\":\"Customer not found\",\"path\":\"/api/customers/99999999\",\"fieldErrors\":null}"
+      }
+    },
+    {
+      "id": "CUS-006",
+      "title": "Customer login: own record 200 without POC data; other customer 403; list scoped to self",
+      "status": "PASS",
+      "evidence": {
+        "own": "200 successPocs=null pocMissing=null",
+        "other": "403 {\"timestamp\":\"2026-09-15T14:58:02.513207Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for this action\",\"path\":\"/api/customers/52\",\"fieldErrors\":null}",
+        "list": "200 total=1"
+      }
+    },
+    {
+      "id": "CUS-007",
+      "title": "PUT contact fields persists; linked login fullName/email synced; blank password keeps old password",
+      "status": "PASS",
+      "evidence": {
+        "put": 200,
+        "get": {
+          "name": "cp-mu2sqkltc327 alpha2",
+          "phone": "555-9999",
+          "email": "cp-mu2sqkltc327-new@rt.local",
+          "address": "2 New Rd"
+        },
+        "login": {
+          "fullName": "cp-mu2sqkltc327 alpha2",
+          "email": "cp-mu2sqkltc327-new@rt.local"
+        },
+        "oldPasswordStillWorks": true
+      }
+    },
+    {
+      "id": "CUS-008",
+      "title": "PUT with password changes the customer login password",
+      "status": "PASS",
+      "evidence": {
+        "put": 200,
+        "newPasswordLogin": true,
+        "oldPasswordLogin": false
+      }
+    },
+    {
+      "id": "CUS-009",
+      "title": "PUT blank name -> 400 fieldErrors.name, nothing changed; PUT unknown id -> 404",
+      "status": "PASS",
+      "evidence": {
+        "blank": "400 {\"timestamp\":\"2026-09-15T14:58:02.778956Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/customers/51\",\"fieldErrors\":{\"name\":\"must not be blank\"}}",
+        "phoneAfter": "555-0003",
+        "unknown": "404 {\"timestamp\":\"2026-09-15T14:58:02.791075Z\",\"status\":404,\"error\":\"Not Found\",\"message\":\"Customer not found\",\"path\":\"/api/customers/99999999\",\"fieldErrors\":null}"
+      }
+    },
+    {
+      "id": "CUS-010",
+      "title": "Customer create/update written to audit (CUSTOMER_CREATED, CUSTOMER_UPDATED x2) with actor",
+      "status": "PASS",
+      "evidence": {
+        "status": 200,
+        "actions": [
+          "CUSTOMER_UPDATED",
+          "CUSTOMER_UPDATED",
+          "CUSTOMER_CREATED"
+        ]
+      }
+    },
+    {
+      "id": "CUS-011",
+      "title": "Permissions: CASHIER (CUSTOMER_MANAGE) creates 200; VIEWER create/update -> 403",
+      "status": "PASS",
+      "evidence": {
+        "cashier": 200,
+        "viewerCreate": "403 {\"timestamp\":\"2026-09-15T14:58:03.017148Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for this action\",\"path\":\"/api/customers\",\"fieldErrors\":null}",
+        "viewerUpdate": 403
+      }
+    },
+    {
+      "id": "CUS-012",
+      "title": "List sort by name/phone/email/outstanding/creditBalance (asc+desc) orders rows correctly",
+      "status": "FAIL",
+      "evidence": {
+        "nameAsc": [
+          "alpha2",
+          "bravo",
+          "bycashier",
+          "delta"
+        ],
+        "nameDesc": [
+          "delta",
+          "bycashier",
+          "bravo",
+          "alpha2"
+        ],
+        "phoneAsc": [
+          "delta",
+          "bravo",
+          "bycashier",
+          "alpha2"
+        ],
+        "emailAsc": [
+          "delta",
+          "bravo",
+          "bycashier",
+          "alpha2"
+        ],
+        "outstandingDesc": [
+          "bravo=300",
+          "bycashier=100",
+          "delta=0",
+          "alpha2=0"
+        ],
+        "creditDesc": [
+          50,
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "id": "CUS-013",
+      "title": "Paging envelope + validation: size not in [10,20,50] -> 400, page<0 -> 400, non-sortable/unknown sort -> 400; pages do not overlap",
+      "status": "PASS",
+      "evidence": {
+        "envelope": {
+          "total": 4,
+          "pages": 1,
+          "size": 10,
+          "applied": [
+            "name:contains:cp-mu2sqkltc327"
+          ]
+        },
+        "size7": "400 {\"timestamp\":\"2026-09-15T14:58:03.176938Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"size must be one of [10, 20, 50]\",\"path\":\"/api/customers\",\"fieldErrors\":null}",
+        "pageNeg": "400 {\"timestamp\":\"2026-09-15T14:58:03.178553Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"page must be >= 0\",\"path\":\"/api/customers\",\"fieldErrors\":null}",
+        "sortAddress": "400 {\"timestamp\":\"2026-09-15T14:58:03.180047Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Column is not sortable: address\",\"path\":\"/api/customers\",\"fieldErrors\":null}",
+        "sortSeat": "400 {\"timestamp\":\"2026-09-15T14:58:03.181489Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Column is not sortable: successPocUserId\",\"path\":\"/api/customers\",\"fieldErrors\":null}",
+        "sortBogus": "400 {\"timestamp\":\"2026-09-15T14:58:03.183099Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Unknown column: bogus\",\"path\":\"/api/customers\",\"fieldErrors\":null}",
+        "overlapPage1vs2": 0
+      }
+    },
+    {
+      "id": "CUS-014",
+      "title": "Text filter operators contains (case-insensitive)/eq/neq/isEmpty/isNotEmpty and AND-combination; invalid column/op -> 400",
+      "status": "PASS",
+      "evidence": {
+        "contains": [
+          "alpha2"
+        ],
+        "eq": [
+          "bravo"
+        ],
+        "neq": [
+          "alpha2",
+          "bycashier",
+          "delta"
+        ],
+        "phoneIsEmpty": [
+          "delta"
+        ],
+        "emailIsNotEmpty": [
+          "alpha2",
+          "bravo",
+          "bycashier"
+        ],
+        "addressContains": [
+          "alpha2"
+        ],
+        "nameGt": "400 {\"timestamp\":\"2026-09-15T14:58:03.226169Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Operator gt is not valid for co",
+        "unknownCol": 400,
+        "unknownOp": 400,
+        "malformed": 400
+      }
+    },
+    {
+      "id": "POC-001",
+      "title": "First SUCCESS POC added becomes primary automatically",
+      "status": "PASS",
+      "evidence": "200 {\"id\":35,\"pocType\":\"SUCCESS\",\"primary\":true,\"user\":{\"id\":115,\"username\":\"cpcs-mu2sqklu67a2\",\"fullName\":\"CPCS-MU2SQKLU67A2\",\"email\":\"cpcs-mu2sqklu67a2@rt.local\",\"role\":\"CUSTOMER_SUCCESS_POC\",\"active\":true},\"createdAt\":\"2026-09-15T14:58:03.236432Z\"}"
+    },
+    {
+      "id": "POC-002",
+      "title": "Second SUCCESS POC (primary:false) added non-primary; exactly one primary",
+      "status": "PASS",
+      "evidence": {
+        "add": "200 {\"id\":36,\"pocType\":\"SUCCESS\",\"primary\":false,\"user\":{\"id\":116,\"username\":\"cpcs-mu2sqknx6b46\",\"fullName\":\"CPCS-MU2SQKNX6B46\",\"email\":\"cpcs-mu2sqknx6b46@rt.local\",\"role\":\"CUSTOMER_SUCCESS_POC\",\"active\":true},\"createdAt\":\"2026-09-15T14:58:03.242300Z\"}",
+        "seats": [
+          "cpcs-mu2sqklu67a2*",
+          "cpcs-mu2sqknx6b46"
+        ]
+      }
+    },
+    {
+      "id": "POC-003",
+      "title": "Adding with primary:true demotes previous primary; still one primary per type",
+      "status": "PASS",
+      "evidence": {
+        "seats": [
+          "cpcs-mu2sqkpvaef5*",
+          "cpcs-mu2sqklu67a2",
+          "cpcs-mu2sqknx6b46"
+        ]
+      }
+    },
+    {
+      "id": "POC-004",
+      "title": "Adding the same user twice for the same kind -> 400",
+      "status": "PASS",
+      "evidence": "400 {\"timestamp\":\"2026-09-15T14:58:03.259039Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"cpcs-mu2sqklu67a2 is already a Customer Success POC for this customer\",\"path\":\"/api/customers/51/pocs\",\"fieldErrors\":null}"
+    },
+    {
+      "id": "POC-005",
+      "title": "COLLECTION seats independent of SUCCESS: first is primary, second not; customer DTO lists both kinds and pocMissing=false",
+      "status": "PASS",
+      "evidence": {
+        "collection": [
+          "cpcol-mu2sqkrv3476*",
+          "cpcol-mu2sqkttb519"
+        ],
+        "dto": {
+          "s": 3,
+          "c": 2,
+          "pocMissing": false
+        }
+      }
+    },
+    {
+      "id": "POC-006",
+      "title": "POST .../{pocId}/primary switches primary; only one COLLECTION primary",
+      "status": "PASS",
+      "evidence": {
+        "resp": "200 {\"id\":39,\"pocType\":\"COLLECTION\",\"primary\":true,\"user\":{\"id\":119,\"username\":\"cpcol-mu2sqkttb519\",\"fullName\":\"CPCOL-MU2SQKTTB519\",\"email\":\"cpcol-mu2sqkttb519@rt.local\",\"role\":\"COLLECTION_POC\",\"active\":true},\"createdAt\":\"2026-09-15T14:58:03.266130Z\"}",
+        "collection": [
+          "cpcol-mu2sqkttb519*",
+          "cpcol-mu2sqkrv3476"
+        ]
+      }
+    },
+    {
+      "id": "POC-007",
+      "title": "Removing a non-primary seat leaves primary unchanged",
+      "status": "PASS",
+      "evidence": {
+        "del": 200,
+        "seats": [
+          "cpcs-mu2sqkpvaef5*",
+          "cpcs-mu2sqknx6b46"
+        ]
+      }
+    },
+    {
+      "id": "POC-008",
+      "title": "Removing the primary promotes the remaining holder to primary (AC-A4)",
+      "status": "PASS",
+      "evidence": {
+        "del": 200,
+        "seats": [
+          "cpcs-mu2sqknx6b46*"
+        ]
+      }
+    },
+    {
+      "id": "POC-009",
+      "title": "Removing the last SUCCESS seat clears it: no SUCCESS seats, pocMissing=true, collection untouched",
+      "status": "PASS",
+      "evidence": {
+        "del": 200,
+        "success": 0,
+        "collection": 2,
+        "pocMissing": true
+      }
+    },
+    {
+      "id": "POC-010",
+      "title": "Invalid seat adds rejected: SALES kind 400, inactive user 400, wrong-privilege user 400, customer account 400, unknown user 404, missing userId 400, bad pocType 400, unknown customer 404; no seat created",
+      "status": "FAIL",
+      "evidence": {
+        "sales": "400 {\"timestamp\":\"2026-09-15T14:58:03.322594Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Sales POC is assigned per invoice, not per customer\",\"path\":\"/api/customers/52/pocs\",\"fieldErrors\":null}",
+        "inactive": "400 {\"timestamp\":\"2026-09-15T14:58:03.326369Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"User cpcsoff-mu2sql08660e is inactive and cannot be assigned\",\"path\":\"/api/customers/52/pocs\",\"fieldErrors\":null}",
+        "wrongKind": "400 {\"timestamp\":\"2026-09-15T14:58:03.329601Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"User cpcol-mu2sqkrv3476 is not assignable as Customer Success POC\",\"path\":\"/api/customers/52/pocs\",\"fieldErrors\":null}",
+        "customerAcct": "400 {\"timestamp\":\"2026-09-15T14:58:03.332309Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"A customer account cannot be assigned as a POC\",\"path\":\"/api/customers/52/pocs\",\"fieldErrors\":null}",
+        "unknownUser": 404,
+        "noUser": 400,
+        "badType": "500 {\"timestamp\":\"2026-09-15T14:58:03.339632Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"JSON parse error: Cannot deserialize value of type `com.geneinvoice.poc.PocType` from String \\\"FOO\\\": not one of the values accepted for Enum class: [SUCCESS, SA",
+        "unknownCustomer": 404,
+        "seatsLeft": 0
+      }
+    },
+    {
+      "id": "POC-011",
+      "title": "pocId of another customer -> 400 (remove and primary), unknown pocId -> 404, seat untouched",
+      "status": "PASS",
+      "evidence": {
+        "remove": "400 {\"timestamp\":\"2026-09-15T14:58:03.347712Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"POC assignment does not belong to this customer\",\"path\":\"/api/customers/52/pocs/39\",\"fieldErrors\":null}",
+        "primary": 400,
+        "unknown": 404,
+        "seatsStill": 2
+      }
+    },
+    {
+      "id": "POC-012",
+      "title": "Seat permissions: customer login GET pocs 403 and assignable 403; VIEWER (POC_VIEW only) GET 200 but add/remove 403",
+      "status": "PASS",
+      "evidence": {
+        "customerGet": 403,
+        "customerAssignable": 403,
+        "viewerGet": 200,
+        "viewerAdd": 403,
+        "viewerDel": 403
+      }
+    },
+    {
+      "id": "POC-013",
+      "title": "GET /api/pocs/assignable returns only active users with matching POC_ASSIGNABLE_* privilege; q matches username/fullName/email case-insensitively",
+      "status": "PASS",
+      "evidence": {
+        "qCpcs": 3,
+        "inactiveExcluded": true,
+        "rolesInSuccessList": [
+          "CUSTOMER_SUCCESS_POC",
+          "ADMIN"
+        ],
+        "collectionByUsername": [
+          "cpcol-mu2sqkrv3476"
+        ],
+        "byEmail": [
+          "cpcs-mu2sqknx6b46"
+        ],
+        "byFullNameUpper": 1,
+        "noMatch": [],
+        "salesUserInSuccess": 0
+      }
+    },
+    {
+      "id": "POC-014",
+      "title": "assignable: limit honoured (limit=2 -> <=2, default <=25); type=bogus / missing type -> 400 (clean validation error)",
+      "status": "FAIL",
+      "evidence": {
+        "limit2": 2,
+        "default": 8,
+        "bogus": "500 {\"timestamp\":\"2026-09-15T14:58:03.401323Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Method parameter 'type': Failed to convert value of type 'java.lang.String' to required type 'com.geneinvoice.poc.PocType'; Failed to convert from type [java.lan",
+        "missing": "500 {\"timestamp\":\"2026-09-15T14:58:03.404860Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"Required request parameter 'type' for method parameter type PocType is not present\",\"path\":\"/api/pocs/assignable\",\"fieldErrors\":null}"
+      }
+    },
+    {
+      "id": "POC-015",
+      "title": "A custom role carrying POC_ASSIGNABLE_SUCCESS + _COLLECTION makes its user assignable as both kinds (privilege, not role name)",
+      "status": "PASS",
+      "evidence": {
+        "role": 200,
+        "user": 200,
+        "inSuccess": 1,
+        "inCollection": 1
+      }
+    },
+    {
+      "id": "POC-016",
+      "title": "Every seat change audited on the customer: 5 POC_ASSIGNED, 3 POC_REMOVED, 1 POC_PRIMARY_CHANGED (with before/after, actor)",
+      "status": "PASS",
+      "evidence": {
+        "counts": {
+          "assigned": 5,
+          "removed": 3,
+          "primaryChanged": 1
+        },
+        "primaryRow": {
+          "before": "{\"pocType\":\"COLLECTION\",\"userId\":118,\"username\":\"cpcol-mu2sqkrv3476\",\"primary\":true}",
+          "after": "{\"pocType\":\"COLLECTION\",\"userId\":119,\"username\":\"cpcol-mu2sqkttb519\",\"primary\":true}",
+          "reason": "Primary Collection POC is now cpcol-mu2sqkttb519"
+        }
+      }
+    },
+    {
+      "id": "POC-017",
+      "title": "Implicit primary changes are captured in audit (auto-promotion of cs2 on primary removal; demotion of cs1 when cs3 added as primary) — AC-A7",
+      "status": "FAIL",
+      "evidence": {
+        "removalOfPrimary": {
+          "before": "{\"pocType\":\"SUCCESS\",\"userId\":117,\"username\":\"cpcs-mu2sqkpvaef5\",\"primary\":true}",
+          "after": null,
+          "reason": "Removed Customer Success POC cpcs-mu2sqkpvaef5"
+        },
+        "addAsPrimary": {
+          "before": null,
+          "after": "{\"pocType\":\"SUCCESS\",\"userId\":117,\"username\":\"cpcs-mu2sqkpvaef5\",\"primary\":true}"
+        },
+        "anyRowRecordingPromotionOfCs2": false
+      }
+    },
+    {
+      "id": "POC-018",
+      "title": "Newly assigned POC receives a POC_ASSIGNED notification linking to the customer",
+      "status": "PASS",
+      "evidence": {
+        "title": "You are now Collection POC",
+        "link": "/customers/51"
+      }
+    },
+    {
+      "id": "POC-019",
+      "title": "Seat filters: eq = holds a seat, isEmpty = POC missing, isNotEmpty, neq, in; contains rejected 400",
+      "status": "PASS",
+      "evidence": {
+        "successEqCs1": [
+          "bycashier"
+        ],
+        "collectionEqCol1": [
+          "alpha2",
+          "delta"
+        ],
+        "successIsEmpty": [
+          "alpha2",
+          "bravo"
+        ],
+        "collectionIsEmpty": [
+          "bravo",
+          "bycashier"
+        ],
+        "collectionIsNotEmpty": [
+          "alpha2",
+          "delta"
+        ],
+        "collectionNeqCol2": [
+          "bravo",
+          "bycashier",
+          "delta"
+        ],
+        "successIn": [
+          "bycashier",
+          "delta"
+        ],
+        "contains": 400
+      }
+    },
+    {
+      "id": "TIL-001",
+      "title": "Summary tiles over my filter: count 4, totalOutstanding 400, totalCreditBalance = c4 credit, missing Success 2, missing Collection 2",
+      "status": "PASS",
+      "evidence": {
+        "tiles": {
+          "count": 4,
+          "totalOutstanding": 400,
+          "totalCreditBalance": 50,
+          "missingSuccessPocCount": 2,
+          "missingCollectionPocCount": 2
+        },
+        "c4credit": 50
+      }
+    },
+    {
+      "id": "TIL-002",
+      "title": "Tiles follow extra filter (collection isEmpty -> count 2, outstanding 400); empty result -> zeros; bad filter -> 400",
+      "status": "PASS",
+      "evidence": {
+        "collectionIsEmpty": {
+          "count": 2,
+          "totalOutstanding": 400,
+          "totalCreditBalance": 0,
+          "missingSuccessPocCount": 1,
+          "missingCollectionPocCount": 2
+        },
+        "empty": {
+          "count": 0,
+          "totalOutstanding": 0,
+          "totalCreditBalance": 0,
+          "missingSuccessPocCount": 0,
+          "missingCollectionPocCount": 0
+        },
+        "bad": 400
+      }
+    },
+    {
+      "id": "POC-020",
+      "title": "pocMissing flag matches its documented meaning (CustomerDtos: \"no POC seat of either kind\") — alpha2 has collection seats only",
+      "status": "FAIL",
+      "evidence": {
+        "flags": {
+          "alpha2": true,
+          "bravo": true,
+          "bycashier": true,
+          "delta": false
+        },
+        "note": "CustomerService.java:171 computes success.isEmpty() || collection.isEmpty()"
+      }
+    },
+    {
+      "id": "BLK-001",
+      "title": "Bulk ADD_POC: per-record result — c1 (already holds col1) skipped with reason, c2/c3 succeeded; seats created (first seat primary)",
+      "status": "PASS",
+      "evidence": {
+        "result": {
+          "action": "ADD_POC",
+          "requested": 3,
+          "succeeded": [
+            52,
+            53
+          ],
+          "failed": [],
+          "skipped": [
+            {
+              "id": 51,
+              "reason": "cpcol-mu2sqkrv3476 is already a Collection POC for this customer"
+            }
+          ],
+          "truncated": false,
+          "limit": 5000
+        }
+      }
+    },
+    {
+      "id": "BLK-002",
+      "title": "Bulk ADD_POC selectAllMatchingFilter applies to the whole filtered set (2 customers missing Success) and tiles update (missingSuccess 0)",
+      "status": "PASS",
+      "evidence": {
+        "result": {
+          "action": "ADD_POC",
+          "requested": 2,
+          "succeeded": [
+            51,
+            52
+          ],
+          "failed": [],
+          "skipped": [],
+          "truncated": false,
+          "limit": 5000
+        },
+        "tilesAfter": {
+          "count": 4,
+          "totalOutstanding": 400,
+          "totalCreditBalance": 50,
+          "missingSuccessPocCount": 0,
+          "missingCollectionPocCount": 0
+        }
+      }
+    },
+    {
+      "id": "BLK-003",
+      "title": "Bulk ADD_POC with invalid params -> clean 400 (pocType=foo, userId=abc), not 500",
+      "status": "FAIL",
+      "evidence": {
+        "pocTypeFoo": "500 {\"timestamp\":\"2026-09-15T14:58:03.729305Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"No enum constant com.geneinvoice.poc.PocType.FOO\",\"path\":\"/api/customers/bulk\",\"fieldErrors\":null}",
+        "userIdAbc": "500 {\"timestamp\":\"2026-09-15T14:58:03.733428Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"For input string: \\\"abc\\\"\",\"path\":\"/api/customers/bulk\",\"fieldErrors\":null}"
+      }
+    },
+    {
+      "id": "BLK-004",
+      "title": "Bulk ADD_POC with an invalid request (pocType SALES / inactive user) rejected once with 400 rather than every row \"skipped\"",
+      "status": "FAIL",
+      "evidence": {
+        "sales": "200 {\"action\":\"ADD_POC\",\"requested\":2,\"succeeded\":[],\"failed\":[],\"skipped\":[{\"id\":51,\"reason\":\"Sales POC is assigned per invoice, not per customer\"},{\"id\":52,\"reason\":\"Sales POC is assigned per invoice, not per customer\"}],\"truncated\":false,\"limit\":5000}",
+        "inactive": "200 {\"action\":\"ADD_POC\",\"requested\":2,\"succeeded\":[],\"failed\":[],\"skipped\":[{\"id\":51,\"reason\":\"User cpcsoff-mu2sql08660e is inactive and cannot be assigned\"},{\"id\":52,\"reason\":\"User cpcsoff-mu2sql08660e is inactive and cannot be assigned\"}],\"truncated\":false,\"limi"
+      }
+    },
+    {
+      "id": "BLK-005",
+      "title": "Bulk: unknown action 400, no ids and no selectAll 400, missing params 400",
+      "status": "PASS",
+      "evidence": {
+        "unknown": "400 {\"timestamp\":\"2026-09-15T14:58:03.744696Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Unknown bulk action: DELETE_ALL (expected one of [ADD_POC])\",\"path\":\"/api/customers/bulk\",\"fieldErrors\":null}",
+        "noIds": "400 {\"timestamp\":\"2026-09-15T14:58:03.748087Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Provide ids or set selectAllMatchingFilter\",\"path\":\"/api/customers/bulk\",\"fieldErrors\":null}",
+        "noParams": "400 {\"timestamp\":\"2026-09-15T14:58:03.752173Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"ADD_POC requires params.userId and params.pocType\",\"path\":\"/api/customers/bulk\",\"fieldErrors\":null}"
+      }
+    },
+    {
+      "id": "BLK-006",
+      "title": "Bulk ADD_POC by a role with CUSTOMER_MANAGE but without POC_ASSIGN is refused (expect 403) and changes nothing",
+      "status": "FAIL",
+      "evidence": {
+        "status": "400 {\"timestamp\":\"2026-09-15T14:58:03.885489Z\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"You may not change POC assignments\",\"path\":\"/api/customers/bulk\",\"fieldErrors\":null}",
+        "seatCreated": false
+      }
+    },
+    {
+      "id": "BLK-007",
+      "title": "Bulk with a nonexistent id: every requested id accounted for (succeeded/failed/skipped) — AC-D5 \"never silently drops rows\"",
+      "status": "FAIL",
+      "evidence": {
+        "result": {
+          "action": "ADD_POC",
+          "requested": 1,
+          "succeeded": [
+            52
+          ],
+          "failed": [],
+          "skipped": [],
+          "truncated": false,
+          "limit": 5000
+        },
+        "accountedFor": 1,
+        "requestedIds": 2
+      }
+    },
+    {
+      "id": "EXP-001",
+      "title": "Customer export CSV: text/csv, header, only selected ids, POC columns list usernames with (primary)",
+      "status": "PASS",
+      "evidence": {
+        "status": 200,
+        "ct": "text/csv;charset=UTF-8",
+        "csv": "Id,Name,Phone,Email,Credit balance,Outstanding,Customer Success POCs,Collection POCs\r\n51,cp-mu2sqkltc327 alpha2,555-0003,cp-mu2sqkltc327-c@rt.local,0.00,0,cpcs-mu2sqkpvaef5 (primary),cpcol-mu2sqkrv3476; cpcol-mu2sqkttb519 (primary)\r\n54,cp-mu2sqkltc327 delta,,,50.00,0,cpcs-mu2sqknx6b46 (primary),cpcol-mu2sqkrv3476 (primary)\r\n"
+      }
+    },
+    {
+      "id": "EXP-002",
+      "title": "Export selectAllMatchingFilter with filter+sort returns exactly my 4 rows in sort order; no ids -> 400; customer login (no EXPORT_DATA) -> 403",
+      "status": "PASS",
+      "evidence": {
+        "rows": [
+          "54,cp-mu2sqkltc327 delta,,,50.00,0,cpcs-mu2sqknx6b46 (primar",
+          "53,cp-mu2sqkltc327 bycashier,555-0002,cp-mu2sqkltc327-b@rt.l",
+          "52,cp-mu2sqkltc327 bravo,555-0001,cp-mu2sqkltc327-a@rt.local",
+          "51,cp-mu2sqkltc327 alpha2,555-0003,cp-mu2sqkltc327-c@rt.loca"
+        ],
+        "noIds": 400,
+        "customer": 403
+      }
+    },
+    {
+      "id": "PRD-001",
+      "title": "Create product: 200, active defaults to true, price/description stored",
+      "status": "PASS",
+      "evidence": "200 {\"id\":21,\"name\":\"cp-mu2sqkltc327 P-b\",\"description\":\"desc b\",\"price\":25.5,\"active\":true}"
+    },
+    {
+      "id": "PRD-002",
+      "title": "Product validation: price 0 allowed (active:false honoured); negative / missing price and blank name -> 400 fieldErrors; non-numeric price -> 400",
+      "status": "FAIL",
+      "evidence": {
+        "zero": "200 {\"id\":22,\"name\":\"cp-mu2sqkltc327 P-a\",\"description\":null,\"price\":0,\"active\":false}",
+        "negative": "400 {\"timestamp\":\"2026-09-15T14:58:03.942622Z\",\"status\":400,\"error\":\"Validation Failed\",\"message\":\"One or more fields are invalid\",\"path\":\"/api/products\",\"fieldErrors\":{\"price\":\"must be greater than or equal to 0\"}}",
+        "noPrice": 400,
+        "blankName": 400,
+        "stringPrice": "500 {\"timestamp\":\"2026-09-15T14:58:03.949001Z\",\"status\":500,\"error\":\"Internal Server Error\",\"message\":\"JSON parse error: Cannot deserialize value of type `java.math.BigDecimal` from String \\\"abc\\\": not a valid representation\",\"path\":\"/api/products\",\"fieldErrors\":n"
+      }
+    },
+    {
+      "id": "PRD-003",
+      "title": "Update product persists name/description/price; omitted active keeps it; negative price 400; unknown id 404; audited",
+      "status": "PASS",
+      "evidence": {
+        "get": {
+          "id": 21,
+          "name": "cp-mu2sqkltc327 P-c",
+          "description": "desc c",
+          "price": 99.99,
+          "active": true
+        },
+        "negative": 400,
+        "unknown": 404,
+        "audit": [
+          "PRODUCT_UPDATED",
+          "PRODUCT_CREATED"
+        ]
+      }
+    },
+    {
+      "id": "PRD-004",
+      "title": "Product list: sort price desc, filter active:eq:true, price between; sort on description 400; bad operator 400",
+      "status": "PASS",
+      "evidence": {
+        "priceDesc": [
+          99.99,
+          10,
+          0
+        ],
+        "activeTrue": [
+          "P-c",
+          "P-d"
+        ],
+        "between": [
+          "P-d"
+        ],
+        "sortDesc": 400,
+        "badOp": 400
+      }
+    },
+    {
+      "id": "PRD-005",
+      "title": "Bulk DEACTIVATE: active one succeeds (now inactive, PRODUCT_DEACTIVATED audited), already-inactive one skipped \"Already inactive\"",
+      "status": "PASS",
+      "evidence": {
+        "result": {
+          "action": "DEACTIVATE",
+          "requested": 2,
+          "succeeded": [
+            21
+          ],
+          "failed": [],
+          "skipped": [
+            {
+              "id": 22,
+              "reason": "Already inactive"
+            }
+          ],
+          "truncated": false,
+          "limit": 5000
+        },
+        "activeAfter": false
+      }
+    },
+    {
+      "id": "PRD-006",
+      "title": "Bulk ACTIVATE selectAllMatchingFilter (my inactive products) activates both; none left inactive; unknown action 400",
+      "status": "PASS",
+      "evidence": {
+        "result": {
+          "action": "ACTIVATE",
+          "requested": 2,
+          "succeeded": [
+            22,
+            21
+          ],
+          "failed": [],
+          "skipped": [],
+          "truncated": false,
+          "limit": 5000
+        },
+        "inactiveLeft": 0,
+        "badAction": 400
+      }
+    },
+    {
+      "id": "PRD-007",
+      "title": "Product export CSV: header Id,Name,Description,Price,Active; my 3 products; honours the requested sort (price desc)",
+      "status": "FAIL",
+      "evidence": {
+        "csv": "Id,Name,Description,Price,Active\r\n23,cp-mu2sqkltc327 P-d,,10.00,true\r\n22,cp-mu2sqkltc327 P-a,,0.00,true\r\n21,cp-mu2sqkltc327 P-c,desc c,99.99,true\r\n"
+      }
+    },
+    {
+      "id": "PRD-008",
+      "title": "Product permissions: CASHIER can list (200) but not create/bulk (403); COLLECTION_POC (no PRODUCT_VIEW) list 403",
+      "status": "PASS",
+      "evidence": {
+        "cashierCreate": 403,
+        "cashierList": 200,
+        "cashierBulk": 403,
+        "collectionList": 403
+      }
+    },
+    {
+      "id": "PRD-009",
+      "title": "Backend: invoice with an INACTIVE product is rejected (400)",
+      "status": "FAIL",
+      "evidence": {
+        "status": "200 {\"id\":74,\"invoiceNumber\":\"INV-20260915-0074\",\"customerId\":52,\"customerName\":\"cp-mu2sqkltc327 bravo\",\"invoiceDate\":\"2026-09-15T14:58:04.118347Z\",\"total\":10.00,\"paidAmount\":0,\"balance\":10.00,\"status\":\"UNPAID\",\"notes\":null,\"items\":[{\"id\":75,\"productId\":23,\"produc",
+        "note": "InvoiceService.create (InvoiceService.java:70) loads the product with findById and never checks active"
+      }
+    }
+  ]
+}

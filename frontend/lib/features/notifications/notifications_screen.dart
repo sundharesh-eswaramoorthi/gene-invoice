@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/format.dart';
+import '../../core/table/data_table_scaffold.dart';
+import '../../core/table/route_query.dart';
+import '../../core/table/table_models.dart';
+import '../../core/table/table_providers.dart';
 import '../../shared/models/notification.dart';
 import 'notifications_providers.dart';
 
 class NotificationsScreen extends ConsumerWidget {
-  const NotificationsScreen({super.key});
+  final TableQuery query;
+  const NotificationsScreen({super.key, required this.query});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(notificationsProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notifications'),
@@ -21,76 +25,70 @@ class NotificationsScreen extends ConsumerWidget {
             icon: const Icon(Icons.done_all),
             label: const Text('Mark all read'),
             onPressed: () async {
-              final dio = ref.read(dioProvider);
-              await dio.post('/api/notifications/mark-all-read');
-              ref.invalidate(notificationsProvider);
+              await ref.read(dioProvider).post('/api/notifications/mark-all-read');
+              ref.invalidate(tablePageProvider);
               ref.invalidate(unreadCountProvider);
             },
           ),
         ],
       ),
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Failed: $e')),
-        data: (list) {
-          if (list.isEmpty) return const Center(child: Text('No notifications'));
-          return RefreshIndicator(
-            onRefresh: () async => ref.refresh(notificationsProvider.future),
-            child: ListView.separated(
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) => _NotificationTile(notification: list[i]),
+      body: DataTableScaffold<AppNotification>(
+        entity: 'notifications',
+        path: '/api/notifications',
+        query: query,
+        onQueryChanged: (q) => RouteQuery(context, '/notifications').push(q),
+        parse: AppNotification.fromJson,
+        idOf: (n) => n.id,
+        emptyMessage: 'No notifications match this filter',
+        onRowTap: (context, n) => _open(context, ref, n),
+        bulkActions: const [
+          BulkActionSpec(action: 'MARK_READ', label: 'Mark read', icon: Icons.done_all),
+          BulkActionSpec(
+              action: 'MARK_UNREAD', label: 'Mark unread', icon: Icons.mark_email_unread_outlined),
+        ],
+        columns: [
+          TableColumnSpec(
+            label: 'Title',
+            sortKey: 'title',
+            cell: (context, n) => Text(
+              n.title,
+              style: TextStyle(fontWeight: n.read ? FontWeight.normal : FontWeight.w700),
             ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _NotificationTile extends ConsumerWidget {
-  final AppNotification notification;
-  const _NotificationTile({required this.notification});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final df = DateFormat.yMMMd().add_jm();
-    return ListTile(
-      leading: Icon(
-        notification.read ? Icons.notifications_none : Icons.notifications_active,
-        color: notification.read ? null : Theme.of(context).colorScheme.primary,
-      ),
-      title: Text(
-        notification.title,
-        style: TextStyle(fontWeight: notification.read ? FontWeight.normal : FontWeight.w600),
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (notification.message != null) Text(notification.message!),
-          Text(df.format(notification.createdAt.toLocal()),
-              style: Theme.of(context).textTheme.bodySmall),
+          ),
+          TableColumnSpec(
+            label: 'Message',
+            cell: (context, n) =>
+                Text(n.message ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+          TableColumnSpec(label: 'Type', sortKey: 'type', cell: (context, n) => Text(n.type)),
+          TableColumnSpec(
+              label: 'Received',
+              sortKey: 'createdAt',
+              cell: (context, n) => Text(formatDateTime(n.createdAt))),
+          TableColumnSpec(
+              label: 'Read',
+              sortKey: 'read',
+              cell: (context, n) => Icon(
+                    n.read ? Icons.drafts_outlined : Icons.markunread,
+                    size: 18,
+                    color: n.read ? null : Theme.of(context).colorScheme.primary,
+                  )),
         ],
       ),
-      onTap: () async {
-        if (!notification.read) {
-          await ref.read(dioProvider).post('/api/notifications/${notification.id}/read');
-          ref.invalidate(notificationsProvider);
-          ref.invalidate(unreadCountProvider);
-        }
-        if (notification.link != null && context.mounted) {
-          _navigateToLink(context, notification.link!);
-        }
-      },
     );
   }
 
-  void _navigateToLink(BuildContext context, String link) {
-    // Backend stores routes like `/disputes/42` or `/admin/disputes/42`.
-    // Map admin links to the admin route prefix.
-    final target = link.startsWith('/admin/disputes/')
-        ? link.replaceFirst('/admin', '')
-        : link;
-    context.go(target);
+  Future<void> _open(BuildContext context, WidgetRef ref, AppNotification n) async {
+    if (!n.read) {
+      await ref.read(dioProvider).post('/api/notifications/${n.id}/read');
+      ref.invalidate(tablePageProvider);
+      ref.invalidate(unreadCountProvider);
+    }
+    if (n.link != null && context.mounted) {
+      // Backend links use the same paths as the app; admin dispute links are the exception.
+      final target =
+          n.link!.startsWith('/admin/disputes/') ? n.link!.replaceFirst('/admin', '') : n.link!;
+      context.go(target);
+    }
   }
 }

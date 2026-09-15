@@ -1,0 +1,37 @@
+[
+  {
+    "id": "PRM-UI10",
+    "title": "Record payment dialog lists the customer's open promise and links the payment to it",
+    "status": "PASS",
+    "actual": "'Open promises' section shown=true; promise checkbox found=true; POST body promiseIds=[92] invoiceIds=[230] poc=314; promise now KEPT links=[105]",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui3-10a-record-dialog.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui3-10b-record-filled.png"
+  },
+  {
+    "id": "PRM-UI11",
+    "title": "Override from a Promises list row updates the row status and the tiles (lead #16)",
+    "status": "FAIL",
+    "actual": "API status=KEPT; row status cell(s) on screen=[\"Open\"]; tiles Open=1 Kept=0",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui3-11a-list-before.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui3-11b-list-after.png"
+  },
+  {
+    "id": "PRM-UI12",
+    "title": "Edit (date only) of a promise one of whose invoices was cancelled (lead #3)",
+    "status": "FAIL",
+    "actual": "invoice checkboxes offered=[\"INV-20260915-0222=true\"] (cancelled INV-20260915-0223 not listed so it cannot be unticked); after Save: dialog still open=true; error shown=\"Invoice INV-20260915-0223 is cancelled and cannot be promised against \"",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui3-12-edit-after-invoice-cancel.png"
+  },
+  {
+    "id": "PRM-UI13",
+    "title": "Customer login sees its promises read-only with no POC and no manage buttons",
+    "status": "PASS",
+    "actual": "card visible=true; manage buttons present=[]; POC identity shown=false; #/promises for customer: Notifications | Account\npromisesui-mu2t7sgu02a1 • CUSTOMER | Promises | Open | Kept | Partially kept | Broken | Promised total | 1 | 0 • ₹0.00 | 1 • ₹60.00 | 0 • ₹0.00 | 0 • ₹0.00 | ₹60.00 | Add filter | Customer | Amount | Promised by | Status | Fulfilled | Remaining | promisesui-mu2t7sgu02a1 | ₹60",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui3-13-customer-view.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui3-13b-customer-promises-list.png ; apiErrors=[]"
+  },
+  {
+    "id": "PRM-UI14",
+    "title": "Promises list and Payment Promise tab are usable at phone width (400px)",
+    "status": "PASS",
+    "actual": "page errors=[] (see screenshots for layout)",
+    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui3-14a-mobile-list.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui3-14b-mobile-customer-tab.png"
+  }
+]

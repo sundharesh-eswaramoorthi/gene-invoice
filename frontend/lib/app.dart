@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router.dart';
+import 'core/table/table_providers.dart';
 import 'core/theme.dart';
 import 'features/auth/auth_controller.dart';
 
@@ -17,6 +18,7 @@ class _GeneInvoiceAppState extends ConsumerState<GeneInvoiceApp> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(authControllerProvider.notifier).bootstrap();
+      ref.read(pageSizeStoreProvider.notifier).hydrate();
     });
   }
 

@@ -1,0 +1,332 @@
+[
+ {
+  "i": 4,
+  "role": null,
+  "label": null,
+  "text": "99+",
+  "x": 1165,
+  "y": 23,
+  "w": 19,
+  "h": 16
+ },
+ {
+  "i": 5,
+  "role": "button",
+  "label": null,
+  "text": "Notifications",
+  "x": 1166,
+  "y": 28,
+  "w": 40,
+  "h": 40
+ },
+ {
+  "i": 6,
+  "role": "button",
+  "label": null,
+  "text": "Account\nadmin • ADMIN",
+  "x": 1278,
+  "y": 28,
+  "w": 176,
+  "h": 24
+ },
+ {
+  "i": 9,
+  "role": "button",
+  "label": null,
+  "text": "Back",
+  "x": 285,
+  "y": 94,
+  "w": 40,
+  "h": 40
+ },
+ {
+  "i": 10,
+  "role": null,
+  "label": null,
+  "text": "INV-20260915-0376",
+  "x": 412,
+  "y": 84,
+  "w": 213,
+  "h": 32
+ },
+ {
+  "i": 11,
+  "role": null,
+  "label": null,
+  "text": "vdhd-cust-mu2uw86pb9ab • 2026-09-15",
+  "x": 433,
+  "y": 110,
+  "w": 257,
+  "h": 20
+ },
+ {
+  "i": 12,
+  "role": "checkbox",
+  "label": "Partially paid",
+  "text": "",
+  "x": 1147,
+  "y": 94,
+  "w": 116,
+  "h": 34
+ },
+ {
+  "i": 13,
+  "role": "button",
+  "label": null,
+  "text": "Raise dispute",
+  "x": 1280,
+  "y": 94,
+  "w": 139,
+  "h": 32
+ },
+ {
+  "i": 15,
+  "role": null,
+  "label": null,
+  "text": "Total",
+  "x": 300,
+  "y": 148,
+  "w": 29,
+  "h": 16
+ },
+ {
+  "i": 16,
+  "role": null,
+  "label": null,
+  "text": "Paid",
+  "x": 470,
+  "y": 148,
+  "w": 26,
+  "h": 16
+ },
+ {
+  "i": 17,
+  "role": null,
+  "label": null,
+  "text": "Balance",
+  "x": 652,
+  "y": 148,
+  "w": 46,
+  "h": 16
+ },
+ {
+  "i": 18,
+  "role": null,
+  "label": null,
+  "text": "₹200.00",
+  "x": 324,
+  "y": 174,
+  "w": 79,
+  "h": 28
+ },
+ {
+  "i": 19,
+  "role": null,
+  "label": null,
+  "text": "₹50.00",
+  "x": 490,
+  "y": 174,
+  "w": 67,
+  "h": 28
+ },
+ {
+  "i": 20,
+  "role": null,
+  "label": null,
+  "text": "₹150.00",
+  "x": 668,
+  "y": 174,
+  "w": 79,
+  "h": 28
+ },
+ {
+  "i": 21,
+  "role": null,
+  "label": null,
+  "text": "Sales POC",
+  "x": 348,
+  "y": 238,
+  "w": 150,
+  "h": 20
+ },
+ {
+  "i": 22,
+  "role": "button",
+  "label": null,
+  "text": "Sales POC *\nVDHD-SALES-MU2UW82DE737",
+  "x": 887,
+  "y": 238,
+  "w": 927,
+  "h": 40
+ },
+ {
+  "i": 23,
+  "role": null,
+  "label": null,
+  "text": "Notes",
+  "x": 348,
+  "y": 290,
+  "w": 150,
+  "h": 20
+ },
+ {
+  "i": 25,
+  "role": null,
+  "label": null,
+  "text": "Line items",
+  "x": 306,
+  "y": 358,
+  "w": 65,
+  "h": 20
+ },
+ {
+  "i": 26,
+  "role": null,
+  "label": null,
+  "text": "Line items change only through an approved dispute.",
+  "x": 420,
+  "y": 377,
+  "w": 294,
+  "h": 17
+ },
+ {
+  "i": 27,
+  "role": null,
+  "label": null,
+  "text": "vdhd-prod-mu2uw822f12b\n2 × ₹100.00\n₹200.00",
+  "x": 812,
+  "y": 416,
+  "w": 1077,
+  "h": 53
+ },
+ {
+  "i": 28,
+  "role": "button",
+  "label": null,
+  "text": "Save changes",
+  "x": 820,
+  "y": 473,
+  "w": 1093,
+  "h": 38
+ },
+ {
+  "i": 31,
+  "role": "tab",
+  "label": "Disputes",
+  "text": "",
+  "x": 301,
+  "y": 546,
+  "w": 87,
+  "h": 74
+ },
+ {
+  "i": 32,
+  "role": "tab",
+  "label": "Payment Promise",
+  "text": "",
+  "x": 416,
+  "y": 546,
+  "w": 144,
+  "h": 74
+ },
+ {
+  "i": 33,
+  "role": "tab",
+  "label": "History",
+  "text": "",
+  "x": 527,
+  "y": 546,
+  "w": 77,
+  "h": 74
+ },
+ {
+  "i": 38,
+  "role": "checkbox",
+  "label": "All (5)",
+  "text": "",
+  "x": 315,
+  "y": 613,
+  "w": 92,
+  "h": 34
+ },
+ {
+  "i": 39,
+  "role": "checkbox",
+  "label": "Invoices (2)",
+  "text": "",
+  "x": 420,
+  "y": 613,
+  "w": 108,
+  "h": 34
+ },
+ {
+  "i": 40,
+  "role": "checkbox",
+  "label": "Promises (1)",
+  "text": "",
+  "x": 538,
+  "y": 613,
+  "w": 115,
+  "h": 34
+ },
+ {
+  "i": 41,
+  "role": "checkbox",
+  "label": "Disputes (2)",
+  "text": "",
+  "x": 657,
+  "y": 613,
+  "w": 111,
+  "h": 34
+ },
+ {
+  "i": 43,
+  "role": "button",
+  "label": null,
+  "text": "Dispute denied\nDispute #140\nSep 15, 2026 9:28 PM • by admin",
+  "x": 812,
+  "y": 683,
+  "w": 1085,
+  "h": 80
+ },
+ {
+  "i": 45,
+  "role": "button",
+  "label": null,
+  "text": "Dispute opened\nDispute #140\nSep 15, 2026 9:28 PM • by vdhd-cust-mu2uw86pb9ab",
+  "x": 812,
+  "y": 777,
+  "w": 1085,
+  "h": 80
+ },
+ {
+  "i": 47,
+  "role": "button",
+  "label": null,
+  "text": "Promise created · ₹100.00 by 2026-09-25\nPromise #150\nSep 15, 2026 9:28 PM • by admin",
+  "x": 812,
+  "y": 864,
+  "w": 1085,
+  "h": 66
+ },
+ {
+  "i": 49,
+  "role": "button",
+  "label": null,
+  "text": "Payment applied · ₹50.00 · invoice now Partially Paid\nPayment #159\nSep 15, 2026 9:28 PM • by admin",
+  "x": 812,
+  "y": 965,
+  "w": 1085,
+  "h": 80
+ },
+ {
+  "i": 50,
+  "role": "button",
+  "label": null,
+  "text": "Invoice created · ₹200.00\nSep 15, 2026 9:28 PM • by admin",
+  "x": 812,
+  "y": 1051,
+  "w": 1085,
+  "h": 78
+ }
+]

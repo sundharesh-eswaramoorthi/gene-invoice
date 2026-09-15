@@ -1,0 +1,24 @@
+[
+ {
+  "id": "R-LONG-REASON-ROW",
+  "title": "History row for the 616-char dispute expands (title-line click): Note shown (500-char, ellipsis) and Details snapshot with full reason; no page errors",
+  "pass": false,
+  "detail": {
+   "row": "Dispute opened / Dispute #83 / Sep 15, 2026 8:46 PM • by dhd-custA-mu2te2t7f180",
+   "rowBox": {
+    "y": 777,
+    "h": 80,
+    "w": 1085
+   },
+   "linkNodes": [],
+   "exp": {
+    "hash": "#/disputes/83",
+    "hasNote": false,
+    "hasDetails": false,
+    "fullInDetails": true,
+    "ellipsis": false
+   },
+   "pageErrors": []
+  }
+ }
+]

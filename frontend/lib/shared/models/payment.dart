@@ -1,3 +1,4 @@
+import '../../features/poc/poc_providers.dart';
 import 'invoice.dart';
 
 enum PaymentStatus { ACTIVE, VOIDED }
@@ -48,6 +49,10 @@ class PaymentRecord {
   final List<PaidInvoice> invoices;
   final double customerCreditBalance;
 
+  /// Null for a self-service customer, who never receives POC identity (AC-A8).
+  final PocUser? collectionPoc;
+  final bool pocMissing;
+
   const PaymentRecord({
     required this.id,
     required this.customerId,
@@ -60,6 +65,8 @@ class PaymentRecord {
     required this.status,
     required this.invoices,
     required this.customerCreditBalance,
+    this.collectionPoc,
+    this.pocMissing = false,
   });
 
   factory PaymentRecord.fromJson(Map<String, dynamic> json) => PaymentRecord(
@@ -76,5 +83,9 @@ class PaymentRecord {
             .map((e) => PaidInvoice.fromJson(e as Map<String, dynamic>))
             .toList(),
         customerCreditBalance: (json['customerCreditBalance'] as num? ?? 0).toDouble(),
+        collectionPoc: json['collectionPoc'] == null
+            ? null
+            : PocUser.fromJson(json['collectionPoc'] as Map<String, dynamic>),
+        pocMissing: json['pocMissing'] as bool? ?? false,
       );
 }

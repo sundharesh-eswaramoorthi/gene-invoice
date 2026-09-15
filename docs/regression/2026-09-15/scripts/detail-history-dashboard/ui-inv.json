@@ -1,0 +1,293 @@
+[
+ {
+  "id": "I-TOP",
+  "title": "invoice A1 top: number, Total 200, Paid 50, Balance 150, tabs; only disputes tab data loaded",
+  "pass": true,
+  "detail": {
+   "tab": "Disputes",
+   "requests": [
+    "/api/invoices/248",
+    "/api/disputes?size=50&targetType=INVOICE&targetId=248"
+   ],
+   "text": " 91 |  Notifications |  Account\nadmin • ADMIN |  Back |  INV-20260915-0238 |  dhd-custA-mu2te2t7f180 • 2026-09-15 | Partially paid  |  Raise dispute |  Total |  Paid |  Balance |  ₹200.00 |  ₹50.00 |  ₹150.00 |  Sales POC |  Sales POC *\nDHD-SALES-MU2TE2KF0D96 |  Notes |  Line items |  Line items change only through an approved dispute. |  dhd-prod-mu2te2k53309\n2 × ₹100.00\n₹200.00 |  Save changes | Disputes  | Payment Promise  | History  |  Raise dispute | INVOICE INV-20260915-0238 — 200.00\n15 Se"
+  }
+ },
+ {
+  "id": "I-PROM-TAB",
+  "title": "invoice Payment Promise tab loads (no 400) and lists only PR1 (₹100.00), URL ?tab=promises",
+  "pass": true,
+  "detail": {
+   "hash": "#/invoices/248?tab=promises",
+   "requests": [
+    "/api/promises?size=50&customerId=164&invoiceId=248"
+   ],
+   "cards": [
+    "[group] ₹100.00 by 2026-09-25 / Open / Fulfilled ₹0.00 / Remaining ₹100.00 / POC: DHD-COLL2-MU2TE2ORC7D0 / PR1 on A1 @812,728 1085x172"
+   ],
+   "apiErrors": [
+    {
+     "status": 404,
+     "method": "GET",
+     "url": "/api/invoices/999999"
+    },
+    {
+     "status": 404,
+     "method": "GET",
+     "url": "/api/payments/999999"
+    },
+    {
+     "status": 500,
+     "method": "GET",
+     "url": "/api/audit?entityType=INVOICE&entityId=249&includeRelated=true"
+    },
+    {
+     "status": 500,
+     "method": "GET",
+     "url": "/api/promises?size=50&customerId=164&invoiceId=249"
+    }
+   ]
+  }
+ },
+ {
+  "id": "I-HIST",
+  "title": "invoice History: Invoice created · ₹200.00, Payment applied/reversed with amounts, Promise created, Disputes opened/denied; no A2 rows",
+  "pass": true,
+  "detail": [
+   "[button] Payment reversed · ₹20.00 · invoice now Partially Paid / Payment #110 / Sep 15, 2026 8:46 PM • by admin @812,683 1085x80",
+   "[button] Dispute opened / Dispute #83 / Sep 15, 2026 8:46 PM • by dhd-custA-mu2te2t7f180 @812,777 1085x80",
+   "[button] Dispute denied / Dispute #82 / Sep 15, 2026 8:46 PM • by admin @812,864 1085x66",
+   "[button] Dispute opened / Dispute #82 / Sep 15, 2026 8:46 PM • by dhd-custA-mu2te2t7f180 @812,965 1085x80",
+   "[button] Promise created · ₹100.00 by 2026-09-25 / Promise #104 / Sep 15, 2026 8:46 PM • by admin @812,1059 1085x80",
+   "[button] Payment applied · ₹20.00 · invoice now Partially Paid / Payment #110 / Sep 15, 2026 8:46 PM • by admin @812,1153 1085x80",
+   "[button] Payment applied · ₹50.00 · invoice now Partially Paid / Payment #109 / Sep 15, 2026 8:46 PM • by admin @812,1247 1085x80",
+   "[button] Invoice created · ₹200.00 / Sep 15, 2026 8:46 PM • by admin @812,1333 1085x78"
+  ]
+ },
+ {
+  "id": "I-HIST-LINK",
+  "title": "\"Payment #109\" link in invoice History opens the payment",
+  "pass": false,
+  "detail": {
+   "ok": false,
+   "tries": [
+    {
+     "x": 347,
+     "y": 1249,
+     "h": "#/invoices/248?tab=history"
+    },
+    {
+     "x": 347,
+     "y": 1245,
+     "h": "#/invoices/248?tab=history"
+    },
+    {
+     "x": 347,
+     "y": 1253,
+     "h": "#/invoices/248?tab=history"
+    },
+    {
+     "x": 347,
+     "y": 1257,
+     "h": "#/invoices/248?tab=history"
+    },
+    {
+     "x": 347,
+     "y": 1241,
+     "h": "#/invoices/248?tab=history"
+    }
+   ]
+  }
+ },
+ {
+  "id": "I-HIST-LINK-DISPUTE",
+  "title": "\"Dispute #82\" link in invoice History opens the dispute",
+  "pass": true,
+  "detail": {
+   "ok": true,
+   "tries": [
+    {
+     "x": 347,
+     "y": 873,
+     "h": "#/disputes/82"
+    }
+   ],
+   "row": {
+    "i": 47,
+    "role": "button",
+    "label": null,
+    "text": "Dispute denied\nDispute #82\nSep 15, 2026 8:46 PM • by admin",
+    "x": 812,
+    "y": 864,
+    "w": 1085,
+    "h": 66
+   }
+  }
+ },
+ {
+  "id": "I-STALE",
+  "title": "moving from invoice A1 to B1 shows B1 title and totals (notes field: see screenshot i5)",
+  "pass": true,
+  "detail": {
+   "hasB1": true,
+   "shot": "shots/i5-B1-after-A1.png"
+  }
+ },
+ {
+  "id": "I-GUARD-BACK",
+  "title": "invoice: unsaved notes + Back arrow prompts",
+  "pass": true,
+  "detail": {
+   "dirty6": true,
+   "dlg6": true
+  }
+ },
+ {
+  "id": "I-GUARD-SIDEBAR",
+  "title": "invoice: unsaved notes + sidebar \"Payments\" should prompt",
+  "pass": false,
+  "detail": {
+   "hash": "#/payments",
+   "dialog": false
+  }
+ },
+ {
+  "id": "I-NOSAVE",
+  "title": "B1 notes unchanged on server after dropped edit",
+  "pass": true,
+  "detail": {
+   "notes": "B1 notes original"
+  }
+ },
+ {
+  "id": "I-404",
+  "title": "#/invoices/999999 shows \"That invoice does not exist.\" + Go back",
+  "pass": true,
+  "detail": " 91 |  Notifications |  Account\nadmin • ADMIN |  That invoice does not exist. |  Go back"
+ },
+ {
+  "id": "I-MALFORMED",
+  "title": "#/invoices/abc shows a clean not-found state (AC-C8)",
+  "pass": false,
+  "detail": {
+   "text": " 92 |  Notifications |  Account\nadmin • ADMIN",
+   "pageErrors": []
+  }
+ },
+ {
+  "id": "P-MALFORMED",
+  "title": "#/payments/abc shows a clean not-found state",
+  "pass": false,
+  "detail": {
+   "text": " 92 |  Notifications |  Account\nadmin • ADMIN"
+  }
+ },
+ {
+  "id": "P-404",
+  "title": "#/payments/999999 shows \"That payment does not exist.\"",
+  "pass": true,
+  "detail": " 92 |  Notifications |  Account\nadmin • ADMIN |  That payment does not exist. |  Go back"
+ },
+ {
+  "id": "I-SHOWMORE",
+  "title": "invoice with 106 history rows shows \"Show 6 more (6 older)\"; tapping it reveals the rest",
+  "pass": true,
+  "detail": {
+   "tab": "History",
+   "more": "[button] Show 6 more (6 older) @811,869 194x32",
+   "after9": {
+    "moreStill": false,
+    "lastRows": [
+     "[button] Invoice updated / Sep 15, 2026 8:46 PM • by admin @812,690 1085x78",
+     "[button] Invoice updated / Sep 15, 2026 8:46 PM • by admin @812,768 1085x78",
+     "[button] Invoice created · ₹100.00 / Sep 15, 2026 8:46 PM • by admin @812,846 1085x78"
+    ]
+   }
+  }
+ },
+ {
+  "id": "P-TOP",
+  "title": "payment PA1 top: Payment #, Amount ₹50.00, method CASH, allocation to A1",
+  "pass": true,
+  "detail": " 92 |  Notifications |  Account\nadmin • ADMIN |  Back |  Payment #109 |  dhd-custA-mu2te2t7f180 • 15 Sep 2026, 8:46 PM | Active  |  Raise dispute |  Amount |  Credit applied |  Method |  ₹50.00 |  ₹0.00 |  CASH |  Collection POC |  Collection POC *\nDHD-COLL-MU2TE2MKF903 |  Notes |  Invoice allocations |  INV-20260915-0238\nPartially paid • allocated ₹50.00\nTotal ₹200.00 • Bal ₹150.00 |  Save changes | Disputes  | Payment Promise  | History  | No disputes on this record  |  Raise dispute"
+ },
+ {
+  "id": "P-PROM-TAB",
+  "title": "payment Payment Promise tab should list only the promises this payment counts towards (C.3)",
+  "pass": false,
+  "detail": {
+   "cardsShown": [
+    "[group] ₹10.00 by 2026-09-27 / Open / Fulfilled ₹0.00 / Remaining ₹10.00 / POC: DHD-COLL2-MU2TE2ORC7D0 / PR3 on A2 @812,707 1085x172",
+    "[group] ₹60.00 by 2026-09-27 / Open / Fulfilled ₹0.00 / Remaining ₹60.00 / POC: DHD-COLL2-MU2TE2ORC7D0 / PR2 general @812,838 1085x75",
+    "[group] ₹100.00 by 2026-09-25 / Open / Fulfilled ₹0.00 / Remaining ₹100.00 / POC: DHD-COLL2-MU2TE2ORC7D0 / PR1 on A1 @812,1027 1085x172"
+   ],
+   "promisesLinkedToPA1": []
+  }
+ },
+ {
+  "id": "P-HIST",
+  "title": "payment History shows Payment recorded · ₹50.00 and its hash is ?tab=history",
+  "pass": true,
+  "detail": [
+   "[null] dhd-custA-mu2te2t7f180 • 15 Sep 2026, 8:46 PM @462,110 314x20",
+   "[button] Payment recorded · ₹50.00 / Sep 15, 2026 8:46 PM • by admin @812,614 1085x78"
+  ]
+ },
+ {
+  "id": "P-STALE",
+  "title": "moving from payment PA1 to PB1 shows PB1 (₹30.00, B1 allocation; notes see screenshot)",
+  "pass": true,
+  "detail": {
+   "shot": "shots/p4-PB1-after-PA1.png"
+  }
+ },
+ {
+  "id": "P-GUARD-ALLOC",
+  "title": "payment: unsaved notes + tapping an allocation row should prompt before leaving",
+  "pass": false,
+  "detail": {
+   "dirty5": true,
+   "dialog": false,
+   "hash": "#/invoices/250"
+  }
+ },
+ {
+  "id": "T-TAB-ERROR",
+  "title": "a failing tab renders its error inside the tab; top section and other tabs remain",
+  "pass": true,
+  "detail": {
+   "historyErr": "History unavailable: rt forced audit failure",
+   "promErr": true,
+   "retry": true
+  }
+ },
+ {
+  "id": "I-ERRORS",
+  "title": "API/page errors during invoice/payment UI run (info)",
+  "pass": true,
+  "detail": {
+   "apiErrors": [
+    {
+     "status": 404,
+     "method": "GET",
+     "url": "/api/invoices/999999"
+    },
+    {
+     "status": 404,
+     "method": "GET",
+     "url": "/api/payments/999999"
+    },
+    {
+     "status": 500,
+     "method": "GET",
+     "url": "/api/audit?entityType=INVOICE&entityId=249&includeRelated=true"
+    },
+    {
+     "status": 500,
+     "method": "GET",
+     "url": "/api/promises?size=50&customerId=164&invoiceId=249"
+    }
+   ],
+   "pageErrors": []
+  }
+ }
+]

@@ -1,25 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
-import '../../shared/models/dispute.dart';
+import '../../core/format.dart';
+import '../../core/table/data_table_scaffold.dart';
+import '../../core/table/route_query.dart';
+import '../../core/table/table_models.dart';
+import '../../core/table/table_providers.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
-import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
-import '../customer_scope/customer_scope.dart';
-import '../disputes/dispute_create_dialog.dart';
-
-final invoicesProvider = FutureProvider.autoDispose<List<InvoiceSummary>>((ref) async {
-  final dio = ref.watch(dioProvider);
-  final scope = ref.watch(customerScopeProvider);
-  final res = await dio.get('/api/invoices', queryParameters: {
-    if (scope != null) 'customerId': scope.id,
-  });
-  return (res.data as List).cast<Map<String, dynamic>>().map(InvoiceSummary.fromJson).toList();
-});
+import '../poc/poc_picker.dart';
+import '../poc/poc_providers.dart';
+import '../promises/promise_form_dialog.dart';
+import '../promises/promises_screen.dart' show pickPocParams;
 
 final invoiceDetailProvider =
     FutureProvider.autoDispose.family<InvoiceDetail, int>((ref, id) async {
@@ -29,167 +24,196 @@ final invoiceDetailProvider =
 });
 
 class InvoicesScreen extends ConsumerWidget {
-  const InvoicesScreen({super.key});
+  final TableQuery query;
+  const InvoicesScreen({super.key, required this.query});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.invoiceManage) ?? false;
-    final async = ref.watch(invoicesProvider);
-    final df = DateFormat('yyyy-MM-dd');
+    final canExport = user?.has(Privileges.exportData) ?? false;
+    final canPromise = user?.has(Privileges.promiseManage) ?? false;
+    final canSeePoc = ref.watch(canSeePocProvider);
+    final canAssignPoc = ref.watch(canAssignPocProvider);
 
     return Scaffold(
-      floatingActionButton: canManage
-          ? FloatingActionButton.extended(
+      body: DataTableScaffold<InvoiceSummary>(
+        entity: 'invoices',
+        actions: [
+          if (canManage)
+            FilledButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('New invoice'),
               onPressed: () => context.go('/invoices/new'),
-            )
-          : null,
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Failed: $e')),
-        data: (list) {
-          if (list.isEmpty) return const Center(child: Text('No invoices yet'));
-          return RefreshIndicator(
-            onRefresh: () async => ref.refresh(invoicesProvider.future),
-            child: ListView.separated(
-              padding: const EdgeInsets.all(8),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (context, i) {
-                final inv = list[i];
-                return ListTile(
-                  onTap: () => _openDetails(context, ref, inv.id),
-                  title: Text('${inv.invoiceNumber} • ${inv.customerName}'),
-                  subtitle: Text('${df.format(inv.invoiceDate.toLocal())} • ${statusLabel(inv.status)}'),
-                  trailing: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('Total ${inv.total.toStringAsFixed(2)}',
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      if (inv.balance > 0)
-                        Text('Bal ${inv.balance.toStringAsFixed(2)}',
-                            style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                    ],
-                  ),
-                );
-              },
             ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _openDetails(BuildContext context, WidgetRef ref, int id) {
-    showDialog(
-      context: context,
-      builder: (_) => _InvoiceDetailDialog(id: id),
-    );
-  }
-}
-
-class _InvoiceDetailDialog extends ConsumerWidget {
-  final int id;
-  const _InvoiceDetailDialog({required this.id});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(invoiceDetailProvider(id));
-    final user = ref.watch(currentUserProvider);
-    final canDispute = user?.has(Privileges.disputeCreate) ?? false;
-    final canViewAudit = user?.has(Privileges.auditView) ?? false;
-    return Dialog(
-      child: SizedBox(
-        width: 640,
-        child: async.when(
-          loading: () => const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator())),
-          error: (e, _) => Padding(padding: const EdgeInsets.all(20), child: Text('Failed: $e')),
-          data: (inv) => SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+        path: '/api/invoices',
+        query: query,
+        onQueryChanged: (q) => RouteQuery(context, '/invoices').push(q),
+        parse: InvoiceSummary.fromJson,
+        idOf: (i) => i.id,
+        canExport: canExport,
+        selectable: canManage,
+        emptyMessage: 'No invoices match this filter',
+        onRowTap: (context, inv) => context.go('/invoices/${inv.id}'),
+        tiles: (context, s) => Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            SummaryTile(label: 'Invoices', value: '${s['count'] ?? 0}'),
+            SummaryTile(label: 'Total billed', value: formatMoneyCompact(s['totalBilled'])),
+            SummaryTile(
+              label: 'Outstanding',
+              value: formatMoneyCompact(s['outstanding']),
+              icon: Icons.account_balance_wallet_outlined,
+              accent: Theme.of(context).colorScheme.error,
+            ),
+            SummaryTile(label: 'Unpaid', value: '${s['unpaidCount'] ?? 0}'),
+            SummaryTile(label: 'Partially paid', value: '${s['partiallyPaidCount'] ?? 0}'),
+            if (canSeePoc)
+              SummaryTile(
+                label: 'POC missing',
+                value: '${s['pocMissingCount'] ?? 0}',
+                icon: Icons.person_off_outlined,
+              ),
+          ],
+        ),
+        bulkActions: [
+          if (canManage)
+            const BulkActionSpec(
+              action: 'CANCEL',
+              label: 'Cancel unpaid',
+              icon: Icons.block,
+              destructive: true,
+            ),
+          if (canAssignPoc)
+            BulkActionSpec(
+              action: 'REASSIGN_SALES_POC',
+              label: 'Reassign Sales POC',
+              icon: Icons.person_search_outlined,
+              buildParams: (context) => pickPocParams(context, PocType.SALES),
+            ),
+        ],
+        columns: [
+          TableColumnSpec(
+            label: 'Invoice #',
+            sortKey: 'invoiceNumber',
+            cell: (context, inv) => Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(inv.invoiceNumber,
-                          style: Theme.of(context).textTheme.titleLarge),
-                    ),
-                    Chip(label: Text(statusLabel(inv.status))),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(inv.customerName),
-                Text(DateFormat.yMMMd().add_jm().format(inv.invoiceDate.toLocal())),
-                const Divider(height: 24),
-                ...inv.items.map((it) => ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(it.productName),
-                      subtitle: Text('${it.quantity} × ${it.unitPrice.toStringAsFixed(2)}'),
-                      trailing: Text(it.lineTotal.toStringAsFixed(2)),
-                    )),
-                const Divider(height: 24),
-                _row('Total', inv.total),
-                _row('Paid', inv.paidAmount),
-                _row('Balance', inv.balance, bold: true),
-                if (inv.notes != null && inv.notes!.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text('Notes: ${inv.notes}', style: const TextStyle(fontStyle: FontStyle.italic)),
-                ],
-                if (canViewAudit) ...[
-                  const SizedBox(height: 16),
-                  Text('History', style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 4),
-                  AuditHistoryPanel(entityType: 'INVOICE', entityId: inv.id),
-                ],
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (canDispute)
-                      TextButton.icon(
-                        icon: const Icon(Icons.flag_outlined),
-                        label: const Text('Raise dispute'),
-                        onPressed: () async {
-                          final ok = await showDisputeDialog(
-                            context: context,
-                            targetType: DisputeTargetType.INVOICE,
-                            targetId: inv.id,
-                            targetLabel: inv.invoiceNumber,
-                          );
-                          if (ok == true && context.mounted) {
-                            Navigator.of(context).pop();
-                          }
-                        },
-                      ),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Close'),
-                    ),
-                  ],
-                ),
+                Text(inv.invoiceNumber,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                if (canSeePoc && inv.pocMissing)
+                  const Padding(
+                    padding: EdgeInsets.only(left: 6),
+                    child: PocMissingBadge(label: 'POC missing'),
+                  ),
               ],
             ),
           ),
-        ),
+          TableColumnSpec(
+            label: 'Customer',
+            sortKey: 'customerName',
+            cell: (context, inv) => Text(inv.customerName),
+          ),
+          TableColumnSpec(
+            label: 'Date',
+            sortKey: 'invoiceDate',
+            cell: (context, inv) => Text(formatDate(inv.invoiceDate)),
+          ),
+          TableColumnSpec(
+            label: 'Total',
+            sortKey: 'total',
+            numeric: true,
+            cell: (context, inv) => Text(formatMoney(inv.total)),
+          ),
+          TableColumnSpec(
+            label: 'Paid',
+            sortKey: 'paidAmount',
+            numeric: true,
+            cell: (context, inv) => Text(formatMoney(inv.paidAmount)),
+          ),
+          TableColumnSpec(
+            label: 'Balance',
+            sortKey: 'balance',
+            numeric: true,
+            cell: (context, inv) => Text(
+              formatMoney(inv.balance),
+              style: TextStyle(
+                color: inv.balance > 0 ? Theme.of(context).colorScheme.error : null,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TableColumnSpec(
+            label: 'Status',
+            sortKey: 'status',
+            cell: (context, inv) => Text(statusLabel(inv.status)),
+          ),
+          if (canSeePoc)
+            TableColumnSpec(
+              label: 'Sales POC',
+              sortKey: 'salesPocName',
+              cell: (context, inv) => Text(inv.salesPoc?.display ?? '—'),
+            ),
+        ],
+        rowActions: (context, inv) => [
+          IconButton(
+            tooltip: 'Open',
+            icon: const Icon(Icons.open_in_new, size: 18),
+            onPressed: () => context.go('/invoices/${inv.id}'),
+          ),
+          if (canPromise && inv.balance > 0)
+            IconButton(
+              tooltip: 'Raise promise',
+              icon: const Icon(Icons.handshake_outlined, size: 18),
+              onPressed: () => showPromiseDialog(
+                context: context,
+                customerId: inv.customerId,
+                customerName: inv.customerName,
+                preselectedInvoiceIds: [inv.id],
+              ),
+            ),
+          if (canManage && inv.status == InvoiceStatus.UNPAID)
+            IconButton(
+              tooltip: 'Cancel invoice',
+              icon: const Icon(Icons.block, size: 18),
+              onPressed: () => _cancel(context, ref, inv),
+            ),
+        ],
       ),
     );
   }
 
-  Widget _row(String label, double value, {bool bold = false}) {
-    final style = TextStyle(fontWeight: bold ? FontWeight.bold : FontWeight.normal);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Expanded(child: Text(label, style: style)),
-          Text(value.toStringAsFixed(2), style: style),
+  Future<void> _cancel(BuildContext context, WidgetRef ref, InvoiceSummary inv) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Cancel ${inv.invoiceNumber}?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Keep it')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(dialogContext).colorScheme.error),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Cancel invoice'),
+          ),
         ],
       ),
     );
+    if (ok != true) return;
+    try {
+      await ref.read(dioProvider).post('/api/invoices/${inv.id}/cancel');
+      ref.invalidate(tablePageProvider);
+      ref.invalidate(tableSummaryProvider);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      }
+    }
   }
 }

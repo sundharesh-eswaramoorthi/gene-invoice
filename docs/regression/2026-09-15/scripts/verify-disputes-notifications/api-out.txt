@@ -1,0 +1,70 @@
+
+===== RUN 1 =====
+DN-API-04 badType: 500 {"timestamp":"2026-09-15T15:34:06.843766Z","status":500,"error":"Internal Server Error","message":"JSON parse error: Cannot deserialize value of type `com.geneinvoice.dispute.DisputeTargetType` from String \"BOGUS\": not one of the values accepted for Enum cla
+DN-API-04 badId: 500 {"timestamp":"2026-09-15T15:34:06.846454Z","status":500,"error":"Internal Server Error","message":"JSON parse error: Cannot deserialize value of type `java.lang.Long` from String \"abc\": not a valid `java.lang.Long` value","path":"/api/disputes","fieldErrors"
+DN-API-04 noBody: 500 {"timestamp":"2026-09-15T15:34:06.848334Z","status":500,"error":"Internal Server Error","message":"Required request body is missing: public com.geneinvoice.dispute.DisputeDtos$DisputeDto com.geneinvoice.dispute.DisputeController.create(com.geneinvoice.dispute.
+DN-API-04 brokenJson: 500 {"timestamp":"2026-09-15T15:34:06.850122Z","status":500,"error":"Internal Server Error","message":"JSON parse error: Unexpected end-of-input within/between Object entries","path":"/api/disputes","fiel
+DN-API-04 (control) invoices customerId abc: 500 {"timestamp":"2026-09-15T15:34:06.852936Z","status":500,"error":"Internal Server Error","message":"JSON parse error: Cannot deserialize value of type `java.lang.Long` from String \"abc\": not a valid `java.lang.Long` value","path":"/api/invoices","fieldErrors"
+DN-API-04 disputes created for C: 0
+DN-API-15 control: create invoice qty 0 -> 400 {"timestamp":"2026-09-15T15:34:07.043138Z","status":400,"error":"Validation Failed","message":"One or more fields are invalid","path":"/api/invoices","fieldErrors":{"items[0].quantity":"must be greater than 0"}}
+DN-API-15 before total=120 paid=50 status=PARTIALLY_PAID credit=0
+DN-API-15 approve -> 200 {"id":103,"customerId":252,"customerName":"vdnr1-mu2u0zd59e7c","openedByUserId":547,"targetType":"INVOICE","targetId":352,"targetSummary":"INV-20260915-0332 — 0.00","reason":"qty zero test","proposedChangeJson":"{\"action\":\"update_notes\",\"notes\":\"x\"}","
+DN-API-15 after total=0 paid=0 status=FULLY_PAID items=[[0,0]] credit=50
+DN-API-15 negative qty approve -> 200 total=-100 status=FULLY_PAID items=[[-2,-100]]
+DN-API-18 neg: 400 {"timestamp":"2026-09-15T15:34:07.250350Z","status":400,"error":"Bad Request","message":"Amount must be positive","path":"/api/disputes/105/approve","fieldErrors":null}
+DN-API-18 missing: 400 {"timestamp":"2026-09-15T15:34:07.254314Z","status":400,"error":"Bad Request","message":"update_amount requires amount","path":"/api/disputes/105/approve","fieldErrors":null}
+DN-API-18 abc: 500 {"timestamp":"2026-09-15T15:34:07.258549Z","status":500,"error":"Internal Server Error","message":"Character a is neither a decimal digit number, decimal point, nor \"e\" notation exponential mark.","path":"/api/disputes/105/approve","fieldErrors":null}
+DN-API-18 dispute still PENDING; payment amount=40 status=ACTIVE
+DN-API-23 credit start=0; cancel approve=200; invoice=CANCELLED paid=0; credit after cancel=100
+DN-API-23 payment mid: status=ACTIVE creditApplied=0 allocations=undefined
+DN-API-23 void approve=200; payment=VOIDED; credit after void=100; invoice CANCELLED paid=0
+DN-API-24 shrink approve=200; invoice total=50 paid=50 FULLY_PAID; credit=250
+DN-API-24 void approve=200; payment=VOIDED; credit=250; invoice paid=0 UNPAID balance=50
+DN-API-24 new invoice 200 -> paid=200 status=FULLY_PAID; credit now=50
+DN-API-25 cashier privileges include DISPUTE_VIEW? false EXPORT_DATA? true
+DN-API-25 cashier list=403 get=403 export(all)=200 text/csv;charset=UTF-8 rows=109 export(ids)=200 rows=3
+DN-API-25 CSV head: Id,Customer,Target,Target id,Status,Opened,Resolved,Reason || 1,permsca-mu2sq4lq41d7,INVOICE,52,PENDING,2026-09-15T14:57:41.375371Z,,A pending || 3,permscb-mu2sq4noe2d4,INVOICE,54,PENDING,2026-09-15T14:57:41.398736Z,,B pending
+DN-API-25 VIEWER export: 403
+DN-API-25 admin totalElements undefined
+DN-API-29 own=1486 foreign=1487
+DN-API-29 [own, foreign]: 200 {"action":"MARK_READ","requested":1,"succeeded":[1486],"failed":[],"skipped":[],"truncated":false,"limit":5000}
+DN-API-29 [foreign]: 200 {"action":"MARK_READ","requested":0,"succeeded":[],"failed":[],"skipped":[],"truncated":false,"limit":5000}
+DN-API-29 [nonexistent]: 200 {"action":"MARK_READ","requested":0,"succeeded":[],"failed":[],"skipped":[],"truncated":false,"limit":5000}
+DN-API-29 [own already read]: 200 {"action":"MARK_READ","requested":1,"succeeded":[],"failed":[],"skipped":[{"id":1486,"reason":"Already read"}],"truncated":false,"limit":5000}
+DN-API-29 foreign notification read after = false
+DN-API-31 DISPUTE_OPENED link: /admin/disputes/111 | customer links: [["DISPUTE_APPROVED","/disputes/111"]]
+
+===== RUN 2 =====
+DN-API-04 badType: 500 {"timestamp":"2026-09-15T15:34:08.791736Z","status":500,"error":"Internal Server Error","message":"JSON parse error: Cannot deserialize value of type `com.geneinvoice.dispute.DisputeTargetType` from String \"BOGUS\": not one of the values accepted for Enum cla
+DN-API-04 badId: 500 {"timestamp":"2026-09-15T15:34:08.793240Z","status":500,"error":"Internal Server Error","message":"JSON parse error: Cannot deserialize value of type `java.lang.Long` from String \"abc\": not a valid `java.lang.Long` value","path":"/api/disputes","fieldErrors"
+DN-API-04 noBody: 500 {"timestamp":"2026-09-15T15:34:08.794450Z","status":500,"error":"Internal Server Error","message":"Required request body is missing: public com.geneinvoice.dispute.DisputeDtos$DisputeDto com.geneinvoice.dispute.DisputeController.create(com.geneinvoice.dispute.
+DN-API-04 brokenJson: 500 {"timestamp":"2026-09-15T15:34:08.795411Z","status":500,"error":"Internal Server Error","message":"JSON parse error: Unexpected end-of-input within/between Object entries","path":"/api/disputes","fiel
+DN-API-04 (control) invoices customerId abc: 500 {"timestamp":"2026-09-15T15:34:08.796713Z","status":500,"error":"Internal Server Error","message":"JSON parse error: Cannot deserialize value of type `java.lang.Long` from String \"abc\": not a valid `java.lang.Long` value","path":"/api/invoices","fieldErrors"
+DN-API-04 disputes created for C: 0
+DN-API-15 control: create invoice qty 0 -> 400 {"timestamp":"2026-09-15T15:34:08.959157Z","status":400,"error":"Validation Failed","message":"One or more fields are invalid","path":"/api/invoices","fieldErrors":{"items[0].quantity":"must be greater than 0"}}
+DN-API-15 before total=120 paid=50 status=PARTIALLY_PAID credit=0
+DN-API-15 approve -> 200 {"id":112,"customerId":259,"customerName":"vdnr2-mu2u10v2fbdb","openedByUserId":557,"targetType":"INVOICE","targetId":363,"targetSummary":"INV-20260915-0343 — 0.00","reason":"qty zero test","proposedChangeJson":"{\"action\":\"update_notes\",\"notes\":\"x\"}","
+DN-API-15 after total=0 paid=0 status=FULLY_PAID items=[[0,0]] credit=50
+DN-API-15 negative qty approve -> 200 total=-100 status=FULLY_PAID items=[[-2,-100]]
+DN-API-18 neg: 400 {"timestamp":"2026-09-15T15:34:09.153052Z","status":400,"error":"Bad Request","message":"Amount must be positive","path":"/api/disputes/114/approve","fieldErrors":null}
+DN-API-18 missing: 400 {"timestamp":"2026-09-15T15:34:09.156229Z","status":400,"error":"Bad Request","message":"update_amount requires amount","path":"/api/disputes/114/approve","fieldErrors":null}
+DN-API-18 abc: 500 {"timestamp":"2026-09-15T15:34:09.159430Z","status":500,"error":"Internal Server Error","message":"Character a is neither a decimal digit number, decimal point, nor \"e\" notation exponential mark.","path":"/api/disputes/114/approve","fieldErrors":null}
+DN-API-18 dispute still PENDING; payment amount=40 status=ACTIVE
+DN-API-23 credit start=0; cancel approve=200; invoice=CANCELLED paid=0; credit after cancel=100
+DN-API-23 payment mid: status=ACTIVE creditApplied=0 allocations=undefined
+DN-API-23 void approve=200; payment=VOIDED; credit after void=100; invoice CANCELLED paid=0
+DN-API-24 shrink approve=200; invoice total=50 paid=50 FULLY_PAID; credit=250
+DN-API-24 void approve=200; payment=VOIDED; credit=250; invoice paid=0 UNPAID balance=50
+DN-API-24 new invoice 200 -> paid=200 status=FULLY_PAID; credit now=50
+DN-API-25 cashier privileges include DISPUTE_VIEW? false EXPORT_DATA? true
+DN-API-25 cashier list=403 get=403 export(all)=200 text/csv;charset=UTF-8 rows=118 export(ids)=200 rows=3
+DN-API-25 CSV head: Id,Customer,Target,Target id,Status,Opened,Resolved,Reason || 1,permsca-mu2sq4lq41d7,INVOICE,52,PENDING,2026-09-15T14:57:41.375371Z,,A pending || 3,permscb-mu2sq4noe2d4,INVOICE,54,PENDING,2026-09-15T14:57:41.398736Z,,B pending
+DN-API-25 VIEWER export: 403
+DN-API-25 admin totalElements undefined
+DN-API-29 own=1673 foreign=1674
+DN-API-29 [own, foreign]: 200 {"action":"MARK_READ","requested":1,"succeeded":[1673],"failed":[],"skipped":[],"truncated":false,"limit":5000}
+DN-API-29 [foreign]: 200 {"action":"MARK_READ","requested":0,"succeeded":[],"failed":[],"skipped":[],"truncated":false,"limit":5000}
+DN-API-29 [nonexistent]: 200 {"action":"MARK_READ","requested":0,"succeeded":[],"failed":[],"skipped":[],"truncated":false,"limit":5000}
+DN-API-29 [own already read]: 200 {"action":"MARK_READ","requested":1,"succeeded":[],"failed":[],"skipped":[{"id":1673,"reason":"Already read"}],"truncated":false,"limit":5000}
+DN-API-29 foreign notification read after = false
+DN-API-31 DISPUTE_OPENED link: /admin/disputes/120 | customer links: [["DISPUTE_APPROVED","/disputes/120"]]

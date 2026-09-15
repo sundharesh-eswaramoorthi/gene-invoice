@@ -1,0 +1,94 @@
+[
+  [
+    "r1: picker entries 1.5 s after typing the full username",
+    {
+      "count": 0,
+      "first": []
+    }
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/r1-picker-after-typing.png"
+  ],
+  [
+    "r1: picker entries after one extra keystroke",
+    {
+      "count": 0,
+      "first": []
+    }
+  ],
+  [
+    "POC after manual pick",
+    [
+      "Collection POC *\nUIPC-MU2SSCHCE28D"
+    ]
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/r1-poc-picked.png"
+  ],
+  [
+    "POC after then choosing the customer",
+    [
+      "Collection POC *\nUIPC-MU2SSCEO4E95"
+    ]
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/r2-poc-then-customer.png"
+  ],
+  [
+    "r3: picker entries 1.5 s after typing the full username",
+    {
+      "count": 0,
+      "first": []
+    }
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/r3-picker-after-typing.png"
+  ],
+  [
+    "r3: picker entries after one extra keystroke",
+    {
+      "count": 0,
+      "first": []
+    }
+  ],
+  [
+    "POC before record",
+    [
+      "Collection POC *\nUIPC-MU2SSCHCE28D"
+    ]
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/r3-before-record.png"
+  ],
+  [
+    "API payment recorded with the edited POC",
+    {
+      "id": 102,
+      "poc": "uipc-mu2sschce28d",
+      "expected": "uipc-mu2sschce28d",
+      "alloc": [
+        [
+          "INV-20260915-0117",
+          3
+        ]
+      ]
+    }
+  ],
+  [
+    "shot",
+    "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/payments-credit/shots/r4-after-record.png"
+  ],
+  [
+    "apiErrors",
+    []
+  ],
+  [
+    "pageErrors",
+    []
+  ]
+]

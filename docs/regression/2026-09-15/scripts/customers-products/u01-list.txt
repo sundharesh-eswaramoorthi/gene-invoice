@@ -1,0 +1,50 @@
+[null] "34" @1168,23 13x16
+[button] "Notifications" @1166,28 40x40
+[button] "Account\nadmin • ADMIN" @1278,28 176x24
+[null] "Customers" @354,88 146x16
+[null] "Total outstanding" @536,88 146x16
+[null] "Total credit" @718,88 146x16
+[null] "No Success POC" @909,88 128x16
+[null] "No Collection POC" @1091,88 128x16
+[null] "2" @287,116 12x28
+[null] "₹120.00" @502,116 79x28
+[null] "₹0.00" @672,116 54x28
+[null] "2" @833,116 12x28
+[null] "2" @1015,116 12x28
+[checkbox] "Add filter" @325,171 112x34
+[checkbox] "Name contains cpui-mu2ssz55cfab" @526,171 278x34
+[button] "Delete" @645,171 32x32
+[button] "Clear all" @708,171 75x32
+[button] "New customer" @1275,170 158x32
+[columnheader] "Name" @461,224 300x56
+[columnheader] "Phone" @668,224 114x56
+[columnheader] "Email" @860,224 269x56
+[columnheader] "Outstanding" @1070,224 151x56
+[columnheader] "Credit" @1201,224 112x56
+[columnheader] "Success POC" @1311,224 109x56
+[columnheader] "Collection POC" @1473,224 151x56
+[cell] "cpui-mu2ssz55cfab one\nPOC missing" @461,276 300x48
+[cell] "555-7" @668,276 114x48
+[cell] "cpui-mu2ssz55cfab-one@rt.local" @860,276 269x48
+[cell] "₹120.00" @1070,276 151x48
+[cell] "₹0.00" @1201,276 112x48
+[cell] "—" @1311,276 109x48
+[cell] "—" @1473,276 151x48
+[button] "Open" @1596,276 40x40
+[button] "Raise promise" @1636,276 40x40
+[cell] "cpui-mu2ssz55cfab two\nPOC missing" @461,324 300x48
+[cell] "555-7" @668,324 114x48
+[cell] "cpui-mu2ssz55cfab-two@rt.local" @860,324 269x48
+[cell] "₹0.00" @1070,324 151x48
+[cell] "₹0.00" @1201,324 112x48
+[cell] "—" @1311,324 109x48
+[cell] "—" @1473,324 151x48
+[button] "Open" @1596,324 40x40
+[null] "Rows" @964,870 35x20
+[button] "20" @1009,870 42x48
+[null] "1–2 of 2" @1069,870 55x20
+[null] "Page 1 of 1" @1145,870 73x20
+[button] "First page" @1214,870 40x40
+[button] "Previous page" @1254,870 40x40
+[button] "Next page" @1294,870 40x40
+[button] "Last page" @1334,870 40x40

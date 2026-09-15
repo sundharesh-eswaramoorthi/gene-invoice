@@ -4,6 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
+import '../../core/table/data_table_scaffold.dart';
+import '../../core/table/route_query.dart';
+import '../../core/table/table_models.dart';
+import '../../core/table/table_providers.dart';
 import '../auth/auth_controller.dart';
 import 'users_screen.dart';
 
@@ -15,52 +19,59 @@ final allPrivilegesProvider = FutureProvider.autoDispose<List<String>>((ref) asy
 });
 
 class RolesScreen extends ConsumerWidget {
-  const RolesScreen({super.key});
+  final TableQuery query;
+  const RolesScreen({super.key, required this.query});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.roleManage) ?? false;
-    final async = ref.watch(rolesProvider);
+    final canExport = user?.has(Privileges.exportData) ?? false;
 
     return Scaffold(
-      floatingActionButton: canManage
-          ? FloatingActionButton.extended(
+      body: DataTableScaffold<AppRole>(
+        entity: 'roles',
+        actions: [
+          if (canManage)
+            FilledButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('New role'),
               onPressed: () => _openForm(context, ref, null),
-            )
-          : null,
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Failed: $e')),
-        data: (list) => RefreshIndicator(
-          onRefresh: () async => ref.refresh(rolesProvider.future),
-          child: ListView.separated(
-            padding: const EdgeInsets.all(8),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, i) {
-              final r = list[i];
-              return ListTile(
-                title: Text(r.name),
-                subtitle: Text(r.description ?? ''),
-                trailing: Wrap(
-                  spacing: 8,
-                  children: [
-                    Text('${r.privileges.length} privs',
-                        style: const TextStyle(color: Colors.black54)),
-                    if (canManage)
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => _openForm(context, ref, r),
-                      ),
-                  ],
-                ),
-              );
-            },
+            ),
+        ],
+        path: '/api/roles',
+        query: query,
+        onQueryChanged: (q) => RouteQuery(context, '/roles').push(q),
+        parse: AppRole.fromJson,
+        idOf: (r) => r.id,
+        canExport: canExport,
+        selectable: canExport,
+        emptyMessage: 'No roles match this filter',
+        onRowTap: canManage ? (context, r) => _openForm(context, ref, r) : null,
+        columns: [
+          TableColumnSpec(
+            label: 'Name',
+            sortKey: 'name',
+            cell: (context, r) =>
+                Text(r.name, style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
-        ),
+          TableColumnSpec(
+              label: 'Description', cell: (context, r) => Text(r.description ?? '—')),
+          TableColumnSpec(
+            label: 'Privileges',
+            cell: (context, r) => Text('${r.privileges.length}'),
+            numeric: true,
+          ),
+        ],
+        rowActions: canManage
+            ? (context, r) => [
+                  IconButton(
+                    tooltip: 'Edit',
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    onPressed: () => _openForm(context, ref, r),
+                  ),
+                ]
+            : null,
       ),
     );
   }
@@ -70,7 +81,10 @@ class RolesScreen extends ConsumerWidget {
       context: context,
       builder: (_) => _RoleForm(existing: existing),
     );
-    if (saved == true) ref.invalidate(rolesProvider);
+    if (saved == true) {
+      ref.invalidate(rolesProvider);
+      ref.invalidate(tablePageProvider);
+    }
   }
 }
 

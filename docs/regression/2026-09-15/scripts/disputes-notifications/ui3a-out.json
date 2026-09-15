@@ -1,0 +1,30 @@
+{
+  "out": {
+    "unread0": 3,
+    "bellNodes": [
+      "[button] Notifications",
+      "[null] 3",
+      "[button] Account\ndnui3adm-mu2sxwn922f9 • ADMIN"
+    ],
+    "afterNotifClickHash": "#/disputes/67",
+    "unreadAfterClick": 2,
+    "dX1NotifRead": true,
+    "bellNodesAfter": [
+      "[button] Notifications",
+      "[null] 2",
+      "[button] Account\ndnui3adm-mu2sxwn922f9 • ADMIN"
+    ],
+    "listHasX": true,
+    "rowClickHash": "#/disputes/68",
+    "afterApproveHash": "#/disputes",
+    "approveEffect": {
+      "status": "APPROVED",
+      "invStatus": "CANCELLED",
+      "paid": 0,
+      "credit": 150
+    },
+    "resolvedHasApprove": false
+  },
+  "apiErrors": [],
+  "pageErrors": []
+}

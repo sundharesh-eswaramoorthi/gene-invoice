@@ -1,0 +1,383 @@
+{
+  "crawl": {
+    "/api/auth/me": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/customers": {
+      "status": 200,
+      "pocKeys": [
+        "$.content[0].successPocs=null",
+        "$.content[0].collectionPocs=null",
+        "$.content[0].pocMissing=null"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/customers/summary": {
+      "status": 200,
+      "pocKeys": [
+        "$.missingSuccessPocCount=0",
+        "$.missingCollectionPocCount=0"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/customers/37": {
+      "status": 200,
+      "pocKeys": [
+        "$.successPocs=null",
+        "$.collectionPocs=null",
+        "$.pocMissing=null"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/invoices": {
+      "status": 200,
+      "pocKeys": [
+        "$.content[0].salesPoc=null",
+        "$.content[0].pocMissing=null",
+        "$.content[1].salesPoc=null",
+        "$.content[1].pocMissing=null",
+        "$.content[2].salesPoc=null",
+        "$.content[2].pocMissing=null",
+        "$.content[3].salesPoc=null",
+        "$.content[3].pocMissing=null",
+        "$.content[4].salesPoc=null",
+        "$.content[4].pocMissing=null",
+        "$.content[5].salesPoc=null",
+        "$.content[5].pocMissing=null",
+        "$.content[6].salesPoc=null",
+        "$.content[6].pocMissing=null",
+        "$.content[7].salesPoc=null",
+        "$.content[7].pocMissing=null",
+        "$.content[8].salesPoc=null",
+        "$.content[8].pocMissing=null"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/invoices/summary": {
+      "status": 200,
+      "pocKeys": [
+        "$.pocMissingCount=0"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/invoices/52": {
+      "status": 200,
+      "pocKeys": [
+        "$.salesPoc=null",
+        "$.pocMissing=null"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/invoices/53": {
+      "status": 200,
+      "pocKeys": [
+        "$.salesPoc=null",
+        "$.pocMissing=null"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/invoices/assignable-check": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/payments": {
+      "status": 200,
+      "pocKeys": [
+        "$.content[0].collectionPoc=null",
+        "$.content[0].pocMissing=null"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/payments/summary": {
+      "status": 200,
+      "pocKeys": [
+        "$.pocMissingCount=0"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/payments/14": {
+      "status": 200,
+      "pocKeys": [
+        "$.collectionPoc=null",
+        "$.pocMissing=null"
+      ],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/payments/credits/37": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/promises": {
+      "status": 200,
+      "pocKeys": [
+        "$.content[0].collectionPoc=null"
+      ],
+      "strings": [],
+      "actorIds": [
+        "$.content[0].createdByUserId=1 (STAFF)"
+      ]
+    },
+    "/api/promises/summary": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/promises/8": {
+      "status": 200,
+      "pocKeys": [
+        "$.collectionPoc=null"
+      ],
+      "strings": [],
+      "actorIds": [
+        "$.createdByUserId=1 (STAFF)"
+      ]
+    },
+    "/api/promises?invoiceId=53": {
+      "status": 200,
+      "pocKeys": [
+        "$.content[0].collectionPoc=null"
+      ],
+      "strings": [],
+      "actorIds": [
+        "$.content[0].createdByUserId=1 (STAFF)"
+      ]
+    },
+    "/api/disputes": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": [
+        "$.content[0].openedByUserId=96",
+        "$.content[0].resolvedByUserId=1 (STAFF)",
+        "$.content[1].openedByUserId=96"
+      ]
+    },
+    "/api/disputes/1": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": [
+        "$.openedByUserId=96"
+      ]
+    },
+    "/api/disputes/2": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": [
+        "$.openedByUserId=96",
+        "$.resolvedByUserId=1 (STAFF)"
+      ]
+    },
+    "/api/notifications": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/notifications/unread-count": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/audit?entityType=INVOICE&entityId=52&includeRelated=true": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": [
+        "$[0].afterJson<json>.openedByUserId=96",
+        "$[0].changedByUserId=96",
+        "$[0].changedByUsername=permsca-mu2sq4lq41d7"
+      ]
+    },
+    "/api/audit?entityType=INVOICE&entityId=53&includeRelated=true": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": [
+        "$[2].afterJson<json>.openedByUserId=96",
+        "$[2].afterJson<json>.resolvedByUserId=1 (STAFF)",
+        "$[3].afterJson<json>.openedByUserId=96",
+        "$[3].changedByUserId=96",
+        "$[3].changedByUsername=permsca-mu2sq4lq41d7"
+      ]
+    },
+    "/api/audit?entityType=PAYMENT&entityId=14&includeRelated=true": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/audit?entityType=PROMISE&entityId=8&includeRelated=true": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/audit?entityType=CUSTOMER&entityId=37&includeRelated=true": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": [
+        "$[9].afterJson<json>.openedByUserId=96",
+        "$[9].afterJson<json>.resolvedByUserId=1 (STAFF)",
+        "$[10].afterJson<json>.openedByUserId=96",
+        "$[10].changedByUserId=96",
+        "$[10].changedByUsername=permsca-mu2sq4lq41d7",
+        "$[11].afterJson<json>.openedByUserId=96",
+        "$[11].changedByUserId=96",
+        "$[11].changedByUsername=permsca-mu2sq4lq41d7"
+      ]
+    },
+    "/api/table-schemas": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    },
+    "/api/table-schemas/all": {
+      "status": 200,
+      "pocKeys": [],
+      "strings": [],
+      "actorIds": []
+    }
+  },
+  "schemas": {
+    "invoices": {
+      "customerPocCols": [],
+      "viewerPocCols": [
+        "salesPocUserId",
+        "salesPocName"
+      ],
+      "status": 200
+    },
+    "payments": {
+      "customerPocCols": [],
+      "viewerPocCols": [
+        "collectionPocUserId",
+        "collectionPocName"
+      ],
+      "status": 200
+    },
+    "customers": {
+      "customerPocCols": [],
+      "viewerPocCols": [
+        "successPocUserId",
+        "collectionPocUserId"
+      ],
+      "status": 200
+    },
+    "promises": {
+      "customerPocCols": [],
+      "viewerPocCols": [
+        "collectionPocUserId",
+        "collectionPocName"
+      ],
+      "status": 200
+    },
+    "disputes": {
+      "customerPocCols": [],
+      "viewerPocCols": [],
+      "status": 200
+    },
+    "products": {
+      "customerPocCols": [],
+      "viewerPocCols": [],
+      "status": 200
+    },
+    "notifications": {
+      "customerPocCols": [],
+      "viewerPocCols": [],
+      "status": 200
+    }
+  },
+  "filters": {
+    "invoices?filter=salesPocUserId:eq:91": {
+      "status": 200,
+      "total": 8
+    },
+    "invoices?filter=salesPocUserId:eq:92": {
+      "status": 200,
+      "total": 1
+    },
+    "invoices?filter=salesPocUserId:eq:94": {
+      "status": 200,
+      "total": 0
+    },
+    "invoices?filter=salesPocUserId:isEmpty:": {
+      "status": 200,
+      "total": 0
+    },
+    "invoices?filter=salesPocName:contains:PERMSCS1-": {
+      "status": 200,
+      "total": 8
+    },
+    "invoices?sort=salesPocName,asc": {
+      "status": 200,
+      "total": 9
+    },
+    "payments?filter=collectionPocUserId:eq:94": {
+      "status": 200,
+      "total": 1
+    },
+    "payments?filter=collectionPocUserId:eq:95": {
+      "status": 200,
+      "total": 0
+    },
+    "payments?sort=collectionPocName,desc": {
+      "status": 200,
+      "total": 1
+    },
+    "promises?filter=collectionPocUserId:eq:94": {
+      "status": 200,
+      "total": 1
+    },
+    "promises?filter=collectionPocUserId:eq:95": {
+      "status": 200,
+      "total": 0
+    },
+    "promises?sort=collectionPocName,asc": {
+      "status": 200,
+      "total": 1
+    },
+    "customers?filter=collectionPocUserId:eq:94": {
+      "status": 200,
+      "total": 1
+    },
+    "customers?filter=collectionPocUserId:eq:95": {
+      "status": 200,
+      "total": 0
+    },
+    "customers?filter=successPocUserId:eq:93": {
+      "status": 200,
+      "total": 1
+    },
+    "customers?filter=successPocUserId:isEmpty:": {
+      "status": 200,
+      "total": 0
+    },
+    "invoices/summary?filter=salesPocUserId:eq:91": {
+      "status": 200,
+      "total": 8
+    }
+  }
+}

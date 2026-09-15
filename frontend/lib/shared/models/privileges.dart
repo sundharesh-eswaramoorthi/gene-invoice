@@ -26,4 +26,20 @@ class Privileges {
   static const notificationView = 'NOTIFICATION_VIEW';
 
   static const auditView = 'AUDIT_VIEW';
+
+  // Point of contact
+  static const pocView = 'POC_VIEW';
+  static const pocAssign = 'POC_ASSIGN';
+  static const pocAssignableSales = 'POC_ASSIGNABLE_SALES';
+  static const pocAssignableSuccess = 'POC_ASSIGNABLE_SUCCESS';
+  static const pocAssignableCollection = 'POC_ASSIGNABLE_COLLECTION';
+  static const scopeOverride = 'SCOPE_OVERRIDE';
+
+  // Payment promises
+  static const promiseView = 'PROMISE_VIEW';
+  static const promiseManage = 'PROMISE_MANAGE';
+  static const promiseOverride = 'PROMISE_OVERRIDE';
+
+  // Tables
+  static const exportData = 'EXPORT_DATA';
 }

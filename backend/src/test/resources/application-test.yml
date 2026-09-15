@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:geneinvoice-test;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+app:
+  jwt:
+    secret: test-secret-that-is-definitely-at-least-32-bytes-long-for-hs256
+    expiration-ms: 3600000
+  promises:
+    # Long enough that the background sweeper never races a test; tests call sweepOverdue directly.
+    sweep-interval-ms: 3600000

@@ -1,0 +1,250 @@
+{
+  "B01_list": {
+    "status": 200,
+    "total": 28,
+    "adminTotalS1": 28,
+    "locked": [
+      "salesPocUserId:eq:91"
+    ],
+    "applied": [],
+    "foreign": []
+  },
+  "B02_widen": {
+    "salesPocUserId:eq:92": {
+      "status": 200,
+      "total": 0,
+      "foreign": []
+    },
+    "salesPocUserId:neq:91": {
+      "status": 200,
+      "total": 0,
+      "foreign": []
+    },
+    "salesPocUserId:in:91,92": {
+      "status": 200,
+      "total": 28,
+      "foreign": []
+    },
+    "customerId:eq:39": {
+      "status": 200,
+      "total": 0,
+      "foreign": []
+    },
+    "salesPocUserId:isEmpty:": {
+      "status": 200,
+      "total": 0,
+      "foreign": []
+    },
+    "sortSalesPocName": 28
+  },
+  "B03_summary": {
+    "s1": {
+      "count": 28,
+      "totalBilled": 3000,
+      "totalPaid": 133,
+      "outstanding": 2567,
+      "unpaidCount": 22,
+      "partiallyPaidCount": 3,
+      "fullyPaidCount": 0,
+      "cancelledCount": 3,
+      "pocMissingCount": 0
+    },
+    "adminS1": {
+      "count": 28,
+      "totalBilled": 3000,
+      "totalPaid": 133,
+      "outstanding": 2567,
+      "unpaidCount": 22,
+      "partiallyPaidCount": 3,
+      "fullyPaidCount": 0,
+      "cancelledCount": 3,
+      "pocMissingCount": 0
+    }
+  },
+  "B04_bulk": {
+    "explicit": {
+      "action": "REASSIGN_SALES_POC",
+      "requested": 0,
+      "succeeded": [],
+      "failed": [],
+      "skipped": [],
+      "truncated": false,
+      "limit": 5000
+    },
+    "selectAllY": {
+      "action": "REASSIGN_SALES_POC",
+      "requested": 0,
+      "succeeded": [],
+      "failed": [],
+      "skipped": [],
+      "truncated": false,
+      "limit": 5000
+    },
+    "x2SalesPoc": 92,
+    "y1SalesPoc": 92,
+    "s2": 92
+  },
+  "B05_export": {
+    "status": 200,
+    "rows": 28,
+    "pocCol": -1,
+    "foreignRows": [],
+    "explicitIdsRows": 1,
+    "explicitBody": "Invoice #,Customer,Date,Total,Paid,Balance,Status,Sales POC\r\nINV-20260915-0057,permscx-mu2sq4rd00a7,2026-09-15T14:57:41.131820Z,100.00,13.00,87.00,PARTIALLY_PAID,permscs1-mu2sq4bu4edc\r\n"
+  },
+  "B06_getOutsideBook": {
+    "status": 200,
+    "salesPoc": "permscs2-mu2sq4dr33de",
+    "customer": "permscy-mu2sq4pib1df"
+  },
+  "B07_writeOutsideBook": {
+    "patch": 200,
+    "notesAfter": "edited by s1 (outside book)",
+    "cancel": 200,
+    "statusAfter": "CANCELLED",
+    "bulkCancelSameIdBefore": {
+      "action": "CANCEL",
+      "requested": 0,
+      "succeeded": [],
+      "failed": [],
+      "skipped": [],
+      "truncated": false,
+      "limit": 5000
+    },
+    "freshS2": 208
+  },
+  "B08_customers": {
+    "total": 3,
+    "locked": [
+      "myBook:eq:91"
+    ],
+    "hasA": true,
+    "hasB": true,
+    "hasX": true,
+    "hasY": false,
+    "yById": 200,
+    "yByFilter": 0
+  },
+  "B09_myScope": {
+    "s1": {
+      "userId": 91,
+      "clearable": false,
+      "sales": true,
+      "collection": false,
+      "success": false
+    },
+    "c1": {
+      "userId": 94,
+      "clearable": true,
+      "sales": false,
+      "collection": true,
+      "success": false
+    },
+    "cs": {
+      "userId": 93,
+      "clearable": true,
+      "sales": false,
+      "collection": false,
+      "success": true
+    }
+  },
+  "B10_salesOtherLists": {
+    "payments": {
+      "s1Total": 91,
+      "adminTotal": 91,
+      "locked": [],
+      "seesY": false,
+      "seesBPayOrProm": false
+    },
+    "promises": {
+      "s1Total": 81,
+      "adminTotal": 81,
+      "locked": [],
+      "seesY": false,
+      "seesBPayOrProm": true
+    },
+    "disputes": {
+      "s1Total": 69,
+      "adminTotal": 69,
+      "locked": [],
+      "seesY": false,
+      "seesBPayOrProm": false
+    }
+  },
+  "B11_overrideRoles": {
+    "c1.payments": {
+      "status": 200,
+      "total": 91,
+      "adminTotal": 91,
+      "locked": [],
+      "applied": []
+    },
+    "c1.promises": {
+      "status": 200,
+      "total": 81,
+      "adminTotal": 81,
+      "locked": [],
+      "applied": []
+    },
+    "c1.customers": {
+      "status": 200,
+      "total": 137,
+      "adminTotal": 137,
+      "locked": [],
+      "applied": []
+    },
+    "c1.invoices": {
+      "status": 200,
+      "total": 198,
+      "adminTotal": 198,
+      "locked": [],
+      "applied": []
+    },
+    "cs.payments": {
+      "status": 200,
+      "total": 91,
+      "adminTotal": 91,
+      "locked": [],
+      "applied": []
+    },
+    "cs.promises": {
+      "status": 200,
+      "total": 81,
+      "adminTotal": 81,
+      "locked": [],
+      "applied": []
+    },
+    "cs.customers": {
+      "status": 200,
+      "total": 137,
+      "adminTotal": 137,
+      "locked": [],
+      "applied": []
+    },
+    "cs.invoices": {
+      "status": 200,
+      "total": 198,
+      "adminTotal": 198,
+      "locked": [],
+      "applied": []
+    },
+    "c1SeesPayB": 200,
+    "c1NarrowOwn": {
+      "total": 5,
+      "foreign": 0
+    }
+  },
+  "B12_seatOutsideBook": {
+    "add": 200,
+    "body": "{\"id\":96,\"pocType\":\"SUCCESS\",\"primary\":true,\"user\":{\"id\":93,\"username\":\"permsccs-mu2sq4fnd633\",\"fullName\":\"PERMSCCS-MU2SQ4FND633\",\"email\":\"permsccs-mu2sq4fnd633",
+    "listSeatsY": 200
+  },
+  "B13_audit": {
+    "invoiceOutsideBook": 200,
+    "invN": 2,
+    "userAudit": 200,
+    "userAuditSample": "[{\"id\":1156,\"entityType\":\"USER\",\"entityId\":90,\"entityLabel\":null,\"action\":\"USER_UPDATED\",\"beforeJson\":\"{\\\"id\\\":90,\\\"username\\\":\\\"permscv-mu2sq49q6a30\\\",\\\"email\\\":\\\"permscv-mu2sq49q6a30@rt.local\\\",\\\"fullName\\\":\\\"PERMSCV-MU2SQ49Q6A30\\\",\\\"active\\\":true,\\\"role\\\":\\\"VIEWER\\\",\\\"customerId\\\":null,\\\"privileges\\\":[\\\"CUSTOMER_VIEW\\\",\\\"INVOICE_VIEW\\\",\\\"NOTIFICATION_VIEW\\\",\\\"PAYMENT_VIEW\\\",\\\"POC_VIEW\\\",\\\"PRODU",
+    "adminUserAudit": 200,
+    "adminSample": "[]"
+  }
+}

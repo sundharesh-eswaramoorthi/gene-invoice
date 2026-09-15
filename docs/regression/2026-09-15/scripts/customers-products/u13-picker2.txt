@@ -1,0 +1,4 @@
+[group] "Dismiss" @683,600 1366x1200
+[null] "Choose Customer Success POC" @683,398 420x32
+[button] "C\nCPUICS-MU2T3BZO9230\n@cpuics-mu2t3bzo9230 • CUSTOMER_SUCCESS_POC" @683,522 420x80
+[button] "Cancel" @859,802 67x32

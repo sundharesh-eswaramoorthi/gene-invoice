@@ -9,6 +9,7 @@ import '../../core/api/api_client.dart';
 import '../../shared/models/dispute.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
+import '../../core/table/table_providers.dart';
 import 'disputes_providers.dart';
 
 class DisputeDetailScreen extends ConsumerWidget {
@@ -87,7 +88,8 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
         if (applied != null) 'appliedChangeJson': applied,
       });
       ref.invalidate(disputeDetailProvider(widget.dispute.id));
-      ref.invalidate(disputesProvider);
+      ref.invalidate(scopedDisputesProvider);
+      ref.invalidate(tablePageProvider);
       if (mounted) context.go('/disputes');
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));

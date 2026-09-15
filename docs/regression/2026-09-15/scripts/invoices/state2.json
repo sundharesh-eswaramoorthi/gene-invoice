@@ -1,0 +1,130 @@
+{
+  "mine": {
+    "id": 111,
+    "invoiceNumber": "INV-20260915-0111",
+    "customerId": 31,
+    "customerName": "invA-mu2spf4942ca",
+    "invoiceDate": "2026-09-15T14:58:51.930043Z",
+    "total": 25.5,
+    "paidAmount": 0,
+    "balance": 25.5,
+    "status": "UNPAID",
+    "notes": null,
+    "items": [
+      {
+        "id": 116,
+        "productId": 15,
+        "productName": "invP2-mu2spfbr3f48",
+        "quantity": 1,
+        "unitPrice": 25.5,
+        "lineTotal": 25.5
+      }
+    ],
+    "salesPoc": {
+      "id": 70,
+      "username": "inv-mu2spes07081",
+      "fullName": "INV-MU2SPES07081",
+      "email": "inv-mu2spes07081@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T14:58:51.930769Z"
+  },
+  "theirs": {
+    "id": 112,
+    "invoiceNumber": "INV-20260915-0112",
+    "customerId": 31,
+    "customerName": "invA-mu2spf4942ca",
+    "invoiceDate": "2026-09-15T14:58:51.936821Z",
+    "total": 25.5,
+    "paidAmount": 0,
+    "balance": 25.5,
+    "status": "UNPAID",
+    "notes": null,
+    "items": [
+      {
+        "id": 117,
+        "productId": 15,
+        "productName": "invP2-mu2spfbr3f48",
+        "quantity": 1,
+        "unitPrice": 25.5,
+        "lineTotal": 25.5
+      }
+    ],
+    "salesPoc": {
+      "id": 71,
+      "username": "inv-mu2speu15bd5",
+      "fullName": "INV-MU2SPEU15BD5",
+      "email": "inv-mu2speu15bd5@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T14:58:51.937350Z"
+  },
+  "theirs2": {
+    "id": 113,
+    "invoiceNumber": "INV-20260915-0113",
+    "customerId": 31,
+    "customerName": "invA-mu2spf4942ca",
+    "invoiceDate": "2026-09-15T14:58:51.956078Z",
+    "total": 25.5,
+    "paidAmount": 0,
+    "balance": 25.5,
+    "status": "UNPAID",
+    "notes": null,
+    "items": [
+      {
+        "id": 118,
+        "productId": 15,
+        "productName": "invP2-mu2spfbr3f48",
+        "quantity": 1,
+        "unitPrice": 25.5,
+        "lineTotal": 25.5
+      }
+    ],
+    "salesPoc": {
+      "id": 71,
+      "username": "inv-mu2speu15bd5",
+      "fullName": "INV-MU2SPEU15BD5",
+      "email": "inv-mu2speu15bd5@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T14:58:51.956607Z"
+  },
+  "u": {
+    "id": 110,
+    "invoiceNumber": "INV-20260915-0110",
+    "customerId": 31,
+    "customerName": "invA-mu2spf4942ca",
+    "invoiceDate": "2026-09-15T14:58:51.888102Z",
+    "total": 25.5,
+    "paidAmount": 0,
+    "balance": 25.5,
+    "status": "UNPAID",
+    "notes": null,
+    "items": [
+      {
+        "id": 115,
+        "productId": 15,
+        "productName": "invP2-mu2spfbr3f48",
+        "quantity": 1,
+        "unitPrice": 25.5,
+        "lineTotal": 25.5
+      }
+    ],
+    "salesPoc": {
+      "id": 70,
+      "username": "inv-mu2spes07081",
+      "fullName": "INV-MU2SPES07081",
+      "email": "inv-mu2spes07081@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T14:58:51.889037Z"
+  }
+}

@@ -1,0 +1,189 @@
+{
+ "cf": 103,
+ "cb": 104,
+ "cc": 106,
+ "ccUser": "promises-mu2stiuw3e73",
+ "collA": 203,
+ "collAUser": "promises-mu2sth6e810f",
+ "F": {
+  "kept": {
+   "id": 43,
+   "customerId": 103,
+   "customerName": "promises-mu2stij0a000",
+   "amount": 100,
+   "fulfilledAmount": 0,
+   "remainingAmount": 100,
+   "promisedDate": "2026-09-18",
+   "status": "OPEN",
+   "statusOverridden": false,
+   "overrideReason": null,
+   "overriddenByUserId": null,
+   "overriddenAt": null,
+   "collectionPoc": {
+    "id": 203,
+    "username": "promises-mu2sth6e810f",
+    "fullName": "PROMISES-MU2STH6E810F",
+    "email": "promises-mu2sth6e810f@rt.local",
+    "role": "COLLECTION_POC",
+    "active": true
+   },
+   "notes": null,
+   "invoices": [
+    {
+     "id": 160,
+     "invoiceNumber": "INV-20260915-0150",
+     "total": 100,
+     "balance": 100,
+     "status": "UNPAID"
+    }
+   ],
+   "payments": [],
+   "createdByUserId": 1,
+   "createdAt": "2026-09-15T15:00:18.906362Z",
+   "updatedAt": "2026-09-15T15:00:18.906362Z"
+  },
+  "open": {
+   "id": 44,
+   "customerId": 103,
+   "customerName": "promises-mu2stij0a000",
+   "amount": 50,
+   "fulfilledAmount": 0,
+   "remainingAmount": 50,
+   "promisedDate": "2026-10-05",
+   "status": "OPEN",
+   "statusOverridden": false,
+   "overrideReason": null,
+   "overriddenByUserId": null,
+   "overriddenAt": null,
+   "collectionPoc": {
+    "id": 204,
+    "username": "promises-mu2sth8rb182",
+    "fullName": "PROMISES-MU2STH8RB182",
+    "email": "promises-mu2sth8rb182@rt.local",
+    "role": "COLLECTION_POC",
+    "active": true
+   },
+   "notes": null,
+   "invoices": [
+    {
+     "id": 161,
+     "invoiceNumber": "INV-20260915-0151",
+     "total": 100,
+     "balance": 100,
+     "status": "UNPAID"
+    }
+   ],
+   "payments": [],
+   "createdByUserId": 1,
+   "createdAt": "2026-09-15T15:00:18.918419Z",
+   "updatedAt": "2026-09-15T15:00:18.918419Z"
+  },
+  "general": {
+   "id": 45,
+   "customerId": 103,
+   "customerName": "promises-mu2stij0a000",
+   "amount": 30,
+   "fulfilledAmount": 0,
+   "remainingAmount": 30,
+   "promisedDate": "2026-10-25",
+   "status": "OPEN",
+   "statusOverridden": false,
+   "overrideReason": null,
+   "overriddenByUserId": null,
+   "overriddenAt": null,
+   "collectionPoc": {
+    "id": 204,
+    "username": "promises-mu2sth8rb182",
+    "fullName": "PROMISES-MU2STH8RB182",
+    "email": "promises-mu2sth8rb182@rt.local",
+    "role": "COLLECTION_POC",
+    "active": true
+   },
+   "notes": null,
+   "invoices": [],
+   "payments": [],
+   "createdByUserId": 1,
+   "createdAt": "2026-09-15T15:00:18.922480Z",
+   "updatedAt": "2026-09-15T15:00:18.922480Z"
+  },
+  "broken": {
+   "id": 46,
+   "customerId": 103,
+   "customerName": "promises-mu2stij0a000",
+   "amount": 20,
+   "fulfilledAmount": 0,
+   "remainingAmount": 20,
+   "promisedDate": "2026-09-12",
+   "status": "BROKEN",
+   "statusOverridden": false,
+   "overrideReason": null,
+   "overriddenByUserId": null,
+   "overriddenAt": null,
+   "collectionPoc": {
+    "id": 203,
+    "username": "promises-mu2sth6e810f",
+    "fullName": "PROMISES-MU2STH6E810F",
+    "email": "promises-mu2sth6e810f@rt.local",
+    "role": "COLLECTION_POC",
+    "active": true
+   },
+   "notes": null,
+   "invoices": [
+    {
+     "id": 161,
+     "invoiceNumber": "INV-20260915-0151",
+     "total": 100,
+     "balance": 100,
+     "status": "UNPAID"
+    }
+   ],
+   "payments": [],
+   "createdByUserId": 1,
+   "createdAt": "2026-09-15T15:00:18.926242Z",
+   "updatedAt": "2026-09-15T15:00:18.928859Z"
+  },
+  "twoInv": {
+   "id": 47,
+   "customerId": 103,
+   "customerName": "promises-mu2stij0a000",
+   "amount": 60,
+   "fulfilledAmount": 0,
+   "remainingAmount": 60,
+   "promisedDate": "2026-09-25",
+   "status": "OPEN",
+   "statusOverridden": false,
+   "overrideReason": null,
+   "overriddenByUserId": null,
+   "overriddenAt": null,
+   "collectionPoc": {
+    "id": 203,
+    "username": "promises-mu2sth6e810f",
+    "fullName": "PROMISES-MU2STH6E810F",
+    "email": "promises-mu2sth6e810f@rt.local",
+    "role": "COLLECTION_POC",
+    "active": true
+   },
+   "notes": null,
+   "invoices": [
+    {
+     "id": 160,
+     "invoiceNumber": "INV-20260915-0150",
+     "total": 100,
+     "balance": 0,
+     "status": "FULLY_PAID"
+    },
+    {
+     "id": 161,
+     "invoiceNumber": "INV-20260915-0151",
+     "total": 100,
+     "balance": 100,
+     "status": "UNPAID"
+    }
+   ],
+   "payments": [],
+   "createdByUserId": 1,
+   "createdAt": "2026-09-15T15:00:18.932214Z",
+   "updatedAt": "2026-09-15T15:00:18.932214Z"
+  }
+ }
+}

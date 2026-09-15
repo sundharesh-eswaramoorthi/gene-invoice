@@ -1,0 +1,28 @@
+[
+ {
+  "id": "R-LONG-REASON-MOUSE",
+  "title": "mouse click on the 616-char dispute row title expands it (Note + Details) and stays on the invoice History",
+  "pass": true,
+  "detail": {
+   "row": "Dispute opened / Dispute #83 / Sep 15, 2026 8:46 PM • by dhd-custA-mu2te2t7f180",
+   "exp": {
+    "hash": "#/invoices/248?tab=history",
+    "hasNote": true,
+    "hasDetails": true,
+    "endInDetails": false
+   },
+   "pageErrors": []
+  }
+ },
+ {
+  "id": "R-A11Y-ROW-ACTIVATE",
+  "title": "accessibility activation of a dispute History row (one merged node) — expands or follows the link? (observation)",
+  "pass": false,
+  "detail": {
+   "row": "Dispute denied / Dispute #82 / Sep 15, 2026 8:46 PM • by admin",
+   "a11y": {
+    "hash": "#/disputes/82"
+   }
+  }
+ }
+]

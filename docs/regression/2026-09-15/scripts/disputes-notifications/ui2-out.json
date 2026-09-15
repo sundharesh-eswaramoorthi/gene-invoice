@@ -1,0 +1,39 @@
+{
+  "out": {
+    "notesRequired": true,
+    "dialogClosed": true,
+    "tabShowsDispute": true,
+    "apiDispute": [
+      {
+        "id": 66,
+        "status": "PENDING",
+        "reason": "UI: notes are wrong on this invoice",
+        "proposed": "{\"action\":\"update_notes\",\"notes\":\"UI corrected notes\"}"
+      }
+    ],
+    "disputeId": 66,
+    "duplicateError": [
+      "An open dispute already exists for this invoice"
+    ],
+    "listHasOwn": true,
+    "listHasOther": false,
+    "detailHasApprove": false,
+    "detailHasReason": true,
+    "otherSecretVisible": false,
+    "amountError": true,
+    "paymentDisputes": 0
+  },
+  "apiErrors": [
+    {
+      "status": 400,
+      "method": "POST",
+      "url": "/api/disputes"
+    },
+    {
+      "status": 403,
+      "method": "GET",
+      "url": "/api/disputes/34"
+    }
+  ],
+  "pageErrors": []
+}

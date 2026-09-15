@@ -1,0 +1,29 @@
+[button] "Open navigation menu" @28,28 40x40
+[null] "64" @202,23 13x16
+[button] "Notifications" @200,28 40x40
+[button] "Account\nadmin • ADMIN" @312,28 176x24
+[button] "Back" @28,140 40x40
+[null] "Payment #67" @107,100 118x64
+[null] "apaycr-mu2sscpo6ab0 • 15 Sep 2026, 8:29 PM" @107,172 118x80
+[checkbox] "Active" @202,140 73x34
+[button] "Raise dispute" @314,140 139x32
+[null] "Amount" @51,240 45x16
+[null] "Credit applied" @250,240 81x16
+[null] "₹120.00" @67,266 79x28
+[null] "₹0.00" @237,266 54x28
+[null] "Method" @50,324 44x16
+[null] "Cash" @53,350 50x28
+[null] "Collection POC" @91,414 150x20
+[button] "Collection POC *\nUIPC-MU2SSCEO4E95" @275,414 218x40
+[null] "Notes" @91,466 150x20
+[null] "Invoice allocations" @75,534 118x20
+[button] "INV-20260915-0116\nFully paid • allocated ₹100.00\nTotal ₹100.00 • Bal ₹0.00" @200,571 368x53
+[button] "INV-20260915-0117\nPartially paid • allocated ₹20.00\nTotal ₹200.00 • Bal ₹175.00" @200,624 368x53
+[button] "Save changes" @208,681 384x38
+[tabpanel] "No disputes on this record" @200,825 400x70
+[button] "Raise dispute" @200,817 376x38
+[tab] "Disputes" @44,753 87x74
+[tab] "Payment Promise" @159,753 144x74
+[tab] "History" @270,753 77x74
+--inputs--
+{"tag":"TEXTAREA","label":null,"value":"","x":278,"y":481,"w":224}

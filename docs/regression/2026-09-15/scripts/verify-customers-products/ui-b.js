@@ -1,0 +1,65 @@
+// UI-012: POC picker search lags behind the debounce.
+const rt = require('../lib.js');
+const fs = require('fs');
+const path = require('path');
+const D = __dirname;
+const dump = async (page, name) => {
+  const s = await rt.semantics(page);
+  fs.mkdirSync(path.join(D, 'sem'), { recursive: true });
+  fs.writeFileSync(path.join(D, 'sem', name + '.txt'), s.map((n) => `[${n.role}] ${JSON.stringify(n.label || n.text)} @${n.x},${n.y} ${n.w}x${n.h}`).join('\n'));
+  return s;
+};
+const has = (s, re) => s.some((n) => re.test(n.label || '') || re.test(n.text || ''));
+const tapNode = async (page, n, wait = 1500) => { await page.locator(`flt-semantics[data-rt="${n.i}"]`).dispatchEvent('click'); await page.waitForTimeout(wait); };
+const tilesOf = (s) => s.filter((n) => /@\S+/.test(n.label || n.text || '') && /•/.test(n.label || n.text || '')).map((t) => (t.label || t.text).replace(/\n/g, ' ').slice(0, 60));
+
+(async () => {
+  const A = await rt.adminToken();
+  const cust = await rt.createCustomer(A, 'vcppick');
+  const cs = await rt.createStaff(A, 'CUSTOMER_SUCCESS_POC', 'vcppk');
+  const unfiltered = (await rt.api('GET', '/api/pocs/assignable?type=SUCCESS', { token: A })).json;
+  console.log('API unfiltered count', unfiltered.length, 'contains new user', unfiltered.some((u) => u.id === cs.id));
+  const filtered = (await rt.api('GET', `/api/pocs/assignable?type=SUCCESS&q=${cs.username}`, { token: A })).json;
+  console.log('API filtered', filtered.map((u) => u.username));
+
+  const app = await rt.openApp({ token: A, width: 1366, height: 1200 });
+  const { page } = app;
+  const reqs = [];
+  page.on('request', (r) => { if (r.url().includes('/api/pocs/assignable')) reqs.push({ t: Date.now(), u: decodeURIComponent(r.url().replace(rt.API, '')) }); });
+  await rt.go(page, '#/customers');
+  await rt.go(page, `#/customers/${cust.id}`, 4500);
+  let s = await dump(page, 'b-start');
+  const addChip = s.filter((n) => n.label === 'Add' && n.role !== 'button').sort((a, b) => a.y - b.y)[0] || s.find((n) => n.label === 'Add');
+  console.log('add chip', JSON.stringify(addChip));
+  await tapNode(page, addChip);
+  s = await dump(page, 'b-add-dialog');
+  console.log('add dialog shot', await rt.shot(page, D, 'b-add-dialog'));
+  const picker = s.find((n) => /Customer Success POC \*/.test(n.label || n.text || '')) || s.find((n) => /Select…/.test(n.label || n.text || ''));
+  console.log('picker node', JSON.stringify(picker));
+  await tapNode(page, picker);
+  s = await dump(page, 'b-picker-open');
+  console.log('picker open tiles', tilesOf(s).length);
+  const t0 = Date.now();
+  await rt.typeText(page, cs.username);
+  const typedAt = Date.now();
+  await page.waitForTimeout(2500);
+  s = await dump(page, 'b-picker-typed');
+  console.log('typed shot', await rt.shot(page, D, 'b-picker-typed'));
+  const t1 = tilesOf(s);
+  console.log('RESULT after typing + 2.5s', JSON.stringify({ tiles: t1.length, first: t1.slice(0, 3), newUserShown: t1.some((x) => x.includes(cs.username)) }));
+  console.log('requests during typing', JSON.stringify(reqs.filter((r) => r.t >= t0).map((r) => ({ dt: r.t - typedAt, u: r.u }))));
+  await page.waitForTimeout(3000);
+  s = await rt.semantics(page);
+  console.log('RESULT after 5.5s total', JSON.stringify({ tiles: tilesOf(s).length, newUserShown: tilesOf(s).some((x) => x.includes(cs.username)) }));
+  await page.keyboard.press('Backspace');
+  await page.waitForTimeout(1500);
+  s = await dump(page, 'b-picker-extra');
+  console.log('extra shot', await rt.shot(page, D, 'b-picker-extra'));
+  const t2 = tilesOf(s);
+  console.log('RESULT after one Backspace', JSON.stringify({ tiles: t2.length, first: t2.slice(0, 3), newUserShown: t2.some((x) => x.includes(cs.username)) }));
+  console.log('all requests', JSON.stringify(reqs.map((r) => ({ dt: r.t - typedAt, u: r.u }))));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(800);
+  console.log('apiErrors', JSON.stringify(app.apiErrors), 'pageErrors', JSON.stringify(app.pageErrors));
+  await app.close();
+})().catch((e) => { console.error('UI-B FAILED', e); process.exit(1); });
