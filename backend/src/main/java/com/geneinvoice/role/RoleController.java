@@ -62,7 +62,7 @@ public class RoleController {
     }
 
     @PostMapping("/export")
-    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "')")
+    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.ROLE_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         TableQuery query = TableQuery.parseUnpaged(TableSchemas.ROLES, req.sort(), req.filters());
         List<Long> permitted = queryExecutor.ids(Role.class, TableSchemas.ROLES, query,

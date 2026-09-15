@@ -1,5 +1,6 @@
 package com.geneinvoice.promise;
 
+import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.BulkExecutor;
@@ -8,6 +9,7 @@ import com.geneinvoice.common.query.FilterParams;
 import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
+import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.privilege.Privileges;
 import jakarta.servlet.http.HttpServletRequest;
@@ -29,6 +31,12 @@ public class PaymentPromiseController {
 
     private final PaymentPromiseService service;
     private final BulkExecutor bulkExecutor;
+    private final CurrentUser currentUser;
+
+    /** Customer logins cannot filter or sort on the Collection POC columns (AC-A8). */
+    private TableSchema schema() {
+        return TableSchemas.PROMISES.visibleTo(currentUser.isCustomer());
+    }
 
     @GetMapping
     @PreAuthorize("hasAuthority('" + Privileges.PROMISE_VIEW + "')")
@@ -39,7 +47,7 @@ public class PaymentPromiseController {
             HttpServletRequest request,
             @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) Long invoiceId) {
-        return service.page(TableQuery.parse(TableSchemas.PROMISES, page, size, sort,
+        return service.page(TableQuery.parse(schema(), page, size, sort,
                 withContext(FilterParams.from(request), customerId, invoiceId)));
     }
 
@@ -48,7 +56,7 @@ public class PaymentPromiseController {
     public PromiseDtos.PromiseSummaryDto summary(
             HttpServletRequest request,
             @RequestParam(required = false) Long customerId) {
-        return service.tiles(TableQuery.parseUnpaged(TableSchemas.PROMISES, null,
+        return service.tiles(TableQuery.parseUnpaged(schema(), null,
                 withContext(FilterParams.from(request), customerId, null)));
     }
 
@@ -117,11 +125,11 @@ public class PaymentPromiseController {
     }
 
     @PostMapping("/export")
-    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "')")
+    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.PROMISE_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         List<Long> ids = resolveIds(req);
         List<PromiseDtos.PromiseDto> rows = service.allMatching(
-                        TableQuery.parseUnpaged(TableSchemas.PROMISES, req.sort(), req.filters())).stream()
+                        TableQuery.parseUnpaged(schema(), req.sort(), req.filters())).stream()
                 .filter(p -> ids.contains(p.getId()))
                 .map(service::toDto)
                 .toList();
@@ -144,7 +152,7 @@ public class PaymentPromiseController {
     }
 
     private List<Long> resolveIds(BulkDtos.BulkRequest req) {
-        TableQuery query = TableQuery.parseUnpaged(TableSchemas.PROMISES, req.sort(), req.filters());
+        TableQuery query = TableQuery.parseUnpaged(schema(), req.sort(), req.filters());
         List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT);
         if (req.allMatching()) return permitted;
         if (req.ids() == null || req.ids().isEmpty()) {

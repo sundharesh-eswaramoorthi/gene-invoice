@@ -7,6 +7,7 @@ import com.geneinvoice.common.query.FilterParams;
 import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
+import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.poc.PocType;
@@ -37,6 +38,11 @@ public class InvoiceController {
     private final CurrentUser currentUser;
     private final UserRepository userRepository;
 
+    /** Customer logins cannot filter or sort on the Sales POC columns (AC-A8). */
+    private TableSchema schema() {
+        return TableSchemas.INVOICES.visibleTo(currentUser.isCustomer());
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public PageResponse<InvoiceDtos.InvoiceSummary> list(
@@ -45,7 +51,7 @@ public class InvoiceController {
             @RequestParam(required = false) String sort,
             HttpServletRequest request,
             @RequestParam(required = false) Long customerId) {
-        return service.page(TableQuery.parse(TableSchemas.INVOICES, page, size, sort,
+        return service.page(TableQuery.parse(schema(), page, size, sort,
                 withCustomer(FilterParams.from(request), customerId)));
     }
 
@@ -55,7 +61,7 @@ public class InvoiceController {
     public InvoiceDtos.InvoiceSummaryTiles summary(
             HttpServletRequest request,
             @RequestParam(required = false) Long customerId) {
-        return service.tiles(TableQuery.parseUnpaged(TableSchemas.INVOICES, null,
+        return service.tiles(TableQuery.parseUnpaged(schema(), null,
                 withCustomer(FilterParams.from(request), customerId)));
     }
 
@@ -114,12 +120,12 @@ public class InvoiceController {
     }
 
     @PostMapping("/export")
-    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "')")
+    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         boolean poc = scopeResolver.canSeePoc();
         List<Long> ids = resolveIds(req);
         List<Invoice> invoices = service.allMatching(
-                        TableQuery.parseUnpaged(TableSchemas.INVOICES, req.sort(), req.filters())).stream()
+                        TableQuery.parseUnpaged(schema(), req.sort(), req.filters())).stream()
                 .filter(i -> ids.contains(i.getId()))
                 .toList();
 
@@ -145,7 +151,7 @@ public class InvoiceController {
      * the caller's scope, so a bulk parameter can never widen what they may touch (AC-D6, AC-D10).
      */
     private List<Long> resolveIds(BulkDtos.BulkRequest req) {
-        TableQuery query = TableQuery.parseUnpaged(TableSchemas.INVOICES, req.sort(), req.filters());
+        TableQuery query = TableQuery.parseUnpaged(schema(), req.sort(), req.filters());
         List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT);
         if (req.allMatching()) return permitted;
         if (req.ids() == null || req.ids().isEmpty()) {

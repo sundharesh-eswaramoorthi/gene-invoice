@@ -34,6 +34,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 String username = claims.getSubject();
                 if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                     UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+                    // A token outlives the account's standing: once a user is deactivated, the
+                    // request goes on unauthenticated and gets the same 401 a new login would.
+                    if (!userDetails.isEnabled() || !userDetails.isAccountNonLocked()) {
+                        chain.doFilter(request, response);
+                        return;
+                    }
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

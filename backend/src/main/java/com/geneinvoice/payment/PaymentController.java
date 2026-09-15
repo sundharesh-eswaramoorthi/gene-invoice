@@ -10,6 +10,7 @@ import com.geneinvoice.common.query.FilterParams;
 import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
+import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
@@ -42,6 +43,11 @@ public class PaymentController {
     private final BulkExecutor bulkExecutor;
     private final UserRepository userRepository;
 
+    /** Customer logins cannot filter or sort on the Collection POC columns (AC-A8). */
+    private TableSchema schema() {
+        return TableSchemas.PAYMENTS.visibleTo(currentUser.isCustomer());
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('" + Privileges.PAYMENT_VIEW + "')")
     public PageResponse<PaymentDtos.PaymentDto> list(
@@ -50,7 +56,7 @@ public class PaymentController {
             @RequestParam(required = false) String sort,
             HttpServletRequest request,
             @RequestParam(required = false) Long customerId) {
-        return paymentService.page(TableQuery.parse(TableSchemas.PAYMENTS, page, size, sort,
+        return paymentService.page(TableQuery.parse(schema(), page, size, sort,
                 withCustomer(FilterParams.from(request), customerId)));
     }
 
@@ -59,7 +65,7 @@ public class PaymentController {
     public PaymentDtos.PaymentSummaryTiles summary(
             HttpServletRequest request,
             @RequestParam(required = false) Long customerId) {
-        return paymentService.tiles(TableQuery.parseUnpaged(TableSchemas.PAYMENTS, null,
+        return paymentService.tiles(TableQuery.parseUnpaged(schema(), null,
                 withCustomer(FilterParams.from(request), customerId)));
     }
 
@@ -129,12 +135,12 @@ public class PaymentController {
     }
 
     @PostMapping("/export")
-    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "')")
+    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.PAYMENT_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         boolean poc = scopeResolver.canSeePoc();
         List<Long> ids = resolveIds(req);
         List<Payment> payments = paymentService.allMatching(
-                        TableQuery.parseUnpaged(TableSchemas.PAYMENTS, req.sort(), req.filters())).stream()
+                        TableQuery.parseUnpaged(schema(), req.sort(), req.filters())).stream()
                 .filter(p -> ids.contains(p.getId()))
                 .toList();
 
@@ -156,7 +162,7 @@ public class PaymentController {
     }
 
     private List<Long> resolveIds(BulkDtos.BulkRequest req) {
-        TableQuery query = TableQuery.parseUnpaged(TableSchemas.PAYMENTS, req.sort(), req.filters());
+        TableQuery query = TableQuery.parseUnpaged(schema(), req.sort(), req.filters());
         List<Long> permitted = paymentService.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT);
         if (req.allMatching()) return permitted;
         if (req.ids() == null || req.ids().isEmpty()) {

@@ -9,6 +9,7 @@ import com.geneinvoice.common.query.FilterParams;
 import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
+import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.poc.PocDtos;
 import com.geneinvoice.poc.PocService;
@@ -37,6 +38,11 @@ public class CustomerController {
     private final CurrentUser currentUser;
     private final UserRepository userRepository;
 
+    /** Customer logins cannot filter on the POC seat columns (AC-A8). */
+    private TableSchema schema() {
+        return TableSchemas.CUSTOMERS.visibleTo(currentUser.isCustomer());
+    }
+
     @GetMapping
     @PreAuthorize("hasAuthority('" + Privileges.CUSTOMER_VIEW + "')")
     public PageResponse<CustomerDtos.CustomerDto> list(
@@ -44,14 +50,14 @@ public class CustomerController {
             @RequestParam(required = false) Integer size,
             @RequestParam(required = false) String sort,
             HttpServletRequest request) {
-        return service.page(TableQuery.parse(TableSchemas.CUSTOMERS, page, size, sort, FilterParams.from(request)));
+        return service.page(TableQuery.parse(schema(), page, size, sort, FilterParams.from(request)));
     }
 
     @GetMapping("/summary")
     @PreAuthorize("hasAuthority('" + Privileges.CUSTOMER_VIEW + "')")
     public CustomerDtos.CustomerSummaryTiles summary(
             HttpServletRequest request) {
-        return service.tiles(TableQuery.parseUnpaged(TableSchemas.CUSTOMERS, null, FilterParams.from(request)));
+        return service.tiles(TableQuery.parseUnpaged(schema(), null, FilterParams.from(request)));
     }
 
     @GetMapping("/{id}")
@@ -146,11 +152,11 @@ public class CustomerController {
     }
 
     @PostMapping("/export")
-    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "')")
+    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.CUSTOMER_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         List<Long> ids = resolveIds(req);
         List<CustomerDtos.CustomerDto> rows = service.toDtos(
-                service.allMatching(TableQuery.parseUnpaged(TableSchemas.CUSTOMERS, req.sort(), req.filters()))
+                service.allMatching(TableQuery.parseUnpaged(schema(), req.sort(), req.filters()))
                         .stream().filter(c -> ids.contains(c.getId())).toList());
 
         String csv = Csv.of(
@@ -175,7 +181,7 @@ public class CustomerController {
     }
 
     private List<Long> resolveIds(BulkDtos.BulkRequest req) {
-        TableQuery query = TableQuery.parseUnpaged(TableSchemas.CUSTOMERS, req.sort(), req.filters());
+        TableQuery query = TableQuery.parseUnpaged(schema(), req.sort(), req.filters());
         List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT);
         if (req.allMatching()) return permitted;
         if (req.ids() == null || req.ids().isEmpty()) {

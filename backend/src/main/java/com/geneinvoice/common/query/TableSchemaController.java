@@ -35,10 +35,10 @@ public class TableSchemaController {
 
     @GetMapping("/{entity}")
     public SchemaDto schema(@PathVariable String entity) {
-        TableSchema schema = TableSchemas.byEntity(entity);
-        boolean hidePoc = currentUser.isCustomer();
+        // The same view of the columns the list endpoints validate against, so the published
+        // schema and what a filter may name can never drift apart.
+        TableSchema schema = TableSchemas.byEntity(entity).visibleTo(currentUser.isCustomer());
         List<ColumnDto> columns = schema.ordered().stream()
-                .filter(c -> !(hidePoc && c.pocRestricted()))
                 .map(c -> new ColumnDto(c.name(), c.label(), c.type().name(), c.sortable(),
                         c.filterable(),
                         c.type().operators().stream().map(FilterOperator::wire).toList(),

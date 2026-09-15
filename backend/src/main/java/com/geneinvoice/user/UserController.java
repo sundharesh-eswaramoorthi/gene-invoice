@@ -208,7 +208,7 @@ public class UserController {
     }
 
     @PostMapping("/export")
-    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "')")
+    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.USER_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         List<User> users = userRepository.findAllById(resolveIds(req));
         String csv = Csv.of(List.of("Id", "Username", "Full name", "Email", "Role", "Active"),

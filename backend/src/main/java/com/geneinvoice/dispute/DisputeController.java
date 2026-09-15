@@ -78,7 +78,7 @@ public class DisputeController {
     }
 
     @PostMapping("/export")
-    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "')")
+    @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.DISPUTE_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         TableQuery query = TableQuery.parseUnpaged(TableSchemas.DISPUTES, req.sort(), req.filters());
         List<Long> permitted = queryExecutor.ids(Dispute.class, TableSchemas.DISPUTES, query,
