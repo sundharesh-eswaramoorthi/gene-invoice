@@ -1,0 +1,61 @@
+{
+ "kind": "phone",
+ "serverBefore": "vu-d04 invoice notes",
+ "back1": {
+  "dialogs": 1,
+  "hash": "#/invoices",
+  "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11b-phone-02-back1-dialog.png",
+  "afterKeep": {
+   "dialogs": 0,
+   "hash": "#/invoices/448"
+  },
+  "hrefAfterKeep": "http://localhost:8084/#/invoices/448",
+  "shotAfterKeep": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11b-phone-03-back1-after-keep.png"
+ },
+ "back2": {
+  "dialogs": 1,
+  "hash": "#/invoices",
+  "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11b-phone-04-back2.png",
+  "afterKeep": {
+   "dialogs": 0,
+   "hash": "#/invoices/448"
+  }
+ },
+ "bellNode": "304,28",
+ "badgeNode": "99+ 303,23 19x16",
+ "bellOffBadge": {
+  "dialogs": 1,
+  "hash": "#/invoices/448",
+  "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11b-phone-05-bell-off-badge.png",
+  "afterKeep": {
+   "dialogs": 0,
+   "hash": "#/invoices/448"
+  }
+ },
+ "bellOnBadge": {
+  "dialogs": 0,
+  "hash": "#/invoices/448",
+  "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11b-phone-06-bell-on-badge.png"
+ },
+ "blockedNav": {
+  "dialogs": 1,
+  "hash": "#/invoices/448",
+  "afterKeep": {
+   "dialogs": 0,
+   "hash": "#/invoices/448"
+  }
+ },
+ "backAfterBlocked1": {
+  "dialogs": 1,
+  "hash": "#/invoices",
+  "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11b-phone-07-back-after-blocked-1.png"
+ },
+ "stateAtEnd": {
+  "dialogs": 0,
+  "hash": "#/invoices/448"
+ },
+ "serverAfter": "vu-d04 invoice notes",
+ "error": "TypeError: Cannot read properties of undefined (reading 'x')\n    at /Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/d11b.js:139:33\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:472:9)",
+ "apiErrors": [],
+ "pageErrors": []
+}

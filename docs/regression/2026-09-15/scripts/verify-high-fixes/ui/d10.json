@@ -1,0 +1,265 @@
+{
+ "fixture": {
+  "A": "INV-20260915-0431",
+  "B": "INV-20260915-0432",
+  "promise": 156,
+  "before": {
+   "status": "OPEN",
+   "amount": 200,
+   "notes": "vu promise",
+   "invoices": [
+    "INV-20260915-0431:UNPAID",
+    "INV-20260915-0432:CANCELLED"
+   ]
+  }
+ },
+ "sem_d10-01-promise-tab": [
+  "[null] 99+ @1165,23 19x16",
+  "[button] Notifications @1166,28 40x40",
+  "[button] Account / admin • ADMIN @1278,28 176x24",
+  "[button] Back @285,94 40x40",
+  "[null] @vu-d10-mu2ylm4p1423 @385,110 161x20",
+  "[null] vu-d10-mu2ylm4p1423 @428,84 245x32",
+  "[null] POC missing @1309,94 66x16",
+  "[null] Outstanding @320,148 71x16",
+  "[null] Credit balance @509,148 84x16",
+  "[null] ₹100.00 @324,174 79x28",
+  "[null] ₹0.00 @494,174 54x28",
+  "[null] Name @348,238 150x20",
+  "[null] Phone @348,290 150x20",
+  "[null] Email @348,342 150x20",
+  "[null] Address @348,394 150x20",
+  "[null] Customer Success POCs @348,498 150x28",
+  "[checkbox] Add @463,509 79x6",
+  "[null] No Customer Success POC yet @898,490 905x20",
+  "[null] Collection POCs @348,572 150x20",
+  "[null] No Collection POC yet @898,568 905x20",
+  "[checkbox] Add @463,601 79x34",
+  "[button] Save changes @350,655 153x38",
+  "[tab] Disputes @301,550 87x74",
+  "[tab] Payment Promise @416,550 144x74",
+  "[tab] History @527,550 77x74",
+  "[button] Raise promise @347,615 156x38",
+  "[group] ₹200.00 by 2026-09-22 / Open / Fulfilled ₹0.00 / Remaining ₹200.00 / POC: VU-COLL-MU2YLLNJ039E / vu promise @812,732 1085x172",
+  "[checkbox] INV-20260915-0431 • ₹100.00 left @405,731 247x34",
+  "[checkbox] INV-20260915-0432 • ₹100.00 left @658,731 247x34",
+  "[button] Edit @1056,790 78x32",
+  "[button] Override status @1170,790 150x32",
+  "[button] Cancel @1293,790 97x32"
+ ],
+ "shot_d10-01-promise-tab": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d10-01-promise-tab.png",
+ "sem_d10-02-edit-dialog": [
+  "[group] Dismiss @683,450 1366x900",
+  "[null] Edit promise @683,234 520x32",
+  "[button] Promised by * / 2026-09-22 @816,286 254x40",
+  "[button] Collection POC * / VU-COLL-MU2YLLNJ039E @683,338 520x40",
+  "[null] Invoices this covers (optional) @518,380 189x20",
+  "[null] Leave empty for a general promise against the account balance. @601,398 356x17",
+  "[checkbox] INV-20260915-0431 / Unpaid • balance ₹100.00 @683,437 520x53",
+  "[checkbox] INV-20260915-0432 / Cancelled • no longer owed @683,490 520x53",
+  "[null] Promised ₹100.00 more than those invoices owe. @582,535 318x20",
+  "[button] Cancel @823,664 67x32",
+  "[button] Save @904,664 78x38"
+ ],
+ "shot_d10-02-edit-dialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d10-02-edit-dialog.png",
+ "dialog1": {
+  "checkboxes": [
+   {
+    "label": "INV-20260915-0431 / Unpaid • balance ₹100.00",
+    "checked": "true"
+   },
+   {
+    "label": "INV-20260915-0432 / Cancelled • no longer owed",
+    "checked": "true"
+   }
+  ],
+  "hints": [
+   "INV-20260915-0431\nUnpaid • balance ₹100.00",
+   "INV-20260915-0432\nCancelled • no longer owed",
+   "Promised ₹100.00 more than those invoices owe."
+  ]
+ },
+ "sem_d10-03-notes-typed": [
+  "[group] Dismiss @683,450 1366x900",
+  "[null] Edit promise @683,234 520x32",
+  "[button] Promised by * / 2026-09-22 @816,286 254x40",
+  "[button] Collection POC * / VU-COLL-MU2YLLNJ039E @683,338 520x40",
+  "[null] Invoices this covers (optional) @518,380 189x20",
+  "[null] Leave empty for a general promise against the account balance. @601,398 356x17",
+  "[checkbox] INV-20260915-0431 / Unpaid • balance ₹100.00 @683,437 520x53",
+  "[checkbox] INV-20260915-0432 / Cancelled • no longer owed @683,490 520x53",
+  "[null] Promised ₹100.00 more than those invoices owe. @582,535 318x20",
+  "[button] Cancel @823,664 67x32",
+  "[button] Save @904,664 78x38"
+ ],
+ "shot_d10-03-notes-typed": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d10-03-notes-typed.png",
+ "sem_d10-04-after-save1": [
+  "[null] 99+ @1165,23 19x16",
+  "[button] Notifications @1166,28 40x40",
+  "[button] Account / admin • ADMIN @1278,28 176x24",
+  "[button] Back @285,94 40x40",
+  "[null] @vu-d10-mu2ylm4p1423 @385,110 161x20",
+  "[null] vu-d10-mu2ylm4p1423 @428,84 245x32",
+  "[null] POC missing @1309,94 66x16",
+  "[null] Outstanding @320,148 71x16",
+  "[null] Credit balance @509,148 84x16",
+  "[null] ₹100.00 @324,174 79x28",
+  "[null] ₹0.00 @494,174 54x28",
+  "[null] Name @348,238 150x20",
+  "[null] Phone @348,290 150x20",
+  "[null] Email @348,342 150x20",
+  "[null] Address @348,394 150x20",
+  "[null] Customer Success POCs @348,498 150x28",
+  "[checkbox] Add @463,509 79x6",
+  "[null] No Customer Success POC yet @898,490 905x20",
+  "[null] Collection POCs @348,572 150x20",
+  "[null] No Collection POC yet @898,568 905x20",
+  "[checkbox] Add @463,601 79x34",
+  "[button] Save changes @350,655 153x38",
+  "[tab] Disputes @301,550 87x74",
+  "[tab] Payment Promise @416,550 144x74",
+  "[tab] History @527,550 77x74",
+  "[button] Raise promise @347,615 156x38",
+  "[group] ₹200.00 by 2026-09-22 / Open / Fulfilled ₹0.00 / Remaining ₹200.00 / POC: VU-COLL-MU2YLLNJ039E / vu promise +  @812,732 1085x172",
+  "[checkbox] INV-20260915-0431 • ₹100.00 left @405,731 247x34",
+  "[checkbox] INV-20260915-0432 • ₹100.00 left @658,731 247x34",
+  "[button] Edit @1056,790 78x32",
+  "[button] Override status @1170,790 150x32",
+  "[button] Cancel @1293,790 97x32"
+ ],
+ "shot_d10-04-after-save1": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d10-04-after-save1.png",
+ "afterSave1": {
+  "dialogStillOpen": false,
+  "texts": [],
+  "promise": {
+   "status": "OPEN",
+   "amount": 200,
+   "notes": "vu promise + vu notes edit",
+   "invoices": [
+    "INV-20260915-0431:UNPAID",
+    "INV-20260915-0432:CANCELLED"
+   ]
+  }
+ },
+ "sem_d10-05-edit-dialog2": [
+  "[group] Dismiss @683,450 1366x900",
+  "[null] Edit promise @683,234 520x32",
+  "[button] Promised by * / 2026-09-22 @816,286 254x40",
+  "[button] Collection POC * / VU-COLL-MU2YLLNJ039E @683,338 520x40",
+  "[null] Invoices this covers (optional) @518,380 189x20",
+  "[null] Leave empty for a general promise against the account balance. @601,398 356x17",
+  "[checkbox] INV-20260915-0431 / Unpaid • balance ₹100.00 @683,437 520x53",
+  "[checkbox] INV-20260915-0432 / Cancelled • no longer owed @683,490 520x53",
+  "[null] Promised ₹100.00 more than those invoices owe. @582,535 318x20",
+  "[button] Cancel @823,664 67x32",
+  "[button] Save @904,664 78x38"
+ ],
+ "shot_d10-05-edit-dialog2": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d10-05-edit-dialog2.png",
+ "dialog2": {
+  "checkboxes": [
+   {
+    "label": "INV-20260915-0431 / Unpaid • balance ₹100.00",
+    "checked": "true"
+   },
+   {
+    "label": "INV-20260915-0432 / Cancelled • no longer owed",
+    "checked": "true"
+   }
+  ],
+  "hints": [
+   "INV-20260915-0432\nCancelled • no longer owed",
+   "Promised ₹100.00 more than those invoices owe."
+  ]
+ },
+ "bNode": "[checkbox] INV-20260915-0432 / Cancelled • no longer owed @683,490 520x53",
+ "sem_d10-06-b-unticked": [
+  "[group] Dismiss @683,450 1366x900",
+  "[null] Edit promise @683,234 520x32",
+  "[button] Promised by * / 2026-09-22 @816,286 254x40",
+  "[button] Collection POC * / VU-COLL-MU2YLLNJ039E @683,338 520x40",
+  "[null] Invoices this covers (optional) @518,380 189x20",
+  "[null] Leave empty for a general promise against the account balance. @601,398 356x17",
+  "[checkbox] INV-20260915-0431 / Unpaid • balance ₹100.00 @683,437 520x53",
+  "[checkbox] INV-20260915-0432 / Cancelled • no longer owed @683,490 520x53",
+  "[null] Promised ₹100.00 more than those invoices owe. @582,535 318x20",
+  "[button] Cancel @823,664 67x32",
+  "[button] Save @904,664 78x38"
+ ],
+ "shot_d10-06-b-unticked": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d10-06-b-unticked.png",
+ "dialog2AfterUntick": {
+  "checkboxes": [
+   {
+    "label": "INV-20260915-0431 / Unpaid • balance ₹100.00",
+    "checked": "true"
+   },
+   {
+    "label": "INV-20260915-0432 / Cancelled • no longer owed",
+    "checked": "false"
+   }
+  ],
+  "hints": [
+   "INV-20260915-0432\nCancelled • no longer owed",
+   "Promised ₹100.00 more than those invoices owe."
+  ]
+ },
+ "sem_d10-07-after-save2": [
+  "[null] 99+ @1165,23 19x16",
+  "[button] Notifications @1166,28 40x40",
+  "[button] Account / admin • ADMIN @1278,28 176x24",
+  "[button] Back @285,94 40x40",
+  "[null] @vu-d10-mu2ylm4p1423 @385,110 161x20",
+  "[null] vu-d10-mu2ylm4p1423 @428,84 245x32",
+  "[null] POC missing @1309,94 66x16",
+  "[null] Outstanding @320,148 71x16",
+  "[null] Credit balance @509,148 84x16",
+  "[null] ₹100.00 @324,174 79x28",
+  "[null] ₹0.00 @494,174 54x28",
+  "[null] Name @348,238 150x20",
+  "[null] Phone @348,290 150x20",
+  "[null] Email @348,342 150x20",
+  "[null] Address @348,394 150x20",
+  "[null] Customer Success POCs @348,498 150x28",
+  "[checkbox] Add @463,509 79x6",
+  "[null] No Customer Success POC yet @898,490 905x20",
+  "[null] Collection POCs @348,572 150x20",
+  "[null] No Collection POC yet @898,568 905x20",
+  "[checkbox] Add @463,601 79x34",
+  "[button] Save changes @350,655 153x38",
+  "[tab] Disputes @301,550 87x74",
+  "[tab] Payment Promise @416,550 144x74",
+  "[tab] History @527,550 77x74",
+  "[button] Raise promise @347,615 156x38",
+  "[group] ₹200.00 by 2026-09-22 / Open / Fulfilled ₹0.00 / Remaining ₹200.00 / POC: VU-COLL-MU2YLLNJ039E / vu promise +  @812,732 1085x172",
+  "[checkbox] INV-20260915-0431 • ₹100.00 left @405,731 247x34",
+  "[button] Edit @1056,790 78x32",
+  "[button] Override status @1170,790 150x32",
+  "[button] Cancel @1293,790 97x32"
+ ],
+ "shot_d10-07-after-save2": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d10-07-after-save2.png",
+ "afterSave2": {
+  "dialogStillOpen": false,
+  "texts": [],
+  "promise": {
+   "status": "OPEN",
+   "amount": 200,
+   "notes": "vu promise + vu notes edit",
+   "invoices": [
+    "INV-20260915-0431:UNPAID"
+   ]
+  }
+ },
+ "puts": [
+  {
+   "status": 200,
+   "body": "{\"customerId\":304,\"amount\":200,\"promisedDate\":\"2026-09-22\",\"collectionPocUserId\":633,\"notes\":\"vu promise + vu notes edit\",\"invoiceIds\":[451,452]}",
+   "resp": "{\"id\":156,\"customerId\":304,\"customerName\":\"vu-d10-mu2ylm4p1423\",\"amount\":200,\"fulfilledAmount\":0,\"remainingAmount\":200,\"promisedDate\":\"2026-09-22\",\"status\":\"OPEN\",\"statusOverridden\":false,\"overrideReason\":null,\"overriddenByUserId\":null,\"overriddenAt\":null,\"collectionPoc\":{\"id\":633,\"username\":\"vu-col"
+  },
+  {
+   "status": 200,
+   "body": "{\"customerId\":304,\"amount\":200,\"promisedDate\":\"2026-09-22\",\"collectionPocUserId\":633,\"notes\":\"vu promise + vu notes edit\",\"invoiceIds\":[451]}",
+   "resp": "{\"id\":156,\"customerId\":304,\"customerName\":\"vu-d10-mu2ylm4p1423\",\"amount\":200,\"fulfilledAmount\":0,\"remainingAmount\":200,\"promisedDate\":\"2026-09-22\",\"status\":\"OPEN\",\"statusOverridden\":false,\"overrideReason\":null,\"overriddenByUserId\":null,\"overriddenAt\":null,\"collectionPoc\":{\"id\":633,\"username\":\"vu-col"
+  }
+ ],
+ "apiErrors": [],
+ "pageErrors": []
+}

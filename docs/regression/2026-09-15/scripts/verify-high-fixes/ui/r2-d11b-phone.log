@@ -1,0 +1,55 @@
+{
+ "kind": "phone",
+ "serverBefore": "vu-d04 invoice notes",
+ "back1": {
+  "dialogs": 1,
+  "hash": "#/invoices",
+  "afterKeep": {
+   "dialogs": 0,
+   "hash": "#/invoices/448"
+  },
+  "hrefAfterKeep": "http://localhost:8084/#/invoices/448"
+ },
+ "back2": {
+  "dialogs": 1,
+  "hash": "#/invoices",
+  "afterKeep": {
+   "dialogs": 0,
+   "hash": "#/invoices/448"
+  }
+ },
+ "bellNode": "304,28",
+ "badgeNode": "99+ 303,23 19x16",
+ "bellOffBadge": {
+  "dialogs": 1,
+  "hash": "#/invoices/448",
+  "afterKeep": {
+   "dialogs": 0,
+   "hash": "#/invoices/448"
+  }
+ },
+ "bellOnBadge": {
+  "dialogs": 0,
+  "hash": "#/invoices/448"
+ },
+ "blockedNav": {
+  "dialogs": 1,
+  "hash": "#/invoices/448",
+  "afterKeep": {
+   "dialogs": 0,
+   "hash": "#/invoices/448"
+  }
+ },
+ "backAfterBlocked1": {
+  "dialogs": 1,
+  "hash": "#/invoices"
+ },
+ "stateAtEnd": {
+  "dialogs": 0,
+  "hash": "#/invoices/448"
+ },
+ "serverAfter": "vu-d04 invoice notes",
+ "error": "TypeError: Cannot read properties of undefined (reading 'x')\n    at /Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/d11b.js:139:33\n    at runNextTicks (node:internal/process/task_queues:65:5)\n    at process.processImmediate (node:internal/timers:472:9)",
+ "apiErrors": [],
+ "pageErrors": []
+}

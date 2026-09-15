@@ -1,0 +1,196 @@
+{
+  "run": "2026-09-15 UI re-verification of high-severity fixes D-04, D-06, D-07, D-10, D-11, D-12 (web 8084 / API 8083, Chrome headless via playwright-core)",
+  "evidenceBase": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/",
+  "scripts": ["setup.js", "d04.js", "d04b.js", "d06.js", "d07.js", "d10.js", "d11.js", "d11b.js", "d11c.js", "d11phone.js", "d12.js", "d12menu.js"],
+  "rawResults": ["state.json", "d04.json", "d04b.json", "d06.json", "d07.json", "d10.json", "d11-customer.json", "d11-invoice.json", "d11-payment.json", "d11b-*.json", "d11c-desktop.json", "d11c-phone.json", "d11phone.json", "d12.json", "d12menu.json"],
+  "summary": { "PASS": 21, "FAIL": 1, "BLOCKED": 0 },
+  "results": [
+    {
+      "id": "U-01", "defect": "D-04", "status": "PASS",
+      "steps": "Admin, 1366x900. Pending INVOICE dispute #147 (update_notes). Opened #/disputes/147; real mouse clicks on empty row space at (1300,769) and (697,769); checked GET /api/disputes/147; clicked Deny. Second dispute #148: clicked Approve.",
+      "expected": "Visible Approve/Deny at normal size; blank clicks do nothing; the buttons themselves work.",
+      "actual": "Approve (filled, 118x38 at 332,769) and Deny (outlined, 97x32 at 448,769) are painted side by side. After both blank clicks the dispute is still PENDING. Clicking Deny: DENIED. Clicking Approve on #148: APPROVED.",
+      "evidence": ["shots/d04-01-dispute-a.png", "shots/d04-02-after-blank-clicks.png", "shots/d04-03-after-deny-click.png", "shots/d04-05-after-approve-click.png", "GET /api/disputes/147 -> PENDING, PENDING, DENIED; /148 -> APPROVED"]
+    },
+    {
+      "id": "U-02", "defect": "D-04", "status": "PASS",
+      "steps": "Admin, #/invoices/448: replaced Notes, clicked Save changes at its painted position.",
+      "expected": "Visible Save changes with an 'Unsaved changes' hint; click saves.",
+      "actual": "'Save changes' 153x38 at (350,473) is visible, with 'Unsaved changes' beside it. Clicking it showed the 'Invoice saved' snackbar; the API notes are 'vu-d04 invoice notes'.",
+      "evidence": ["shots/d04-07-invoice-dirty.png", "shots/d04-08-invoice-after-save.png"]
+    },
+    {
+      "id": "U-03", "defect": "D-04", "status": "PASS",
+      "steps": "Admin, #/payments/171: replaced Notes, clicked Save changes.",
+      "expected": "As U-02.",
+      "actual": "'Save changes' 153x38 at (350,452) is visible with 'Unsaved changes'. Clicking it showed 'Payment saved'; the API notes are 'vu-d04 payment notes'.",
+      "evidence": ["shots/d04-10-payment-dirty.png", "shots/d04-11-payment-after-save.png"]
+    },
+    {
+      "id": "U-04", "defect": "D-04", "status": "PASS",
+      "steps": "Dashboard, Invoices/Payments/Customers list toolbars, Payments -> Record payment dialog, login screen (1366x900).",
+      "expected": "Buttons at natural width; dialog Record beside Cancel; login button full width of its form.",
+      "actual": "Dashboard: New invoice 142x38 in a row with the outlined buttons. List toolbar New invoice/Record payment/New customer are 142-169px wide at the right. Record payment dialog: Cancel (67x32) and Record (92x38) on one line at y=612. Login: Sign in 400x38, the full width of the 400px form.",
+      "evidence": ["shots/d04b-01-dashboard.png", "shots/d04b-02-invoices-list.png", "shots/d04b-04-record-payment-dialog.png", "shots/d04-19-login.png"]
+    },
+    {
+      "id": "U-05", "defect": "D-06", "status": "PASS",
+      "steps": "Admin, #/invoices/new: tapped Customer field, typed 'zz-vu-mu2yllvo' (part of customer zz-vu-mu2yllvo5926), selected result.",
+      "expected": "'Choose customer' dialog with search; zz customer found and selectable.",
+      "actual": "The 'Choose customer' dialog opens with a 'Search by name' box. Typing the partial name gives exactly the zz customer (name and email). Selecting it fills the field.",
+      "evidence": ["shots/d06-02-choose-customer.png", "shots/d06-03-customer-partial.png", "shots/d06-06-customer-picked.png"]
+    },
+    {
+      "id": "U-06", "defect": "D-06", "status": "PASS",
+      "steps": "Line Product field -> 'Choose product'; typed 'zz-vu-', then 'zz-vu-inactive', then the exact active name; selected it.",
+      "expected": "Active zz product findable; inactive zz product never offered.",
+      "actual": "'zz-vu-' lists only zz-vu-prod-mu2yllxd0d84 (₹123.45); zz-vu-inactive-mu2yllxsb8ab is absent. 'zz-vu-inactive' shows 'Nothing matches'. Every request carries filter=active:eq:true.",
+      "evidence": ["shots/d06-09-product-zz.png", "shots/d06-10-product-inactive-search.png", "shots/d06-12-form-filled.png", "d06.json searchRequests"]
+    },
+    {
+      "id": "U-07", "defect": "D-06", "status": "PASS",
+      "steps": "Picked Sales POC vu-sales-mu2ylll4f82e, clicked Create invoice.",
+      "expected": "Invoice created for the zz customer.",
+      "actual": "The 'Invoice created' snackbar shows and the app returns to #/invoices. GET /api/invoices?customerId=<zz> returns INV-20260915-0434 (id 454), total 123.45, customer zz-vu-mu2yllvo5926.",
+      "evidence": ["shots/d06-13-after-create.png"]
+    },
+    {
+      "id": "U-08", "defect": "D-06", "status": "PASS",
+      "steps": "Payments -> Record payment -> Customer field; typed 'zz-vu-mu2yll'; selected zz customer.",
+      "expected": "Record payment customer picker finds the zz customer.",
+      "actual": "The zz customer is found and selected. The dialog then lists its outstanding INV-20260915-0434 • ₹123.45 left (dialog cancelled afterwards).",
+      "evidence": ["shots/d06-14-record-payment-search.png", "shots/d06-15-record-payment-picked.png"]
+    },
+    {
+      "id": "U-09", "defect": "D-06", "status": "PASS",
+      "steps": "In the customer picker: typed full name, then an extra 'Q', then Backspace (1.2s apart).",
+      "expected": "Results follow the text currently in the box (no one-keystroke lag).",
+      "actual": "Full name gives the customer; '…5926Q' gives 'Nothing matches'; after Backspace the customer shows again. Each request's name:contains matches the text in the box exactly.",
+      "evidence": ["shots/d06-04-customer-extra-char.png", "shots/d06-05-customer-back.png", "d06.json searchRequests"]
+    },
+    {
+      "id": "U-10", "defect": "D-07", "status": "PASS",
+      "steps": "SALES_POC vu-d07s named on invoice #450, then DELETE /api/users/{id} (-> deactivated:true). Admin opened #/invoices/450, changed only Notes, clicked Save changes.",
+      "expected": "'Invoice saved', notes persisted.",
+      "actual": "The Sales POC field shows the user with an 'inactive' chip. Save sent PATCH {\"notes\":…} with no salesPocUserId and showed 'Invoice saved'. The API notes are updated and the POC is unchanged (active:false).",
+      "evidence": ["shots/d07-invoices-3-after-save.png", "d07.json patches"]
+    },
+    {
+      "id": "U-11", "defect": "D-07", "status": "PASS",
+      "steps": "COLLECTION_POC vu-d07c named on payment #172, then deleted (deactivated). Admin changed only Notes on #/payments/172 and saved.",
+      "expected": "'Payment saved', notes persisted.",
+      "actual": "PATCH {\"notes\":…} only; 'Payment saved' shown; the API notes are updated. The field shows the POC with an 'inactive' chip.",
+      "evidence": ["shots/d07-payments-3-after-save.png", "d07.json patches"]
+    },
+    {
+      "id": "U-12", "defect": "D-10", "status": "PASS",
+      "steps": "Customer vu-d10 with A=INV-…0431 and B=INV-…0432 (₹100 each); promise #156 of ₹200 on [A,B] due 2026-09-22; B cancelled. #/customers/304?tab=promises -> Edit; appended to Notes; Save.",
+      "expected": "A listed and B listed as cancelled ('Cancelled • no longer owed'), still ticked; no misleading excess hint computed over B; save succeeds.",
+      "actual": "The dialog lists A 'Unpaid • balance ₹100.00' (ticked) and B 'Cancelled • no longer owed' (ticked). Hint text exactly: 'Promised ₹100.00 more than those invoices owe.' This is correct, since only A (₹100) counts. PUT with invoiceIds [451,452] returned 200; the dialog closed; API notes 'vu promise + vu notes edit'.",
+      "evidence": ["shots/d10-02-edit-dialog.png", "shots/d10-04-after-save1.png", "d10.json puts[0]"]
+    },
+    {
+      "id": "U-13", "defect": "D-10", "status": "PASS",
+      "steps": "Edit again, untick B, Save.",
+      "expected": "Succeeds; B no longer linked.",
+      "actual": "After unticking, B's aria-checked is false. PUT invoiceIds [451] returned 200 and the dialog closed. The API promise now links only INV-…0431; the card shows only A's chip.",
+      "evidence": ["shots/d10-06-b-unticked.png", "shots/d10-07-after-save2.png"]
+    },
+    {
+      "id": "U-14", "defect": "D-11", "status": "PASS",
+      "steps": "Customer #/customers/305 at 1366x900, Phone edited. (a) sidebar Dashboard; (b) browser Back; (c) bell; (e) History / Payment Promise / Disputes tabs; Back arrow with Keep editing and with Discard; Discard via sidebar and browser Back; save then navigate.",
+      "expected": "Prompt for (a)(b)(c) and the Back arrow; Keep editing stays with edit intact; tabs no prompt; Discard navigates with server unchanged; exactly one prompt; no prompt after saving.",
+      "actual": "(a) prompt; Keep editing stays on #/customers/305 with the edit intact. (b) prompt (see U-18 for the URL). (c) prompt when the bell icon is clicked off its badge (see O-2). (e) no prompt; URL becomes ?tab=history/promises/disputes and the edit is kept. Back arrow: exactly 1 dialog; none left after Keep editing; Discard goes to #/customers with no second prompt. Discard via sidebar goes to #/invoices, via browser Back to #/customers. Server phone stays 555-0100. After saving (server 555-7906), the sidebar navigates with no prompt.",
+      "evidence": ["d11-customer.json", "d11b-customer.json", "shots/d11-customer-02-sidebar-dialog.png", "shots/d11-customer-11-back-arrow-discard.png", "shots/d11-customer-14-save-first-before.png"]
+    },
+    {
+      "id": "U-15", "defect": "D-11", "status": "PASS",
+      "steps": "Same sequence on #/invoices/453 (Notes).",
+      "expected": "As U-14.",
+      "actual": "Same as U-14: prompts for sidebar, browser Back, bell (off badge) and the Back arrow (exactly one). Tabs don't prompt and keep the edit. Discard leaves with server notes unchanged ('vu original'). Save then navigate gives no prompt.",
+      "evidence": ["d11-invoice.json", "d11b-invoice.json", "shots/d11-invoice-03-sidebar-after-keep.png", "shots/d11-invoice-08-after-tabs.png"]
+    },
+    {
+      "id": "U-16", "defect": "D-11", "status": "PASS",
+      "steps": "Same sequence on #/payments/173 (Notes) plus (d) click on the invoice allocation row INV-20260915-0433.",
+      "expected": "As U-14, and the allocation row prompts.",
+      "actual": "All as U-14. The allocation-row click shows the prompt; Keep editing stays on #/payments/173 with the edit intact. Server notes unchanged until saved.",
+      "evidence": ["d11-payment.json", "d11b-payment.json", "shots/d11-payment-08-allocation-row-dialog.png"]
+    },
+    {
+      "id": "U-17", "defect": "D-11", "status": "PASS",
+      "steps": "400x820, admin: invoice #448 (Notes) and customer #301 (Phone) edited; hamburger -> drawer Payments; Keep editing; bell; hamburger -> Dashboard -> Discard. Browser Back also run (d11b phone).",
+      "expected": "The drawer, bell and browser Back prompt; Discard navigates; server unchanged.",
+      "actual": "Drawer Payments: prompt; Keep editing stays on the detail and the drawer closes with the edit intact. Bell (off badge): prompt. Browser Back: prompt. Drawer Dashboard -> Discard lands on the dashboard; server values unchanged.",
+      "evidence": ["d11phone.json", "d11b-phone.json", "shots/d11p-invoice-3-drawer-dialog.png", "shots/d11p-invoice-4-after-keep.png", "shots/d11p-invoice-5-after-discard.png"]
+    },
+    {
+      "id": "U-18", "defect": "D-11", "status": "PASS",
+      "steps": "Fresh list -> detail, edit, page.goBack(); read location while the prompt shows and after Keep editing.",
+      "expected": "Prompt; note the address bar.",
+      "actual": "While the prompt is up the address bar already shows the list URL (e.g. #/invoices). After Keep editing it goes back to the detail URL (#/invoices/453) and the edit is intact. A second Back prompts again. Same on customer, payment and phone.",
+      "evidence": ["shots/d11b-invoice-02-back1-dialog.png", "shots/d11b-invoice-03-back1-after-keep.png", "d11b-*.json back1/back2"]
+    },
+    {
+      "id": "U-19", "defect": "D-11", "status": "FAIL", "severity": "low",
+      "steps": "Dirty detail (confirmed 'Unsaved changes'); click sidebar (desktop) or drawer (phone) Payments -> prompt -> Keep editing; then press browser Back repeatedly.",
+      "expected": "The first browser Back asks 'Discard unsaved changes?'.",
+      "actual": "Keep editing adds a history entry (history.length 7 -> 8) that duplicates the detail URL. The first Back press then does nothing: no prompt, same page, same URL. Only the second press prompts, and Discard then works with no data loss. Same on desktop and phone. In a longer sequence (d11b) two presses were dead.",
+      "likelyCause": "When onExit vetoes a context.go, go_router 14.8.1 GoRouterDelegate.setNewRoutePath (~/.pub-cache/hosted/pub.dev/go_router-14.8.1/lib/src/delegate.dart:249-261) keeps the old configuration. The current (detail) location then appears to be reported to the browser again as a new history entry. The app wires onExit in frontend/lib/core/router.dart:36-37,70,94,110.",
+      "evidence": ["d11c-desktop.json", "d11c-phone.json", "shots/d11c-desktop-2b-blocked.png", "shots/d11c-desktop-2c-after-keep.png"]
+    },
+    {
+      "id": "U-20", "defect": "D-12", "status": "PASS",
+      "steps": "400x820 as COLLECTION_POC 'vu-collections-representative-north-mu2ylm9va66b', admin, VIEWER, CUSTOMER: read the app bar; clicked (28,28).",
+      "expected": "Drawer opens (not Notifications); bell doesn't overlap hamburger; title visible.",
+      "actual": "For all four: hamburger 40x40 at (28,28), bell at (304,28), account icon at (364,28), with no overlap. 'Gene Invoice' is shown in full. Clicking (28,28) opens the drawer (Dashboard, Invoices, …) and the URL stays #/ (no Notifications).",
+      "evidence": ["shots/d12-longColl-1-phone-bar.png", "shots/d12-longColl-2-after-hamburger.png", "shots/d12-admin-1-phone-bar.png", "shots/d12-viewer-1-phone-bar.png", "shots/d12-customer-1-phone-bar.png"]
+    },
+    {
+      "id": "U-21", "defect": "D-12", "status": "PASS",
+      "steps": "Opened the account menu (phone, each role; desktop long name).",
+      "expected": "First row shows username and role.",
+      "actual": "The first (disabled) row shows the username and role, e.g. 'vu-collections-representative-north-mu2ylm9va66b / COLLECTION_POC' (name wraps to two lines), 'admin / ADMIN', '… / VIEWER', '… / CUSTOMER'. Change password and Logout follow.",
+      "evidence": ["shots/d12m-longColl-menu.png", "d12menu.json"]
+    },
+    {
+      "id": "U-22", "defect": "D-12", "status": "PASS",
+      "steps": "1366x900 app bar for the long COLLECTION_POC and admin.",
+      "expected": "Label next to account icon, ellipsis when long.",
+      "actual": "The long user shows 'vu-collections-representative-…' next to the icon (button 278px, label capped); admin shows 'admin • ADMIN' in full.",
+      "evidence": ["shots/d12-longColl_desktop-bar-crop.png", "shots/d12-admin_desktop-bar.png"]
+    }
+  ],
+  "observations": [
+    {
+      "id": "O-1", "area": "Customer Details layout (1366x900)",
+      "detail": "'Save changes' and 'Unsaved changes' sit below the fold of the upper pane (y≈655, behind the tab bar at y≈512), so the user must scroll the upper pane to reach them. A click at the button's semantic position lands on the dispute list below instead. This isn't caused by the theme change: an earlier semantics dump showed the same position. The button itself is painted at 153x38 and saves once scrolled into view (server phone 555-7906).",
+      "evidence": ["shots/d04-13-customer-dirty.png", "shots/d11-customer-14-save-first-before.png"]
+    },
+    {
+      "id": "O-2", "area": "Notifications bell badge",
+      "detail": "With unread notifications, the '99+' badge (19x16 at 1165,23; on phone 303,23) covers the bell's centre and swallows taps. On a clean page a click on the badge does nothing (URL unchanged); a click on the lower-left of the bell opens #/notifications. Likely cause: the Positioned badge Container is stacked over the IconButton in frontend/lib/shared/widgets/app_shell.dart:181-190 and wins the hit test.",
+      "evidence": ["d11c-desktop.json cleanBadgeClick", "shots/d11c-desktop-1-clean-badge-click.png"]
+    },
+    {
+      "id": "O-3", "area": "Sales POC picker (D-18, not part of this fix set)",
+      "detail": "On the invoice form, typing the full username 'vu-sales-mu2ylll4f82e' in 'Choose Sales POC' left the list unfiltered (AURRC…, AURSB…). Adding and deleting a space made it filter to the one user. So D-18 is still present in PocPicker; the new SearchPickerField does not have this lag.",
+      "evidence": ["shots/d06-07-choose-poc.png", "shots/d06-07b-choose-poc-retry.png"]
+    },
+    {
+      "id": "O-4", "area": "Promise card chips",
+      "detail": "After B was cancelled, the promise card still showed 'INV-20260915-0432 • ₹100.00 left' for the cancelled invoice, while the edit dialog says 'no longer owed'. The chip uses the balance with no status check: frontend/lib/features/promises/promises_tab.dart:186.",
+      "evidence": ["shots/d10-04-after-save1.png"]
+    },
+    {
+      "id": "O-5", "area": "Phone detail header (known D-38)",
+      "detail": "At 400x820 the invoice number still breaks mid-token ('INV-20 / 26091 / 5-0428').",
+      "evidence": ["shots/d11p-invoice-4-after-keep.png"]
+    },
+    {
+      "id": "O-6", "area": "Setup note",
+      "detail": "POST /api/disputes as admin returns 403 'You do not have permission for this action', so the test disputes were opened with the customer's login. Only one open dispute per invoice is allowed (400 'An open dispute already exists for this invoice'). Admin detail screens do show a 'Raise dispute' button; its behaviour for admin was not exercised here.",
+      "evidence": ["state.json log"]
+    }
+  ]
+}

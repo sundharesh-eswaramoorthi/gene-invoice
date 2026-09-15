@@ -1,0 +1,848 @@
+{
+  "log": [
+    {
+      "what": "inv4",
+      "status": 200,
+      "body": "{\"id\":448,\"invoiceNumber\":\"INV-20260915-0428\",\"customerId\":301,\"customerName\":\"vu-d04-mu2yllpz737c\",\"invoiceDate\":\"2026-09-15T17:42:07.489510Z\",\"total\":500,\"paidAmount\":0,\"balance\":500,\"status\":\"UNPAID\",\"notes\":\"vu original\",\"items\":[{\"id\":450,\"productId\":1,\"productName\":\"tfw-mu2sowlk11ca-prod-01\",\""
+    },
+    {
+      "what": "pay4",
+      "status": 200,
+      "body": "{\"id\":171,\"customerId\":301,\"customerName\":\"vu-d04-mu2yllpz737c\",\"amount\":100,\"creditApplied\":0,\"method\":\"Cash\",\"notes\":\"vu original\",\"paidAt\":\"2026-09-15T17:42:07.502671Z\",\"status\":\"ACTIVE\",\"invoices\":[{\"id\":448,\"invoiceNumber\":\"INV-20260915-0428\",\"total\":500.00,\"paidAmount\":100.00,\"balance\":400.00,"
+    },
+    {
+      "what": "inv4b",
+      "status": 200,
+      "body": "{\"id\":449,\"invoiceNumber\":\"INV-20260915-0429\",\"customerId\":301,\"customerName\":\"vu-d04-mu2yllpz737c\",\"invoiceDate\":\"2026-09-15T17:42:07.517913Z\",\"total\":200,\"paidAmount\":0,\"balance\":200,\"status\":\"UNPAID\",\"notes\":\"vu original\",\"items\":[{\"id\":451,\"productId\":1,\"productName\":\"tfw-mu2sowlk11ca-prod-01\",\""
+    },
+    {
+      "what": "dispute as admin",
+      "status": 403,
+      "body": "{\"timestamp\":\"2026-09-15T17:42:07.532121Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for this action\",\"path\":\"/api/disputes\",\"fieldErrors\":null}"
+    },
+    {
+      "what": "d4a",
+      "status": 200,
+      "body": "{\"id\":147,\"customerId\":301,\"customerName\":\"vu-d04-mu2yllpz737c\",\"openedByUserId\":634,\"targetType\":\"INVOICE\",\"targetId\":448,\"targetSummary\":\"INV-20260915-0428 — 500.00\",\"reason\":\"vu D-04 check\",\"proposedChangeJson\":\"{\\\"action\\\":\\\"update_notes\\\",\\\"notes\\\":\\\"x\\\"}\",\"status\":\"PENDING\",\"adminNotes\":null,\""
+    },
+    {
+      "what": "d4b",
+      "status": 200,
+      "body": "{\"id\":148,\"customerId\":301,\"customerName\":\"vu-d04-mu2yllpz737c\",\"openedByUserId\":634,\"targetType\":\"INVOICE\",\"targetId\":449,\"targetSummary\":\"INV-20260915-0429 — 200.00\",\"reason\":\"vu D-04 check\",\"proposedChangeJson\":\"{\\\"action\\\":\\\"update_notes\\\",\\\"notes\\\":\\\"x\\\"}\",\"status\":\"PENDING\",\"adminNotes\":null,\""
+    },
+    {
+      "what": "zzProd",
+      "status": 200,
+      "body": "{\"id\":130,\"name\":\"zz-vu-prod-mu2yllxd0d84\",\"description\":\"vu active\",\"price\":123.45,\"active\":true}"
+    },
+    {
+      "what": "zzInactive",
+      "status": 200,
+      "body": "{\"id\":131,\"name\":\"zz-vu-inactive-mu2yllxsb8ab\",\"description\":\"vu inactive\",\"price\":99,\"active\":false}"
+    },
+    {
+      "what": "inv7",
+      "status": 200,
+      "body": "{\"id\":450,\"invoiceNumber\":\"INV-20260915-0430\",\"customerId\":303,\"customerName\":\"vu-d07-mu2ylm1o2b8f\",\"invoiceDate\":\"2026-09-15T17:42:07.910251Z\",\"total\":300,\"paidAmount\":0,\"balance\":300,\"status\":\"UNPAID\",\"notes\":\"vu original\",\"items\":[{\"id\":452,\"productId\":1,\"productName\":\"tfw-mu2sowlk11ca-prod-01\",\""
+    },
+    {
+      "what": "pay7",
+      "status": 200,
+      "body": "{\"id\":172,\"customerId\":303,\"customerName\":\"vu-d07-mu2ylm1o2b8f\",\"amount\":50,\"creditApplied\":0,\"method\":\"Cash\",\"notes\":\"vu original\",\"paidAt\":\"2026-09-15T17:42:07.921787Z\",\"status\":\"ACTIVE\",\"invoices\":[{\"id\":450,\"invoiceNumber\":\"INV-20260915-0430\",\"total\":300.00,\"paidAmount\":50.00,\"balance\":250.00,\"s"
+    },
+    {
+      "what": "delete sx",
+      "status": 200,
+      "body": "{\"deactivated\":true,\"deleted\":false,\"pocReferences\":1}"
+    },
+    {
+      "what": "delete cx",
+      "status": 200,
+      "body": "{\"deactivated\":true,\"deleted\":false,\"pocReferences\":1}"
+    },
+    {
+      "what": "A",
+      "status": 200,
+      "body": "{\"id\":451,\"invoiceNumber\":\"INV-20260915-0431\",\"customerId\":304,\"customerName\":\"vu-d10-mu2ylm4p1423\",\"invoiceDate\":\"2026-09-15T17:42:08.011948Z\",\"total\":100,\"paidAmount\":0,\"balance\":100,\"status\":\"UNPAID\",\"notes\":\"vu original\",\"items\":[{\"id\":453,\"productId\":1,\"productName\":\"tfw-mu2sowlk11ca-prod-01\",\""
+    },
+    {
+      "what": "B",
+      "status": 200,
+      "body": "{\"id\":452,\"invoiceNumber\":\"INV-20260915-0432\",\"customerId\":304,\"customerName\":\"vu-d10-mu2ylm4p1423\",\"invoiceDate\":\"2026-09-15T17:42:08.021874Z\",\"total\":100,\"paidAmount\":0,\"balance\":100,\"status\":\"UNPAID\",\"notes\":\"vu original\",\"items\":[{\"id\":454,\"productId\":1,\"productName\":\"tfw-mu2sowlk11ca-prod-01\",\""
+    },
+    {
+      "what": "promise",
+      "status": 200,
+      "body": "{\"id\":156,\"customerId\":304,\"customerName\":\"vu-d10-mu2ylm4p1423\",\"amount\":200,\"fulfilledAmount\":0,\"remainingAmount\":200,\"promisedDate\":\"2026-09-22\",\"status\":\"OPEN\",\"statusOverridden\":false,\"overrideReason\":null,\"overriddenByUserId\":null,\"overriddenAt\":null,\"collectionPoc\":{\"id\":633,\"username\":\"vu-col"
+    },
+    {
+      "what": "cancel B",
+      "status": 200,
+      "body": "{\"id\":452,\"invoiceNumber\":\"INV-20260915-0432\",\"customerId\":304,\"customerName\":\"vu-d10-mu2ylm4p1423\",\"invoiceDate\":\"2026-09-15T17:42:08.021874Z\",\"total\":100.00,\"paidAmount\":0.00,\"balance\":100.00,\"status\":\"CANCELLED\",\"notes\":\"vu original\",\"items\":[{\"id\":454,\"productId\":1,\"productName\":\"tfw-mu2sowlk11c"
+    },
+    {
+      "what": "inv11",
+      "status": 200,
+      "body": "{\"id\":453,\"invoiceNumber\":\"INV-20260915-0433\",\"customerId\":305,\"customerName\":\"vu-d11-mu2ylm7h6cb3\",\"invoiceDate\":\"2026-09-15T17:42:08.113008Z\",\"total\":400,\"paidAmount\":0,\"balance\":400,\"status\":\"UNPAID\",\"notes\":\"vu original\",\"items\":[{\"id\":455,\"productId\":1,\"productName\":\"tfw-mu2sowlk11ca-prod-01\",\""
+    },
+    {
+      "what": "pay11",
+      "status": 200,
+      "body": "{\"id\":173,\"customerId\":305,\"customerName\":\"vu-d11-mu2ylm7h6cb3\",\"amount\":150,\"creditApplied\":0,\"method\":\"Cash\",\"notes\":\"vu original\",\"paidAt\":\"2026-09-15T17:42:08.123496Z\",\"status\":\"ACTIVE\",\"invoices\":[{\"id\":453,\"invoiceNumber\":\"INV-20260915-0433\",\"total\":400.00,\"paidAmount\":150.00,\"balance\":250.00,"
+    }
+  ],
+  "sales": {
+    "id": 632,
+    "username": "vu-sales-mu2ylll4f82e",
+    "email": "vu-sales-mu2ylll4f82e@rt.local",
+    "fullName": "VU-SALES-MU2YLLL4F82E",
+    "active": true,
+    "role": "SALES_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_SALES",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW"
+    ],
+    "password": "Passw0rd!"
+  },
+  "coll": {
+    "id": 633,
+    "username": "vu-coll-mu2yllnj039e",
+    "email": "vu-coll-mu2yllnj039e@rt.local",
+    "fullName": "VU-COLL-MU2YLLNJ039E",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "prod": {
+    "id": 1,
+    "name": "tfw-mu2sowlk11ca-prod-01",
+    "description": "Widget, \"deluxe\" edition",
+    "price": 10,
+    "active": true
+  },
+  "c4": {
+    "id": 301,
+    "name": "vu-d04-mu2yllpz737c",
+    "phone": "555-0100",
+    "email": "vu-d04-mu2yllpz737c@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "vu-d04-mu2yllpz737c",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T17:42:07.420777Z",
+    "password": "Passw0rd!"
+  },
+  "inv4": {
+    "id": 448,
+    "invoiceNumber": "INV-20260915-0428",
+    "customerId": 301,
+    "customerName": "vu-d04-mu2yllpz737c",
+    "invoiceDate": "2026-09-15T17:42:07.489510Z",
+    "total": 500,
+    "paidAmount": 0,
+    "balance": 500,
+    "status": "UNPAID",
+    "notes": "vu original",
+    "items": [
+      {
+        "id": 450,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 500,
+        "lineTotal": 500
+      }
+    ],
+    "salesPoc": {
+      "id": 632,
+      "username": "vu-sales-mu2ylll4f82e",
+      "fullName": "VU-SALES-MU2YLLL4F82E",
+      "email": "vu-sales-mu2ylll4f82e@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T17:42:07.490277Z"
+  },
+  "pay4": {
+    "id": 171,
+    "customerId": 301,
+    "customerName": "vu-d04-mu2yllpz737c",
+    "amount": 100,
+    "creditApplied": 0,
+    "method": "Cash",
+    "notes": "vu original",
+    "paidAt": "2026-09-15T17:42:07.502671Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 448,
+        "invoiceNumber": "INV-20260915-0428",
+        "total": 500,
+        "paidAmount": 100,
+        "balance": 400,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 100
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 633,
+      "username": "vu-coll-mu2yllnj039e",
+      "fullName": "VU-COLL-MU2YLLNJ039E",
+      "email": "vu-coll-mu2yllnj039e@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "inv4b": {
+    "id": 449,
+    "invoiceNumber": "INV-20260915-0429",
+    "customerId": 301,
+    "customerName": "vu-d04-mu2yllpz737c",
+    "invoiceDate": "2026-09-15T17:42:07.517913Z",
+    "total": 200,
+    "paidAmount": 0,
+    "balance": 200,
+    "status": "UNPAID",
+    "notes": "vu original",
+    "items": [
+      {
+        "id": 451,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 200,
+        "lineTotal": 200
+      }
+    ],
+    "salesPoc": {
+      "id": 632,
+      "username": "vu-sales-mu2ylll4f82e",
+      "fullName": "VU-SALES-MU2YLLL4F82E",
+      "email": "vu-sales-mu2ylll4f82e@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T17:42:07.518922Z"
+  },
+  "disputeCreatedBy": "customer",
+  "d4a": {
+    "id": 147,
+    "customerId": 301,
+    "customerName": "vu-d04-mu2yllpz737c",
+    "openedByUserId": 634,
+    "targetType": "INVOICE",
+    "targetId": 448,
+    "targetSummary": "INV-20260915-0428 — 500.00",
+    "reason": "vu D-04 check",
+    "proposedChangeJson": "{\"action\":\"update_notes\",\"notes\":\"x\"}",
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T17:42:07.597261Z",
+    "updatedAt": "2026-09-15T17:42:07.597261Z"
+  },
+  "d4b": {
+    "id": 148,
+    "customerId": 301,
+    "customerName": "vu-d04-mu2yllpz737c",
+    "openedByUserId": 634,
+    "targetType": "INVOICE",
+    "targetId": 449,
+    "targetSummary": "INV-20260915-0429 — 200.00",
+    "reason": "vu D-04 check",
+    "proposedChangeJson": "{\"action\":\"update_notes\",\"notes\":\"x\"}",
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T17:42:07.610788Z",
+    "updatedAt": "2026-09-15T17:42:07.610788Z"
+  },
+  "zzCust": {
+    "id": 302,
+    "name": "zz-vu-mu2yllvo5926",
+    "phone": "555-0100",
+    "email": "zz-vu-mu2yllvo5926@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "zz-vu-mu2yllvo5926",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T17:42:07.622899Z",
+    "password": "Passw0rd!"
+  },
+  "zzProd": {
+    "id": 130,
+    "name": "zz-vu-prod-mu2yllxd0d84",
+    "description": "vu active",
+    "price": 123.45,
+    "active": true
+  },
+  "zzInactive": {
+    "id": 131,
+    "name": "zz-vu-inactive-mu2yllxsb8ab",
+    "description": "vu inactive",
+    "price": 99,
+    "active": false
+  },
+  "sx": {
+    "id": 636,
+    "username": "vu-d07s-mu2yllxwd833",
+    "email": "vu-d07s-mu2yllxwd833@rt.local",
+    "fullName": "VU-D07S-MU2YLLXWD833",
+    "active": true,
+    "role": "SALES_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_SALES",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW"
+    ],
+    "password": "Passw0rd!"
+  },
+  "cx": {
+    "id": 637,
+    "username": "vu-d07c-mu2yllzr23ba",
+    "email": "vu-d07c-mu2yllzr23ba@rt.local",
+    "fullName": "VU-D07C-MU2YLLZR23BA",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "c7": {
+    "id": 303,
+    "name": "vu-d07-mu2ylm1o2b8f",
+    "phone": "555-0100",
+    "email": "vu-d07-mu2ylm1o2b8f@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "vu-d07-mu2ylm1o2b8f",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T17:42:07.840828Z",
+    "password": "Passw0rd!"
+  },
+  "inv7": {
+    "id": 450,
+    "invoiceNumber": "INV-20260915-0430",
+    "customerId": 303,
+    "customerName": "vu-d07-mu2ylm1o2b8f",
+    "invoiceDate": "2026-09-15T17:42:07.910251Z",
+    "total": 300,
+    "paidAmount": 0,
+    "balance": 300,
+    "status": "UNPAID",
+    "notes": "vu original",
+    "items": [
+      {
+        "id": 452,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 300,
+        "lineTotal": 300
+      }
+    ],
+    "salesPoc": {
+      "id": 636,
+      "username": "vu-d07s-mu2yllxwd833",
+      "fullName": "VU-D07S-MU2YLLXWD833",
+      "email": "vu-d07s-mu2yllxwd833@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T17:42:07.911296Z"
+  },
+  "pay7": {
+    "id": 172,
+    "customerId": 303,
+    "customerName": "vu-d07-mu2ylm1o2b8f",
+    "amount": 50,
+    "creditApplied": 0,
+    "method": "Cash",
+    "notes": "vu original",
+    "paidAt": "2026-09-15T17:42:07.921787Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 450,
+        "invoiceNumber": "INV-20260915-0430",
+        "total": 300,
+        "paidAmount": 50,
+        "balance": 250,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 50
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 637,
+      "username": "vu-d07c-mu2yllzr23ba",
+      "fullName": "VU-D07C-MU2YLLZR23BA",
+      "email": "vu-d07c-mu2yllzr23ba@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "delSx": {
+    "deactivated": true,
+    "deleted": false,
+    "pocReferences": 1
+  },
+  "delCx": {
+    "deactivated": true,
+    "deleted": false,
+    "pocReferences": 1
+  },
+  "sxAfter": {
+    "id": 636,
+    "username": "vu-d07s-mu2yllxwd833",
+    "email": "vu-d07s-mu2yllxwd833@rt.local",
+    "fullName": "VU-D07S-MU2YLLXWD833",
+    "active": false,
+    "role": "SALES_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_SALES",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW"
+    ]
+  },
+  "cxAfter": {
+    "id": 637,
+    "username": "vu-d07c-mu2yllzr23ba",
+    "email": "vu-d07c-mu2yllzr23ba@rt.local",
+    "fullName": "VU-D07C-MU2YLLZR23BA",
+    "active": false,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ]
+  },
+  "c10": {
+    "id": 304,
+    "name": "vu-d10-mu2ylm4p1423",
+    "phone": "555-0100",
+    "email": "vu-d10-mu2ylm4p1423@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "vu-d10-mu2ylm4p1423",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T17:42:07.947572Z",
+    "password": "Passw0rd!"
+  },
+  "A": {
+    "id": 451,
+    "invoiceNumber": "INV-20260915-0431",
+    "customerId": 304,
+    "customerName": "vu-d10-mu2ylm4p1423",
+    "invoiceDate": "2026-09-15T17:42:08.011948Z",
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "UNPAID",
+    "notes": "vu original",
+    "items": [
+      {
+        "id": 453,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 632,
+      "username": "vu-sales-mu2ylll4f82e",
+      "fullName": "VU-SALES-MU2YLLL4F82E",
+      "email": "vu-sales-mu2ylll4f82e@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T17:42:08.012630Z"
+  },
+  "B": {
+    "id": 452,
+    "invoiceNumber": "INV-20260915-0432",
+    "customerId": 304,
+    "customerName": "vu-d10-mu2ylm4p1423",
+    "invoiceDate": "2026-09-15T17:42:08.021874Z",
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "UNPAID",
+    "notes": "vu original",
+    "items": [
+      {
+        "id": 454,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 632,
+      "username": "vu-sales-mu2ylll4f82e",
+      "fullName": "VU-SALES-MU2YLLL4F82E",
+      "email": "vu-sales-mu2ylll4f82e@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T17:42:08.022595Z"
+  },
+  "promise": {
+    "id": 156,
+    "customerId": 304,
+    "customerName": "vu-d10-mu2ylm4p1423",
+    "amount": 200,
+    "fulfilledAmount": 0,
+    "remainingAmount": 200,
+    "promisedDate": "2026-09-22",
+    "status": "OPEN",
+    "statusOverridden": false,
+    "overrideReason": null,
+    "overriddenByUserId": null,
+    "overriddenAt": null,
+    "collectionPoc": {
+      "id": 633,
+      "username": "vu-coll-mu2yllnj039e",
+      "fullName": "VU-COLL-MU2YLLNJ039E",
+      "email": "vu-coll-mu2yllnj039e@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "notes": "vu promise",
+    "invoices": [
+      {
+        "id": 451,
+        "invoiceNumber": "INV-20260915-0431",
+        "total": 100,
+        "balance": 100,
+        "status": "UNPAID"
+      },
+      {
+        "id": 452,
+        "invoiceNumber": "INV-20260915-0432",
+        "total": 100,
+        "balance": 100,
+        "status": "UNPAID"
+      }
+    ],
+    "payments": [],
+    "createdByUserId": 1,
+    "createdAt": "2026-09-15T17:42:08.031027Z",
+    "updatedAt": "2026-09-15T17:42:08.031027Z"
+  },
+  "cancelB": {
+    "id": 452,
+    "invoiceNumber": "INV-20260915-0432",
+    "customerId": 304,
+    "customerName": "vu-d10-mu2ylm4p1423",
+    "invoiceDate": "2026-09-15T17:42:08.021874Z",
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "CANCELLED",
+    "notes": "vu original",
+    "items": [
+      {
+        "id": 454,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 632,
+      "username": "vu-sales-mu2ylll4f82e",
+      "fullName": "VU-SALES-MU2YLLL4F82E",
+      "email": "vu-sales-mu2ylll4f82e@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T17:42:08.022595Z"
+  },
+  "c11": {
+    "id": 305,
+    "name": "vu-d11-mu2ylm7h6cb3",
+    "phone": "555-0100",
+    "email": "vu-d11-mu2ylm7h6cb3@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "vu-d11-mu2ylm7h6cb3",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T17:42:08.047312Z",
+    "password": "Passw0rd!"
+  },
+  "inv11": {
+    "id": 453,
+    "invoiceNumber": "INV-20260915-0433",
+    "customerId": 305,
+    "customerName": "vu-d11-mu2ylm7h6cb3",
+    "invoiceDate": "2026-09-15T17:42:08.113008Z",
+    "total": 400,
+    "paidAmount": 0,
+    "balance": 400,
+    "status": "UNPAID",
+    "notes": "vu original",
+    "items": [
+      {
+        "id": 455,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 400,
+        "lineTotal": 400
+      }
+    ],
+    "salesPoc": {
+      "id": 632,
+      "username": "vu-sales-mu2ylll4f82e",
+      "fullName": "VU-SALES-MU2YLLL4F82E",
+      "email": "vu-sales-mu2ylll4f82e@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T17:42:08.113836Z"
+  },
+  "pay11": {
+    "id": 173,
+    "customerId": 305,
+    "customerName": "vu-d11-mu2ylm7h6cb3",
+    "amount": 150,
+    "creditApplied": 0,
+    "method": "Cash",
+    "notes": "vu original",
+    "paidAt": "2026-09-15T17:42:08.123496Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 453,
+        "invoiceNumber": "INV-20260915-0433",
+        "total": 400,
+        "paidAmount": 150,
+        "balance": 250,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 150
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 633,
+      "username": "vu-coll-mu2yllnj039e",
+      "fullName": "VU-COLL-MU2YLLNJ039E",
+      "email": "vu-coll-mu2yllnj039e@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "longColl": {
+    "id": 641,
+    "username": "vu-collections-representative-north-mu2ylm9va66b",
+    "email": "vu-collections-representative-north-mu2ylm9va66b@rt.local",
+    "fullName": "VU-COLLECTIONS-REPRESENTATIVE-NORTH-MU2YLM9VA66B",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "viewer": {
+    "id": 642,
+    "username": "vu-viewer-mu2ylmbt1650",
+    "email": "vu-viewer-mu2ylmbt1650@rt.local",
+    "fullName": "VU-VIEWER-MU2YLMBT1650",
+    "active": true,
+    "role": "VIEWER",
+    "customerId": null,
+    "privileges": [
+      "CUSTOMER_VIEW",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "c12": {
+    "id": 306,
+    "name": "vu-d12cust-mu2ylmdv4cdb",
+    "phone": "555-0100",
+    "email": "vu-d12cust-mu2ylmdv4cdb@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "vu-d12cust-mu2ylmdv4cdb",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T17:42:08.278644Z",
+    "password": "Passw0rd!"
+  },
+  "d11inv": {
+    "id": 149,
+    "customerId": 305,
+    "customerName": "vu-d11-mu2ylm7h6cb3",
+    "openedByUserId": 640,
+    "targetType": "INVOICE",
+    "targetId": 453,
+    "targetSummary": "INV-20260915-0433 — 400.00",
+    "reason": "vu D-11 rerun row",
+    "proposedChangeJson": "{\"action\":\"update_notes\",\"notes\":\"x\"}",
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T18:21:32.958648Z",
+    "updatedAt": "2026-09-15T18:21:32.958648Z"
+  },
+  "d11pay": {
+    "id": 150,
+    "customerId": 305,
+    "customerName": "vu-d11-mu2ylm7h6cb3",
+    "openedByUserId": 640,
+    "targetType": "PAYMENT",
+    "targetId": 173,
+    "targetSummary": "Payment #173 — 150.00",
+    "reason": "vu D-11 rerun row",
+    "proposedChangeJson": "{\"action\":\"update_notes\",\"notes\":\"x\"}",
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T18:21:32.986103Z",
+    "updatedAt": "2026-09-15T18:21:32.986103Z"
+  }
+}

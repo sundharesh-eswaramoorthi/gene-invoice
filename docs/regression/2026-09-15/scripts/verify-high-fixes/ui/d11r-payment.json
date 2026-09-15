@@ -1,0 +1,87 @@
+{
+ "kind": "payment",
+ "serverBefore": "vu-d11 pay mu303kd6",
+ "history": {
+  "dirtyConfirmed": true,
+  "dirty": {
+   "hash": "#/payments/173",
+   "historyLength": 4,
+   "dialogs": 0
+  },
+  "tabSwitch": {
+   "hash": "#/payments/173?tab=history",
+   "historyLength": 5,
+   "dialogs": 0
+  },
+  "unsavedHintAfterTab": true,
+  "click1": {
+   "target": "Dispute opened / Dispute #150 / Sep 15, 2026 11:51 PM • by vu-d11-mu2ylm7h6cb3 @360,741",
+   "hash": "#/payments/173?tab=history",
+   "historyLength": 5,
+   "dialogs": 1,
+   "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11r-payment-01-history-prompt.png"
+  },
+  "afterKeep": {
+   "hash": "#/payments/173?tab=history",
+   "historyLength": 5,
+   "dialogs": 0,
+   "unsavedHint": true
+  },
+  "click2": {
+   "target": "Dispute opened / Dispute #150 / Sep 15, 2026 11:51 PM • by vu-d11-mu2ylm7h6cb3 @360,741",
+   "hash": "#/payments/173?tab=history",
+   "historyLength": 5,
+   "dialogs": 1
+  },
+  "afterDiscard": {
+   "hash": "#/disputes/150",
+   "historyLength": 6,
+   "dialogs": 0,
+   "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11r-payment-02-history-after-discard.png"
+  },
+  "serverAfter": "vu-d11 pay mu303kd6"
+ },
+ "disputes": {
+  "dirtyConfirmed": true,
+  "dirty": {
+   "hash": "#/payments/173",
+   "historyLength": 8,
+   "dialogs": 0
+  },
+  "tabSwitch": {
+   "hash": "#/payments/173",
+   "historyLength": 8,
+   "dialogs": 0
+  },
+  "unsavedHintAfterTab": true,
+  "click1": {
+   "target": "PAYMENT Payment #173 — 150.00 / 15 Sep 2026, 11:51 PM / vu D-11 rerun row @512,661",
+   "hash": "#/payments/173",
+   "historyLength": 8,
+   "dialogs": 1,
+   "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11r-payment-03-disputes-prompt.png"
+  },
+  "afterKeep": {
+   "hash": "#/payments/173",
+   "historyLength": 8,
+   "dialogs": 0,
+   "unsavedHint": true
+  },
+  "click2": {
+   "target": "PAYMENT Payment #173 — 150.00 / 15 Sep 2026, 11:51 PM / vu D-11 rerun row @512,661",
+   "hash": "#/payments/173",
+   "historyLength": 8,
+   "dialogs": 1
+  },
+  "afterDiscard": {
+   "hash": "#/disputes/150",
+   "historyLength": 9,
+   "dialogs": 0,
+   "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11r-payment-04-disputes-after-discard.png"
+  },
+  "serverAfter": "vu-d11 pay mu303kd6"
+ },
+ "expectedHistoryLinkTarget": "#/disputes/150",
+ "apiErrors": [],
+ "pageErrors": []
+}

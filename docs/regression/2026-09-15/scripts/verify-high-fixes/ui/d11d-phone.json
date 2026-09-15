@@ -1,0 +1,77 @@
+{
+ "mode": "phone",
+ "detail": "#/invoices/450",
+ "steps": [
+  {
+   "name": "drawer Payments",
+   "hash": "#/invoices/450",
+   "historyLength": 4,
+   "dialogs": 1,
+   "afterKeep": {
+    "hash": "#/invoices/450",
+    "historyLength": 4,
+    "dialogs": 0
+   }
+  },
+  {
+   "name": "bell (off badge)",
+   "hash": "#/invoices/450",
+   "historyLength": 4,
+   "dialogs": 1,
+   "afterKeep": {
+    "hash": "#/invoices/450",
+    "historyLength": 4,
+    "dialogs": 0
+   }
+  },
+  {
+   "name": "drawer Dashboard",
+   "hash": "#/invoices/450",
+   "historyLength": 4,
+   "dialogs": 1,
+   "afterKeep": {
+    "hash": "#/invoices/450",
+    "historyLength": 4,
+    "dialogs": 0
+   }
+  },
+  {
+   "name": "Back arrow",
+   "hash": "#/invoices/450",
+   "historyLength": 4,
+   "dialogs": 1,
+   "afterKeep": {
+    "hash": "#/invoices/450",
+    "historyLength": 4,
+    "dialogs": 0
+   }
+  }
+ ],
+ "serverBefore": "vu-d07 invoices notes mu2yy3v7",
+ "opened": {
+  "hash": "#/invoices/450",
+  "historyLength": 4,
+  "dialogs": 0
+ },
+ "typed": "vu-d11d-mu306foe",
+ "dirty": {
+  "hash": "#/invoices/450",
+  "historyLength": 4,
+  "dialogs": 0
+ },
+ "shotAfterRefusals": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11d-phone-1-after-refusals.png",
+ "afterSave": {
+  "hash": "#/invoices/450",
+  "historyLength": 4,
+  "dialogs": 0
+ },
+ "serverAfterSave": "vu-d11d-mu306foe",
+ "backAfterSave": {
+  "hash": "#/invoices",
+  "historyLength": 4,
+  "dialogs": 0
+ },
+ "shotBackAfterSave": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11d-phone-2-back-after-save.png",
+ "apiErrors": [],
+ "pageErrors": []
+}

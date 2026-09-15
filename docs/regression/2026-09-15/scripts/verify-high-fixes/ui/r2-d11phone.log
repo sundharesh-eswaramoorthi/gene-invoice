@@ -1,0 +1,54 @@
+{
+ "invoice": {
+  "serverBefore": "vu-d04 invoice notes",
+  "labelNode": "91,498 150x20",
+  "shotDirty": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-invoice-1-dirty.png",
+  "shotDrawer": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-invoice-2-drawer.png",
+  "drawerPayments": {
+   "dialogs": 1,
+   "hash": "#/invoices/448",
+   "hashAfterKeep": "#/invoices/448",
+   "dialogsAfterKeep": 0
+  },
+  "shotDrawerDialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-invoice-3-drawer-dialog.png",
+  "shotAfterKeep": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-invoice-4-after-keep.png",
+  "bell": {
+   "dialogs": 0,
+   "hash": "#/invoices/448"
+  },
+  "drawerDashboard": {
+   "dialogs": 1,
+   "hashAfterDiscard": "",
+   "dialogsAfterDiscard": 0
+  },
+  "shotAfterDiscard": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-invoice-5-after-discard.png",
+  "serverAfter": "vu-d04 invoice notes"
+ },
+ "customer": {
+  "serverBefore": "555-0100",
+  "labelNode": "91,290 150x20",
+  "shotDirty": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-customer-1-dirty.png",
+  "shotDrawer": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-customer-2-drawer.png",
+  "drawerPayments": {
+   "dialogs": 1,
+   "hash": "#/customers/301",
+   "hashAfterKeep": "#/customers/301",
+   "dialogsAfterKeep": 0
+  },
+  "shotDrawerDialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-customer-3-drawer-dialog.png",
+  "shotAfterKeep": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-customer-4-after-keep.png",
+  "bell": {
+   "dialogs": 0,
+   "hash": "#/customers/301"
+  },
+  "drawerDashboard": {
+   "dialogs": 1,
+   "hashAfterDiscard": "",
+   "dialogsAfterDiscard": 0
+  },
+  "shotAfterDiscard": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11p-customer-5-after-discard.png",
+  "serverAfter": "555-0100"
+ },
+ "apiErrors": [],
+ "pageErrors": []
+}

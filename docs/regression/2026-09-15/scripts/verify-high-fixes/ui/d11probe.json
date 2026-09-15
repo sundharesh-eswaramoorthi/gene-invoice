@@ -1,0 +1,98 @@
+{
+ "customer": {
+  "History": [
+   "[checkbox] Add @463,509 79x6",
+   "[null] Collection POCs @348,572 150x20",
+   "[null] No Collection POC yet @898,568 905x20",
+   "[checkbox] Add @463,601 79x34",
+   "[button] Save changes @350,655 153x38",
+   "[tab] Disputes @301,550 87x74",
+   "[tab] Payment Promise @416,550 144x74",
+   "[tab] History @527,550 77x74",
+   "[checkbox] All (12) @319,617 100x34",
+   "[checkbox] Customer (3) @433,617 117x34",
+   "[checkbox] Invoices (4) @552,617 108x34",
+   "[checkbox] Payments (3) @671,617 118x34",
+   "[checkbox] Disputes (2) @791,617 111x34",
+   "[button] Payment updated / Payment #173 / Sep 15, 2026 11:54 PM • by admin @812,687 1085x80",
+   "[button] Customer details updated / Sep 15, 2026 11:54 PM • by admin @812,773 1085x78",
+   "[button] Invoice updated / INV-20260915-0433 / Sep 15, 2026 11:54 PM • by admin @812,859 1085x80",
+   "[button] Dispute opened / Dispute #150 / Sep 15, 2026 11:51 PM • by vu-d11-mu2ylm7h6cb3 @812,953 1085x80",
+   "[button] Dispute opened / Dispute #149 / Sep 15, 2026 11:51 PM • by vu-d11-mu2ylm7h6cb3 @812,1047 1085x80",
+   "[button] Payment updated / Payment #173 / Sep 15, 2026 11:31 PM • by admin @812,1141 1085x80",
+   "[button] Invoice updated / INV-20260915-0433 / Sep 15, 2026 11:29 PM • by admin @812,1235 1085x80",
+   "[button] Customer details updated / Sep 15, 2026 11:27 PM • by admin @812,1321 1085x78",
+   "[group] Payment applied · ₹150.00 · invoice now Partially Paid / Sep 15, 2026 11:12 PM • by admin @812,1407 1085x94",
+   "[button] INV-20260915-0433 @385,1409 129x20",
+   "[button] Payment #173 @509,1409 94x20",
+   "[button] Payment recorded · ₹150.00 / Payment #173 / Sep 15, 2026 11:12 PM • by admin @812,1501 1085x80",
+   "[button] Invoice created · ₹400.00 / INV-20260915-0433 / Sep 15, 2026 11:12 PM • by admin @812,1595 1085x80",
+   "[button] Customer created / Sep 15, 2026 11:12 PM • by admin @812,1681 1085x78"
+  ],
+  "HistoryShot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11probe-customer-History.png",
+  "Disputes": [
+   "[checkbox] Add @463,509 79x6",
+   "[null] Collection POCs @348,572 150x20",
+   "[null] No Collection POC yet @898,568 905x20",
+   "[checkbox] Add @463,601 79x34",
+   "[button] Save changes @350,655 153x38",
+   "[tab] Disputes @301,550 87x74",
+   "[tab] Payment Promise @416,550 144x74",
+   "[tab] History @527,550 77x74",
+   "[button] PAYMENT Payment #173 — 150.00 / 15 Sep 2026, 11:51 PM / vu D-11 rerun row @812,640 1085x80",
+   "[checkbox] Pending @1287,625 85x34",
+   "[button] INVOICE INV-20260915-0433 — 400.00 / 15 Sep 2026, 11:51 PM / vu D-11 rerun row @812,721 1085x80",
+   "[checkbox] Pending @1287,706 85x34"
+  ],
+  "DisputesShot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11probe-customer-Disputes.png"
+ },
+ "invoice": {
+  "History": [
+   "[tab] Disputes @301,546 87x74",
+   "[tab] Payment Promise @416,546 144x74",
+   "[tab] History @527,546 77x74",
+   "[checkbox] All (5) @315,613 92x34",
+   "[checkbox] Invoices (4) @420,613 108x34",
+   "[checkbox] Disputes (1) @536,613 111x34",
+   "[button] Invoice updated / Sep 15, 2026 11:54 PM • by admin @812,675 1085x78",
+   "[button] Dispute opened / Dispute #149 / Sep 15, 2026 11:51 PM • by vu-d11-mu2ylm7h6cb3 @812,761 1085x80",
+   "[button] Invoice updated / Sep 15, 2026 11:29 PM • by admin @812,847 1085x78",
+   "[button] Payment applied · ₹150.00 · invoice now Partially Paid / Payment #173 / Sep 15, 2026 11:12 PM • by admin @812,895 1085x4",
+   "[button] Invoice created · ₹400.00 / Sep 15, 2026 11:12 PM • by admin @812,1019 1085x78"
+  ],
+  "HistoryShot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11probe-invoice-History.png",
+  "Disputes": [
+   "[tab] Disputes @301,546 87x74",
+   "[tab] Payment Promise @416,546 144x74",
+   "[tab] History @527,546 77x74",
+   "[button] Raise dispute @345,611 151x38",
+   "[button] INVOICE INV-20260915-0433 — 400.00 / 15 Sep 2026, 11:51 PM / vu D-11 rerun row @812,682 1085x80",
+   "[checkbox] Pending @1287,667 85x34"
+  ],
+  "DisputesShot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11probe-invoice-Disputes.png"
+ },
+ "payment": {
+  "History": [
+   "[tab] Disputes @301,525 87x74",
+   "[tab] Payment Promise @416,525 144x74",
+   "[tab] History @527,525 77x74",
+   "[checkbox] All (4) @315,592 92x34",
+   "[checkbox] Payments (3) @426,592 118x34",
+   "[checkbox] Disputes (1) @546,592 111x34",
+   "[button] Payment updated / Sep 15, 2026 11:54 PM • by admin @812,654 1085x78",
+   "[button] Dispute opened / Dispute #150 / Sep 15, 2026 11:51 PM • by vu-d11-mu2ylm7h6cb3 @812,740 1085x80",
+   "[button] Payment updated / Sep 15, 2026 11:31 PM • by admin @812,826 1085x78",
+   "[button] Payment recorded · ₹150.00 / Sep 15, 2026 11:12 PM • by admin @812,870 1085x11"
+  ],
+  "HistoryShot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11probe-payment-History.png",
+  "Disputes": [
+   "[tab] Disputes @301,525 87x74",
+   "[tab] Payment Promise @416,525 144x74",
+   "[tab] History @527,525 77x74",
+   "[button] Raise dispute @345,590 151x38",
+   "[button] PAYMENT Payment #173 — 150.00 / 15 Sep 2026, 11:51 PM / vu D-11 rerun row @812,661 1085x80",
+   "[checkbox] Pending @1287,646 85x34"
+  ],
+  "DisputesShot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11probe-payment-Disputes.png"
+ }
+}

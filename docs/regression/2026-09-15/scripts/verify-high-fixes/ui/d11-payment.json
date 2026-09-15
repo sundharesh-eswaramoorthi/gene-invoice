@@ -1,0 +1,117 @@
+{
+ "kind": "payment",
+ "serverBefore": "vu-d11 pay mu2zak34",
+ "typed": "vu-d11 pay mu301mpa",
+ "sidebar": {
+  "hashBefore": "#/payments/173",
+  "dialogs": 1,
+  "hashWithDialog": "#/payments/173",
+  "shotDialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-02-sidebar-dialog.png",
+  "dialogsAfterKeep": 0,
+  "hashAfterKeep": "#/payments/173",
+  "hrefAfterKeep": "http://localhost:8084/#/payments/173",
+  "inputsAfterKeep": [],
+  "shotAfterKeep": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-03-sidebar-after-keep.png"
+ },
+ "browserBack": {
+  "hashBefore": "#/payments/173",
+  "dialogs": 1,
+  "hashWithDialog": "#/payments",
+  "shotDialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-04-browser-back-dialog.png",
+  "dialogsAfterKeep": 0,
+  "hashAfterKeep": "#/payments/173",
+  "hrefAfterKeep": "http://localhost:8084/#/payments/173",
+  "inputsAfterKeep": [],
+  "shotAfterKeep": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-05-browser-back-after-keep.png"
+ },
+ "sidebarAfterBrowserBack": {
+  "hashBefore": "#/payments/173",
+  "dialogs": 1,
+  "hashWithDialog": "#/payments/173",
+  "shotDialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-06-sidebar-again-dialog.png",
+  "dialogsAfterKeep": 0,
+  "hashAfterKeep": "#/payments/173",
+  "hrefAfterKeep": "http://localhost:8084/#/payments/173",
+  "inputsAfterKeep": [],
+  "shotAfterKeep": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-07-sidebar-again-after-keep.png"
+ },
+ "bell": {
+  "hashBefore": "#/payments/173",
+  "dialogs": 0,
+  "hashWithDialog": "#/payments/173",
+  "shotDialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-08-bell-dialog.png"
+ },
+ "allocationRowNode": "[button] INV-20260915-0433 / Partially paid • allocated ₹150.00 / Total ₹400.00 • Bal ₹250.00 @812,395 1077x53",
+ "allocationRow": {
+  "hashBefore": "#/payments/173",
+  "dialogs": 1,
+  "hashWithDialog": "#/payments/173",
+  "shotDialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-09-allocation-row-dialog.png",
+  "dialogsAfterKeep": 0,
+  "hashAfterKeep": "#/payments/173",
+  "hrefAfterKeep": "http://localhost:8084/#/payments/173",
+  "inputsAfterKeep": [],
+  "shotAfterKeep": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-10-allocation-row-after-keep.png"
+ },
+ "tabs": {
+  "History": {
+   "dialogs": 0,
+   "hash": "#/payments/173?tab=history",
+   "inputs": []
+  },
+  "Payment Promise": {
+   "dialogs": 0,
+   "hash": "#/payments/173?tab=promises",
+   "inputs": []
+  },
+  "Disputes": {
+   "dialogs": 0,
+   "hash": "#/payments/173?tab=disputes",
+   "inputs": []
+  }
+ },
+ "shotTabs": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-11-after-tabs.png",
+ "backArrowKeep": {
+  "hashBefore": "#/payments/173?tab=disputes",
+  "dialogs": 1,
+  "hashWithDialog": "#/payments/173?tab=disputes",
+  "shotDialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-12-back-arrow-dialog.png",
+  "dialogsAfterKeep": 0,
+  "hashAfterKeep": "#/payments/173?tab=disputes",
+  "hrefAfterKeep": "http://localhost:8084/#/payments/173?tab=disputes",
+  "inputsAfterKeep": [],
+  "shotAfterKeep": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-13-back-arrow-after-keep.png"
+ },
+ "backArrowDiscard": {
+  "dialogs": 1,
+  "dialogsAfterDiscard": 0,
+  "hashAfterDiscard": "#/payments",
+  "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-14-back-arrow-discard.png",
+  "serverAfter": "vu-d11 pay mu2zak34"
+ },
+ "sidebarDiscard": {
+  "dialogs": 1,
+  "dialogsAfterDiscard": 0,
+  "hashAfterDiscard": "#/invoices",
+  "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-15-sidebar-discard.png",
+  "serverAfter": "vu-d11 pay mu2zak34"
+ },
+ "browserBackDiscard": {
+  "dialogs": 1,
+  "hashWithDialog": "#/payments",
+  "dialogsAfterDiscard": 0,
+  "hashAfterDiscard": "#/payments",
+  "shot": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-16-browser-back-discard.png"
+ },
+ "saveThenNavigate": {
+  "saveNode": "[button] Save changes @350,452 153x38",
+  "shotBeforeSave": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-17-save-first-before.png",
+  "shotAfterSave": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-high-fixes/ui/shots/d11-payment-18-save-first-after.png",
+  "serverAfterSave": "vu-d11 pay mu303kd6",
+  "typed": "vu-d11 pay mu303kd6",
+  "dialogs": 0,
+  "hashAfterNav": ""
+ },
+ "apiErrors": [],
+ "pageErrors": []
+}
