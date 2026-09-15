@@ -9,6 +9,7 @@ import com.geneinvoice.dispute.DisputeRepository;
 import com.geneinvoice.dispute.DisputeService;
 import com.geneinvoice.dispute.DisputeStatus;
 import com.geneinvoice.dispute.DisputeTargetType;
+import com.geneinvoice.notification.Notification;
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceDtos;
 import com.geneinvoice.invoice.InvoiceService;
@@ -90,6 +91,23 @@ class InputValidationTest extends IntegrationTestBase {
                 "method", "m".repeat(41), "collectionPocUserId", collector.getId()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.method").exists());
+    }
+
+    @Test
+    void aDisputeReasonUpToItsLimitIsSavedThoughTheAdminNotificationHoldsLess() throws Exception {
+        String reason = "r".repeat(FieldLimits.DISPUTE_TEXT - 4) + "-END";
+        String body = mockMvc.perform(post("/api/disputes").with(as(customerLogin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("targetType", "INVOICE", "targetId", invoice.getId(), "reason", reason))))
+                .andExpect(status().is2xxSuccessful())
+                .andReturn().getResponse().getContentAsString();
+        long id = objectMapper.readTree(body).get("id").asLong();
+
+        assertThat(disputeRepository.findById(id).orElseThrow().getReason()).isEqualTo(reason);
+        Notification toAdmin = notificationRepository.findByUserIdOrderByCreatedAtDesc(admin.getId()).stream()
+                .filter(n -> n.getLink() != null && n.getLink().endsWith("/" + id))
+                .findFirst().orElseThrow();
+        assertThat(toAdmin.getMessage()).hasSize(Notification.MESSAGE_MAX).endsWith("…");
     }
 
     // ---- D-30: amounts finer than a cent ----------------------------------------

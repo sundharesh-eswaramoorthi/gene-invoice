@@ -31,14 +31,24 @@ class DisputesScreen extends ConsumerWidget {
         emptyMessage: 'No disputes match this filter',
         onRowTap: (context, d) => context.go('/disputes/${d.id}'),
         columns: [
+          // Target, Customer and Reason are capped so the table fits beside the sidebar at
+          // 1366px (D-20); anything longer ends in "…" and shows in full on hover.
           TableColumnSpec(
             label: 'Target',
             sortKey: 'targetType',
-            cell: (context, d) => Text(disputeTargetText(d)),
+            maxWidth: 200,
+            cell: (context, d) => Tooltip(
+              message: disputeTargetText(d),
+              child: Text(disputeTargetText(d), maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
           ),
           TableColumnSpec(
             label: 'Customer',
-            cell: (context, d) => Text(d.customerName ?? '—'),
+            maxWidth: 160,
+            cell: (context, d) => Tooltip(
+              message: d.customerName ?? '',
+              child: Text(d.customerName ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
           ),
           TableColumnSpec(
             label: 'Status',
@@ -52,7 +62,7 @@ class DisputesScreen extends ConsumerWidget {
           ),
           TableColumnSpec(
             label: 'Reason',
-            maxWidth: 360,
+            maxWidth: 280,
             cell: (context, d) => Tooltip(
               message: d.reason,
               child: Text(d.reason, maxLines: 2, overflow: TextOverflow.ellipsis),

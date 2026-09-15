@@ -27,10 +27,13 @@ public class Notification {
     @Column(nullable = false, length = 40)
     private String type;
 
-    @Column(nullable = false, length = 200)
+    public static final int TITLE_MAX = 200;
+    public static final int MESSAGE_MAX = 1000;
+
+    @Column(nullable = false, length = TITLE_MAX)
     private String title;
 
-    @Column(length = 1000)
+    @Column(length = MESSAGE_MAX)
     private String message;
 
     @Column(length = 300)

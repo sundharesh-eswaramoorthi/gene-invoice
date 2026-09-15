@@ -276,6 +276,9 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
             child: ConstrainedBox(
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: DataTable(
+                // Material's 56px gaps alone cost ~300px on a seven-column table, enough to push
+                // the row actions off-screen at 1366px (D-19, D-20).
+                columnSpacing: 24,
                 showCheckboxColumn: _selectable,
                 sortColumnIndex: (sortIndex != null && sortIndex >= 0) ? sortIndex : null,
                 sortAscending: ascending,

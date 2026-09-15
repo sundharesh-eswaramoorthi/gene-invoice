@@ -50,7 +50,7 @@ class NotificationsScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Title',
             sortKey: 'title',
-            maxWidth: 240,
+            maxWidth: 200,
             cell: (context, n) => Text(
               n.title,
               maxLines: 1,
@@ -60,7 +60,7 @@ class NotificationsScreen extends ConsumerWidget {
           ),
           TableColumnSpec(
             label: 'Message',
-            maxWidth: 360,
+            maxWidth: 280,
             cell: (context, n) => Tooltip(
               message: n.message ?? '',
               child: Text(n.message ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),

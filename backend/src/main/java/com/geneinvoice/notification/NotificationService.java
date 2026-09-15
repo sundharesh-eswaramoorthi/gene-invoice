@@ -15,10 +15,23 @@ public class NotificationService {
     private final NotificationRepository repository;
     private final UserRepository userRepository;
 
+    /**
+     * A notification quotes user text (a dispute reason, a customer name), which may be longer than
+     * the notification holds. It is shortened to fit rather than failing the action that caused it;
+     * the full text stays on the record the link opens.
+     */
     @Transactional
     public Notification notify(Long userId, String type, String title, String message, String link) {
         return repository.save(Notification.builder()
-                .userId(userId).type(type).title(title).message(message).link(link).build());
+                .userId(userId).type(type)
+                .title(fit(title, Notification.TITLE_MAX))
+                .message(fit(message, Notification.MESSAGE_MAX))
+                .link(link).build());
+    }
+
+    static String fit(String text, int max) {
+        if (text == null || text.length() <= max) return text;
+        return text.substring(0, max - 1) + "…";
     }
 
     @Transactional
