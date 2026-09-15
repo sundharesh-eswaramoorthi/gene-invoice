@@ -20,6 +20,7 @@ import com.geneinvoice.poc.PocType;
 import com.geneinvoice.poc.ScopeResolver;
 import com.geneinvoice.promise.PaymentPromiseService;
 import com.geneinvoice.user.User;
+import com.geneinvoice.user.UserRepository;
 import jakarta.persistence.criteria.Expression;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ public class PaymentService {
     private final AuditService auditService;
     private final CurrentUser currentUser;
     private final PaymentPromiseService promiseService;
+    private final UserRepository userRepository;
 
     @Transactional
     public Payment record(PaymentDtos.CreatePaymentRequest req) {
@@ -97,14 +99,17 @@ public class PaymentService {
         Object before = PaymentDtos.PaymentDto.from(p);
 
         if (req.notes() != null) p.setNotes(req.notes());
-        if (req.collectionPocUserId() != null) {
-            User poc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION);
-            User previous = p.getCollectionPoc();
-            if (previous == null || !previous.getId().equals(poc.getId())) {
-                p.setCollectionPoc(poc);
-                pocService.notifyAssignee(poc, PocType.COLLECTION,
-                        "payment #" + p.getId(), "/payments/" + p.getId());
+        // Only an actual change of POC is checked, so a notes edit still saves when the POC has
+        // since been deactivated or the editor may not assign POCs (AC-A5).
+        Long previousId = p.getCollectionPoc() == null ? null : p.getCollectionPoc().getId();
+        if (req.collectionPocUserId() != null && !req.collectionPocUserId().equals(previousId)) {
+            if (!currentUser.canAssignPoc(userRepository)) {
+                throw new BadRequestException("You may not change the Collection POC");
             }
+            User poc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION);
+            p.setCollectionPoc(poc);
+            pocService.notifyAssignee(poc, PocType.COLLECTION,
+                    "payment #" + p.getId(), "/payments/" + p.getId());
         }
         Payment saved = paymentRepository.save(p);
         auditService.record(ENTITY, id, "PAYMENT_UPDATED", before, PaymentDtos.PaymentDto.from(saved),

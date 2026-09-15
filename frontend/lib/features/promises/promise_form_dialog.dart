@@ -98,6 +98,24 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
     }
   }
 
+  /// Every outstanding invoice, plus — when editing — any linked one that has since been paid off
+  /// or cancelled, so it stays visible and can be unticked.
+  List<_InvoiceOption> _options(List<InvoiceSummary> outstanding) {
+    final options = [
+      for (final i in outstanding)
+        _InvoiceOption(i.id, i.invoiceNumber, statusLabel(i.status), i.balance, live: true),
+    ];
+    final shown = {for (final o in options) o.id};
+    for (final linked in widget.existing?.invoices ?? const <PromiseInvoiceRef>[]) {
+      if (shown.contains(linked.id)) continue;
+      final status = InvoiceStatus.values.asNameMap()[linked.status];
+      options.add(_InvoiceOption(linked.id, linked.invoiceNumber,
+          status == null ? linked.status : statusLabel(status), linked.balance,
+          live: status != InvoiceStatus.CANCELLED));
+    }
+    return options;
+  }
+
   Future<void> _submit() async {
     final amount = double.tryParse(_amount.text.trim());
     if (amount == null || amount <= 0) {
@@ -205,8 +223,9 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
               invoicesAsync.when(
                 loading: () => const LinearProgressIndicator(),
                 error: (e, _) => Text('Could not load invoices: ${apiErrorMessage(e)}'),
-                data: (invoices) {
-                  if (invoices.isEmpty) {
+                data: (outstanding) {
+                  final options = _options(outstanding);
+                  if (options.isEmpty) {
                     return const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
                       child: Text('No outstanding invoices — this will be a general promise.'),
@@ -216,18 +235,19 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                     constraints: const BoxConstraints(maxHeight: 180),
                     child: ListView(
                       shrinkWrap: true,
-                      children: invoices
-                          .map((inv) => CheckboxListTile(
+                      children: options
+                          .map((o) => CheckboxListTile(
                                 dense: true,
-                                value: _invoiceIds.contains(inv.id),
-                                title: Text(inv.invoiceNumber),
-                                subtitle: Text(
-                                    '${statusLabel(inv.status)} • balance ${formatMoney(inv.balance)}'),
+                                value: _invoiceIds.contains(o.id),
+                                title: Text(o.invoiceNumber),
+                                subtitle: Text(o.live
+                                    ? '${o.status} • balance ${formatMoney(o.balance)}'
+                                    : '${o.status} • no longer owed'),
                                 onChanged: (on) => setState(() {
                                   if (on == true) {
-                                    _invoiceIds.add(inv.id);
+                                    _invoiceIds.add(o.id);
                                   } else {
-                                    _invoiceIds.remove(inv.id);
+                                    _invoiceIds.remove(o.id);
                                   }
                                 }),
                               ))
@@ -237,12 +257,14 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                 },
               ),
               // A shortfall or excess against the covered invoices is shown, never blocked (AC-B2).
+              // A cancelled invoice owes nothing, so it counts towards neither.
               invoicesAsync.maybeWhen(
-                data: (invoices) {
-                  if (_invoiceIds.isEmpty || promisedAmount <= 0) return const SizedBox.shrink();
-                  final covered = invoices
-                      .where((i) => _invoiceIds.contains(i.id))
-                      .fold<double>(0, (sum, i) => sum + i.balance);
+                data: (outstanding) {
+                  final live = _options(outstanding)
+                      .where((o) => o.live && _invoiceIds.contains(o.id))
+                      .toList();
+                  if (live.isEmpty || promisedAmount <= 0) return const SizedBox.shrink();
+                  final covered = live.fold<double>(0, (sum, o) => sum + o.balance);
                   final diff = promisedAmount - covered;
                   if (diff.abs() < 0.005) return const SizedBox.shrink();
                   return Padding(
@@ -287,6 +309,19 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
       ],
     );
   }
+}
+
+/// A row in the promise's invoice checklist.
+class _InvoiceOption {
+  final int id;
+  final String invoiceNumber;
+  final String status;
+  final double balance;
+
+  /// False for a cancelled invoice, which owes nothing any more.
+  final bool live;
+
+  const _InvoiceOption(this.id, this.invoiceNumber, this.status, this.balance, {required this.live});
 }
 
 final _outstandingInvoicesProvider =

@@ -464,4 +464,70 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(promiseRepository.countLinkedPayments(p.id())).isEqualTo(1);
         assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.KEPT);
     }
+
+    // ---- AC-B7: a general promise answers only for the debt it was made against --
+
+    @Test
+    void aKeptGeneralPromiseStaysKeptWhenALaterInvoiceIsRaised() {
+        PromiseDtos.PromiseDto p = promise("500.00", TODAY.minusDays(2), null);
+        assertThat(p.status()).isEqualTo(PromiseStatus.KEPT);
+
+        invoice("300.00", 1);
+
+        assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.KEPT);
+        assertThat(notificationRepository.findByUserIdOrderByCreatedAtDesc(collections.getId()))
+                .noneMatch(n -> n.getType().equals("PROMISE_BROKEN"));
+    }
+
+    @Test
+    void anInvoiceDatedByThePromisedDayStillCountsAgainstAGeneralPromise() {
+        PromiseDtos.PromiseDto p = promise("100.00", TODAY, null);
+        assertThat(p.status()).isEqualTo(PromiseStatus.KEPT);
+
+        invoice("300.00", 1);
+
+        assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.OPEN);
+    }
+
+    // ---- editing after the facts have moved on ------------------------------------
+
+    @Test
+    void aPromiseStaysEditableAfterOneOfItsInvoicesIsCancelled() {
+        Invoice a = invoice("100.00", 1);
+        Invoice b = invoice("100.00", 1);
+        PromiseDtos.PromiseDto p = promise("200.00", TOMORROW, List.of(a.getId(), b.getId()));
+        invoiceService.cancel(b.getId());
+
+        PromiseDtos.PromiseDto edited = promiseService.update(p.id(), new PromiseDtos.UpdatePromiseRequest(
+                new BigDecimal("200.00"), TOMORROW, null, "edited", List.of(a.getId(), b.getId())));
+        assertThat(edited.notes()).isEqualTo("edited");
+
+        PromiseDtos.PromiseDto unticked = promiseService.update(p.id(), new PromiseDtos.UpdatePromiseRequest(
+                new BigDecimal("100.00"), TOMORROW, null, "edited", List.of(a.getId())));
+        assertThat(unticked.invoices()).extracting(PromiseDtos.PromiseInvoiceDto::id)
+                .containsExactly(a.getId());
+    }
+
+    @Test
+    void aCancelledInvoiceStillCannotBeNewlyAddedToAPromise() {
+        Invoice a = invoice("100.00", 1);
+        Invoice c = invoice("100.00", 1);
+        invoiceService.cancel(c.getId());
+        PromiseDtos.PromiseDto p = promise("100.00", TOMORROW, List.of(a.getId()));
+
+        assertThatThrownBy(() -> promiseService.update(p.id(), new PromiseDtos.UpdatePromiseRequest(
+                new BigDecimal("100.00"), TOMORROW, null, "n", List.of(a.getId(), c.getId()))))
+                .hasMessageContaining("cancelled");
+    }
+
+    @Test
+    void aPromiseWhoseCollectionPocWasDeactivatedCanStillBeEdited() {
+        PromiseDtos.PromiseDto p = promise("100.00", TOMORROW, null);
+        collections.setActive(false);
+        userRepository.save(collections);
+
+        PromiseDtos.PromiseDto edited = promiseService.update(p.id(), new PromiseDtos.UpdatePromiseRequest(
+                new BigDecimal("100.00"), TOMORROW, collections.getId(), "still theirs", null));
+        assertThat(edited.notes()).isEqualTo("still theirs");
+    }
 }

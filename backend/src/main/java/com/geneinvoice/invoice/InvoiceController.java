@@ -81,9 +81,7 @@ public class InvoiceController {
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
     public InvoiceDtos.InvoiceDto update(@PathVariable Long id,
                                          @RequestBody InvoiceDtos.UpdateInvoiceRequest req) {
-        if (req.salesPocUserId() != null && !currentUser.canAssignPoc(userRepository)) {
-            throw new BadRequestException("You may not change the Sales POC");
-        }
+        // Whether the POC may change is decided by the service, which knows the current one.
         return InvoiceDtos.InvoiceDto.from(service.update(id, req), scopeResolver.canSeePoc());
     }
 

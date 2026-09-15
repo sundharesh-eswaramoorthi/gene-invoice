@@ -30,6 +30,7 @@ class InvoiceDetailScreen extends ConsumerStatefulWidget {
 class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
   final _notes = TextEditingController();
   PocUser? _salesPoc;
+  int? _savedSalesPocId;
   bool _loadedInto = false;
   bool _dirty = false;
   bool _saving = false;
@@ -46,6 +47,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     _loadedInto = true;
     _notes.text = inv.notes ?? '';
     _salesPoc = inv.salesPoc;
+    _savedSalesPocId = inv.salesPoc?.id;
   }
 
   Future<bool> _confirmDiscard() async {
@@ -74,10 +76,14 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       _error = null;
     });
     try {
+      final pocChanged = _salesPoc != null && _salesPoc!.id != _savedSalesPocId;
       await ref.read(dioProvider).patch('/api/invoices/${widget.id}', data: {
         'notes': _notes.text.trim(),
-        if (_salesPoc != null) 'salesPocUserId': _salesPoc!.id,
+        // Sent only when changed: an unchanged POC may since have been deactivated, or this user
+        // may not assign POCs, and neither should block a notes edit (AC-A5).
+        if (pocChanged) 'salesPocUserId': _salesPoc!.id,
       });
+      _savedSalesPocId = _salesPoc?.id;
       // Top section, tabs and the list the user came from all pick up the new values (AC-C5).
       ref.invalidate(invoiceDetailProvider(widget.id));
       ref.invalidate(tablePageProvider);

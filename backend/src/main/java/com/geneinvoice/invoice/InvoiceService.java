@@ -19,6 +19,7 @@ import com.geneinvoice.product.Product;
 import com.geneinvoice.product.ProductRepository;
 import com.geneinvoice.promise.PaymentPromiseService;
 import com.geneinvoice.user.User;
+import com.geneinvoice.user.UserRepository;
 import jakarta.persistence.criteria.Expression;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -47,6 +48,7 @@ public class InvoiceService {
     private final PaymentPromiseService promiseService;
     private final CreditLedger creditLedger;
     private final InvoiceNumbers invoiceNumbers;
+    private final UserRepository userRepository;
 
     @Transactional
     public Invoice create(InvoiceDtos.CreateInvoiceRequest req) {
@@ -110,14 +112,17 @@ public class InvoiceService {
         Object before = InvoiceDtos.InvoiceDto.from(inv);
 
         if (req.notes() != null) inv.setNotes(req.notes());
-        if (req.salesPocUserId() != null) {
-            User poc = pocService.requireAssignable(req.salesPocUserId(), PocType.SALES);
-            User previous = inv.getSalesPoc();
-            if (previous == null || !previous.getId().equals(poc.getId())) {
-                inv.setSalesPoc(poc);
-                pocService.notifyAssignee(poc, PocType.SALES,
-                        "invoice " + inv.getInvoiceNumber(), "/invoices/" + inv.getId());
+        // Only an actual change of POC is checked, so a notes edit still saves when the POC has
+        // since been deactivated or the editor may not assign POCs (AC-A5).
+        Long previousId = inv.getSalesPoc() == null ? null : inv.getSalesPoc().getId();
+        if (req.salesPocUserId() != null && !req.salesPocUserId().equals(previousId)) {
+            if (!currentUser.canAssignPoc(userRepository)) {
+                throw new BadRequestException("You may not change the Sales POC");
             }
+            User poc = pocService.requireAssignable(req.salesPocUserId(), PocType.SALES);
+            inv.setSalesPoc(poc);
+            pocService.notifyAssignee(poc, PocType.SALES,
+                    "invoice " + inv.getInvoiceNumber(), "/invoices/" + inv.getId());
         }
         Invoice saved = invoiceRepository.save(inv);
         auditService.record(ENTITY, id, "INVOICE_UPDATED", before,

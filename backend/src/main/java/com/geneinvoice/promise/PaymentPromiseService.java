@@ -78,7 +78,7 @@ public class PaymentPromiseService {
         }
 
         User poc = resolveCollectionPoc(req.collectionPocUserId(), customer.getId());
-        Set<Invoice> invoices = resolveInvoices(req.invoiceIds(), customer.getId());
+        Set<Invoice> invoices = resolveInvoices(req.invoiceIds(), customer.getId(), Set.of());
 
         PaymentPromise promise = PaymentPromise.builder()
                 .customer(customer)
@@ -114,17 +114,20 @@ public class PaymentPromiseService {
         promise.setAmount(req.amount());
         promise.setPromisedDate(req.promisedDate());
         promise.setNotes(req.notes());
-        if (req.collectionPocUserId() != null) {
+        // Only an actual change of POC is validated, so a promise whose POC has since been
+        // deactivated can still be edited (AC-A5).
+        Long previousPocId = promise.getCollectionPoc() == null ? null : promise.getCollectionPoc().getId();
+        if (req.collectionPocUserId() != null && !req.collectionPocUserId().equals(previousPocId)) {
             User poc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION);
-            if (!poc.getId().equals(promise.getCollectionPoc().getId())) {
-                promise.setCollectionPoc(poc);
-                pocService.notifyAssignee(poc, PocType.COLLECTION,
-                        "a payment promise from " + promise.getCustomer().getName(),
-                        "/promises/" + promise.getId());
-            }
+            promise.setCollectionPoc(poc);
+            pocService.notifyAssignee(poc, PocType.COLLECTION,
+                    "a payment promise from " + promise.getCustomer().getName(),
+                    "/promises/" + promise.getId());
         }
         if (req.invoiceIds() != null) {
-            promise.setInvoices(resolveInvoices(req.invoiceIds(), promise.getCustomer().getId()));
+            Set<Long> linked = promise.getInvoices().stream().map(Invoice::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            promise.setInvoices(resolveInvoices(req.invoiceIds(), promise.getCustomer().getId(), linked));
         }
 
         evaluate(promise);
@@ -264,8 +267,7 @@ public class PaymentPromiseService {
             boolean complete = invoiceScoped
                     ? invoicesSettled
                     : fulfilment.total().compareTo(promise.getAmount()) >= 0
-                            || (dateReached
-                                    && customerOutstanding(promise.getCustomer().getId()).signum() <= 0);
+                            || (dateReached && owedUnderPromise(promise).signum() <= 0);
             if (complete) return PromiseStatus.KEPT;
             return fulfilment.total().signum() > 0 ? PromiseStatus.PARTIALLY_KEPT : PromiseStatus.OPEN;
         }
@@ -275,7 +277,7 @@ public class PaymentPromiseService {
         boolean keptOnTime = onTime.compareTo(promise.getAmount()) >= 0
                 || (invoiceScoped && invoicesSettled && fulfilment.late().signum() == 0)
                 || (!invoiceScoped && fulfilment.late().signum() == 0
-                        && customerOutstanding(promise.getCustomer().getId()).signum() <= 0);
+                        && owedUnderPromise(promise).signum() <= 0);
         if (keptOnTime) return PromiseStatus.KEPT;
         return onTime.signum() > 0 ? PromiseStatus.PARTIALLY_KEPT : PromiseStatus.BROKEN;
     }
@@ -352,10 +354,22 @@ public class PaymentPromiseService {
                 .toList();
     }
 
-    private BigDecimal customerOutstanding(Long customerId) {
+    /**
+     * What the customer still owes on the invoices a general promise answers for: those dated by
+     * the end of the promised date, and any that already existed when the promise was made
+     * (AC-B7). An invoice raised after both is a new debt the promise never covered, so it cannot
+     * break a promise that was already kept.
+     */
+    private BigDecimal owedUnderPromise(PaymentPromise promise) {
+        Instant deadline = endOfPromisedDate(promise);
+        Instant made = promise.getCreatedAt();
         BigDecimal total = BigDecimal.ZERO;
-        for (Invoice inv : invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customerId)) {
+        for (Invoice inv : invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(promise.getCustomer().getId())) {
             if (inv.getStatus() == InvoiceStatus.CANCELLED) continue;
+            boolean datedInTime = inv.getInvoiceDate().isBefore(deadline);
+            boolean existedWhenMade = made == null || inv.getCreatedAt() == null
+                    || !inv.getCreatedAt().isAfter(made);
+            if (!datedInTime && !existedWhenMade) continue;
             BigDecimal balance = inv.getBalance();
             if (balance.signum() > 0) total = total.add(balance);
         }
@@ -541,7 +555,12 @@ public class PaymentPromiseService {
                                 + "so pick one explicitly"));
     }
 
-    private Set<Invoice> resolveInvoices(List<Long> ids, Long customerId) {
+    /**
+     * Loads the invoices a promise covers. A cancelled invoice cannot be newly promised against,
+     * but one already linked when it was cancelled stays acceptable, so the promise can still be
+     * edited afterwards.
+     */
+    private Set<Invoice> resolveInvoices(List<Long> ids, Long customerId, Set<Long> alreadyLinked) {
         Set<Invoice> resolved = new LinkedHashSet<>();
         if (ids == null || ids.isEmpty()) return resolved;
         List<Invoice> found = invoiceRepository.findAllById(new ArrayList<>(ids));
@@ -553,7 +572,7 @@ public class PaymentPromiseService {
                 throw new BadRequestException("Invoice " + inv.getInvoiceNumber()
                         + " belongs to a different customer");
             }
-            if (inv.getStatus() == InvoiceStatus.CANCELLED) {
+            if (inv.getStatus() == InvoiceStatus.CANCELLED && !alreadyLinked.contains(inv.getId())) {
                 throw new BadRequestException("Invoice " + inv.getInvoiceNumber()
                         + " is cancelled and cannot be promised against");
             }

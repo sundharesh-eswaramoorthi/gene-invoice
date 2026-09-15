@@ -31,6 +31,7 @@ class PaymentDetailScreen extends ConsumerStatefulWidget {
 class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
   final _notes = TextEditingController();
   PocUser? _collectionPoc;
+  int? _savedCollectionPocId;
   bool _seeded = false;
   bool _dirty = false;
   bool _saving = false;
@@ -47,6 +48,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     _seeded = true;
     _notes.text = p.notes ?? '';
     _collectionPoc = p.collectionPoc;
+    _savedCollectionPocId = p.collectionPoc?.id;
   }
 
   Future<bool> _confirmDiscard() async {
@@ -75,10 +77,14 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
       _error = null;
     });
     try {
+      final pocChanged = _collectionPoc != null && _collectionPoc!.id != _savedCollectionPocId;
       await ref.read(dioProvider).patch('/api/payments/${widget.id}', data: {
         'notes': _notes.text.trim(),
-        if (_collectionPoc != null) 'collectionPocUserId': _collectionPoc!.id,
+        // Sent only when changed: an unchanged POC may since have been deactivated, or this user
+        // may not assign POCs, and neither should block a notes edit (AC-A5).
+        if (pocChanged) 'collectionPocUserId': _collectionPoc!.id,
       });
+      _savedCollectionPocId = _collectionPoc?.id;
       ref.invalidate(paymentDetailProvider(widget.id));
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);

@@ -90,9 +90,7 @@ public class PaymentController {
     @PreAuthorize("hasAuthority('" + Privileges.PAYMENT_MANAGE + "')")
     public PaymentDtos.PaymentDto update(@PathVariable Long id,
                                          @RequestBody PaymentDtos.UpdatePaymentRequest req) {
-        if (req.collectionPocUserId() != null && !currentUser.canAssignPoc(userRepository)) {
-            throw new BadRequestException("You may not change the Collection POC");
-        }
+        // Whether the POC may change is decided by the service, which knows the current one.
         return PaymentDtos.PaymentDto.from(paymentService.update(id, req), scopeResolver.canSeePoc());
     }
 
