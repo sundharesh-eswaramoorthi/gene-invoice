@@ -1,6 +1,7 @@
 package com.geneinvoice.common;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -55,6 +56,13 @@ public class GlobalExceptionHandler {
         }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                 ApiError.validation(req.getRequestURI(), errors));
+    }
+
+    /** A unique or foreign-key constraint refused the write. The SQL behind it stays server-side. */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiError> conflict(DataIntegrityViolationException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                ApiError.of(409, "Conflict", "This change conflicts with existing data", req.getRequestURI()));
     }
 
     @ExceptionHandler(Exception.class)

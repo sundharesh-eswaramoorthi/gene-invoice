@@ -195,7 +195,12 @@ public class PaymentService {
         return saved;
     }
 
-    /** Reverse allocations only (does NOT mark status). Used both for void and for re-recording. */
+    /**
+     * Reverse allocations only (does NOT mark status). Used both for void and for re-recording.
+     * {@link CreditLedger} keeps the allocations and the credit applied current as money moves
+     * through credit, so this takes back exactly what the payment put in. The floor at zero only
+     * matters for credit older than the ledger.
+     */
     private void reverseAllocations(Payment p) {
         for (PaymentAllocation alloc : new ArrayList<>(p.getAllocations())) {
             Invoice inv = alloc.getInvoice();

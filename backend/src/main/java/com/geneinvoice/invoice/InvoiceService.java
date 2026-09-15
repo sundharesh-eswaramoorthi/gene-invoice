@@ -11,6 +11,7 @@ import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.payment.CreditLedger;
 import com.geneinvoice.poc.PocService;
 import com.geneinvoice.poc.PocType;
 import com.geneinvoice.poc.ScopeResolver;
@@ -26,9 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,6 +45,8 @@ public class InvoiceService {
     private final TableQueryExecutor queryExecutor;
     private final AuditService auditService;
     private final PaymentPromiseService promiseService;
+    private final CreditLedger creditLedger;
+    private final InvoiceNumbers invoiceNumbers;
 
     @Transactional
     public Invoice create(InvoiceDtos.CreateInvoiceRequest req) {
@@ -60,7 +60,8 @@ public class InvoiceService {
                 .customer(customer)
                 .invoiceDate(req.invoiceDate() == null ? Instant.now() : req.invoiceDate())
                 .notes(req.notes())
-                .invoiceNumber(nextInvoiceNumber())
+                // Drawn before this transaction writes anything; see InvoiceNumbers#next.
+                .invoiceNumber(invoiceNumbers.next())
                 .salesPoc(salesPoc)
                 .build();
 
@@ -80,15 +81,21 @@ public class InvoiceService {
         }
         invoice.setItems(items);
         invoice.setTotal(total);
-        applyCustomerCreditIfAny(invoice);
-        recomputeStatus(invoice);
+        // Saved before any credit is booked against it: an allocation needs the invoice's id.
         Invoice saved = invoiceRepository.save(invoice);
+        List<CreditLedger.CreditMove> fromCredit = creditLedger.applyTo(saved);
+        recomputeStatus(saved);
+        saved = invoiceRepository.save(saved);
         // Leftover credit is the only thing that can have paid a brand-new invoice, so a non-zero
         // paid amount here is exactly the credit it consumed.
         BigDecimal creditUsed = saved.getPaidAmount();
         auditService.record(ENTITY, saved.getId(), "INVOICE_CREATED", null,
                 InvoiceDtos.InvoiceDto.from(saved), currentUser.idOrNull(), null,
                 creditUsed.signum() > 0 ? "Customer credit applied: " + creditUsed.toPlainString() : null);
+        for (CreditLedger.CreditMove m : fromCredit) {
+            auditService.record(ENTITY, saved.getId(), "PAYMENT_APPLIED", m.before(), m.after(),
+                    currentUser.idOrNull(), null, "Paid from customer credit");
+        }
 
         pocService.notifyAssignee(salesPoc, PocType.SALES,
                 "invoice " + saved.getInvoiceNumber(), "/invoices/" + saved.getId());
@@ -125,28 +132,12 @@ public class InvoiceService {
         return update(id, new InvoiceDtos.UpdateInvoiceRequest(null, userId));
     }
 
-    private void applyCustomerCreditIfAny(Invoice invoice) {
-        Customer c = invoice.getCustomer();
-        BigDecimal credit = c.getCreditBalance();
-        if (credit == null || credit.signum() <= 0) return;
-        BigDecimal apply = credit.min(invoice.getTotal());
-        invoice.setPaidAmount(invoice.getPaidAmount().add(apply));
-        c.setCreditBalance(credit.subtract(apply));
-        customerRepository.save(c);
-    }
-
     public static void recomputeStatus(Invoice inv) {
         if (inv.getStatus() == InvoiceStatus.CANCELLED) return;
         BigDecimal balance = inv.getBalance();
         if (balance.signum() <= 0) inv.setStatus(InvoiceStatus.FULLY_PAID);
         else if (inv.getPaidAmount().signum() > 0) inv.setStatus(InvoiceStatus.PARTIALLY_PAID);
         else inv.setStatus(InvoiceStatus.UNPAID);
-    }
-
-    private String nextInvoiceNumber() {
-        String prefix = "INV-" + LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
-        long count = invoiceRepository.countByInvoiceNumberStartingWith(prefix);
-        return prefix + String.format("%04d", count + 1);
     }
 
     @Transactional(readOnly = true)
@@ -241,7 +232,8 @@ public class InvoiceService {
 
     /**
      * Cancel an invoice as part of a dispute resolution. Any amount already paid is refunded to
-     * the customer's credit balance. Caller (DisputeService) is responsible for audit logging.
+     * the customer's credit balance, still booked to the payments it came from. Caller
+     * (DisputeService) is responsible for audit logging.
      */
     @Transactional
     public Invoice cancelWithRefund(Long id) {
@@ -250,9 +242,7 @@ public class InvoiceService {
             throw new BadRequestException("Invoice already cancelled");
         }
         if (inv.getPaidAmount().signum() > 0) {
-            Customer c = inv.getCustomer();
-            c.setCreditBalance(c.getCreditBalance().add(inv.getPaidAmount()));
-            customerRepository.save(c);
+            creditLedger.refund(inv, inv.getPaidAmount());
             inv.setPaidAmount(BigDecimal.ZERO);
         }
         inv.setStatus(InvoiceStatus.CANCELLED);
@@ -294,10 +284,7 @@ public class InvoiceService {
         if (notes != null) inv.setNotes(notes);
 
         if (inv.getPaidAmount().compareTo(total) > 0) {
-            BigDecimal refund = inv.getPaidAmount().subtract(total);
-            Customer c = inv.getCustomer();
-            c.setCreditBalance(c.getCreditBalance().add(refund));
-            customerRepository.save(c);
+            creditLedger.refund(inv, inv.getPaidAmount().subtract(total));
             inv.setPaidAmount(total);
         }
         recomputeStatus(inv);
