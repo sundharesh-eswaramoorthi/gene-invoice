@@ -1,0 +1,168 @@
+[
+  {
+    "id": "M1-01",
+    "defect": "D-13",
+    "name": "each malformed request → expected 4xx, no class names",
+    "status": "PASS",
+    "detail": {
+      "GET /invoices/abc": [
+        400,
+        "Invalid value for 'id': must be a number"
+      ],
+      "GET /invoices?size=abc": [
+        400,
+        "Invalid value for 'size': must be a number"
+      ],
+      "GET /pocs/assignable?type=bogus": [
+        400,
+        "Invalid value for 'type': must be one of [SALES, SUCCESS, COLLECTION]"
+      ],
+      "GET /pocs/assignable (no type)": [
+        400,
+        "Missing required parameter 'type'"
+      ],
+      "POST /products price abc": [
+        400,
+        "One or more fields are invalid"
+      ],
+      "POST /products {bad json": [
+        400,
+        "The request body is not valid JSON"
+      ],
+      "POST /override status FOO": [
+        400,
+        "One or more fields are invalid"
+      ],
+      "bulk ADD_POC pocType foo": [
+        400,
+        "pocType must be one of [SALES, SUCCESS, COLLECTION]"
+      ],
+      "bulk ADD_POC userId abc": [
+        400,
+        "params.userId must be a whole number"
+      ],
+      "DELETE /invoices (405)": [
+        405,
+        "DELETE is not supported here"
+      ],
+      "POST /products text/plain (415)": [
+        415,
+        "Send the request body as application/json"
+      ],
+      "GET /api/no-such-thing (404)": [
+        404,
+        "No such endpoint"
+      ],
+      "dispute update_amount abc": [
+        400,
+        "amount must be a number"
+      ]
+    }
+  },
+  {
+    "id": "M1-02",
+    "defect": "D-27",
+    "name": "email/role-name clash and role in use → 400 with message; unknown role → 404",
+    "status": "PASS",
+    "detail": {
+      "dupEmailCreate": [
+        400,
+        "Email already exists"
+      ],
+      "dupEmailUpdate": [
+        400,
+        "Email already exists"
+      ],
+      "dupRoleName": [
+        400,
+        "Role name already exists"
+      ],
+      "deleteRoleInUse": [
+        400,
+        "Role is assigned to 1 user; move them to another role first"
+      ],
+      "deleteUnknownRole": [
+        404,
+        "Role not found"
+      ]
+    }
+  },
+  {
+    "id": "M1-03",
+    "defect": "D-28",
+    "name": "two blank-email users 200 with null email; edit/reactivate 200",
+    "status": "PASS",
+    "detail": {
+      "one": [
+        200,
+        "{\"id\":650,\"username\":\"vm1-blank-mu32elvu1379\",\"email\":null,\"fullName\":null,\"acti"
+      ],
+      "two": [
+        200,
+        "{\"id\":651,\"username\":\"vm1-blank-mu32elxoa7c5\",\"email\":null,\"fullName\":null,\"acti"
+      ],
+      "deactivate": 200,
+      "reactivate": 200
+    }
+  },
+  {
+    "id": "M1-04",
+    "defect": "D-29",
+    "name": "username 81, invoice notes 501, payment notes 301 → 400 field errors; 500 → 200",
+    "status": "PASS",
+    "detail": {
+      "username81": [
+        400,
+        "One or more fields are invalid"
+      ],
+      "invoiceNotes501": [
+        400,
+        "One or more fields are invalid"
+      ],
+      "invoiceNotes500": [
+        200,
+        "{\"id\":455,\"invoiceNumber\":\"INV-20260915-0435\",\"customerId\":307,\"customerName\":\"v"
+      ],
+      "paymentNotes301": [
+        400,
+        "One or more fields are invalid"
+      ]
+    }
+  },
+  {
+    "id": "M1-05",
+    "defect": "D-30",
+    "name": "0.001 and 10.555 → 400; 10.55 → 200 and stored as 10.55",
+    "status": "PASS",
+    "detail": {
+      "tiny": [
+        400,
+        "One or more fields are invalid"
+      ],
+      "fine": [
+        400,
+        "One or more fields are invalid"
+      ],
+      "ok": 200,
+      "stored": 10.55
+    }
+  },
+  {
+    "id": "M1-06",
+    "defect": "D-32",
+    "name": "qty 0 / -2 → 400; invoice total unchanged; dispute still PENDING",
+    "status": "PASS",
+    "detail": {
+      "zero": [
+        400,
+        "Quantity must be positive"
+      ],
+      "negative": [
+        400,
+        "Quantity must be positive"
+      ],
+      "total": 100,
+      "dispute": "PENDING"
+    }
+  }
+]

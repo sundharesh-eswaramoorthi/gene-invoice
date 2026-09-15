@@ -1,0 +1,62 @@
+{
+ "W03": {
+  "paymentsBefore": [
+   {
+    "id": 179,
+    "amount": 10.55,
+    "method": "10.555"
+   }
+  ],
+  "shot_w03b-1-customer-picked": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w03b-1-customer-picked.png",
+  "inputsBefore10555": [
+   "Amount *=10.555",
+   "Method (cash/card/transfer)=10.555",
+   "Notes="
+  ],
+  "shot_w03b-2-10555": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w03b-2-10555.png",
+  "after10555": [
+   "[null] Enter an amount greater than zero, with at most 2 decimal places @623,610 420x20"
+  ],
+  "postsAfter10555": 0,
+  "paymentsAfter10555": [
+   {
+    "id": 179,
+    "amount": 10.55,
+    "method": "10.555"
+   }
+  ],
+  "inputsBefore1055": [
+   "Amount *=10.55",
+   "Method (cash/card/transfer)=Cash",
+   "Notes="
+  ],
+  "shot_w03b-3-1055": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w03b-3-1055.png",
+  "dialogStillOpen": false,
+  "textsAfter1055": [],
+  "posts": [
+   "{\"customerId\":324,\"amount\":10.55,\"method\":\"Cash\",\"notes\":\"\",\"collectionPocUserId\":687}"
+  ],
+  "paymentsAfter1055": [
+   {
+    "id": 180,
+    "amount": 10.55,
+    "method": "Cash"
+   },
+   {
+    "id": 179,
+    "amount": 10.55,
+    "method": "10.555"
+   }
+  ]
+ },
+ "fillMisses": [
+  {
+   "matcher": "/^Amount/",
+   "wanted": "10.555",
+   "got": "",
+   "attempt": 0
+  }
+ ],
+ "apiErrors": [],
+ "pageErrors": []
+}

@@ -1,0 +1,157 @@
+{
+ "W01": {
+  "shot_w01-1-dialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w01-1-dialog.png",
+  "inputs": [
+   {
+    "i": 0,
+    "tag": "INPUT",
+    "label": "Username",
+    "value": "",
+    "x": 687,
+    "y": 326,
+    "w": 428,
+    "h": 46
+   },
+   {
+    "i": 1,
+    "tag": "INPUT",
+    "label": "Email",
+    "value": "",
+    "x": 687,
+    "y": 374,
+    "w": 428,
+    "h": 46
+   },
+   {
+    "i": 2,
+    "tag": "INPUT",
+    "label": "Full name",
+    "value": "",
+    "x": 687,
+    "y": 422,
+    "w": 428,
+    "h": 46
+   },
+   {
+    "i": 3,
+    "tag": "INPUT",
+    "label": "Password",
+    "value": "",
+    "x": 687,
+    "y": 470,
+    "w": 428,
+    "h": 46
+   }
+  ],
+  "username": "wm-ui-user-mu33o5ew3177",
+  "roleMenu": [
+   "[menuitem] ADMIN @687,80 460x48",
+   "[menuitem] AUR_EMPTY-mu2sozf82050 @687,128 460x48",
+   "[menuitem] AUR_UMGR-mu2soyuk8e21 @687,176 460x48",
+   "[menuitem] CASHIER @687,224 460x48",
+   "[menuitem] COLLECTION_POC @687,272 460x48",
+   "[menuitem] CPNOASSIGN-MU2SQMAW03DB @687,320 460x48",
+   "[menuitem] CPROLE-MU2SQM19F60B @687,368 460x48",
+   "[menuitem] CPRRNA-MU2SSCU14D95 @687,416 460x48",
+   "[menuitem] CUSTOMER @687,464 460x48",
+   "[menuitem] CUSTOMER_SUCCESS_POC @687,512 460x48",
+   "[menuitem] INVMGR_MU2SPF2461B0 @687,560 460x48",
+   "[menuitem] PAYCR_NOASSIGN-mu2sqr0j861f @687,608 460x48",
+   "[menuitem] PAYCR_NOASSIGN-mu2sreg1c0d1 @687,656 460x48",
+   "[menuitem] PERMSC_LIVE-MU2SY08VCF07 @687,704 460x48",
+   "[menuitem] PERMSC_MR-MU2SU5ZWD32C @687,752 460x48"
+  ],
+  "rolePicked": "AUR_EMPTY-mu2sozf82050",
+  "shot_w01-2-malformed": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w01-2-malformed.png",
+  "malformedTexts": [
+   "[null] Email must be a well-formed email address @683,583 278x20"
+  ],
+  "longTyped": 132,
+  "longFieldValue": [
+   {
+    "label": "Username",
+    "len": 0
+   },
+   {
+    "label": "Email",
+    "len": 120
+   },
+   {
+    "label": "Full name",
+    "len": 0
+   },
+   {
+    "label": "Password",
+    "len": 0
+   }
+  ],
+  "shot_w01-3-overlong": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w01-3-overlong.png",
+  "overlongTexts": [
+   "[null] Email must be a well-formed email address @683,583 278x20"
+  ],
+  "dupEmailTyped": "WM-DUP-MU33KDPC454E@RT.LOCAL",
+  "shot_w01-4-duplicate": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w01-4-duplicate.png",
+  "duplicateTexts": [
+   "[null] Email already exists @683,583 129x20"
+  ],
+  "dialogStillOpen": true,
+  "userCreated": 0
+ },
+ "W02": {
+  "shot_w02-1-dialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w02-1-dialog.png",
+  "shot_w02-2-after-save": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w02-2-after-save.png",
+  "error": "[null] Role name already exists @523,780 161x20",
+  "save": "[button] Save @884,833 78x38",
+  "cancel": "[button] Cancel @803,833 67x32",
+  "errorOnScreen": true,
+  "errorAboveSaveWithin80px": true
+ },
+ "W03": {
+  "shot_w03-1-dialog": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w03-1-dialog.png",
+  "shot_w03-2-customer-search": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w03-2-customer-search.png",
+  "shot_w03-3-customer-picked": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w03-3-customer-picked.png",
+  "pocShown": [
+   "[button] Collection POC * / WM-COLLA-MU33KDKUC85F @683,389 540x40"
+  ],
+  "shot_w03-4-10555": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w03-4-10555.png",
+  "after10555": [
+   "[null] Enter an amount greater than zero, with at most 2 decimal places @623,610 420x20"
+  ],
+  "paymentsAfter10555": [],
+  "shot_w03-5-1055": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w03-5-1055.png",
+  "dialogOpenAfter1055": false,
+  "textsAfter1055": [
+   "[columnheader] Amount @726,224 124x56"
+  ],
+  "paymentsAfter1055": [
+   {
+    "id": 179,
+    "amount": 10.55,
+    "poc": "wm-collA-mu33kdkuc85f"
+   }
+  ]
+ },
+ "apiErrors": [
+  {
+   "status": 400,
+   "method": "POST",
+   "url": "/api/users"
+  },
+  {
+   "status": 400,
+   "method": "POST",
+   "url": "/api/users"
+  },
+  {
+   "status": 400,
+   "method": "POST",
+   "url": "/api/users"
+  },
+  {
+   "status": 400,
+   "method": "POST",
+   "url": "/api/roles"
+  }
+ ],
+ "pageErrors": []
+}

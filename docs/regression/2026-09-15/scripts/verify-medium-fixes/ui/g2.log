@@ -1,0 +1,116 @@
+{
+ "W04": {
+  "shot_w04-1-admin-columns": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w04-1-admin-columns.png",
+  "adminColumns": [
+   "Id",
+   "Invoice #",
+   "Customer",
+   "Customer name",
+   "Date",
+   "Total",
+   "Paid",
+   "Balance",
+   "Status",
+   "Notes",
+   "Sales POC",
+   "Sales POC name",
+   "Created"
+  ],
+  "adminAllTexts": [
+   "Invoice #",
+   "Customer",
+   "Customer name",
+   "Total",
+   "Balance",
+   "Status",
+   "Sales POC",
+   "Sales POC name"
+  ],
+  "shot_w04-2-signed-out": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w04-2-signed-out.png",
+  "hashAfterSignOut": "#/login",
+  "shot_w04-3-customer-home": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w04-3-customer-home.png",
+  "reloads": 1,
+  "shot_w04-4-customer-invoices": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w04-4-customer-invoices.png",
+  "customerListTexts": [
+   "[cell] INV-20260915-0461 @350,276 187x48"
+  ],
+  "shot_w04-5-customer-columns": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w04-5-customer-columns.png",
+  "customerColumns": [
+   "Id",
+   "Invoice #",
+   "Customer",
+   "Customer name",
+   "Date",
+   "Total",
+   "Paid",
+   "Balance",
+   "Status",
+   "Notes",
+   "Created"
+  ],
+  "customerAllTexts": [
+   "Invoice #",
+   "Customer",
+   "Customer name",
+   "Total",
+   "Balance",
+   "Status"
+  ],
+  "shot_w04-6-after-close": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w04-6-after-close.png",
+  "errorsOnScreen": [],
+  "salesPocOffered": false,
+  "apiErrors": [
+   {
+    "status": 401,
+    "method": "GET",
+    "url": "/api/table-schemas/invoices"
+   }
+  ],
+  "pageErrors": []
+ },
+ "W05": {
+  "shot_w05-1-admin-invoice": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w05-1-admin-invoice.png",
+  "adminInvoiceHeader": [
+   "[null] 99+ @1165,23 19x16",
+   "[button] Notifications @1166,28 40x40",
+   "[button] Account / admin • ADMIN @1278,28 176x24",
+   "[button] Back @285,94 40x40",
+   "[null] INV-20260915-0462 @412,84 213x32",
+   "[null] wm-disp-mu33kdwo2e6c • 2026-09-16 @428,110 247x20",
+   "[checkbox] Partially paid @1292,94 116x34"
+  ],
+  "adminInvoiceRaise": [],
+  "shot_w05-2-admin-payment": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w05-2-admin-payment.png",
+  "adminPaymentHeader": [
+   "[null] 99+ @1165,23 19x16",
+   "[button] Notifications @1166,28 40x40",
+   "[button] Account / admin • ADMIN @1278,28 176x24",
+   "[button] Back @285,94 40x40",
+   "[null] Payment #178 @383,84 155x32",
+   "[null] wm-disp-mu33kdwo2e6c • 16 Sep 2026, 1:31 AM @462,110 315x20",
+   "[checkbox] Active @1313,94 73x34"
+  ],
+  "adminPaymentRaise": [],
+  "adminApiErrors": [],
+  "shot_w05-3-customer-invoice": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w05-3-customer-invoice.png",
+  "customerInvoiceHeader": [
+   "[button] Notifications @1064,28 40x40",
+   "[button] Account / wm-disp-mu33kdwo2e6c • CUSTOMER @1227,28 278x24",
+   "[button] Back @285,94 40x40",
+   "[null] INV-20260915-0463 @412,84 213x32",
+   "[null] wm-disp-mu33kdwo2e6c • 2026-09-16 @428,110 247x20",
+   "[checkbox] Unpaid @1166,94 78x34",
+   "[button] Raise dispute @1280,94 139x32"
+  ],
+  "customerInvoiceRaise": [
+   "[button] Raise dispute @1280,94 139x32",
+   "[button] Raise dispute @345,485 151x38"
+  ],
+  "shot_w05-4-customer-payment": "/Users/srinivasans/Git/DooD_Test/gene-invoice-main/docs/regression/2026-09-15/scripts/verify-medium-fixes/ui/shots/w05-4-customer-payment.png",
+  "customerPaymentRaise": [
+   "[button] Raise dispute @1280,94 139x32",
+   "[button] Raise dispute @345,464 151x38"
+  ],
+  "customerApiErrors": []
+ }
+}

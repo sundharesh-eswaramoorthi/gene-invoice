@@ -1,0 +1,1014 @@
+{
+  "log": [
+    {
+      "what": "seat cPay A",
+      "status": 200,
+      "body": "{\"id\":173,\"pocType\":\"COLLECTION\",\"primary\":true,\"user\":{\"id\":687,\"username\":\"wm-collA-mu33kdkuc85f\",\"fullName\":\"WM-COLLA-MU33KDKUC85F\",\"email\":\"wm-collA-mu33kdkuc85f@rt.local\",\"role\":\"COLLECTION_POC\","
+    },
+    {
+      "what": "invPay",
+      "status": 200,
+      "body": "{\"id\":480,\"invoiceNumber\":\"INV-20260915-0460\",\"customerId\":324,\"customerName\":\"wm-pay-mu33kdrm096a\",\"invoiceDate\":\"2026-09-15T20:01:08.619623Z\",\"total\":1000,\"paidAmount\":0,\"balance\":1000,\"status\":\"UNP"
+    },
+    {
+      "what": "inv22",
+      "status": 200,
+      "body": "{\"id\":481,\"invoiceNumber\":\"INV-20260915-0461\",\"customerId\":325,\"customerName\":\"wm-d22-mu33kdudfe1e\",\"invoiceDate\":\"2026-09-15T20:01:08.704404Z\",\"total\":250,\"paidAmount\":0,\"balance\":250,\"status\":\"UNPAI"
+    },
+    {
+      "what": "invDisp",
+      "status": 200,
+      "body": "{\"id\":482,\"invoiceNumber\":\"INV-20260915-0462\",\"customerId\":326,\"customerName\":\"wm-disp-mu33kdwo2e6c\",\"invoiceDate\":\"2026-09-15T20:01:08.788223Z\",\"total\":451234.5,\"paidAmount\":0,\"balance\":451234.5,\"sta"
+    },
+    {
+      "what": "payDisp",
+      "status": 200,
+      "body": "{\"id\":178,\"customerId\":326,\"customerName\":\"wm-disp-mu33kdwo2e6c\",\"amount\":1000,\"creditApplied\":0,\"method\":\"Cash\",\"notes\":\"wm\",\"paidAt\":\"2026-09-15T20:01:08.800057Z\",\"status\":\"ACTIVE\",\"invoices\":[{\"id\""
+    },
+    {
+      "what": "invDisp2",
+      "status": 200,
+      "body": "{\"id\":483,\"invoiceNumber\":\"INV-20260915-0463\",\"customerId\":326,\"customerName\":\"wm-disp-mu33kdwo2e6c\",\"invoiceDate\":\"2026-09-15T20:01:08.818204Z\",\"total\":300,\"paidAmount\":0,\"balance\":300,\"status\":\"UNPA"
+    },
+    {
+      "what": "dispInv",
+      "status": 200,
+      "body": "{\"id\":166,\"customerId\":326,\"customerName\":\"wm-disp-mu33kdwo2e6c\",\"openedByUserId\":692,\"targetType\":\"INVOICE\",\"targetId\":482,\"targetSummary\":\"INV-20260915-0462 — 451234.50\",\"targetNumber\":\"INV-20260915"
+    },
+    {
+      "what": "dispPay",
+      "status": 200,
+      "body": "{\"id\":167,\"customerId\":326,\"customerName\":\"wm-disp-mu33kdwo2e6c\",\"openedByUserId\":692,\"targetType\":\"PAYMENT\",\"targetId\":178,\"targetSummary\":\"Payment #178 — 1000.00\",\"targetNumber\":\"#178\",\"targetAmount"
+    },
+    {
+      "what": "seat c36 primary",
+      "status": 200,
+      "body": "{\"id\":174,\"pocType\":\"COLLECTION\",\"primary\":true,\"user\":{\"id\":693,\"username\":\"wm-d36primary-mu33ke2ree31\",\"fullName\":\"WM-D36PRIMARY-MU33KE2REE31\",\"email\":\"wm-d36primary-mu33ke2ree31@rt.local\",\"role\":\"C"
+    },
+    {
+      "what": "seat c36 backup",
+      "status": 200,
+      "body": "{\"id\":175,\"pocType\":\"COLLECTION\",\"primary\":false,\"user\":{\"id\":694,\"username\":\"wm-d36backup-mu33ke4o2132\",\"fullName\":\"WM-D36BACKUP-MU33KE4O2132\",\"email\":\"wm-d36backup-mu33ke4o2132@rt.local\",\"role\":\"COL"
+    },
+    {
+      "what": "delete p36",
+      "status": 200,
+      "body": "{\"deactivated\":true,\"pocReferences\":1,\"deleted\":false}"
+    },
+    {
+      "what": "inv37",
+      "status": 200,
+      "body": "{\"id\":484,\"invoiceNumber\":\"INV-20260915-0464\",\"customerId\":328,\"customerName\":\"wm-d37-mu33ke9pca07\",\"invoiceDate\":\"2026-09-15T20:01:09.252711Z\",\"total\":500,\"paidAmount\":0,\"balance\":500,\"status\":\"UNPAI"
+    },
+    {
+      "what": "prom37",
+      "status": 200,
+      "body": "{\"id\":162,\"customerId\":328,\"customerName\":\"wm-d37-mu33ke9pca07\",\"amount\":500,\"fulfilledAmount\":0,\"remainingAmount\":500,\"promisedDate\":\"2026-09-25\",\"status\":\"OPEN\",\"statusOverridden\":false,\"overrideRea"
+    },
+    {
+      "what": "inv9x",
+      "status": 200,
+      "body": "{\"id\":485,\"invoiceNumber\":\"INV-20260915-0465\",\"customerId\":329,\"customerName\":\"wm-card-mu33kec60d46\",\"invoiceDate\":\"2026-09-15T20:01:09.343058Z\",\"total\":100,\"paidAmount\":0,\"balance\":100,\"status\":\"UNPA"
+    },
+    {
+      "what": "inv9y",
+      "status": 200,
+      "body": "{\"id\":486,\"invoiceNumber\":\"INV-20260915-0466\",\"customerId\":329,\"customerName\":\"wm-card-mu33kec60d46\",\"invoiceDate\":\"2026-09-15T20:01:09.353295Z\",\"total\":200,\"paidAmount\":0,\"balance\":200,\"status\":\"UNPA"
+    },
+    {
+      "what": "prom9",
+      "status": 200,
+      "body": "{\"id\":163,\"customerId\":329,\"customerName\":\"wm-card-mu33kec60d46\",\"amount\":300,\"fulfilledAmount\":0,\"remainingAmount\":300,\"promisedDate\":\"2026-09-22\",\"status\":\"OPEN\",\"statusOverridden\":false,\"overrideRe"
+    },
+    {
+      "what": "cancel inv9x",
+      "status": 200,
+      "body": "{\"id\":485,\"invoiceNumber\":\"INV-20260915-0465\",\"customerId\":329,\"customerName\":\"wm-card-mu33kec60d46\",\"invoiceDate\":\"2026-09-15T20:01:09.343058Z\",\"total\":100.00,\"paidAmount\":0.00,\"balance\":100.00,\"stat"
+    },
+    {
+      "what": "invLong1",
+      "status": 200,
+      "body": "{\"id\":487,\"invoiceNumber\":\"INV-20260915-0467\",\"customerId\":330,\"customerName\":\"wm-long-mu33kef888ea\",\"invoiceDate\":\"2026-09-15T20:01:09.448935Z\",\"total\":120,\"paidAmount\":0,\"balance\":120,\"status\":\"UNPA"
+    },
+    {
+      "what": "invLong2",
+      "status": 200,
+      "body": "{\"id\":488,\"invoiceNumber\":\"INV-20260915-0468\",\"customerId\":330,\"customerName\":\"wm-long-mu33kef888ea\",\"invoiceDate\":\"2026-09-15T20:01:09.461605Z\",\"total\":130,\"paidAmount\":0,\"balance\":130,\"status\":\"UNPA"
+    },
+    {
+      "what": "dispLong1",
+      "status": 200,
+      "body": "{\"id\":169,\"customerId\":330,\"customerName\":\"wm-long-mu33kef888ea\",\"openedByUserId\":698,\"targetType\":\"INVOICE\",\"targetId\":487,\"targetSummary\":\"INV-20260915-0467 — 120.00\",\"targetNumber\":\"INV-20260915-04"
+    },
+    {
+      "what": "dispLong2",
+      "status": 200,
+      "body": "{\"id\":170,\"customerId\":330,\"customerName\":\"wm-long-mu33kef888ea\",\"openedByUserId\":698,\"targetType\":\"INVOICE\",\"targetId\":488,\"targetSummary\":\"INV-20260915-0468 — 130.00\",\"targetNumber\":\"INV-20260915-04"
+    },
+    {
+      "what": "exportRole",
+      "status": 200,
+      "body": "{\"id\":71,\"name\":\"wm-exporter-mu33kek51d92\",\"description\":\"wm D-21\",\"privileges\":[\"EXPORT_DATA\",\"INVOICE_VIEW\",\"NOTIFICATION_VIEW\"]}"
+    },
+    {
+      "what": "exportUser",
+      "status": 200,
+      "body": "{\"id\":699,\"username\":\"wm-exporter-user-mu33kekb6e3a\",\"email\":\"wm-exporter-user-mu33kekb6e3a@rt.local\",\"fullName\":\"wm-exporter-user-mu33kekb6e3a\",\"active\":true,\"role\":\"wm-exporter-mu33kek51d92\",\"custom"
+    },
+    {
+      "what": "invBulk",
+      "status": 200,
+      "body": "{\"id\":489,\"invoiceNumber\":\"INV-20260915-0469\",\"customerId\":331,\"customerName\":\"wm-bulk-mu33kelz9b41\",\"invoiceDate\":\"2026-09-15T20:01:09.696718Z\",\"total\":77,\"paidAmount\":0,\"balance\":77,\"status\":\"UNPAID"
+    }
+  ],
+  "prod": {
+    "id": 1,
+    "name": "tfw-mu2sowlk11ca-prod-01",
+    "description": "Widget, \"deluxe\" edition",
+    "price": 10,
+    "active": true
+  },
+  "sales": {
+    "id": 686,
+    "username": "wm-sales-mu33kdil2c86",
+    "email": "wm-sales-mu33kdil2c86@rt.local",
+    "fullName": "WM-SALES-MU33KDIL2C86",
+    "active": true,
+    "role": "SALES_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_SALES",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW"
+    ],
+    "password": "Passw0rd!"
+  },
+  "collA": {
+    "id": 687,
+    "username": "wm-collA-mu33kdkuc85f",
+    "email": "wm-collA-mu33kdkuc85f@rt.local",
+    "fullName": "WM-COLLA-MU33KDKUC85F",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "collB": {
+    "id": 688,
+    "username": "wm-collB-mu33kdn33eb2",
+    "email": "wm-collB-mu33kdn33eb2@rt.local",
+    "fullName": "WM-COLLB-MU33KDN33EB2",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "dupUser": {
+    "id": 689,
+    "username": "wm-dup-mu33kdpc454e",
+    "email": "wm-dup-mu33kdpc454e@rt.local",
+    "fullName": "WM-DUP-MU33KDPC454E",
+    "active": true,
+    "role": "VIEWER",
+    "customerId": null,
+    "privileges": [
+      "CUSTOMER_VIEW",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "cPay": {
+    "id": 324,
+    "name": "wm-pay-mu33kdrm096a",
+    "phone": "555-0100",
+    "email": "wm-pay-mu33kdrm096a@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "wm-pay-mu33kdrm096a",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T20:01:08.537882Z",
+    "password": "Passw0rd!"
+  },
+  "invPay": {
+    "id": 480,
+    "invoiceNumber": "INV-20260915-0460",
+    "customerId": 324,
+    "customerName": "wm-pay-mu33kdrm096a",
+    "invoiceDate": "2026-09-15T20:01:08.619623Z",
+    "total": 1000,
+    "paidAmount": 0,
+    "balance": 1000,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 482,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 1000,
+        "lineTotal": 1000
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:08.620564Z"
+  },
+  "c22": {
+    "id": 325,
+    "name": "wm-d22-mu33kdudfe1e",
+    "phone": "555-0100",
+    "email": "wm-d22-mu33kdudfe1e@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "wm-d22-mu33kdudfe1e",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T20:01:08.636011Z",
+    "password": "Passw0rd!"
+  },
+  "inv22": {
+    "id": 481,
+    "invoiceNumber": "INV-20260915-0461",
+    "customerId": 325,
+    "customerName": "wm-d22-mu33kdudfe1e",
+    "invoiceDate": "2026-09-15T20:01:08.704404Z",
+    "total": 250,
+    "paidAmount": 0,
+    "balance": 250,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 483,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 250,
+        "lineTotal": 250
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:08.705234Z"
+  },
+  "cDisp": {
+    "id": 326,
+    "name": "wm-disp-mu33kdwo2e6c",
+    "phone": "555-0100",
+    "email": "wm-disp-mu33kdwo2e6c@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "wm-disp-mu33kdwo2e6c",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T20:01:08.717710Z",
+    "password": "Passw0rd!"
+  },
+  "invDisp": {
+    "id": 482,
+    "invoiceNumber": "INV-20260915-0462",
+    "customerId": 326,
+    "customerName": "wm-disp-mu33kdwo2e6c",
+    "invoiceDate": "2026-09-15T20:01:08.788223Z",
+    "total": 451234.5,
+    "paidAmount": 0,
+    "balance": 451234.5,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 484,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 451234.5,
+        "lineTotal": 451234.5
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:08.789170Z"
+  },
+  "payDisp": {
+    "id": 178,
+    "customerId": 326,
+    "customerName": "wm-disp-mu33kdwo2e6c",
+    "amount": 1000,
+    "creditApplied": 0,
+    "method": "Cash",
+    "notes": "wm",
+    "paidAt": "2026-09-15T20:01:08.800057Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 482,
+        "invoiceNumber": "INV-20260915-0462",
+        "total": 451234.5,
+        "paidAmount": 1000,
+        "balance": 450234.5,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 1000
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 687,
+      "username": "wm-collA-mu33kdkuc85f",
+      "fullName": "WM-COLLA-MU33KDKUC85F",
+      "email": "wm-collA-mu33kdkuc85f@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "invDisp2": {
+    "id": 483,
+    "invoiceNumber": "INV-20260915-0463",
+    "customerId": 326,
+    "customerName": "wm-disp-mu33kdwo2e6c",
+    "invoiceDate": "2026-09-15T20:01:08.818204Z",
+    "total": 300,
+    "paidAmount": 0,
+    "balance": 300,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 485,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 300,
+        "lineTotal": 300
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:08.820521Z"
+  },
+  "dispInv": {
+    "id": 166,
+    "customerId": 326,
+    "customerName": "wm-disp-mu33kdwo2e6c",
+    "openedByUserId": 692,
+    "targetType": "INVOICE",
+    "targetId": 482,
+    "targetSummary": "INV-20260915-0462 — 451234.50",
+    "targetNumber": "INV-20260915-0462",
+    "targetAmount": 451234.5,
+    "reason": "wm D-39 invoice dispute",
+    "proposedChangeJson": null,
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T20:01:08.910327Z",
+    "updatedAt": "2026-09-15T20:01:08.910327Z"
+  },
+  "dispPay": {
+    "id": 167,
+    "customerId": 326,
+    "customerName": "wm-disp-mu33kdwo2e6c",
+    "openedByUserId": 692,
+    "targetType": "PAYMENT",
+    "targetId": 178,
+    "targetSummary": "Payment #178 — 1000.00",
+    "targetNumber": "#178",
+    "targetAmount": 1000,
+    "reason": "wm D-39 payment dispute",
+    "proposedChangeJson": null,
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T20:01:08.923801Z",
+    "updatedAt": "2026-09-15T20:01:08.923801Z"
+  },
+  "p36": {
+    "id": 693,
+    "username": "wm-d36primary-mu33ke2ree31",
+    "email": "wm-d36primary-mu33ke2ree31@rt.local",
+    "fullName": "WM-D36PRIMARY-MU33KE2REE31",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "b36": {
+    "id": 694,
+    "username": "wm-d36backup-mu33ke4o2132",
+    "email": "wm-d36backup-mu33ke4o2132@rt.local",
+    "fullName": "WM-D36BACKUP-MU33KE4O2132",
+    "active": true,
+    "role": "COLLECTION_POC",
+    "customerId": null,
+    "privileges": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "password": "Passw0rd!"
+  },
+  "c36": {
+    "id": 327,
+    "name": "wm-d36-mu33ke6n5455",
+    "phone": "555-0100",
+    "email": "wm-d36-mu33ke6n5455@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "wm-d36-mu33ke6n5455",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T20:01:09.076135Z",
+    "password": "Passw0rd!"
+  },
+  "del36": {
+    "deactivated": true,
+    "pocReferences": 1,
+    "deleted": false
+  },
+  "c36Pocs": [
+    {
+      "id": 174,
+      "pocType": "COLLECTION",
+      "primary": true,
+      "user": {
+        "id": 693,
+        "username": "wm-d36primary-mu33ke2ree31",
+        "fullName": "WM-D36PRIMARY-MU33KE2REE31",
+        "email": "wm-d36primary-mu33ke2ree31@rt.local",
+        "role": "COLLECTION_POC",
+        "active": false
+      },
+      "createdAt": "2026-09-15T20:01:09.148349Z"
+    },
+    {
+      "id": 175,
+      "pocType": "COLLECTION",
+      "primary": false,
+      "user": {
+        "id": 694,
+        "username": "wm-d36backup-mu33ke4o2132",
+        "fullName": "WM-D36BACKUP-MU33KE4O2132",
+        "email": "wm-d36backup-mu33ke4o2132@rt.local",
+        "role": "COLLECTION_POC",
+        "active": true
+      },
+      "createdAt": "2026-09-15T20:01:09.161359Z"
+    }
+  ],
+  "c37": {
+    "id": 328,
+    "name": "wm-d37-mu33ke9pca07",
+    "phone": "555-0100",
+    "email": "wm-d37-mu33ke9pca07@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "wm-d37-mu33ke9pca07",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T20:01:09.185273Z",
+    "password": "Passw0rd!"
+  },
+  "inv37": {
+    "id": 484,
+    "invoiceNumber": "INV-20260915-0464",
+    "customerId": 328,
+    "customerName": "wm-d37-mu33ke9pca07",
+    "invoiceDate": "2026-09-15T20:01:09.252711Z",
+    "total": 500,
+    "paidAmount": 0,
+    "balance": 500,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 486,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 500,
+        "lineTotal": 500
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:09.254060Z"
+  },
+  "prom37": {
+    "id": 162,
+    "customerId": 328,
+    "customerName": "wm-d37-mu33ke9pca07",
+    "amount": 500,
+    "fulfilledAmount": 0,
+    "remainingAmount": 500,
+    "promisedDate": "2026-09-25",
+    "status": "OPEN",
+    "statusOverridden": false,
+    "overrideReason": null,
+    "overriddenByUserId": null,
+    "overriddenAt": null,
+    "collectionPoc": {
+      "id": 687,
+      "username": "wm-collA-mu33kdkuc85f",
+      "fullName": "WM-COLLA-MU33KDKUC85F",
+      "email": "wm-collA-mu33kdkuc85f@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "notes": "wm D-37",
+    "invoices": [
+      {
+        "id": 484,
+        "invoiceNumber": "INV-20260915-0464",
+        "total": 500,
+        "balance": 500,
+        "status": "UNPAID"
+      }
+    ],
+    "payments": [],
+    "createdByUserId": 1,
+    "createdAt": "2026-09-15T20:01:09.264853Z",
+    "updatedAt": "2026-09-15T20:01:09.264853Z"
+  },
+  "c9": {
+    "id": 329,
+    "name": "wm-card-mu33kec60d46",
+    "phone": "555-0100",
+    "email": "wm-card-mu33kec60d46@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "wm-card-mu33kec60d46",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T20:01:09.275361Z",
+    "password": "Passw0rd!"
+  },
+  "inv9x": {
+    "id": 485,
+    "invoiceNumber": "INV-20260915-0465",
+    "customerId": 329,
+    "customerName": "wm-card-mu33kec60d46",
+    "invoiceDate": "2026-09-15T20:01:09.343058Z",
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 487,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:09.343937Z"
+  },
+  "inv9y": {
+    "id": 486,
+    "invoiceNumber": "INV-20260915-0466",
+    "customerId": 329,
+    "customerName": "wm-card-mu33kec60d46",
+    "invoiceDate": "2026-09-15T20:01:09.353295Z",
+    "total": 200,
+    "paidAmount": 0,
+    "balance": 200,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 488,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 200,
+        "lineTotal": 200
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:09.353948Z"
+  },
+  "prom9": {
+    "id": 163,
+    "customerId": 329,
+    "customerName": "wm-card-mu33kec60d46",
+    "amount": 300,
+    "fulfilledAmount": 0,
+    "remainingAmount": 300,
+    "promisedDate": "2026-09-22",
+    "status": "OPEN",
+    "statusOverridden": false,
+    "overrideReason": null,
+    "overriddenByUserId": null,
+    "overriddenAt": null,
+    "collectionPoc": {
+      "id": 687,
+      "username": "wm-collA-mu33kdkuc85f",
+      "fullName": "WM-COLLA-MU33KDKUC85F",
+      "email": "wm-collA-mu33kdkuc85f@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "notes": "wm card",
+    "invoices": [
+      {
+        "id": 485,
+        "invoiceNumber": "INV-20260915-0465",
+        "total": 100,
+        "balance": 100,
+        "status": "UNPAID"
+      },
+      {
+        "id": 486,
+        "invoiceNumber": "INV-20260915-0466",
+        "total": 200,
+        "balance": 200,
+        "status": "UNPAID"
+      }
+    ],
+    "payments": [],
+    "createdByUserId": 1,
+    "createdAt": "2026-09-15T20:01:09.362659Z",
+    "updatedAt": "2026-09-15T20:01:09.362659Z"
+  },
+  "cancel9x": {
+    "id": 485,
+    "invoiceNumber": "INV-20260915-0465",
+    "customerId": 329,
+    "customerName": "wm-card-mu33kec60d46",
+    "invoiceDate": "2026-09-15T20:01:09.343058Z",
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "CANCELLED",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 487,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:09.343937Z"
+  },
+  "cLong": {
+    "id": 330,
+    "name": "wm-long-mu33kef888ea",
+    "phone": "555-0100",
+    "email": "wm-long-mu33kef888ea@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "wm-long-mu33kef888ea",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T20:01:09.384298Z",
+    "password": "Passw0rd!"
+  },
+  "invLong1": {
+    "id": 487,
+    "invoiceNumber": "INV-20260915-0467",
+    "customerId": 330,
+    "customerName": "wm-long-mu33kef888ea",
+    "invoiceDate": "2026-09-15T20:01:09.448935Z",
+    "total": 120,
+    "paidAmount": 0,
+    "balance": 120,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 489,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 120,
+        "lineTotal": 120
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:09.449534Z"
+  },
+  "invLong2": {
+    "id": 488,
+    "invoiceNumber": "INV-20260915-0468",
+    "customerId": 330,
+    "customerName": "wm-long-mu33kef888ea",
+    "invoiceDate": "2026-09-15T20:01:09.461605Z",
+    "total": 130,
+    "paidAmount": 0,
+    "balance": 130,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 490,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 130,
+        "lineTotal": 130
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:09.462935Z"
+  },
+  "reason1500": {
+    "status": 409,
+    "body": "{\"timestamp\":\"2026-09-15T20:01:09.534662Z\",\"status\":409,\"error\":\"Conflict\",\"message\":\"This change conflicts with existing data\",\"path\":\"/api/disputes\",\"fieldErrors\":null}"
+  },
+  "dispLong1": {
+    "id": 169,
+    "customerId": 330,
+    "customerName": "wm-long-mu33kef888ea",
+    "openedByUserId": 698,
+    "targetType": "INVOICE",
+    "targetId": 487,
+    "targetSummary": "INV-20260915-0467 — 120.00",
+    "targetNumber": "INV-20260915-0467",
+    "targetAmount": 120,
+    "reason": "wm-long-reason the customer says this invoice was billed twice for the same delivery and wants it corrected wm-long-reason the customer says this invoice was billed twice for the same delivery and wants it corrected wm-long-reason the customer says this invoice was billed twice for the same delivery and wants it corrected wm-long-reason the customer says this invoice was billed twice for the same delivery and wants it corrected wm-long-reason the customer says this invoice was billed twice for the same delivery and wants it corrected wm-long-reason the customer says this invoice was billed twice for the same delivery and wants it corrected wm-long-reason the customer says this invoice was billed twice for the same delivery and wants it corrected wm-long-reason the customer says this invoice was billed twice for the same delivery and wants it corrected wm-long-reason the customer says this invoice was billed twice for the same delivery and wants it corrected wm-long-reason END-OF-REASON",
+    "proposedChangeJson": null,
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T20:01:09.537963Z",
+    "updatedAt": "2026-09-15T20:01:09.537963Z"
+  },
+  "dispLong2": {
+    "id": 170,
+    "customerId": 330,
+    "customerName": "wm-long-mu33kef888ea",
+    "openedByUserId": 698,
+    "targetType": "INVOICE",
+    "targetId": 488,
+    "targetSummary": "INV-20260915-0468 — 130.00",
+    "targetNumber": "INV-20260915-0468",
+    "targetAmount": 130,
+    "reason": "wm-unbroken-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-END",
+    "proposedChangeJson": null,
+    "status": "PENDING",
+    "adminNotes": null,
+    "resolvedByUserId": null,
+    "resolvedAt": null,
+    "createdAt": "2026-09-15T20:01:09.549527Z",
+    "updatedAt": "2026-09-15T20:01:09.549527Z"
+  },
+  "longReasonLen": [
+    1000,
+    1000
+  ],
+  "exportRole": {
+    "id": 71,
+    "name": "wm-exporter-mu33kek51d92",
+    "description": "wm D-21",
+    "privileges": [
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW"
+    ]
+  },
+  "exportUser": {
+    "id": 699,
+    "username": "wm-exporter-user-mu33kekb6e3a",
+    "email": "wm-exporter-user-mu33kekb6e3a@rt.local",
+    "fullName": "wm-exporter-user-mu33kekb6e3a",
+    "active": true,
+    "role": "wm-exporter-mu33kek51d92",
+    "customerId": null,
+    "privileges": [
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW"
+    ],
+    "password": "Passw0rd!"
+  },
+  "cBulk": {
+    "id": 331,
+    "name": "wm-bulk-mu33kelz9b41",
+    "phone": "555-0100",
+    "email": "wm-bulk-mu33kelz9b41@rt.local",
+    "address": "1 Test Way",
+    "creditBalance": 0,
+    "username": "wm-bulk-mu33kelz9b41",
+    "outstanding": 0,
+    "successPocs": [],
+    "collectionPocs": [],
+    "pocMissing": true,
+    "createdAt": "2026-09-15T20:01:09.628909Z",
+    "password": "Passw0rd!"
+  },
+  "invBulk": {
+    "id": 489,
+    "invoiceNumber": "INV-20260915-0469",
+    "customerId": 331,
+    "customerName": "wm-bulk-mu33kelz9b41",
+    "invoiceDate": "2026-09-15T20:01:09.696718Z",
+    "total": 77,
+    "paidAmount": 0,
+    "balance": 77,
+    "status": "UNPAID",
+    "notes": "wm",
+    "items": [
+      {
+        "id": 491,
+        "productId": 1,
+        "productName": "tfw-mu2sowlk11ca-prod-01",
+        "quantity": 1,
+        "unitPrice": 77,
+        "lineTotal": 77
+      }
+    ],
+    "salesPoc": {
+      "id": 686,
+      "username": "wm-sales-mu33kdil2c86",
+      "fullName": "WM-SALES-MU33KDIL2C86",
+      "email": "wm-sales-mu33kdil2c86@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-15T20:01:09.697509Z"
+  },
+  "adminUnread": {
+    "count": 166
+  }
+}

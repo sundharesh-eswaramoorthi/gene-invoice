@@ -1,0 +1,77 @@
+[
+  {
+    "id": "M3-01",
+    "defect": "D-14",
+    "name": "unknown and out-of-book ids → skipped with one neutral reason",
+    "status": "PASS",
+    "detail": {
+      "unknown": {
+        "requested": 2,
+        "succeeded": [
+          458
+        ],
+        "skipped": [
+          {
+            "id": 99999999,
+            "reason": "Not found, or outside your scope or the current filter"
+          }
+        ]
+      },
+      "outOfBook": {
+        "requested": 1,
+        "succeeded": [],
+        "skipped": [
+          {
+            "id": 459,
+            "reason": "Not found, or outside your scope or the current filter"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "id": "M3-02",
+    "defect": "D-33",
+    "name": "override and clear on a cancelled promise → 400; stays CANCELLED",
+    "status": "PASS",
+    "detail": {
+      "override": [
+        400,
+        "A cancelled promise cannot be overridden"
+      ],
+      "clear": [
+        400,
+        "A cancelled promise cannot be changed"
+      ],
+      "after": "CANCELLED"
+    }
+  },
+  {
+    "id": "M3-03",
+    "defect": "D-36",
+    "name": "deactivated primary → defaults to the active backup; no active seat → 400",
+    "status": "PASS",
+    "detail": {
+      "deletedPrimary": {
+        "deleted": false,
+        "deactivated": true,
+        "pocReferences": 2
+      },
+      "fallback": [
+        200,
+        {
+          "id": 663,
+          "username": "vm3-backup-mu32zh315d8c",
+          "fullName": "VM3-BACKUP-MU32ZH315D8C",
+          "email": "vm3-backup-mu32zh315d8c@rt.local",
+          "role": "COLLECTION_POC",
+          "active": true
+        }
+      ],
+      "none": [
+        400,
+        "A Collection POC is required — this customer has no active Collection POC, so pick one explicitly"
+      ]
+    }
+  }
+]
