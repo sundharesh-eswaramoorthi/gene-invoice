@@ -530,4 +530,45 @@ class PromiseLifecycleTest extends IntegrationTestBase {
                 new BigDecimal("100.00"), TOMORROW, collections.getId(), "still theirs", null));
         assertThat(edited.notes()).isEqualTo("still theirs");
     }
+
+    // ---- a withdrawn promise stays withdrawn; defaults skip deactivated POCs ----------
+
+    @Test
+    void aCancelledPromiseCannotBeOverriddenOrHaveAnOverrideCleared() {
+        Invoice inv = invoice("100.00", 1);
+        PromiseDtos.PromiseDto p = promise("100.00", TOMORROW, List.of(inv.getId()));
+        promiseService.override(p.id(), PromiseStatus.KEPT, "agreed by phone");
+        promiseService.cancel(p.id(), "raised in error");
+
+        assertThatThrownBy(() -> promiseService.override(p.id(), PromiseStatus.OPEN, "revive"))
+                .hasMessageContaining("cancelled");
+        assertThatThrownBy(() -> promiseService.clearOverride(p.id()))
+                .hasMessageContaining("cancelled");
+
+        pay("100.00", List.of(inv.getId()));
+        PaymentPromise after = promiseRepository.findById(p.id()).orElseThrow();
+        assertThat(after.getStatus()).isEqualTo(PromiseStatus.CANCELLED);
+        assertThat(after.isStatusOverridden()).isFalse();
+        assertThat(promiseRepository.countLinkedPayments(p.id())).isZero();
+    }
+
+    @Test
+    void aDeactivatedPrimaryIsSkippedForTheNextActiveCollectionPoc() {
+        User cole = user("cole.collections", DataSeeder.ROLE_COLLECTION_POC);
+        pocService.add(acme.getId(), PocType.COLLECTION, cole.getId(), false);
+        collections.setActive(false);
+        userRepository.save(collections);
+
+        PromiseDtos.PromiseDto p = promise("50.00", TOMORROW, null);
+        assertThat(p.collectionPoc().id()).isEqualTo(cole.getId());
+    }
+
+    @Test
+    void withNoActiveCollectionPocAPromiseAsksForOne() {
+        collections.setActive(false);
+        userRepository.save(collections);
+
+        assertThatThrownBy(() -> promise("50.00", TOMORROW, null))
+                .hasMessageContaining("no active Collection POC");
+    }
 }

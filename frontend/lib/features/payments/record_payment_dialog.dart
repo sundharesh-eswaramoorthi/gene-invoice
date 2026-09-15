@@ -41,6 +41,9 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
   final Set<int> _selectedPromises = {};
   PocUser? _collectionPoc;
   int? _pocResolvedFor;
+
+  /// True once the cashier picks a POC themselves; the customer's default then never replaces it.
+  bool _pocChosen = false;
   bool _saving = false;
   bool _submitted = false;
   String? _error;
@@ -59,17 +62,15 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     super.dispose();
   }
 
-  /// Pre-fills with the customer's primary Collection POC, still editable (AC-A4/US-A4).
+  /// Pre-fills with the customer's primary Collection POC, still editable (AC-A4/US-A4). A POC the
+  /// cashier already picked is kept, and a deactivated seat holder is never the default.
   void _resolveDefaultPoc(int customerId, List<CustomerPoc> pocs) {
     if (_pocResolvedFor == customerId) return;
     _pocResolvedFor = customerId;
-    CustomerPoc? primary;
-    for (final p in pocs) {
-      if (p.pocType == PocType.COLLECTION && p.primary) primary = p;
-    }
-    primary ??= pocs.where((p) => p.pocType == PocType.COLLECTION).firstOrNull;
+    final active = pocs.where((p) => p.pocType == PocType.COLLECTION && p.user.active);
+    final seat = active.where((p) => p.primary).firstOrNull ?? active.firstOrNull;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _collectionPoc = primary?.user);
+      if (mounted && !_pocChosen) setState(() => _collectionPoc = seat?.user);
     });
   }
 
@@ -152,7 +153,10 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                   errorText: _submitted && _collectionPoc == null
                       ? 'A Collection POC is required before this payment can be saved'
                       : null,
-                  onChanged: (u) => setState(() => _collectionPoc = u),
+                  onChanged: (u) => setState(() {
+                    _collectionPoc = u;
+                    _pocChosen = u != null;
+                  }),
                 ),
               const SizedBox(height: 12),
               if (_customer != null) _outstandingInvoices(_customer!.id),

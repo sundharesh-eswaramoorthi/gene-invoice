@@ -7,6 +7,7 @@ import '../../core/format.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
+import '../../core/table/table_providers.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
 import '../auth/auth_controller.dart';
@@ -142,8 +143,13 @@ class PromisesScreen extends ConsumerWidget {
               tooltip: 'Override status',
               icon: const Icon(Icons.rule, size: 18),
               onPressed: () async {
-                await showOverrideDialog(context: context, promise: p);
+                final saved = await showOverrideDialog(context: context, promise: p);
                 ref.invalidate(promiseDetailProvider(p.id));
+                // The row's status and the tiles above the table both move with an override.
+                if (saved == true) {
+                  ref.invalidate(tablePageProvider);
+                  ref.invalidate(tableSummaryProvider);
+                }
               },
             ),
         ],

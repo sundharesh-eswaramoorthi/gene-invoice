@@ -157,6 +157,11 @@ public class PaymentPromiseService {
         promise.setFulfilledAmount(BigDecimal.ZERO);
         promise.setStatus(PromiseStatus.CANCELLED);
         promise.setBrokenNotifiedAt(null);
+        // A withdrawn promise is pinned to nothing; the override stays readable in its history.
+        promise.setStatusOverridden(false);
+        promise.setOverrideReason(null);
+        promise.setOverriddenByUserId(null);
+        promise.setOverriddenAt(null);
         PaymentPromise saved = promiseRepository.save(promise);
 
         auditService.record(ENTITY, id, "PROMISE_CANCELLED", before, snapshot(saved),
@@ -174,6 +179,11 @@ public class PaymentPromiseService {
             throw new BadRequestException("Use cancel to withdraw a promise");
         }
         PaymentPromise promise = get(id);
+        // Overriding would bring a withdrawn promise back to life, and clearing that override
+        // would then re-link its payments.
+        if (promise.getStatus() == PromiseStatus.CANCELLED) {
+            throw new BadRequestException("A cancelled promise cannot be overridden");
+        }
         Object before = snapshot(promise);
 
         promise.setStatus(status);
@@ -194,6 +204,9 @@ public class PaymentPromiseService {
     @Transactional
     public PromiseDtos.PromiseDto clearOverride(Long id) {
         PaymentPromise promise = get(id);
+        if (promise.getStatus() == PromiseStatus.CANCELLED) {
+            throw new BadRequestException("A cancelled promise cannot be changed");
+        }
         if (!promise.isStatusOverridden()) return toDto(promise);
         Object before = snapshot(promise);
         promise.setStatusOverridden(false);
@@ -556,9 +569,9 @@ public class PaymentPromiseService {
         if (requested != null) {
             return pocService.requireAssignable(requested, PocType.COLLECTION);
         }
-        return pocService.primaryFor(customerId, PocType.COLLECTION)
+        return pocService.defaultAssignee(customerId, PocType.COLLECTION)
                 .orElseThrow(() -> new BadRequestException(
-                        "A Collection POC is required — this customer has no primary Collection POC, "
+                        "A Collection POC is required — this customer has no active Collection POC, "
                                 + "so pick one explicitly"));
     }
 

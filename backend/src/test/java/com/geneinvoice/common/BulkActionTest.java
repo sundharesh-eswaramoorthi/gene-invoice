@@ -152,10 +152,26 @@ class BulkActionTest extends IntegrationTestBase {
         JsonNode result = bulk(sales, "/api/invoices/bulk",
                 request("CANCEL", "ids", List.of(mine.getId(), theirs.getId())));
 
-        assertThat(result.get("requested").asInt()).isEqualTo(1);
+        // Asked for two, acted on one: the other is reported as skipped, never silently dropped.
+        assertThat(result.get("requested").asInt()).isEqualTo(2);
         assertThat(result.get("succeeded").get(0).asLong()).isEqualTo(mine.getId());
+        assertThat(result.get("skipped").get(0).get("id").asLong()).isEqualTo(theirs.getId());
         assertThat(invoiceRepository.findById(theirs.getId()).orElseThrow().getStatus())
                 .isNotEqualTo(InvoiceStatus.CANCELLED);
+    }
+
+    @Test
+    void anUnknownIdIsReportedAsSkippedWithoutSayingItDoesNotExist() throws Exception {
+        Invoice own = invoice(acme, "10.00", sales);
+
+        JsonNode result = bulk(admin, "/api/invoices/bulk",
+                request("CANCEL", "ids", List.of(own.getId(), 99999999L)));
+
+        assertThat(result.get("requested").asInt()).isEqualTo(2);
+        assertThat(result.get("succeeded").get(0).asLong()).isEqualTo(own.getId());
+        assertThat(result.get("skipped").get(0).get("id").asLong()).isEqualTo(99999999L);
+        assertThat(result.get("skipped").get(0).get("reason").asText())
+                .isEqualTo("Not found, or outside your scope or the current filter");
     }
 
     @Test
@@ -295,7 +311,8 @@ class BulkActionTest extends IntegrationTestBase {
         JsonNode result = bulk(admin, "/api/notifications/bulk",
                 request("MARK_READ", "ids", List.of(mine.getId(), theirs.getId())));
 
-        assertThat(result.get("requested").asInt()).isEqualTo(1);
+        assertThat(result.get("requested").asInt()).isEqualTo(2);
+        assertThat(result.get("skipped").get(0).get("id").asLong()).isEqualTo(theirs.getId());
         assertThat(notificationRepository.findById(mine.getId()).orElseThrow().isRead()).isTrue();
         assertThat(notificationRepository.findById(theirs.getId()).orElseThrow().isRead()).isFalse();
     }

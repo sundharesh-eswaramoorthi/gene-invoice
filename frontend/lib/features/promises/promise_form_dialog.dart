@@ -88,14 +88,12 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
   void _resolveDefaultPoc(List<CustomerPoc> pocs) {
     if (_pocResolved) return;
     _pocResolved = true;
-    CustomerPoc? primary;
-    for (final p in pocs) {
-      if (p.pocType == PocType.COLLECTION && p.primary) primary = p;
-    }
-    primary ??= pocs.where((p) => p.pocType == PocType.COLLECTION).firstOrNull;
-    if (primary != null) {
+    // A deactivated seat holder is never the default; the next active one is.
+    final active = pocs.where((p) => p.pocType == PocType.COLLECTION && p.user.active);
+    final seat = active.where((p) => p.primary).firstOrNull ?? active.firstOrNull;
+    if (seat != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _poc = primary!.user);
+        if (mounted) setState(() => _poc = seat.user);
       });
     }
   }

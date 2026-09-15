@@ -183,7 +183,10 @@ class PromiseCard extends ConsumerWidget {
                 children: promise.invoices
                     .map((i) => Chip(
                           visualDensity: VisualDensity.compact,
-                          label: Text('${i.invoiceNumber} • ${formatMoney(i.balance)} left'),
+                          // A cancelled invoice owes nothing, whatever balance it last showed.
+                          label: Text(i.status == 'CANCELLED'
+                              ? '${i.invoiceNumber} • cancelled'
+                              : '${i.invoiceNumber} • ${formatMoney(i.balance)} left'),
                         ))
                     .toList(),
               ),

@@ -94,6 +94,18 @@ public class PocService {
                 .map(CustomerPoc::getUser);
     }
 
+    /**
+     * Who a new record defaults to: the primary seat holder or, once they have been deactivated,
+     * the next active holder of that kind of seat. Empty when the customer has no active one.
+     */
+    @Transactional(readOnly = true)
+    public Optional<User> defaultAssignee(Long customerId, PocType type) {
+        return customerPocRepository.findByCustomerIdOrderByPocTypeAscPrimaryDescIdAsc(customerId).stream()
+                .filter(seat -> seat.getPocType() == type && seat.getUser().isActive())
+                .map(CustomerPoc::getUser)
+                .findFirst();
+    }
+
     @Transactional
     public CustomerPoc add(Long customerId, PocType type, Long userId, boolean makePrimary) {
         if (type == PocType.SALES) {

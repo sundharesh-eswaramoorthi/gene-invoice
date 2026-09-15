@@ -144,7 +144,7 @@ public class CustomerController {
         }
         PocType pocType = PocType.parse(type);
         boolean makePrimary = Boolean.parseBoolean(String.valueOf(req.stringParam("primary")));
-        return bulkExecutor.run(req.action(), ids, truncated, id -> {
+        return bulkExecutor.run(req, ids, truncated, id -> {
             try {
                 pocService.add(id, pocType, userId, makePrimary);
             } catch (BadRequestException e) {

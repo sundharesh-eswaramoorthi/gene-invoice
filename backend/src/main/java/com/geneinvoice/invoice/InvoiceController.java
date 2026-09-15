@@ -102,14 +102,14 @@ public class InvoiceController {
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
 
         return switch (req.action()) {
-            case "CANCEL" -> bulkExecutor.run(req.action(), ids, truncated, service::cancel);
+            case "CANCEL" -> bulkExecutor.run(req, ids, truncated, service::cancel);
             case "REASSIGN_SALES_POC" -> {
                 Long userId = req.longParam("userId");
                 if (userId == null) throw new BadRequestException("REASSIGN_SALES_POC requires params.userId");
                 if (!currentUser.canAssignPoc(userRepository)) {
                     throw new BadRequestException("You may not change the Sales POC");
                 }
-                yield bulkExecutor.run(req.action(), ids, truncated,
+                yield bulkExecutor.run(req, ids, truncated,
                         id -> service.reassignSalesPoc(id, userId));
             }
             default -> throw new BadRequestException(

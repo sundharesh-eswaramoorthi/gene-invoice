@@ -206,7 +206,7 @@ public class UserController {
         List<Long> ids = resolveIds(req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
         Long actor = currentUser.require().getId();
-        return bulkExecutor.run(req.action(), ids, truncated, id -> {
+        return bulkExecutor.run(req, ids, truncated, id -> {
             if (id.equals(actor)) {
                 throw new BulkExecutor.IneligibleException("You cannot change your own account in bulk");
             }

@@ -109,14 +109,14 @@ public class PaymentPromiseController {
         List<Long> ids = resolveIds(req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
         return switch (req.action()) {
-            case "CANCEL" -> bulkExecutor.run(req.action(), ids, truncated,
+            case "CANCEL" -> bulkExecutor.run(req, ids, truncated,
                     id -> service.cancel(id, req.stringParam("reason")));
             case "REASSIGN_COLLECTION_POC" -> {
                 Long userId = req.longParam("userId");
                 if (userId == null) {
                     throw new BadRequestException("REASSIGN_COLLECTION_POC requires params.userId");
                 }
-                yield bulkExecutor.run(req.action(), ids, truncated,
+                yield bulkExecutor.run(req, ids, truncated,
                         id -> service.reassignCollectionPoc(id, userId));
             }
             default -> throw new BadRequestException(

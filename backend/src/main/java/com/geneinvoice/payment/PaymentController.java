@@ -123,7 +123,7 @@ public class PaymentController {
         if (!currentUser.canAssignPoc(userRepository)) {
             throw new BadRequestException("You may not change the Collection POC");
         }
-        return bulkExecutor.run(req.action(), ids, truncated,
+        return bulkExecutor.run(req, ids, truncated,
                 id -> paymentService.reassignCollectionPoc(id, userId));
     }
 

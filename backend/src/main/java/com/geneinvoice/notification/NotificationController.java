@@ -86,7 +86,7 @@ public class NotificationController {
         List<Long> ids = resolveIds(req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
         Long me = currentUser.require().getId();
-        return bulkExecutor.run(req.action(), ids, truncated, id -> {
+        return bulkExecutor.run(req, ids, truncated, id -> {
             Notification n = repository.findById(id)
                     .orElseThrow(() -> new BulkExecutor.IneligibleException("Notification not found"));
             if (!n.getUserId().equals(me)) {
