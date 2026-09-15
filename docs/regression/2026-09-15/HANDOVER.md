@@ -1,4 +1,4 @@
-# Handover — Gene Invoice, 15 Sep 2026
+# Handover — Gene Invoice, 15–16 Sep 2026
 
 Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and continue."*
 
@@ -12,11 +12,18 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
   7 roles plus customer logins, desktop and phone width). 375 passed, 128 failed as reported.
   After every failure was reproduced by an independent verifier and duplicates were merged:
   **67 confirmed defects — 12 high, 27 medium, 28 low.** Verdict: **not ready for release.**
-- **All 12 high-severity defects are fixed**, committed (not pushed) with regression tests, and
-  re-verified against the rebuilt regression environment — see "High-severity fixes" below and the
-  Status column in `defects.md`.
-- Automated suites are green: backend `mvn test` 144/144, `flutter analyze` clean, `flutter test` 28/28.
-- **Waiting on the user:** whether to take the medium defects next (shared-cause wins first).
+  Re-checking the medium fixes on 16 Sep found five more (D-68…D-72), so `defects.md` now lists
+  **72 — 12 high, 28 medium, 32 low.**
+- **All 12 high and all 28 medium defects are fixed**, committed (not pushed) with regression tests,
+  and re-verified against the regression environment (8083/8084) — see "High-severity fixes" and
+  "Medium-severity fixes" below and the Status column in `defects.md`. The 32 low defects are open.
+- Automated suites are green: backend `mvn test` 181/181, `flutter analyze` clean, `flutter test` 45/45.
+- **Waiting on the user — the user's deployment (8082/8081) does not have group 5 yet.** The user
+  approved applying it ("go", 16 Sep), but restarting 8082 was refused by the session's automatic
+  permission check, so the user must run the restart or allow it. Then run the promise recompute:
+  preview first, and apply only if it still shows the approved changes — see "Deploying group 5 to
+  the user's data" below.
+- Next after that: the low defects.
 
 ## What is in this folder
 
@@ -24,7 +31,7 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
 |---|---|
 | `HANDOVER.md` | This file — start here |
 | `report/index.html` | The full interactive report (open it in a browser; works offline). Published copy: https://claude.ai/artifact/JEa2ujkXpq8GX9xzxyvVth |
-| `defects.md` | All 67 confirmed defects: severity, repro, expected/actual, root cause (file:line), suggested fix, screenshot. Has a **Status** column to track fixes (all OPEN) |
+| `defects.md` | All 72 confirmed defects: severity, repro, expected/actual, root cause (file:line), suggested fix, screenshot. **Status** column: high and medium FIXED (commit; checks that passed), low OPEN |
 | `test-results.md` | Pass/fail per area, every case per area, verifier verdicts, recommendations, what was not tested |
 | `test-cases.csv` | All 503 cases (area, id, feature, kind, title, status, severity, steps, expected, actual, evidence, codeRef) |
 | `report/shots/` | Screenshot evidence for 36 defects |
@@ -50,7 +57,7 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
 | D-11 | Unsaved-changes guard only covers the Back arrow; sidebar, browser Back and links drop edits silently |
 | D-12 | On phones a long "username • ROLE" chip pushes the bell over the hamburger menu |
 
-Shared causes behind many medium defects (cheap, broad wins): missing 400 handlers in
+Shared causes behind many medium defects (all fixed on 16 Sep): missing 400 handlers in
 `GlobalExceptionHandler` (D-13, D-27, D-29), the bulk `resolveIds` pattern that silently drops ids
 (D-14 — `BulkActionTest` currently asserts the drop), table width that ignores the nav rail
 (D-19, D-20), the `PocPicker` debounce (D-18).
@@ -80,18 +87,66 @@ Verification: `scripts/verify-high-fixes/api.js` (V-01…V-12, all pass against 
 `ui-results.json`, first-run evidence in `run1/`). The screenshots (`*.png`, about 33 MB) are kept
 on disk but not committed.
 
-Found while verifying, not yet logged in `defects.md`:
+Found while verifying the high fixes, and fixed with the medium batch (re-checked 16 Sep):
 
-- The bell's unread badge is stacked on top of the bell button and swallows taps on the icon's
-  centre (`shared/widgets/app_shell.dart`, the `Positioned` badge — wrapping it in `IgnorePointer`
-  should do).
-- The promise card still shows "₹… left" for a cancelled invoice (`features/promises/promises_tab.dart:186`)
-  while the edit dialog says "no longer owed".
-- Only customer logins may open disputes (`DisputeService`: "Only customers can open disputes"), so
-  `POST /api/disputes` as admin is 403 and the scripts use the customer login. But the seeded ADMIN
-  role holds DISPUTE_CREATE, so admin detail screens still offer "Raise dispute", which can only fail.
-- D-18 (POC picker one keystroke behind) and D-38 (phone header breaks the invoice number) are
-  confirmed still present.
+- The bell's unread badge swallowed taps on the icon — now wrapped in `IgnorePointer` (W-18 pass).
+- The promise card showed "₹… left" for a cancelled invoice — now "… • cancelled" (W-09 pass).
+- Only customer logins may open disputes (`DisputeService`), but admin screens offered
+  "Raise dispute" — now shown only where `canRaiseDispute` holds (W-05 pass). Scripts open disputes
+  with the customer login.
+- D-18 and D-38 were fixed with the medium batch (W-10, W-16 pass).
+
+## Medium-severity fixes (16 Sep)
+
+Committed on `main`, not pushed. Every commit carries its own regression tests.
+
+| Commit | Defects | What changed |
+|---|---|---|
+| `8cb2f87` | D-13, D-27, D-28, D-29, D-30, D-32 | Malformed input (bad JSON, enum, number, id, missing param) → 400 with a plain message, no class names. Emails and role names are unique ignoring case, and a duplicate is a field error, not SQL. A blank email is stored as no email. Overlong text is a 400 field error (`FieldLimits`). Amounts may have at most 2 decimals (`Money.requireCents`) — payments, promises and unit prices. Dispute changes need quantity ≥ 1; a unit price of 0 is allowed. |
+| `d57a846` | D-15, D-16, D-17, D-22 | A Sales POC's locked book now also applies to reads and edits by id (404 outside the book) and to seat changes. Promise DTOs no longer show staff user ids to customers. USER audit history needs `USER_VIEW`. Table schemas are fetched afresh for each signed-in user. |
+| `44fc64f` | D-14, D-31, D-33, D-36, D-37 | Bulk actions report ids they cannot reach as skipped with one neutral reason (`BulkExecutor.run`, `NOT_REACHABLE`). Record payment keeps a Collection POC the cashier already picked. A cancelled promise can't be overridden. The default Collection POC is the first *active* one (no active seat → 400). A Promises row and its tiles refresh after an override. |
+| `7552dd6`, `bf1613f` | D-18…D-21, D-23…D-25, D-38, D-39 | POC picker searches the text actually typed. Desktop tables are sized to the space beside the sidebar, with an always-visible horizontal scrollbar and 24 px column gaps; long-text columns (dispute Target/Customer/Reason, notification Title/Message) are capped, end in "…" and show the full text on hover. Export-only roles can select rows. Date upper bounds no longer take in the next day's midnight rows. A page past the end says so and offers "Go to last page". A malformed or unknown record id shows "That … does not exist." The phone detail header keeps the invoice number on one line. The dispute target reads "Invoice INV-… — ₹…". |
+| `d83d1d8` | D-26, D-34, D-35 | How payments count towards promises — see below. `POST /api/promises/recompute?apply=false\|true` (admin) previews or applies the rule to existing promises. The Promises tab on Payment Details lists only the promises that payment is linked to (new `paymentId` column/param) and no longer offers "Raise promise". |
+| `bf1613f` | D-68 | Notification title and message are shortened to fit their columns (200/1,000, ending "…"), so a dispute reason of up to 2,000 characters saves; the dispute keeps the full text. |
+
+How payments count towards promises now (`PaymentPromiseService.shareOut`), all of a customer's
+live promises being evaluated together:
+
+- Each active payment is shared out once, oldest payment first. Money a payment put on an invoice goes
+  to the promises covering that invoice; what is left counts towards general promises.
+- Promises the payment is still in time for come first, then earliest promised date, then id. Late money
+  can't un-break a promise, so it is not taken from one that can still be kept.
+- No promise takes more than it promised, and money paid before a promise was made doesn't count for it.
+- A promise whose invoices are all settled is KEPT even if another promise on the same invoice took
+  the money. If they were settled only after its date, it is still BROKEN, whoever the money counted for.
+- Cancelling a promise frees its share for the others.
+- Ticking a promise while recording a payment pays that promise's invoices first. A ticked promise
+  that the chosen invoices can't serve is refused with 400.
+- `recomputeAll(apply)` records each status change in the audit history ("Recomputed: each payment now
+  counts once across promises") and sends no broken-promise notifications. With `apply=false` it
+  rolls back.
+
+Verification: `scripts/verify-medium-fixes/api-group1.js`…`api-group5.js` (M1-01…M5-07, all pass
+against 8083) and `scripts/verify-medium-fixes/ui/` (W-01…W-18 in `ui-results.json`: 17 pass. W-12
+failed at 1366 px, was fixed in `bf1613f`, and passes in the re-check `w12r.js`). Screenshots are on
+disk, not committed. The browser run also found D-68…D-72, now logged in `defects.md`.
+
+## Deploying group 5 to the user's data
+
+Nothing from `d83d1d8` or `bf1613f` is on 8082/8081 yet. A dry run on a copy of the user's data
+(DB `geneinvoice_preview`, made with `pg_dump | psql` inside the `gene-invoice-db` container) found
+3 of 34 promises would change. The user saw these and approved on 16 Sep:
+
+| Promise | Customer | Status | Fulfilled |
+|---|---|---|---|
+| #22 | zz-bulk-cust | PARTIALLY_KEPT → OPEN | 100 → 0 (payment #29 now counts only for #21) |
+| #23 | zz-promise-cust | BROKEN (unchanged) | 530 → 0 (the late money counts for #5, still in time) |
+| #26 | zz-promise-cust | BROKEN (unchanged) | 1,000 → 500 (capped at the promise) |
+
+Steps: redeploy the backend and web app as under "Running environments". Then, as admin, run
+`POST http://localhost:8082/api/promises/recompute` (it previews by default), check that it
+still shows the rows above, and only then run it with `?apply=true`. Drop `geneinvoice_preview`
+afterwards (`docker exec gene-invoice-db psql -U geneinvoice -d postgres -c "DROP DATABASE geneinvoice_preview"`).
 
 ## What the first 15 Sep session changed (now in `87c502c`)
 
@@ -143,6 +198,19 @@ Files touched by this session:
 - **Lists open with no filters for every role** (15 Sep). The server-enforced scope for a role without
   `SCOPE_OVERRIDE` (seeded `SALES_POC`) stays and shows as a locked chip.
 - **A cold deep link landing on the dashboard is accepted** — leave it.
+- Medium batch (16 Sep):
+  - **D-15:** a record outside a Sales POC's book is a 404, and its seats can't be changed.
+  - **D-14:** unreachable ids are reported as skipped.
+  - **D-30:** amounts with more than 2 decimals are refused everywhere, including promise amounts
+    and unit prices.
+  - **D-27:** emails and role names are unique ignoring case.
+  - **D-36:** a promise falls back to an active Collection POC.
+  - **D-32:** a unit price of 0 is allowed; quantity must be ≥ 1.
+  - **D-34:** money on an invoice is shared first with the promises covering that invoice, and
+    each promise is capped at what it promised. Two promises on a settled invoice both stay KEPT.
+    I (Claude) added the refinement that promises still in time come first, and the user was told.
+  - **Group 5 on the user's data:** preview the status changes first, then apply without
+    notifications.
 
 ## Running environments
 
@@ -153,6 +221,7 @@ Files touched by this session:
 | Logins | `admin/admin123`, `cashier/cashier123` | same, plus users created by the run (password `Passw0rd!`) |
 
 Port 8080 is taken by another container (`dood-srv`), which is why the app runs on 8082.
+There is no local `psql`; run it inside the container (`docker exec gene-invoice-db psql …`).
 
 Redeploy the user's backend after a change:
 
@@ -206,12 +275,18 @@ cd docs/regression/2026-09-15/scripts && npm install      # playwright-core; dri
 - `setState(() => _future = load())` returns the Future and trips a debug assertion, so the state
   never updates; use a block body.
 - Parallel shell commands share one working directory: use absolute paths (or `npm --prefix`).
+- 8082 runs straight from `backend/target/`: never `mvn package` there while it runs. Build in a
+  copy of `backend/` and swap the jar, or stop 8082 first. Build the test web app with
+  `flutter build web -o <dir>` so `frontend/build/web` (served by 8081) is left alone.
+- The session's automatic permission check treats restarting 8082 as a production deploy and may
+  refuse it. Hand the user the commands rather than working around it.
+- List endpoints accept only `size` 10, 20 or 50; anything else is a 400.
 
 ## Suggested next steps
 
-1. Take the shared-cause medium fixes listed above (D-13, D-27, D-29 in `GlobalExceptionHandler`;
-   D-14; D-19/D-20; D-18), then the rest of the medium list.
-2. Log the four findings under "High-severity fixes" in `defects.md`.
-3. After backend changes to auth, exports, credit, invoices or promises, re-run
-   `scripts/verify-high-fixes/api.js` (it creates its own data on 8083).
+1. Deploy group 5 on 8082/8081 and run the promise recompute (see "Deploying group 5 to the user's
+   data").
+2. Fix the 32 low defects (D-40…D-67, D-69…D-72). D-69…D-72 came out of the medium re-check.
+3. After backend changes, re-run `scripts/verify-high-fixes/api.js` and
+   `scripts/verify-medium-fixes/api-group*.js` (they create their own data on 8083).
 4. Nothing is pushed; ask the user before pushing.

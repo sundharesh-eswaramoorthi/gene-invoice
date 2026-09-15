@@ -1,8 +1,8 @@
 # Confirmed defects — regression run 15 Sep 2026
 
-67 confirmed defects after independent re-verification and de-duplication (12 high, 27 medium, 28 low). Severity: high = core flow, money or security wrong; medium = partly wrong or confusing; low = cosmetic or minor.
+72 confirmed defects (12 high, 28 medium, 32 low): 67 from this run after independent re-verification and de-duplication, plus D-68…D-72, found while re-checking the medium fixes on 16 Sep 2026. Severity: high = core flow, money or security wrong; medium = partly wrong or confusing; low = cosmetic or minor.
 
-Status column is for tracking fixes in later sessions (all OPEN as of this run). High-severity fixes were re-verified on 15 Sep 2026 against the rebuilt regression environment: API checks in `scripts/verify-high-fixes/api.js` (results in `api-results.json`, ids V-01…V-12), UI checks in `scripts/verify-high-fixes/ui/`.
+Status column is for tracking fixes in later sessions (all OPEN as of this run). Medium-severity fixes were re-verified on 16 Sep 2026 against the same environment: API checks in `scripts/verify-medium-fixes/api-group1.js`…`api-group5.js` (ids M1-…M5-, results next to each script), UI checks in `scripts/verify-medium-fixes/ui/` (W-01…W-18 in `ui-results.json`; W-12 re-checked after the follow-up fix by `w12r.js`). High-severity fixes were re-verified on 15 Sep 2026 against the rebuilt regression environment: API checks in `scripts/verify-high-fixes/api.js` (results in `api-results.json`, ids V-01…V-12), UI checks in `scripts/verify-high-fixes/ui/`.
 
 | ID | Severity | Kind | Area | Title | Status |
 |---|---|---|---|---|---|
@@ -18,33 +18,33 @@ Status column is for tracking fixes in later sessions (all OPEN as of this run).
 | D-10 | high | API+UI | promises | A promise can't be edited once one of its invoices is cancelled | FIXED (691c39d; V-12, U-12, U-13 pass) |
 | D-11 | high | UI | detail-history-dashboard | The unsaved-changes guard only covers the Back arrow: sidebar, browser Back, the bell and in-page links drop edits without a prompt | FIXED (a04c5e8, 8ffed8f; U-14…U-19, U-23…U-25 pass) |
 | D-12 | high | UI | ui-sweep | On phones, a long 'username • ROLE' chip pushes the Notifications bell over the hamburger, so a tap opens Notifications instead of the drawer; the app title is hidden | FIXED (a04c5e8; U-20…U-22 pass) |
-| D-13 | medium | API | table-framework | Malformed client input (bad JSON, bad enum or number, non-numeric id or param, missing param) returns 500 with internal class names instead of 400 | OPEN |
-| D-14 | medium | API | table-framework | Bulk actions silently drop ids that are unknown or outside the caller's scope or filter | OPEN |
-| D-15 | medium | API | permissions-scoping | The SALES_POC locked book applies only to lists and bulk: another rep's invoice can be read, edited and cancelled by id, and seats can be edited on customers outside the book | OPEN |
-| D-16 | medium | API | permissions-scoping | Promise DTOs expose staff user ids to customers: createdByUserId and overriddenByUserId are often the Collection POC's own id | OPEN |
-| D-17 | medium | API | permissions-scoping | USER audit history (email, role, privileges) is readable by staff without USER_VIEW | OPEN |
-| D-18 | medium | UI | customers-products | POC picker search is one keystroke behind, so a typed username doesn't filter the list | OPEN |
-| D-19 | medium | UI | ui-sweep | Desktop tables are sized to the full window, so the last columns and row actions sit off-screen even at 1920px | OPEN |
-| D-20 | medium | UI | ui-sweep | Long reason or message text makes the Disputes and Notifications tables thousands of pixels wide | OPEN |
-| D-21 | medium | UI | table-framework | Roles with EXPORT_DATA but no *_MANAGE can't select rows, so 'Export selected' is unreachable | OPEN |
-| D-22 | medium | UI | table-framework | Table schemas are cached across logout, so a customer who signs in after an admin is offered the Sales POC filter columns | OPEN |
-| D-23 | medium | API | table-framework | Date upper bounds (lte, between, yesterday, past, lastMonth) include rows stamped at 00:00:00 of the next day | OPEN |
-| D-24 | medium | UI | table-framework | A page past the end shows 'No invoices match this filter' and a garbled pager ('991–990 of 4') | OPEN |
-| D-25 | medium | UI | detail-history-dashboard | Malformed detail URLs (#/invoices/abc, /customers/abc, /payments/abc) show a blank grey error box | OPEN |
-| D-26 | medium | UI | payments-credit | A payment's Payment Promise tab lists every promise of the customer, not the ones attached to that payment | OPEN |
-| D-27 | medium | API+UI | auth-users-roles | Users/Roles admin: a duplicate email, a duplicate role name, or deleting a role still in use returns 500 with raw SQL shown in the dialog | OPEN |
-| D-28 | medium | API+UI | auth-users-roles | A user with no email can't be edited, reactivated or re-roled from the UI; a blank email is stored as '' and collides on the unique constraint | OPEN |
-| D-29 | medium | API | payments-credit | Overlong text fields return 500 with SQL instead of a 400 field error (username >80, invoice notes >500, payment notes >300) | OPEN |
-| D-30 | medium | API | payments-credit | Payment amounts with more than 2 decimals are accepted: 0.001 is stored as a ₹0.00 payment, and the POST response shows a different amount from the one stored | OPEN |
-| D-31 | medium | UI | payments-credit | Record payment: choosing a customer silently replaces a Collection POC the cashier already picked | OPEN |
-| D-32 | medium | API | disputes-notifications | Dispute replace_items accepts quantity 0 or negative, producing ₹0 or negative FULLY_PAID invoices | OPEN |
-| D-33 | medium | API | promises | An override revives a CANCELLED promise, and clearing the override re-links the payment | OPEN |
-| D-34 | medium | API | promises | Promise totals double-count a payment shared by overlapping or general promises | OPEN |
-| D-35 | medium | API | promises | A payment ticked to a promise but allocated to a different invoice shows as linked yet contributes 0 | OPEN |
-| D-36 | medium | API | promises | The default Collection POC for a new promise can be a deactivated user | OPEN |
-| D-37 | medium | UI | promises | After an override from a Promises list row, the row and tiles stay stale until the user navigates away | OPEN |
-| D-38 | medium | UI | ui-sweep | On phones the detail header breaks the invoice number mid-token and squeezes the subtitle | OPEN |
-| D-39 | medium | API+UI | ui-sweep | The dispute target text shows money unformatted with a raw enum: 'INVOICE INV-… — 451234.50' | OPEN |
+| D-13 | medium | API | table-framework | Malformed client input (bad JSON, bad enum or number, non-numeric id or param, missing param) returns 500 with internal class names instead of 400 | FIXED (8cb2f87; M1-01 pass) |
+| D-14 | medium | API | table-framework | Bulk actions silently drop ids that are unknown or outside the caller's scope or filter | FIXED (44fc64f; M3-01 pass) |
+| D-15 | medium | API | permissions-scoping | The SALES_POC locked book applies only to lists and bulk: another rep's invoice can be read, edited and cancelled by id, and seats can be edited on customers outside the book | FIXED (d57a846; M2-01 pass) |
+| D-16 | medium | API | permissions-scoping | Promise DTOs expose staff user ids to customers: createdByUserId and overriddenByUserId are often the Collection POC's own id | FIXED (d57a846; M2-02 pass) |
+| D-17 | medium | API | permissions-scoping | USER audit history (email, role, privileges) is readable by staff without USER_VIEW | FIXED (d57a846; M2-03 pass) |
+| D-18 | medium | UI | customers-products | POC picker search is one keystroke behind, so a typed username doesn't filter the list | FIXED (7552dd6; W-10 pass) |
+| D-19 | medium | UI | ui-sweep | Desktop tables are sized to the full window, so the last columns and row actions sit off-screen even at 1920px | FIXED (7552dd6; W-11 pass) |
+| D-20 | medium | UI | ui-sweep | Long reason or message text makes the Disputes and Notifications tables thousands of pixels wide | FIXED (7552dd6, bf1613f; W-12 re-check pass) |
+| D-21 | medium | UI | table-framework | Roles with EXPORT_DATA but no *_MANAGE can't select rows, so 'Export selected' is unreachable | FIXED (7552dd6; W-13 pass) |
+| D-22 | medium | UI | table-framework | Table schemas are cached across logout, so a customer who signs in after an admin is offered the Sales POC filter columns | FIXED (d57a846; W-04 pass) |
+| D-23 | medium | API | table-framework | Date upper bounds (lte, between, yesterday, past, lastMonth) include rows stamped at 00:00:00 of the next day | FIXED (7552dd6; M4-01 pass) |
+| D-24 | medium | UI | table-framework | A page past the end shows 'No invoices match this filter' and a garbled pager ('991–990 of 4') | FIXED (7552dd6; W-14 pass; pager wording left as D-69) |
+| D-25 | medium | UI | detail-history-dashboard | Malformed detail URLs (#/invoices/abc, /customers/abc, /payments/abc) show a blank grey error box | FIXED (7552dd6; W-15 pass) |
+| D-26 | medium | UI | payments-credit | A payment's Payment Promise tab lists every promise of the customer, not the ones attached to that payment | FIXED (d83d1d8; M5-05 pass) |
+| D-27 | medium | API+UI | auth-users-roles | Users/Roles admin: a duplicate email, a duplicate role name, or deleting a role still in use returns 500 with raw SQL shown in the dialog | FIXED (8cb2f87; M1-02, W-01, W-02 pass) |
+| D-28 | medium | API+UI | auth-users-roles | A user with no email can't be edited, reactivated or re-roled from the UI; a blank email is stored as '' and collides on the unique constraint | FIXED (8cb2f87; M1-03 pass) |
+| D-29 | medium | API | payments-credit | Overlong text fields return 500 with SQL instead of a 400 field error (username >80, invoice notes >500, payment notes >300) | FIXED (8cb2f87; M1-04, W-01 pass) |
+| D-30 | medium | API | payments-credit | Payment amounts with more than 2 decimals are accepted: 0.001 is stored as a ₹0.00 payment, and the POST response shows a different amount from the one stored | FIXED (8cb2f87; M1-05, W-03 pass) |
+| D-31 | medium | UI | payments-credit | Record payment: choosing a customer silently replaces a Collection POC the cashier already picked | FIXED (44fc64f; W-06 pass) |
+| D-32 | medium | API | disputes-notifications | Dispute replace_items accepts quantity 0 or negative, producing ₹0 or negative FULLY_PAID invoices | FIXED (8cb2f87; M1-06 pass) |
+| D-33 | medium | API | promises | An override revives a CANCELLED promise, and clearing the override re-links the payment | FIXED (44fc64f; M3-02 pass) |
+| D-34 | medium | API | promises | Promise totals double-count a payment shared by overlapping or general promises | FIXED (d83d1d8; M5-01, M5-02, M5-06 pass) |
+| D-35 | medium | API | promises | A payment ticked to a promise but allocated to a different invoice shows as linked yet contributes 0 | FIXED (d83d1d8; M5-03, M5-04 pass) |
+| D-36 | medium | API | promises | The default Collection POC for a new promise can be a deactivated user | FIXED (44fc64f; M3-03, W-07 pass) |
+| D-37 | medium | UI | promises | After an override from a Promises list row, the row and tiles stay stale until the user navigates away | FIXED (44fc64f; W-08 pass) |
+| D-38 | medium | UI | ui-sweep | On phones the detail header breaks the invoice number mid-token and squeezes the subtitle | FIXED (7552dd6; W-16 pass) |
+| D-39 | medium | API+UI | ui-sweep | The dispute target text shows money unformatted with a raw enum: 'INVOICE INV-… — 451234.50' | FIXED (7552dd6; M4-02, W-17 pass) |
 | D-40 | low | API | table-framework | Paging and sort validation gaps: a huge page number overflows int and returns 500; an invalid sort direction is silently treated as asc | OPEN |
 | D-41 | low | API | auth-users-roles | CSV export ignores the requested sort for users, roles and products (rows come back in id or undefined order) | OPEN |
 | D-42 | low | API | auth-users-roles | Admin can set a 1-character password through the user create and update API | OPEN |
@@ -73,6 +73,11 @@ Status column is for tracking fixes in later sessions (all OPEN as of this run).
 | D-65 | low | UI | ui-sweep | On phones the 'What should change?' dropdown text runs under the arrow | OPEN |
 | D-66 | low | UI | ui-sweep | Dispute detail shows developer wording to users: 'INVOICE history', 'Proposed change (JSON)' | OPEN |
 | D-67 | low | UI | ui-sweep | The dashboard shows staff without PAYMENT_MANAGE a 'My payments' button that opens all payments | OPEN |
+| D-68 | medium | API | disputes-notifications | A dispute reason of 1,001–2,000 characters fails with 409 'This change conflicts with existing data' | FIXED (bf1613f; M5-07 pass) |
+| D-69 | low | UI | table-framework | A page past the end still reads 'Page 100 of 24' in the pager | OPEN |
+| D-70 | low | UI | table-framework | Signing out fires a request that fails with 401 (the table schema is re-fetched for nobody) | OPEN |
+| D-71 | low | UI | ui-sweep | The 'That page does not exist.' page has no sidebar or top bar | OPEN |
+| D-72 | low | UI | ui-sweep | Table row checkboxes are missing from the accessibility tree | OPEN |
 
 ## D-01 — A deactivated user's existing JWT keeps full read/write API access for up to 24h
 
@@ -2892,6 +2897,213 @@ Use paymentManage ? 'Record payment' : (isCustomer ? 'My payments' : 'All paymen
 ```
 
 **Screenshot:** [report/shots/D-67-1.png](report/shots/D-67-1.png)
+
+## D-68 — A dispute reason of 1,001–2,000 characters fails with 409 'This change conflicts with existing data'
+
+- **Severity:** medium  ·  **Kind:** API  ·  **Area:** disputes-notifications
+- **Found by:** medium re-check, 16 Sep 2026 (while setting up W-12)
+
+**Reproduce**
+
+```text
+As a customer login, POST /api/disputes {targetType: INVOICE, targetId: <own invoice>, reason: <1,500 characters>}.
+```
+
+**Expected**
+
+
+The dispute is opened: the request allows a reason of up to 2,000 characters.
+
+
+**Actual**
+
+
+409 'This change conflicts with existing data'; nothing is saved. Reasons of up to 1,000 characters work.
+
+
+**Root cause**
+
+```text
+DisputeService.java:82-85 copies the reason into the admin notification, and Notification.message is
+VARCHAR(1000) (Notification.java:33), so the notification insert fails and takes the dispute with it.
+```
+
+**Suggested fix**
+
+
+Shorten notification text to fit, ending in '…'; the full reason stays on the dispute the notification links to.
+
+
+**Evidence**
+
+```text
+scripts/verify-medium-fixes/ui/ui-results.json (W-12 steps)
+```
+
+## D-69 — A page past the end still reads 'Page 100 of 24' in the pager
+
+- **Severity:** low  ·  **Kind:** UI  ·  **Area:** table-framework
+- **Found by:** medium re-check, 16 Sep 2026 (W-14)
+
+**Reproduce**
+
+```text
+Open #/invoices?page=99 with 469 invoices at 20 per page.
+```
+
+**Expected**
+
+
+The pager gives the real page count, e.g. 'Past the last page · 24 pages'.
+
+
+**Actual**
+
+
+The D-24 fix shows the 'This page is past the end' message and a working 'Go to last page', but the pager still reads '0–0 of 469 · Page 100 of 24'.
+
+
+**Root cause**
+
+```text
+data_table_scaffold.dart:859 prints the requested page number whether or not it exists.
+```
+
+**Suggested fix**
+
+
+When page >= totalPages, show the page count without a current page.
+
+
+**Evidence**
+
+```text
+scripts/verify-medium-fixes/ui/ui-results.json (W-14)
+```
+
+## D-70 — Signing out fires a request that fails with 401 (the table schema is re-fetched for nobody)
+
+- **Severity:** low  ·  **Kind:** UI  ·  **Area:** table-framework
+- **Found by:** medium re-check, 16 Sep 2026
+
+**Reproduce**
+
+```text
+Sign in, open any list page, sign out, and watch the network log.
+```
+
+**Expected**
+
+
+No API requests after the token is cleared.
+
+
+**Actual**
+
+
+GET /api/table-schemas/invoices is sent without a token and fails with 401. Nothing shows on screen.
+
+
+**Root cause**
+
+```text
+table_providers.dart:40-45: tableSchemaProvider watches the current user id (the D-22 fix) and re-fetches
+when it changes, including to null at logout (auth_controller.dart:62-64).
+```
+
+**Suggested fix**
+
+
+Skip the fetch while nobody is signed in.
+
+
+**Evidence**
+
+```text
+Browser console during the medium re-check (scripts/verify-medium-fixes/ui/)
+```
+
+## D-71 — The 'That page does not exist.' page has no sidebar or top bar
+
+- **Severity:** low  ·  **Kind:** UI  ·  **Area:** ui-sweep
+- **Found by:** medium re-check, 16 Sep 2026 (W-15)
+
+**Reproduce**
+
+```text
+Signed in as admin, open #/admin/disputes/1.
+```
+
+**Expected**
+
+
+The message shows inside the app, like the 'That invoice does not exist.' pages.
+
+
+**Actual**
+
+
+A bare page with only the message and 'Go back'; the sidebar and top bar are gone.
+
+
+**Root cause**
+
+```text
+router.dart:44-47: GoRouter's errorBuilder renders a plain Scaffold outside the ShellRoute.
+```
+
+**Suggested fix**
+
+
+For signed-in users, send unknown paths to a catch-all route inside the shell.
+
+
+**Evidence**
+
+```text
+scripts/verify-medium-fixes/ui/ui-results.json (W-15)
+```
+
+## D-72 — Table row checkboxes are missing from the accessibility tree
+
+- **Severity:** low  ·  **Kind:** UI  ·  **Area:** ui-sweep
+- **Found by:** medium re-check, 16 Sep 2026 (W-13)
+
+**Reproduce**
+
+```text
+Open any list page as a role that can select rows and inspect the accessibility tree.
+```
+
+**Expected**
+
+
+Each row checkbox is exposed with a label such as 'Select row'.
+
+
+**Actual**
+
+
+The checkboxes are drawn and clickable but not exposed, so the re-check had to click them by position and screen readers probably can't reach them.
+
+
+**Root cause**
+
+```text
+Not investigated; the checkboxes are DataTable's built-in selection column (data_table_scaffold.dart).
+```
+
+**Suggested fix**
+
+
+Give the selection cells a semantic label and check them with a screen reader.
+
+
+**Evidence**
+
+```text
+scripts/verify-medium-fixes/ui/ui-results.json (W-13)
+```
 
 ## Reported but not confirmed
 
