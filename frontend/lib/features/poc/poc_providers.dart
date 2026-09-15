@@ -116,6 +116,8 @@ final canAssignPocProvider = Provider<bool>((ref) {
 });
 
 final myPocScopeProvider = FutureProvider<MyPocScope?>((ref) async {
+  // The scope is the signed-in user's own; the next user to sign in must not inherit it.
+  ref.watch(currentUserProvider.select((u) => u?.id));
   if (!ref.watch(canSeePocProvider)) return null;
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/pocs/my-scope');

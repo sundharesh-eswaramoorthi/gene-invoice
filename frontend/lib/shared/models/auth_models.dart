@@ -1,3 +1,5 @@
+import 'privileges.dart';
+
 class CurrentUser {
   final int id;
   final String username;
@@ -31,6 +33,10 @@ class CurrentUser {
 
   bool has(String privilege) => privileges.contains(privilege);
   bool hasAny(Iterable<String> privs) => privs.any(privileges.contains);
+
+  /// Only a customer's own login may open a dispute (staff resolve them, and the backend refuses
+  /// staff), so staff are never offered the button even when their role holds DISPUTE_CREATE.
+  bool get canRaiseDispute => isCustomer && has(Privileges.disputeCreate);
 }
 
 class LoginResult {

@@ -444,6 +444,11 @@ public class PaymentPromiseService {
         if (callerCustomer != null && !callerCustomer.equals(promise.getCustomer().getId())) {
             throw new AccessDeniedException("Not allowed");
         }
+        // A POC limited to their own book cannot reach another's promise by id either (AC-A6).
+        if (!queryExecutor.inScope(PaymentPromise.class, TableSchemas.PROMISES, id,
+                scopeResolver.forPromises().predicates())) {
+            throw new NotFoundException("Payment promise not found");
+        }
         return promise;
     }
 
@@ -523,11 +528,13 @@ public class PaymentPromiseService {
     @Transactional(readOnly = true)
     public PromiseDtos.PromiseDto toDto(PaymentPromise p) {
         boolean showPoc = scopeResolver.canSeePoc();
+        // Who created or overrode a promise is staff identity, often the POC's own id (AC-A8).
+        boolean showStaff = !currentUser.isCustomer();
         return new PromiseDtos.PromiseDto(
                 p.getId(), p.getCustomer().getId(), p.getCustomer().getName(),
                 p.getAmount(), p.getFulfilledAmount(), p.getRemainingAmount(),
                 p.getPromisedDate(), p.getStatus(), p.isStatusOverridden(),
-                p.getOverrideReason(), p.getOverriddenByUserId(), p.getOverriddenAt(),
+                p.getOverrideReason(), showStaff ? p.getOverriddenByUserId() : null, p.getOverriddenAt(),
                 showPoc ? PocDtos.PocUserDto.from(p.getCollectionPoc()) : null,
                 p.getNotes(),
                 p.getInvoices().stream()
@@ -540,7 +547,7 @@ public class PaymentPromiseService {
                                 pay.getPaidAt(), pay.getMethod(), pay.getStatus().name()))
                         .sorted(java.util.Comparator.comparing(PromiseDtos.PromisePaymentDto::id))
                         .toList(),
-                p.getCreatedByUserId(), p.getCreatedAt(), p.getUpdatedAt());
+                showStaff ? p.getCreatedByUserId() : null, p.getCreatedAt(), p.getUpdatedAt());
     }
 
     // ---- helpers ---------------------------------------------------------------

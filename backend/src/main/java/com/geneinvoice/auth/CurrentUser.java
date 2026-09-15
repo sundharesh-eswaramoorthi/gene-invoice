@@ -33,6 +33,13 @@ public class CurrentUser {
         return require().getCustomerId() != null;
     }
 
+    /** True when the caller holds this privilege; their authorities are their role's privileges. */
+    public boolean has(String privilege) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> privilege.equals(a.getAuthority()));
+    }
+
     /** True when the caller holds POC_ASSIGN and is not a customer-scoped account. */
     public boolean canAssignPoc(com.geneinvoice.user.UserRepository userRepository) {
         User u = require();

@@ -148,7 +148,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             titleTrailing: [
               if (canSeePoc && inv.pocMissing) const PocMissingBadge(),
               Chip(label: Text(statusLabel(inv.status))),
-              if (canSeeDisputes && user!.has(Privileges.disputeCreate))
+              if (canSeeDisputes && user!.canRaiseDispute)
                 TextButton.icon(
                   icon: const Icon(Icons.flag_outlined, size: 18),
                   label: const Text('Raise dispute'),

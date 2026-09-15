@@ -67,6 +67,16 @@ public class TableQueryExecutor {
         return em.createQuery(countQuery).getSingleResult();
     }
 
+    /**
+     * True when the row with this id passes the caller's scope. A read or write by id checks it, so
+     * a record outside the caller's book is as unreachable by id as it is in the list (AC-A6).
+     */
+    @Transactional(readOnly = true)
+    public <T> boolean inScope(Class<T> type, TableSchema schema, Long id, List<PredicateFactory> scope) {
+        if (scope.isEmpty()) return true;
+        return count(type, schema, TableQuery.parseUnpaged(schema, null, List.of("id:eq:" + id)), scope) > 0;
+    }
+
     /** Ids of every row matching the filter, for "select all N" and export. */
     @Transactional(readOnly = true)
     public <T> List<Long> ids(Class<T> type, TableSchema schema, TableQuery query,

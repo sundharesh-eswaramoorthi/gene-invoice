@@ -5,7 +5,6 @@ import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
-import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
 import 'dispute_create_dialog.dart';
 import 'disputes_providers.dart';
@@ -31,7 +30,7 @@ class DisputesTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final canCreate =
-        (user?.has(Privileges.disputeCreate) ?? false) && targetType != null && targetId != null;
+        (user?.canRaiseDispute ?? false) && targetType != null && targetId != null;
     final scope = DisputeScope(
         targetType: targetType, targetId: targetId, customerId: customerId);
     final async = ref.watch(scopedDisputesProvider(scope));

@@ -2,14 +2,11 @@ package com.geneinvoice.audit;
 
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
-import com.geneinvoice.common.NotFoundException;
-import com.geneinvoice.invoice.Invoice;
-import com.geneinvoice.invoice.InvoiceRepository;
-import com.geneinvoice.payment.Payment;
-import com.geneinvoice.payment.PaymentRepository;
+import com.geneinvoice.customer.CustomerService;
+import com.geneinvoice.invoice.InvoiceService;
+import com.geneinvoice.payment.PaymentService;
 import com.geneinvoice.privilege.Privileges;
-import com.geneinvoice.promise.PaymentPromise;
-import com.geneinvoice.promise.PaymentPromiseRepository;
+import com.geneinvoice.promise.PaymentPromiseService;
 import com.geneinvoice.user.User;
 import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,10 +34,20 @@ public class AuditController {
     /** Of those, the ones a customer-scoped account may ever read — and only their own rows. */
     private static final Set<String> CUSTOMER_READABLE = Set.of("INVOICE", "PAYMENT", "CUSTOMER", "PROMISE");
 
+    /** The privilege that lets a caller see each kind of record, and so its history. */
+    private static final Map<String, String> VIEW_PRIVILEGE = Map.of(
+            "INVOICE", Privileges.INVOICE_VIEW,
+            "PAYMENT", Privileges.PAYMENT_VIEW,
+            "CUSTOMER", Privileges.CUSTOMER_VIEW,
+            "PROMISE", Privileges.PROMISE_VIEW,
+            "USER", Privileges.USER_VIEW,
+            "PRODUCT", Privileges.PRODUCT_VIEW);
+
     private final AuditTimelineService timelineService;
-    private final InvoiceRepository invoiceRepository;
-    private final PaymentRepository paymentRepository;
-    private final PaymentPromiseRepository promiseRepository;
+    private final InvoiceService invoiceService;
+    private final PaymentService paymentService;
+    private final CustomerService customerService;
+    private final PaymentPromiseService promiseService;
     private final UserRepository userRepository;
     private final CurrentUser currentUser;
 
@@ -92,33 +99,24 @@ public class AuditController {
                 e.disputeId(), e.reason(), e.createdAt(), e.derived(), e.actorHidden())).toList();
     }
 
+    /**
+     * A record's history is readable exactly where the record is: the caller needs the record's
+     * view privilege, and the service's own read by id applies the customer restriction and the
+     * POC's book. Users and products carry no customer or book restriction.
+     */
     private void ensureCallerCanSee(String entityType, Long entityId) {
-        Long callerCustomer = currentUser.customerIdOrNull();
-        if (callerCustomer == null) return;
-        if (!CUSTOMER_READABLE.contains(entityType)) {
+        if (!currentUser.has(VIEW_PRIVILEGE.get(entityType))) {
             throw new AccessDeniedException("Not allowed");
         }
-        Long owningCustomer = switch (entityType) {
-            case "INVOICE" -> {
-                Invoice inv = invoiceRepository.findById(entityId)
-                        .orElseThrow(() -> new NotFoundException("Invoice not found"));
-                yield inv.getCustomer().getId();
-            }
-            case "PAYMENT" -> {
-                Payment p = paymentRepository.findById(entityId)
-                        .orElseThrow(() -> new NotFoundException("Payment not found"));
-                yield p.getCustomer().getId();
-            }
-            case "PROMISE" -> {
-                PaymentPromise promise = promiseRepository.findById(entityId)
-                        .orElseThrow(() -> new NotFoundException("Payment promise not found"));
-                yield promise.getCustomer().getId();
-            }
-            case "CUSTOMER" -> entityId;
-            default -> throw new BadRequestException("Unknown entity type: " + entityType);
-        };
-        if (!callerCustomer.equals(owningCustomer)) {
+        if (currentUser.isCustomer() && !CUSTOMER_READABLE.contains(entityType)) {
             throw new AccessDeniedException("Not allowed");
+        }
+        switch (entityType) {
+            case "INVOICE" -> invoiceService.get(entityId);
+            case "PAYMENT" -> paymentService.get(entityId);
+            case "CUSTOMER" -> customerService.get(entityId);
+            case "PROMISE" -> promiseService.get(entityId);
+            default -> { }
         }
     }
 }

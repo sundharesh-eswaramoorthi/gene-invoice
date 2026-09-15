@@ -72,12 +72,7 @@ public class PaymentController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.PAYMENT_VIEW + "')")
     public PaymentDtos.PaymentDto get(@PathVariable Long id) {
-        Payment p = paymentService.get(id);
-        Long callerCustomer = currentUser.customerIdOrNull();
-        if (callerCustomer != null && !callerCustomer.equals(p.getCustomer().getId())) {
-            throw new AccessDeniedException("Not allowed");
-        }
-        return PaymentDtos.PaymentDto.from(p, scopeResolver.canSeePoc());
+        return PaymentDtos.PaymentDto.from(paymentService.get(id), scopeResolver.canSeePoc());
     }
 
     @PostMapping

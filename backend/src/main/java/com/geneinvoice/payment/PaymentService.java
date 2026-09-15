@@ -24,6 +24,7 @@ import com.geneinvoice.user.User;
 import com.geneinvoice.user.UserRepository;
 import jakarta.persistence.criteria.Expression;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -97,6 +98,7 @@ public class PaymentService {
     public Payment update(Long id, PaymentDtos.UpdatePaymentRequest req) {
         Payment p = paymentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Payment not found"));
+        requireInBook(id);
         Object before = PaymentDtos.PaymentDto.from(p);
 
         if (req.notes() != null) p.setNotes(req.notes());
@@ -256,10 +258,24 @@ public class PaymentService {
         return saved;
     }
 
+    /** A customer login reads only its own payments; a POC limited to their book, only theirs. */
     @Transactional(readOnly = true)
     public Payment get(Long id) {
-        return paymentRepository.findById(id)
+        Payment p = paymentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Payment not found"));
+        Long callerCustomer = currentUser.customerIdOrNull();
+        if (callerCustomer != null && !callerCustomer.equals(p.getCustomer().getId())) {
+            throw new AccessDeniedException("Not allowed");
+        }
+        requireInBook(id);
+        return p;
+    }
+
+    private void requireInBook(Long id) {
+        if (!queryExecutor.inScope(Payment.class, TableSchemas.PAYMENTS, id,
+                scopeResolver.forPayments().predicates())) {
+            throw new NotFoundException("Payment not found");
+        }
     }
 
     @Transactional(readOnly = true)

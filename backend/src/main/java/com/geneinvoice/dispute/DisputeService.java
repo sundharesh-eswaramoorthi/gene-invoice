@@ -161,7 +161,8 @@ public class DisputeService {
                 d.getTargetType(), d.getTargetId(), summary,
                 d.getReason(), d.getProposedChangeJson(),
                 d.getStatus(), d.getAdminNotes(),
-                d.getResolvedByUserId(), d.getResolvedAt(),
+                // The staff member who resolved it is not the customer's to see (AC-A8).
+                currentUser.isCustomer() ? null : d.getResolvedByUserId(), d.getResolvedAt(),
                 d.getCreatedAt(), d.getUpdatedAt());
     }
 

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../features/auth/auth_controller.dart';
 import '../api/api_client.dart';
 import 'table_models.dart';
 
@@ -36,6 +37,9 @@ class TableRequest {
 }
 
 final tableSchemaProvider = FutureProvider.family<TableSchema, String>((ref, entity) async {
+  // Each user gets their own schema (a customer sees no POC columns), so it is fetched afresh
+  // whenever a different user signs in rather than kept from the previous one.
+  ref.watch(currentUserProvider.select((u) => u?.id));
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/table-schemas/$entity');
   return TableSchema.fromJson(res.data as Map<String, dynamic>);

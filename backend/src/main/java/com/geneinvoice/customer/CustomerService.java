@@ -123,7 +123,17 @@ public class CustomerService {
         if (callerCustomer != null && !callerCustomer.equals(id)) {
             throw new AccessDeniedException("Not allowed");
         }
-        return repository.findById(id).orElseThrow(() -> new NotFoundException("Customer not found"));
+        Customer c = repository.findById(id).orElseThrow(() -> new NotFoundException("Customer not found"));
+        requireInBook(id);
+        return c;
+    }
+
+    /** A POC limited to their own book cannot reach, edit or re-seat other customers by id (AC-A6). */
+    private void requireInBook(Long id) {
+        if (!queryExecutor.inScope(Customer.class, TableSchemas.CUSTOMERS, id,
+                scopeResolver.forCustomers().predicates())) {
+            throw new NotFoundException("Customer not found");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -212,6 +222,7 @@ public class CustomerService {
     public Customer update(Long id, CustomerDtos.CustomerUpdateRequest in) {
         Customer c = repository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
+        requireInBook(id);
         Object before = snapshot(c);
         String email = Emails.normalize(in.email());
         User linked = userRepository.findByCustomerId(id).orElse(null);
@@ -241,6 +252,7 @@ public class CustomerService {
 
     @Transactional
     public void delete(Long id) {
+        requireInBook(id);
         for (CustomerPoc seat : customerPocRepository.findByCustomerIdOrderByPocTypeAscPrimaryDescIdAsc(id)) {
             customerPocRepository.delete(seat);
         }

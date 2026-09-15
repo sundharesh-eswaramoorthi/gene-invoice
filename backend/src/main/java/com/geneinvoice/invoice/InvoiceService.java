@@ -97,6 +97,7 @@ public class InvoiceService {
     @Transactional
     public Invoice update(Long id, InvoiceDtos.UpdateInvoiceRequest req) {
         Invoice inv = getInternal(id);
+        requireInBook(id);
         Object before = InvoiceDtos.InvoiceDto.from(inv);
 
         if (req.notes() != null) inv.setNotes(req.notes());
@@ -169,13 +170,23 @@ public class InvoiceService {
         if (callerCustomer != null && !callerCustomer.equals(inv.getCustomer().getId())) {
             throw new AccessDeniedException("Not allowed");
         }
+        requireInBook(id);
         return inv;
     }
 
+    /** No scope check: for disputes, which staff resolve on any customer's records. */
     @Transactional(readOnly = true)
     public Invoice getInternal(Long id) {
         return invoiceRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Invoice not found"));
+    }
+
+    /** A POC limited to their own book cannot reach another rep's invoice by id either (AC-A6). */
+    private void requireInBook(Long id) {
+        if (!queryExecutor.inScope(Invoice.class, TableSchemas.INVOICES, id,
+                scopeResolver.forInvoices().predicates())) {
+            throw new NotFoundException("Invoice not found");
+        }
     }
 
     // ---- list, tiles ------------------------------------------------------------
@@ -236,6 +247,7 @@ public class InvoiceService {
     @Transactional
     public Invoice cancel(Long id) {
         Invoice inv = getInternal(id);
+        requireInBook(id);
         if (inv.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BadRequestException("Invoice already cancelled");
         }

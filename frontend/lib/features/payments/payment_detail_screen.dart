@@ -151,7 +151,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                   label:
                       Text(payment.status == PaymentStatus.VOIDED ? 'Voided' : 'Active')),
               if (canSeeDisputes &&
-                  user!.has(Privileges.disputeCreate) &&
+                  user!.canRaiseDispute &&
                   payment.status != PaymentStatus.VOIDED)
                 TextButton.icon(
                   icon: const Icon(Icons.flag_outlined, size: 18),

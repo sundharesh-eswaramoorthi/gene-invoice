@@ -100,6 +100,7 @@ public class CustomerController {
     public PocDtos.CustomerPocDto addPoc(@PathVariable Long id,
                                          @Valid @RequestBody PocDtos.AddCustomerPocRequest req) {
         requireNonCustomerCaller();
+        service.get(id); // seats change only on customers in the caller's book
         return PocDtos.CustomerPocDto.from(
                 pocService.add(id, req.pocType(), req.userId(), Boolean.TRUE.equals(req.primary())));
     }
@@ -108,6 +109,7 @@ public class CustomerController {
     @PreAuthorize("hasAuthority('" + Privileges.POC_ASSIGN + "')")
     public void removePoc(@PathVariable Long id, @PathVariable Long pocId) {
         requireNonCustomerCaller();
+        service.get(id);
         pocService.remove(id, pocId);
     }
 
@@ -115,6 +117,7 @@ public class CustomerController {
     @PreAuthorize("hasAuthority('" + Privileges.POC_ASSIGN + "')")
     public PocDtos.CustomerPocDto setPrimary(@PathVariable Long id, @PathVariable Long pocId) {
         requireNonCustomerCaller();
+        service.get(id);
         return PocDtos.CustomerPocDto.from(pocService.setPrimary(id, pocId));
     }
 
