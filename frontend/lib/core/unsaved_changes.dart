@@ -1,4 +1,6 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 /// The screen that may be holding unsaved edits, and how to ask its user about them. Editable
 /// detail routes consult it from GoRoute.onExit, so leaving by the sidebar, the drawer, the bell,
@@ -23,3 +25,13 @@ class UnsavedChanges {
 }
 
 final unsavedChangesProvider = Provider<UnsavedChanges>((ref) => UnsavedChanges());
+
+/// In-app navigation that settles unsaved edits first. Asking before go(), rather than letting the
+/// route's onExit refuse a navigation already under way, keeps a refused navigation out of the
+/// browser history, where its duplicate entry would swallow the next Back press. onExit stays as
+/// the safety net for browser Back and any link that navigates directly.
+Future<void> goGuarded(BuildContext context, String location) async {
+  final unsaved = ProviderScope.containerOf(context, listen: false).read(unsavedChangesProvider);
+  if (!await unsaved.mayLeave()) return;
+  if (context.mounted) context.go(location);
+}

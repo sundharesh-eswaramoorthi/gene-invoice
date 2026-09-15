@@ -3,11 +3,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/unsaved_changes.dart';
 
 class AuditEntry {
   /// Null for an event derived from a record older than its audit trail.
@@ -352,7 +352,7 @@ class _AuditTile extends StatelessWidget {
 
     Widget link(String text, String? route) => route == null
         ? Text(text, style: linkStyle)
-        : InkWell(onTap: () => context.go(route), child: Text(text, style: linkStyle));
+        : InkWell(onTap: () => goGuarded(context, route), child: Text(text, style: linkStyle));
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),

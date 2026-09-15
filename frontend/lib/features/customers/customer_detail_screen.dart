@@ -81,6 +81,8 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         ],
       ),
     );
+    // Discarded edits are gone: the route's onExit, which runs next, must not ask again.
+    if (ok == true) _dirty = false;
     return ok == true;
   }
 
@@ -140,14 +142,14 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         _seed(customer);
         return PopScope(
           canPop: !_dirty,
-          // Every way out goes through the route's onExit, which asks about unsaved edits once.
+          // Unsaved edits are asked about once, by goGuarded or else by the route's onExit.
           onPopInvokedWithResult: (didPop, _) {
-            if (!didPop) context.go('/customers');
+            if (!didPop) goGuarded(context, '/customers');
           },
           child: DetailScaffold(
             title: customer.name,
             subtitle: customer.username == null ? null : '@${customer.username}',
-            onBack: () => context.go('/customers'),
+            onBack: () => goGuarded(context, '/customers'),
             titleTrailing: [
               if (canSeePoc && customer.pocMissing) const PocMissingBadge(),
             ],

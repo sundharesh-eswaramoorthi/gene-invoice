@@ -76,6 +76,8 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         ],
       ),
     );
+    // Discarded edits are gone: the route's onExit, which runs next, must not ask again.
+    if (ok == true) _dirty = false;
     return ok == true;
   }
 
@@ -133,14 +135,14 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         _seed(inv);
         return PopScope(
           canPop: !_dirty,
-          // Every way out goes through the route's onExit, which asks about unsaved edits once.
+          // Unsaved edits are asked about once, by goGuarded or else by the route's onExit.
           onPopInvokedWithResult: (didPop, _) {
-            if (!didPop) context.go('/invoices');
+            if (!didPop) goGuarded(context, '/invoices');
           },
           child: DetailScaffold(
             title: inv.invoiceNumber,
             subtitle: '${inv.customerName} • ${formatDate(inv.invoiceDate)}',
-            onBack: () => context.go('/invoices'),
+            onBack: () => goGuarded(context, '/invoices'),
             titleTrailing: [
               if (canSeePoc && inv.pocMissing) const PocMissingBadge(),
               Chip(label: Text(statusLabel(inv.status))),

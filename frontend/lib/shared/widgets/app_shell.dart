@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/unsaved_changes.dart';
 import '../../features/auth/auth_controller.dart';
 import '../../features/auth/change_password_dialog.dart';
 import '../../features/notifications/notifications_providers.dart';
@@ -129,14 +130,21 @@ class AppShell extends ConsumerWidget {
           ],
         ],
       ),
-      drawer: isWide ? null : _DrawerNav(entries: visible, selectedIndex: selected),
+      drawer: isWide
+          ? null
+          : _DrawerNav(
+              entries: visible,
+              selectedIndex: selected,
+              // The shell's context, which outlives the drawer that closes before navigating.
+              onSelect: (path) => goGuarded(context, path),
+            ),
       body: Row(
         children: [
           if (isWide)
             NavigationRail(
               extended: width > 1100,
               selectedIndex: selected,
-              onDestinationSelected: (i) => context.go(visible[i].path),
+              onDestinationSelected: (i) => goGuarded(context, visible[i].path),
               destinations: visible
                   .map((e) => NavigationRailDestination(
                         icon: Icon(e.icon),
@@ -181,7 +189,7 @@ class _NotificationsBell extends ConsumerWidget {
           IconButton(
             tooltip: 'Notifications',
             icon: const Icon(Icons.notifications_outlined),
-            onPressed: () => context.go('/notifications'),
+            onPressed: () => goGuarded(context, '/notifications'),
           ),
           if (count > 0)
             Positioned(
@@ -208,7 +216,8 @@ class _NotificationsBell extends ConsumerWidget {
 class _DrawerNav extends StatelessWidget {
   final List<_NavEntry> entries;
   final int selectedIndex;
-  const _DrawerNav({required this.entries, required this.selectedIndex});
+  final ValueChanged<String> onSelect;
+  const _DrawerNav({required this.entries, required this.selectedIndex, required this.onSelect});
 
   @override
   Widget build(BuildContext context) {
@@ -224,7 +233,7 @@ class _DrawerNav extends StatelessWidget {
               selected: i == selectedIndex,
               onTap: () {
                 Navigator.of(context).pop();
-                context.go(e.path);
+                onSelect(e.path);
               },
             );
           },

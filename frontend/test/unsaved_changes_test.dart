@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gene_invoice/core/unsaved_changes.dart';
 import 'package:go_router/go_router.dart';
@@ -58,6 +59,47 @@ void main() {
 
     discard = true;
     router.go('/customers');
+    await tester.pumpAndSettle();
+    expect(find.text('customers page'), findsOneWidget);
+  });
+
+  // A refused navigation must never start: one onExit cancels still leaves a duplicate entry in
+  // the browser history that swallows the next Back press.
+  testWidgets('goGuarded asks first and navigates only when the user agrees', (tester) async {
+    final unsaved = UnsavedChanges();
+    var asked = 0;
+    var discard = false;
+    unsaved.register(() async {
+      asked++;
+      return discard;
+    });
+
+    final router = GoRouter(
+      initialLocation: '/invoices/1',
+      routes: [
+        GoRoute(
+          path: '/invoices/:id',
+          onExit: (context, state) => unsaved.mayLeave(),
+          builder: (context, _) => TextButton(
+            onPressed: () => goGuarded(context, '/customers'),
+            child: const Text('Customers'),
+          ),
+        ),
+        GoRoute(path: '/customers', builder: (_, __) => const Text('customers page')),
+      ],
+    );
+    await tester.pumpWidget(ProviderScope(
+      overrides: [unsavedChangesProvider.overrideWithValue(unsaved)],
+      child: MaterialApp.router(routerConfig: router),
+    ));
+
+    await tester.tap(find.text('Customers'));
+    await tester.pumpAndSettle();
+    expect(asked, 1);
+    expect(router.routerDelegate.currentConfiguration.uri.path, '/invoices/1');
+
+    discard = true;
+    await tester.tap(find.text('Customers'));
     await tester.pumpAndSettle();
     expect(find.text('customers page'), findsOneWidget);
   });
