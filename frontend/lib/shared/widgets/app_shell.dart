@@ -147,16 +147,10 @@ class AppShell extends ConsumerWidget {
       body: Row(
         children: [
           if (isWide)
-            NavigationRail(
-              extended: width > 1100,
+            _HoverRail(
+              entries: visible,
               selectedIndex: selected,
-              onDestinationSelected: (i) => goGuarded(context, visible[i].path),
-              destinations: visible
-                  .map((e) => NavigationRailDestination(
-                        icon: Icon(e.icon),
-                        label: Text(e.label),
-                      ))
-                  .toList(),
+              onSelect: (path) => goGuarded(context, path),
             ),
           if (isWide) const VerticalDivider(width: 1),
           Expanded(child: child),
@@ -219,6 +213,62 @@ class _NotificationsBell extends ConsumerWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// The desktop sidebar. Contracted by default — icons only — and it widens to show the labels
+/// while the pointer is over it, so a name is one hover away without costing the page that width
+/// all the time. The button at the top pins it open for anyone who would rather keep the labels.
+class _HoverRail extends StatefulWidget {
+  final List<_NavEntry> entries;
+
+  /// Null when the current route is not one of these entries; nothing looks selected then (D-62).
+  final int? selectedIndex;
+  final ValueChanged<String> onSelect;
+
+  const _HoverRail({
+    required this.entries,
+    required this.selectedIndex,
+    required this.onSelect,
+  });
+
+  @override
+  State<_HoverRail> createState() => _HoverRailState();
+}
+
+class _HoverRailState extends State<_HoverRail> {
+  bool _hovered = false;
+  bool _pinned = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final expanded = _pinned || _hovered;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: NavigationRail(
+        // NavigationRail animates between the two widths itself.
+        extended: expanded,
+        // Contracted means icons alone: the labels arrive with the expansion.
+        labelType: expanded ? null : NavigationRailLabelType.none,
+        selectedIndex: widget.selectedIndex,
+        onDestinationSelected: (i) => widget.onSelect(widget.entries[i].path),
+        leading: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: IconButton(
+            tooltip: _pinned ? 'Let the sidebar contract again' : 'Keep the sidebar open',
+            icon: Icon(_pinned ? Icons.menu_open : Icons.menu),
+            onPressed: () => setState(() => _pinned = !_pinned),
+          ),
+        ),
+        destinations: widget.entries
+            .map((e) => NavigationRailDestination(
+                  icon: Icon(e.icon),
+                  label: Text(e.label),
+                ))
+            .toList(),
       ),
     );
   }
