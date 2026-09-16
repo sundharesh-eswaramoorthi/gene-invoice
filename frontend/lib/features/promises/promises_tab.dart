@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
 import 'promise_form_dialog.dart';
 import 'promise_providers.dart';
@@ -26,33 +27,22 @@ class PromiseStatusChip extends StatelessWidget {
   final bool overridden;
   const PromiseStatusChip({super.key, required this.status, this.overridden = false});
 
+  // The shared chip, so promises, invoices, payments and disputes are one widget rather than
+  // four copies of the same shape.
   @override
-  Widget build(BuildContext context) {
-    final color = promiseStatusColor(context, status);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withValues(alpha: 0.4)),
-          ),
-          child: Text(promiseStatusLabel(status),
-              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600)),
-        ),
-        if (overridden)
-          const Padding(
-            padding: EdgeInsets.only(left: 4),
-            child: Tooltip(
-              message: 'Status was set by hand, not worked out from payments',
-              child: Icon(Icons.edit_note, size: 16),
-            ),
-          ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => StatusChip(
+        label: promiseStatusLabel(status),
+        color: promiseStatusColor(context, status),
+        trailing: overridden
+            ? const Padding(
+                padding: EdgeInsets.only(left: 4),
+                child: Tooltip(
+                  message: 'Status was set by hand, not worked out from payments',
+                  child: Icon(Icons.edit_note, size: 16),
+                ),
+              )
+            : null,
+      );
 }
 
 /// The Payment Promise tab shared by the Customer and Invoice detail screens (C.3).

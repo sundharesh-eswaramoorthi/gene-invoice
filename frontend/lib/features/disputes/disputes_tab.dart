@@ -5,6 +5,7 @@ import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
 import 'dispute_create_dialog.dart';
 import 'disputes_providers.dart';
@@ -92,7 +93,7 @@ class DisputesTab extends ConsumerWidget {
                     subtitle: Text('${formatDateTime(d.createdAt)}\n${d.reason}',
                         maxLines: 3, overflow: TextOverflow.ellipsis),
                     isThreeLine: true,
-                    trailing: Chip(label: Text(disputeStatusLabel(d.status))),
+                    trailing: DisputeStatusChip(status: d.status),
                     onTap: () => goGuarded(context, '/disputes/${d.id}'),
                   );
                 },

@@ -9,6 +9,7 @@ import '../../shared/models/customer.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/promise.dart';
 import '../../shared/widgets/search_picker_field.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../customers/customers_screen.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
@@ -228,7 +229,10 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                           dense: true,
                           value: _selectedInvoices.contains(inv.id),
                           title: Text('${inv.invoiceNumber} • ${formatMoney(inv.balance)} left'),
-                          subtitle: Text(statusLabel(inv.status)),
+                          subtitle: Text(
+                            statusLabel(inv.status),
+                            style: TextStyle(color: invoiceStatusColor(context, inv.status)),
+                          ),
                           onChanged: (on) => setState(() {
                             if (on == true) {
                               _selectedInvoices.add(inv.id);

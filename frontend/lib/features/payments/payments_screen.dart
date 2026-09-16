@@ -10,6 +10,7 @@ import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/payment.dart';
 import '../../shared/models/privileges.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
@@ -134,7 +135,7 @@ class PaymentsScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, p) => Text(p.status == PaymentStatus.VOIDED ? 'Voided' : 'Active'),
+            cell: (context, p) => PaymentStatusChip(status: p.status),
           ),
           if (canSeePoc)
             TableColumnSpec(

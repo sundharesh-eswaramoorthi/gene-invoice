@@ -7,6 +7,7 @@ import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
 import '../../shared/models/dispute.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
 
@@ -53,7 +54,7 @@ class DisputesScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, d) => Chip(label: Text(disputeStatusLabel(d.status))),
+            cell: (context, d) => DisputeStatusChip(status: d.status),
           ),
           TableColumnSpec(
             label: 'Opened',

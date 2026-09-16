@@ -13,6 +13,7 @@ import '../../shared/models/invoice.dart';
 import '../../shared/models/payment.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
@@ -147,9 +148,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
             onBack: () => goGuarded(context, '/payments'),
             titleTrailing: [
               if (canSeePoc && payment.pocMissing) const PocMissingBadge(),
-              Chip(
-                  label:
-                      Text(payment.status == PaymentStatus.VOIDED ? 'Voided' : 'Active')),
+              PaymentStatusChip(status: payment.status),
               if (canSeeDisputes &&
                   user!.canRaiseDispute &&
                   payment.status != PaymentStatus.VOIDED)

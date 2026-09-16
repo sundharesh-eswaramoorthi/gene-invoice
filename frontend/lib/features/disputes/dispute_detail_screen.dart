@@ -8,6 +8,7 @@ import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../shared/models/dispute.dart';
 import '../../shared/widgets/detail_scaffold.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../../core/table/table_providers.dart';
@@ -123,7 +124,7 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              Chip(label: Text(disputeStatusLabel(d.status))),
+              DisputeStatusChip(status: d.status),
             ],
           ),
           const SizedBox(height: 4),

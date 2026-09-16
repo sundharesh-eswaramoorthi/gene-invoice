@@ -12,6 +12,7 @@ import '../../shared/models/dispute.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
@@ -147,7 +148,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             onBack: () => goGuarded(context, '/invoices'),
             titleTrailing: [
               if (canSeePoc && inv.pocMissing) const PocMissingBadge(),
-              Chip(label: Text(statusLabel(inv.status))),
+              InvoiceStatusChip(status: inv.status),
               if (canSeeDisputes && user!.canRaiseDispute)
                 TextButton.icon(
                   icon: const Icon(Icons.flag_outlined, size: 18),

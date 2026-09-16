@@ -10,6 +10,7 @@ import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
@@ -148,7 +149,7 @@ class InvoicesScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, inv) => Text(statusLabel(inv.status)),
+            cell: (context, inv) => InvoiceStatusChip(status: inv.status),
           ),
           if (canSeePoc)
             TableColumnSpec(
