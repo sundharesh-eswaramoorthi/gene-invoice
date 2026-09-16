@@ -10,6 +10,8 @@ import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.email.EmailDtos;
+import com.geneinvoice.email.EmailService;
 import com.geneinvoice.poc.PocType;
 import com.geneinvoice.poc.ScopeResolver;
 import com.geneinvoice.privilege.Privileges;
@@ -36,7 +38,7 @@ public class InvoiceController {
     private final ScopeResolver scopeResolver;
     private final BulkExecutor bulkExecutor;
     private final CurrentUser currentUser;
-    private final UserRepository userRepository;
+    private final UserRepository userRepository;    private final EmailService emailService;
 
     /** Customer logins cannot filter or sort on the Sales POC columns (AC-A8). */
     private TableSchema schema() {
@@ -91,9 +93,26 @@ public class InvoiceController {
         return InvoiceDtos.InvoiceDto.from(service.cancel(id), scopeResolver.canSeePoc());
     }
 
+    // ---- stored Emails ----------------------------------------------------------
+
+    /** The Invoice Emails tab: only Emails linked to this exact invoice (FR13). */
+    @GetMapping("/{id}/emails")
+    @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
+    public List<EmailDtos.RecordEmailSummary> emails(@PathVariable Long id) {
+        return emailService.forInvoice(id);
+    }
+
+    /** Records a stored in-app Email linked to this invoice; nothing is delivered (AQ1). */
+    @PostMapping("/{id}/emails")
+    @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
+    public EmailDtos.SendOutcome sendEmail(@PathVariable Long id,
+                                           @RequestBody EmailDtos.SendRequest req) {
+        return emailService.sendForInvoice(id, req);
+    }
+
     // ---- bulk & export ---------------------------------------------------------
 
-    public static final List<String> BULK_ACTIONS = List.of("CANCEL", "REASSIGN_SALES_POC");
+    public static final List<String> BULK_ACTIONS = List.of("CANCEL", "REASSIGN_SALES_POC", "SEND_EMAIL");
 
     @PostMapping("/bulk")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
@@ -103,6 +122,18 @@ public class InvoiceController {
 
         return switch (req.action()) {
             case "CANCEL" -> bulkExecutor.run(req, ids, truncated, service::cancel);
+            case "SEND_EMAIL" -> {
+                EmailDtos.SendRequest draft = EmailDtos.SendRequest.fromParams(req.params());
+                // A draft that could not work for any row at all is one 400, not every row failed.
+                emailService.validateDraft(draft);
+                yield bulkExecutor.run(req, ids, truncated, id -> {
+                    EmailDtos.SendOutcome outcome = emailService.sendForInvoice(id, draft);
+                    // A row that resolves to nobody records nothing and counts as skipped (FAIL1).
+                    if (!outcome.created()) {
+                        throw new BulkExecutor.IneligibleException(outcome.message());
+                    }
+                });
+            }
             case "REASSIGN_SALES_POC" -> {
                 Long userId = req.longParam("userId");
                 if (userId == null) throw new BadRequestException("REASSIGN_SALES_POC requires params.userId");

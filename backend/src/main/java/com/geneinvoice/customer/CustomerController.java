@@ -11,6 +11,9 @@ import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.email.EmailDtos;
+import com.geneinvoice.email.EmailService;
+
 import com.geneinvoice.poc.PocDtos;
 import com.geneinvoice.poc.PocService;
 import com.geneinvoice.poc.PocType;
@@ -36,7 +39,7 @@ public class CustomerController {
     private final PocService pocService;
     private final BulkExecutor bulkExecutor;
     private final CurrentUser currentUser;
-    private final UserRepository userRepository;
+    private final UserRepository userRepository;    private final EmailService emailService;
 
     /** Customer logins cannot filter on the POC seat columns (AC-A8). */
     private TableSchema schema() {
@@ -121,15 +124,44 @@ public class CustomerController {
         return PocDtos.CustomerPocDto.from(pocService.setPrimary(id, pocId));
     }
 
+    // ---- stored Emails ----------------------------------------------------------
+
+    /** The Customer Emails tab: this customer's own Emails plus its invoices', newest first. */
+    @GetMapping("/{id}/emails")
+    @PreAuthorize("hasAuthority('" + Privileges.CUSTOMER_VIEW + "')")
+    public List<EmailDtos.RecordEmailSummary> emails(@PathVariable Long id) {
+        return emailService.forCustomer(id);
+    }
+
+    /** Records a stored in-app Email linked to this customer; nothing is delivered (AQ1). */
+    @PostMapping("/{id}/emails")
+    @PreAuthorize("hasAuthority('" + Privileges.CUSTOMER_MANAGE + "')")
+    public EmailDtos.SendOutcome sendEmail(@PathVariable Long id,
+                                           @RequestBody EmailDtos.SendRequest req) {
+        return emailService.sendForCustomer(id, req);
+    }
+
     // ---- bulk & export ---------------------------------------------------------
 
-    public static final List<String> BULK_ACTIONS = List.of("ADD_POC");
+    public static final List<String> BULK_ACTIONS = List.of("ADD_POC", "SEND_EMAIL");
 
     @PostMapping("/bulk")
     @PreAuthorize("hasAuthority('" + Privileges.CUSTOMER_MANAGE + "')")
     public BulkDtos.BulkResult bulk(@Valid @RequestBody BulkDtos.BulkRequest req) {
         List<Long> ids = resolveIds(req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
+        if ("SEND_EMAIL".equals(req.action())) {
+            EmailDtos.SendRequest draft = EmailDtos.SendRequest.fromParams(req.params());
+            // A draft that could not work for any row at all is one 400, not every row failed.
+            emailService.validateDraft(draft);
+            return bulkExecutor.run(req, ids, truncated, id -> {
+                EmailDtos.SendOutcome outcome = emailService.sendForCustomer(id, draft);
+                // A row that resolves to nobody records nothing and counts as skipped (FAIL1).
+                if (!outcome.created()) {
+                    throw new BulkExecutor.IneligibleException(outcome.message());
+                }
+            });
+        }
         if (!"ADD_POC".equals(req.action())) {
             throw new BadRequestException(
                     "Unknown bulk action: " + req.action() + " (expected one of " + BULK_ACTIONS + ")");

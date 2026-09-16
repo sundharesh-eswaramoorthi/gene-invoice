@@ -44,8 +44,8 @@ public class TableSchemaController {
                         c.type().operators().stream().map(FilterOperator::wire).toList(),
                         c.enumValues(), c.referenceKind()))
                 .toList();
-        return new SchemaDto(schema.entity(), schema.defaultSort(), TableQuery.ALLOWED_SIZES,
-                TableQuery.DEFAULT_SIZE, DateRange.PRESETS, columns);
+        return new SchemaDto(schema.entity(), schema.defaultSort(), schema.pageSizes(),
+                schema.defaultPageSize(), DateRange.PRESETS, columns);
     }
 
     /** Convenience for a client that wants every schema in one round trip. */

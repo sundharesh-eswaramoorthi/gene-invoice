@@ -12,8 +12,8 @@ import java.util.List;
 public record TableQuery(int page, int size, String sortField, boolean sortAscending,
                          List<FilterSpec> filters) {
 
-    public static final int DEFAULT_SIZE = 20;
-    public static final List<Integer> ALLOWED_SIZES = List.of(10, 20, 50);
+    public static final int DEFAULT_SIZE = TableSchema.DEFAULT_PAGE_SIZE;
+    public static final List<Integer> ALLOWED_SIZES = TableSchema.DEFAULT_PAGE_SIZES;
     /** Hard ceiling for internal callers (export / select-all); the UI is limited to ALLOWED_SIZES. */
     public static final int MAX_SIZE = 50;
 
@@ -22,9 +22,11 @@ public record TableQuery(int page, int size, String sortField, boolean sortAscen
         int p = page == null ? 0 : page;
         if (p < 0) throw new BadRequestException("page must be >= 0");
 
-        int s = size == null ? DEFAULT_SIZE : size;
-        if (!ALLOWED_SIZES.contains(s)) {
-            throw new BadRequestException("size must be one of " + ALLOWED_SIZES);
+        // Each table publishes the page sizes it accepts: the Inbox offers 10/25/50/100 with
+        // a default of 25, every existing table keeps its 10/20/50 with default 20.
+        int s = size == null ? schema.defaultPageSize() : size;
+        if (!schema.pageSizes().contains(s)) {
+            throw new BadRequestException("size must be one of " + schema.pageSizes());
         }
 
         String sortSpec = (sort == null || sort.isBlank()) ? schema.defaultSort() : sort;
@@ -60,7 +62,7 @@ public record TableQuery(int page, int size, String sortField, boolean sortAscen
 
     /** Same validation, but for callers that operate on the whole filtered set (export, select-all). */
     public static TableQuery parseUnpaged(TableSchema schema, String sort, List<String> filterParams) {
-        TableQuery q = parse(schema, 0, DEFAULT_SIZE, sort, filterParams);
+        TableQuery q = parse(schema, 0, schema.defaultPageSize(), sort, filterParams);
         return new TableQuery(0, Integer.MAX_VALUE, q.sortField(), q.sortAscending(), q.filters());
     }
 

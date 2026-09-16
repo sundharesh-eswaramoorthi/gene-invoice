@@ -25,6 +25,10 @@ public class Role {
 
     @Column(length = 255)
     private String description;
+    /** Optional address a sender selection of this role resolves to at Email send time. Not
+     *  unique: senders are identified by role, not by address. Never seeded or synchronized. */
+    @Column(length = 120)
+    private String email;
 
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(

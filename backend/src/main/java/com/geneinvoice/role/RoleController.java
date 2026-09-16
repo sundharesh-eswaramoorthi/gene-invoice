@@ -1,6 +1,7 @@
 package com.geneinvoice.role;
 
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Emails;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.bulk.BulkDtos;
@@ -41,9 +42,10 @@ public class RoleController {
     private final UserRepository userRepository;
     private final TableQueryExecutor queryExecutor;
 
-    public record RoleDto(Long id, String name, String description, List<String> privileges) {
+    public record RoleDto(Long id, String name, String description, String email,
+                          List<String> privileges) {
         static RoleDto from(Role r) {
-            return new RoleDto(r.getId(), r.getName(), r.getDescription(),
+            return new RoleDto(r.getId(), r.getName(), r.getDescription(), r.getEmail(),
                     r.getPrivileges().stream().map(Privilege::getName).sorted().toList());
         }
     }
@@ -51,6 +53,7 @@ public class RoleController {
     public record RoleUpsert(
             @NotBlank @Size(max = FieldLimits.ROLE_NAME) String name,
             @Size(max = FieldLimits.ROLE_DESCRIPTION) String description,
+            @Size(max = FieldLimits.EMAIL) String email,
             List<String> privileges
     ) {}
 
@@ -109,6 +112,8 @@ public class RoleController {
         }
         Role r = Role.builder()
                 .name(name).description(in.description())
+                // Trimmed, blank-as-null; never part of identity, uniqueness or authority.
+                .email(normalizeEmail(in.email()))
                 .privileges(resolvePrivileges(in.privileges()))
                 .build();
         return RoleDto.from(roleRepository.save(r));
@@ -124,6 +129,7 @@ public class RoleController {
         }
         r.setName(name);
         r.setDescription(in.description());
+        r.setEmail(normalizeEmail(in.email()));
         r.setPrivileges(resolvePrivileges(in.privileges()));
         return RoleDto.from(roleRepository.save(r));
     }
@@ -139,6 +145,15 @@ public class RoleController {
                     + (holders == 1 ? " user" : " users") + "; move them to another role first");
         }
         roleRepository.delete(r);
+    }
+
+    /** Trim and blank-as-null, then check format on the value that would actually be stored. */
+    private static String normalizeEmail(String raw) {
+        String email = Emails.normalize(raw);
+        if (email != null && !Emails.isValid(email)) {
+            throw new BadRequestException("Email is not a valid email address");
+        }
+        return email;
     }
 
     private Set<Privilege> resolvePrivileges(List<String> names) {

@@ -26,4 +26,6 @@ public final class FieldLimits {
     /** Override and cancellation reasons, which also land in the audit trail's reason column. */
     public static final int REASON = 500;
     public static final int DISPUTE_TEXT = 2000;
+    public static final int EMAIL_SUBJECT = 200;
+    public static final int EMAIL_BODY = 4000;
 }

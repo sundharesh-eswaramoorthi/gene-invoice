@@ -5,7 +5,12 @@ import com.geneinvoice.auth.AppUserDetails;
 import com.geneinvoice.auth.AppUserDetailsService;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.config.DataSeeder;
+import com.geneinvoice.email.EmailRecipientReadRepository;
+import com.geneinvoice.email.EmailRecipientRepository;
+import com.geneinvoice.email.EmailRepository;
 import com.geneinvoice.invoice.InvoiceRepository;
+import com.geneinvoice.setting.AppSettingRepository;
 import com.geneinvoice.notification.NotificationRepository;
 import com.geneinvoice.payment.PaymentRepository;
 import com.geneinvoice.poc.CustomerPocRepository;
@@ -29,6 +34,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 
@@ -52,11 +58,19 @@ public abstract class IntegrationTestBase {
     @Autowired protected PaymentPromiseRepository promiseRepository;
     @Autowired protected CustomerPocRepository customerPocRepository;
     @Autowired protected NotificationRepository notificationRepository;
+    @Autowired protected EmailRepository emailRepository;
+    @Autowired protected EmailRecipientRepository emailRecipientRepository;
+    @Autowired protected EmailRecipientReadRepository emailRecipientReadRepository;
+    @Autowired protected AppSettingRepository appSettingRepository;
     @Autowired protected PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void resetTransactionalData() {
         SecurityContextHolder.clearContext();
+        emailRecipientReadRepository.deleteAll();
+        emailRecipientRepository.deleteAll();
+        emailRepository.deleteAll();
+        appSettingRepository.deleteAll();
         promiseRepository.deleteAll();
         paymentRepository.deleteAll();
         invoiceRepository.deleteAll();
@@ -67,6 +81,13 @@ public abstract class IntegrationTestBase {
         userRepository.findAll().stream()
                 .filter(u -> !List.of("admin", "cashier").contains(u.getUsername()))
                 .forEach(userRepository::delete);
+        // Tests create ad-hoc roles (e.g. empty sender roles); roles.name is unique, so drop them.
+        // Seeded role names below are the exact set DataSeeder creates in run().
+        Set<String> seededRoles = Set.of("ADMIN", "CASHIER", "VIEWER", "CUSTOMER",
+                DataSeeder.ROLE_SALES_POC, DataSeeder.ROLE_SUCCESS_POC, DataSeeder.ROLE_COLLECTION_POC);
+        roleRepository.findAll().stream()
+                .filter(r -> !seededRoles.contains(r.getName()))
+                .forEach(roleRepository::delete);
     }
 
     // ---- fixtures --------------------------------------------------------------

@@ -13,12 +13,23 @@ import java.util.Map;
  * this list, so it must not be left to a hash map's whim.
  */
 public record TableSchema(String entity, List<ColumnDef> columns, Map<String, ColumnDef> byName,
-                          String defaultSort) {
+                          String defaultSort, List<Integer> pageSizes, int defaultPageSize) {
+
+    /** The page capacities existing tables have always offered (DES-EMAIL-12 leaves them be). */
+    public static final List<Integer> DEFAULT_PAGE_SIZES = List.of(10, 20, 50);
+    public static final int DEFAULT_PAGE_SIZE = 20;
 
     public static TableSchema of(String entity, String defaultSort, ColumnDef... defs) {
+        return of(entity, defaultSort, DEFAULT_PAGE_SIZES, DEFAULT_PAGE_SIZE, defs);
+    }
+
+    /** A schema carrying its own permitted page sizes and default — the Inbox uses this. */
+    public static TableSchema of(String entity, String defaultSort, List<Integer> pageSizes,
+                                 int defaultPageSize, ColumnDef... defs) {
         Map<String, ColumnDef> index = new LinkedHashMap<>();
         for (ColumnDef d : defs) index.put(d.name(), d);
-        return new TableSchema(entity, List.of(defs), Map.copyOf(index), defaultSort);
+        return new TableSchema(entity, List.of(defs), Map.copyOf(index), defaultSort,
+                pageSizes, defaultPageSize);
     }
 
     public ColumnDef require(String name) {
@@ -56,7 +67,7 @@ public record TableSchema(String entity, List<ColumnDef> columns, Map<String, Co
      */
     public TableSchema visibleTo(boolean customerScoped) {
         if (!customerScoped) return this;
-        return of(entity, defaultSort,
+        return of(entity, defaultSort, pageSizes, defaultPageSize,
                 columns.stream().filter(c -> !c.pocRestricted()).toArray(ColumnDef[]::new));
     }
 

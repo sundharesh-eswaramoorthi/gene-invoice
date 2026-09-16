@@ -308,13 +308,28 @@ public final class TableSchemas {
             ColumnDef.of("message", "Message", ColumnType.TEXT).notSortable().build(),
             ColumnDef.of("read", "Read", ColumnType.BOOLEAN).build(),
             ColumnDef.of("createdAt", "Received", ColumnType.DATE).build());
+    // ---- email inbox -------------------------------------------------------------
+
+    // The one table with its own page capacities: 10/25/50/100, defaulting to 25 (FR17, AC24).
+    // Ordering is sentAt descending with the executor's id-descending tiebreak (AQ8). Columns are
+    // declared notFilterable because this phase has no Inbox search or filters (NFR1).
+    public static final TableSchema INBOX = TableSchema.of("inbox", "sentAt,desc",
+            List.of(10, 25, 50, 100), 25,
+            ColumnDef.of("id", "Id", ColumnType.NUMBER).notFilterable().build(),
+            ColumnDef.of("subject", "Subject", ColumnType.TEXT)
+                    .notFilterable().path(ColumnDef.nested("email", "subject")).build(),
+            ColumnDef.of("senderDisplay", "From", ColumnType.TEXT)
+                    .notFilterable().path(ColumnDef.nested("email", "senderDisplay")).build(),
+            ColumnDef.of("read", "Read", ColumnType.BOOLEAN).notFilterable().build(),
+            ColumnDef.of("sentAt", "Sent", ColumnType.DATE)
+                    .notFilterable().path(ColumnDef.nested("email", "sentAt")).build());
 
     private static final Map<String, TableSchema> BY_ENTITY = buildIndex();
 
     private static Map<String, TableSchema> buildIndex() {
         Map<String, TableSchema> m = new LinkedHashMap<>();
         for (TableSchema s : List.of(INVOICES, PAYMENTS, CUSTOMERS, PROMISES, PRODUCTS,
-                USERS, ROLES, DISPUTES, NOTIFICATIONS)) {
+                USERS, ROLES, DISPUTES, NOTIFICATIONS, INBOX)) {
             m.put(s.entity(), s);
         }
         return Map.copyOf(m);

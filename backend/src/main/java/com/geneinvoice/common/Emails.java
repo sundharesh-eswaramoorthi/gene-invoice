@@ -13,4 +13,8 @@ public final class Emails {
         String trimmed = raw.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }
+    /** A conservative single-address check, applied to a value already normalised. */
+    public static boolean isValid(String address) {
+        return address != null && address.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+    }
 }

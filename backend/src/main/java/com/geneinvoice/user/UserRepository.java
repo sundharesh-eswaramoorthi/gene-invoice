@@ -23,6 +23,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     int clearBlankEmails();
     Optional<User> findByCustomerId(Long customerId);
     List<User> findByRoleName(String roleName);
+    List<User> findByRoleId(Long roleId);
+
+    /** Every internal (non-customer) login, for the Email compose dialog's From and To lists. */
+    @Query("select u from User u where u.customerId is null order by u.fullName, u.username")
+    List<User> findInternalUsers();
 
     /**
      * Users offerable in a POC dropdown: active, not customer-scoped, and holding a role that
