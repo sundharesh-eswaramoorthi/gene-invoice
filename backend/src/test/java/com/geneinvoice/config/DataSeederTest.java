@@ -82,6 +82,41 @@ class DataSeederTest extends IntegrationTestBase {
         assertThat(names(DataSeeder.ROLE_SALES_POC)).contains(Privileges.PROMISE_MANAGE);
     }
 
+    @Test
+    void aPrivilegeNewToTheDatabaseReachesThePocRolesSeededWithIt() {
+        // Stands in for an upgrade: the database has POC roles but has never had EMAIL_SEND.
+        for (Role r : roleRepository.findAll()) {
+            if (r.getPrivileges().removeIf(p -> Privileges.EMAIL_SEND.equals(p.getName()))) {
+                roleRepository.save(r);
+            }
+        }
+        privilegeRepository.delete(privilegeRepository.findByName(Privileges.EMAIL_SEND).orElseThrow());
+
+        seeder.run();
+
+        for (String r : POC_ROLES) {
+            assertThat(names(r)).contains(Privileges.EMAIL_SEND);
+        }
+        assertThat(names("ADMIN")).contains(Privileges.EMAIL_SEND);
+        assertThat(names("VIEWER")).doesNotContain(Privileges.EMAIL_SEND);
+        assertThat(names("CUSTOMER")).doesNotContain(Privileges.EMAIL_SEND);
+    }
+
+    @Test
+    void aPrivilegeAnAdminTookFromAPocRoleStaysTaken() {
+        Role success = roleRepository.findByName(DataSeeder.ROLE_SUCCESS_POC).orElseThrow();
+        success.getPrivileges().removeIf(p -> Privileges.EMAIL_VIEW.equals(p.getName()));
+        roleRepository.save(success);
+        try {
+            seeder.run();
+            assertThat(names(DataSeeder.ROLE_SUCCESS_POC)).doesNotContain(Privileges.EMAIL_VIEW);
+        } finally {
+            Role restored = roleRepository.findByName(DataSeeder.ROLE_SUCCESS_POC).orElseThrow();
+            restored.getPrivileges().add(privilegeRepository.findByName(Privileges.EMAIL_VIEW).orElseThrow());
+            roleRepository.save(restored);
+        }
+    }
+
     private Set<String> names(String roleName) {
         return roleRepository.findByName(roleName).orElseThrow()
                 .getPrivileges().stream().map(Privilege::getName).collect(Collectors.toSet());

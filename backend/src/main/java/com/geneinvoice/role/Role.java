@@ -26,6 +26,13 @@ public class Role {
     @Column(length = 255)
     private String description;
 
+    /**
+     * The shared mailbox that speaks for this role, e.g. collections@…. Shown as the sender when an
+     * email goes out from the role; it is read when the email is sent, and kept on the email.
+     */
+    @Column(length = 120)
+    private String email;
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "role_privileges",

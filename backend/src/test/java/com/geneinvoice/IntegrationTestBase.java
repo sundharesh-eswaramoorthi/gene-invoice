@@ -5,6 +5,8 @@ import com.geneinvoice.auth.AppUserDetails;
 import com.geneinvoice.auth.AppUserDetailsService;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.email.EmailDeliveryRepository;
+import com.geneinvoice.email.EmailRepository;
 import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.notification.NotificationRepository;
 import com.geneinvoice.payment.PaymentRepository;
@@ -52,11 +54,15 @@ public abstract class IntegrationTestBase {
     @Autowired protected PaymentPromiseRepository promiseRepository;
     @Autowired protected CustomerPocRepository customerPocRepository;
     @Autowired protected NotificationRepository notificationRepository;
+    @Autowired protected EmailRepository emailRepository;
+    @Autowired protected EmailDeliveryRepository emailDeliveryRepository;
     @Autowired protected PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void resetTransactionalData() {
         SecurityContextHolder.clearContext();
+        emailDeliveryRepository.deleteAll();
+        emailRepository.deleteAll();
         promiseRepository.deleteAll();
         paymentRepository.deleteAll();
         invoiceRepository.deleteAll();

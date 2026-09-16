@@ -46,6 +46,34 @@ public interface UserRepository extends JpaRepository<User, Long> {
                               @Param("q") String lowercaseLikePattern,
                               Pageable pageable);
 
+    /** Internal users an email can come from or go to: active, and not a customer login. */
+    @Query("""
+            select u from User u
+            where u.active = true
+              and u.customerId is null
+              and (:q is null
+                   or lower(u.username) like :q
+                   or lower(coalesce(u.fullName, '')) like :q
+                   or lower(coalesce(u.email, '')) like :q)
+            order by u.fullName asc, u.username asc
+            """)
+    List<User> findActiveStaff(@Param("q") String lowercaseLikePattern, Pageable pageable);
+
+    /** Who is in a role right now, as far as email goes: its active internal users. */
+    @Query("""
+            select u from User u
+            where u.role.id = :roleId and u.active = true and u.customerId is null
+            order by u.fullName asc, u.username asc
+            """)
+    List<User> findActiveStaffInRole(@Param("roleId") Long roleId);
+
+    @Query("""
+            select u.role.id, count(u) from User u
+            where u.active = true and u.customerId is null
+            group by u.role.id
+            """)
+    List<Object[]> countActiveStaffByRole();
+
     @Query("""
             select count(u) > 0 from User u
               join u.role r

@@ -283,7 +283,8 @@ public final class TableSchemas {
     public static final TableSchema ROLES = TableSchema.of("roles", "name,asc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
             ColumnDef.of("name", "Name", ColumnType.TEXT).build(),
-            ColumnDef.of("description", "Description", ColumnType.TEXT).notSortable().build());
+            ColumnDef.of("description", "Description", ColumnType.TEXT).notSortable().build(),
+            ColumnDef.of("email", "Email", ColumnType.TEXT).build());
 
     // ---- disputes ------------------------------------------------------------------
 
@@ -309,12 +310,28 @@ public final class TableSchemas {
             ColumnDef.of("read", "Read", ColumnType.BOOLEAN).build(),
             ColumnDef.of("createdAt", "Received", ColumnType.DATE).build());
 
+    // ---- emails --------------------------------------------------------------------
+
+    /**
+     * The Email tab on customer and invoice details: always newest first, with no filters. Not
+     * published as a table schema; it only validates paging for those lists.
+     */
+    public static final TableSchema EMAILS = TableSchema.of("emails", "sentAt,desc",
+            ColumnDef.of("id", "Id", ColumnType.NUMBER).notFilterable().build(),
+            ColumnDef.of("sentAt", "Sent", ColumnType.DATE).notFilterable().build());
+
+    /** A user's Inbox, one row per email they received. It has no search or filters in this phase. */
+    public static final TableSchema INBOX = TableSchema.of("inbox", "sentAt,desc",
+            ColumnDef.of("id", "Id", ColumnType.NUMBER).notSortable().notFilterable().build(),
+            ColumnDef.of("sentAt", "Received", ColumnType.DATE).notFilterable()
+                    .path(ColumnDef.nested("email", "sentAt")).build());
+
     private static final Map<String, TableSchema> BY_ENTITY = buildIndex();
 
     private static Map<String, TableSchema> buildIndex() {
         Map<String, TableSchema> m = new LinkedHashMap<>();
         for (TableSchema s : List.of(INVOICES, PAYMENTS, CUSTOMERS, PROMISES, PRODUCTS,
-                USERS, ROLES, DISPUTES, NOTIFICATIONS)) {
+                USERS, ROLES, DISPUTES, NOTIFICATIONS, INBOX)) {
             m.put(s.entity(), s);
         }
         return Map.copyOf(m);

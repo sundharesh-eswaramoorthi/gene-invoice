@@ -14,6 +14,8 @@ public class CustomerDtos {
 
     public record CustomerDto(
             Long id, String name, String phone, String email,
+            /** Other addresses besides {@code email}; never null. */
+            List<String> additionalEmails,
             String address, BigDecimal creditBalance, String username,
             BigDecimal outstanding,
             /** Null for a customer-scoped caller, who never sees POC identity (AC-A8). */
@@ -28,6 +30,7 @@ public class CustomerDtos {
             @NotBlank @Size(max = FieldLimits.FULL_NAME) String name,
             @Size(max = FieldLimits.PHONE) String phone,
             @Email @Size(max = FieldLimits.EMAIL) String email,
+            List<@Email @Size(max = FieldLimits.EMAIL) String> additionalEmails,
             @Size(max = FieldLimits.ADDRESS) String address,
             @NotBlank @Size(max = FieldLimits.USERNAME) String username,
             @NotBlank String password
@@ -37,6 +40,8 @@ public class CustomerDtos {
             @NotBlank @Size(max = FieldLimits.FULL_NAME) String name,
             @Size(max = FieldLimits.PHONE) String phone,
             @Email @Size(max = FieldLimits.EMAIL) String email,
+            /** Null leaves the other addresses as they are; a list replaces them. */
+            List<@Email @Size(max = FieldLimits.EMAIL) String> additionalEmails,
             @Size(max = FieldLimits.ADDRESS) String address,
             String password
     ) {}

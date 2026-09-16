@@ -11,6 +11,7 @@ import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.email.EmailCleanup;
 import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.invoice.InvoiceStatus;
 import com.geneinvoice.poc.CustomerPoc;
@@ -52,6 +53,7 @@ public class CustomerService {
     private final TableQueryExecutor queryExecutor;
     private final AuditService auditService;
     private final CurrentUser currentUser;
+    private final EmailCleanup emailCleanup;
 
     // ---- reads -----------------------------------------------------------------
 
@@ -175,7 +177,8 @@ public class CustomerService {
                     .filter(s -> s.getPocType() == PocType.COLLECTION)
                     .map(PocDtos.CustomerPocDto::from).toList();
             return new CustomerDtos.CustomerDto(
-                    c.getId(), c.getName(), c.getPhone(), c.getEmail(), c.getAddress(),
+                    c.getId(), c.getName(), c.getPhone(), c.getEmail(),
+                    List.copyOf(c.getAdditionalEmails()), c.getAddress(),
                     c.getCreditBalance(), usernames.get(c.getId()),
                     outstanding.getOrDefault(c.getId(), BigDecimal.ZERO),
                     showPoc ? success : null,
@@ -202,6 +205,7 @@ public class CustomerService {
 
         Customer c = repository.save(Customer.builder()
                 .name(in.name()).phone(in.phone()).email(email).address(in.address())
+                .additionalEmails(Emails.normalizeOthers(in.additionalEmails(), email))
                 .build());
 
         Passwords.require(in.password());
@@ -236,6 +240,10 @@ public class CustomerService {
         c.setName(in.name());
         c.setPhone(in.phone());
         c.setEmail(email);
+        List<String> others = in.additionalEmails() == null ? c.getAdditionalEmails() : in.additionalEmails();
+        List<String> normalizedOthers = Emails.normalizeOthers(others, email);
+        c.getAdditionalEmails().clear();
+        c.getAdditionalEmails().addAll(normalizedOthers);
         c.setAddress(in.address());
         Customer saved = repository.save(c);
 
@@ -260,14 +268,16 @@ public class CustomerService {
             customerPocRepository.delete(seat);
         }
         userRepository.findByCustomerId(id).ifPresent(userRepository::delete);
+        emailCleanup.deleteForCustomer(id);
         repository.deleteById(id);
     }
 
     private Object snapshot(Customer c) {
         return new CustomerAuditSnapshot(c.getId(), c.getName(), c.getPhone(), c.getEmail(),
-                c.getAddress(), c.getCreditBalance());
+                List.copyOf(c.getAdditionalEmails()), c.getAddress(), c.getCreditBalance());
     }
 
     public record CustomerAuditSnapshot(Long id, String name, String phone, String email,
+                                        List<String> additionalEmails,
                                         String address, BigDecimal creditBalance) {}
 }

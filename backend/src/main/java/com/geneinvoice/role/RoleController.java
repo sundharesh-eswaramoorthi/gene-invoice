@@ -1,6 +1,7 @@
 package com.geneinvoice.role;
 
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Emails;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.bulk.BulkDtos;
@@ -16,6 +17,7 @@ import com.geneinvoice.privilege.Privileges;
 import com.geneinvoice.user.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
@@ -41,9 +43,10 @@ public class RoleController {
     private final UserRepository userRepository;
     private final TableQueryExecutor queryExecutor;
 
-    public record RoleDto(Long id, String name, String description, List<String> privileges) {
+    public record RoleDto(Long id, String name, String description, String email,
+                          List<String> privileges) {
         static RoleDto from(Role r) {
-            return new RoleDto(r.getId(), r.getName(), r.getDescription(),
+            return new RoleDto(r.getId(), r.getName(), r.getDescription(), r.getEmail(),
                     r.getPrivileges().stream().map(Privilege::getName).sorted().toList());
         }
     }
@@ -51,6 +54,7 @@ public class RoleController {
     public record RoleUpsert(
             @NotBlank @Size(max = FieldLimits.ROLE_NAME) String name,
             @Size(max = FieldLimits.ROLE_DESCRIPTION) String description,
+            @Email @Size(max = FieldLimits.EMAIL) String email,
             List<String> privileges
     ) {}
 
@@ -82,9 +86,10 @@ public class RoleController {
         // findAllById ignores order, so put the rows back the way the filter and sort asked (D-41).
         List<Role> roles = new ArrayList<>(roleRepository.findAllById(ids));
         roles.sort(Comparator.comparingInt(r -> ids.indexOf(r.getId())));
-        String csv = Csv.of(List.of("Id", "Name", "Description", "Privileges"),
+        String csv = Csv.of(List.of("Id", "Name", "Description", "Email", "Privileges"),
                 roles.stream().map(r -> List.<Object>of(
                         r.getId(), r.getName(), r.getDescription() == null ? "" : r.getDescription(),
+                        r.getEmail() == null ? "" : r.getEmail(),
                         String.join(" ", r.getPrivileges().stream().map(Privilege::getName).sorted().toList())
                 )).toList());
         return ResponseEntity.ok()
@@ -109,6 +114,7 @@ public class RoleController {
         }
         Role r = Role.builder()
                 .name(name).description(in.description())
+                .email(Emails.normalize(in.email()))
                 .privileges(resolvePrivileges(in.privileges()))
                 .build();
         return RoleDto.from(roleRepository.save(r));
@@ -124,6 +130,7 @@ public class RoleController {
         }
         r.setName(name);
         r.setDescription(in.description());
+        r.setEmail(Emails.normalize(in.email()));
         r.setPrivileges(resolvePrivileges(in.privileges()));
         return RoleDto.from(roleRepository.save(r));
     }

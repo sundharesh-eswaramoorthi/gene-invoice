@@ -60,6 +60,12 @@ public final class Privileges {
     /** May export the current selection / filtered set as CSV. */
     public static final String EXPORT_DATA = "EXPORT_DATA";
 
+    // ---- In-app email ------------------------------------------------------------
+    /** May read the Email tab on customer and invoice details. */
+    public static final String EMAIL_VIEW = "EMAIL_VIEW";
+    /** May compose and send emails about customers and invoices. */
+    public static final String EMAIL_SEND = "EMAIL_SEND";
+
     public static final List<String> ALL = List.of(
             USER_VIEW, USER_MANAGE,
             ROLE_VIEW, ROLE_MANAGE,
@@ -74,6 +80,7 @@ public final class Privileges {
             POC_ASSIGNABLE_SALES, POC_ASSIGNABLE_SUCCESS, POC_ASSIGNABLE_COLLECTION,
             SCOPE_OVERRIDE,
             PROMISE_VIEW, PROMISE_MANAGE, PROMISE_OVERRIDE,
-            EXPORT_DATA
+            EXPORT_DATA,
+            EMAIL_VIEW, EMAIL_SEND
     );
 }

@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static com.geneinvoice.privilege.Privileges.*;
 
@@ -24,7 +25,9 @@ import static com.geneinvoice.privilege.Privileges.*;
  *
  * <p>The four built-in roles are kept in step with the code on every boot, so a new privilege
  * added here reaches them on upgrade. The three POC roles are created once and then left alone —
- * an admin who tailors them keeps their edits across restarts (AC-A1).
+ * an admin who tailors them keeps their edits across restarts (AC-A1) — except that a privilege
+ * this database has never had before is added to the POC roles seeded with it. No admin can have
+ * taken away a privilege that did not exist yet, so that reaches them without undoing an edit.
  */
 @Component
 @RequiredArgsConstructor
@@ -47,10 +50,12 @@ public class DataSeeder implements CommandLineRunner {
         if (blankEmails > 0) log.info("Cleared {} blank user email(s) to null", blankEmails);
 
         Set<Privilege> all = new HashSet<>();
+        Set<String> created = new HashSet<>();
         for (String name : Privileges.ALL) {
-            Privilege p = privilegeRepository.findByName(name)
-                    .orElseGet(() -> privilegeRepository.save(
-                            Privilege.builder().name(name).description(name).build()));
+            Privilege p = privilegeRepository.findByName(name).orElseGet(() -> {
+                created.add(name);
+                return privilegeRepository.save(Privilege.builder().name(name).description(name).build());
+            });
             all.add(p);
         }
 
@@ -67,16 +72,19 @@ public class DataSeeder implements CommandLineRunner {
                 POC_VIEW, POC_ASSIGN,
                 PROMISE_VIEW,
                 SCOPE_OVERRIDE,
-                EXPORT_DATA
+                EXPORT_DATA,
+                EMAIL_VIEW, EMAIL_SEND
         ));
         upsertRole("VIEWER", "Read-only access", pickByNames(
                 CUSTOMER_VIEW, PRODUCT_VIEW, INVOICE_VIEW, PAYMENT_VIEW,
                 NOTIFICATION_VIEW,
                 POC_VIEW,
                 PROMISE_VIEW,
-                SCOPE_OVERRIDE
+                SCOPE_OVERRIDE,
+                EMAIL_VIEW
         ));
         // A customer account never receives POC_VIEW: POC identity is invisible to them (AC-A8).
+        // Nor any EMAIL_* privilege: emails are staff correspondence about the account.
         upsertRole("CUSTOMER", "Customer self-service", pickByNames(
                 CUSTOMER_VIEW,
                 INVOICE_VIEW,
@@ -88,7 +96,7 @@ public class DataSeeder implements CommandLineRunner {
         ));
 
         // A Sales POC deliberately lacks SCOPE_OVERRIDE: their book filter is shown locked.
-        createRoleIfAbsent(ROLE_SALES_POC, "Salesperson who owns invoices", pickByNames(
+        createRoleIfAbsent(ROLE_SALES_POC, "Salesperson who owns invoices", created, pickByNames(
                 CUSTOMER_VIEW,
                 PRODUCT_VIEW,
                 INVOICE_VIEW, INVOICE_MANAGE,
@@ -99,9 +107,10 @@ public class DataSeeder implements CommandLineRunner {
                 POC_VIEW, POC_ASSIGN,
                 POC_ASSIGNABLE_SALES,
                 PROMISE_VIEW,
-                EXPORT_DATA
+                EXPORT_DATA,
+                EMAIL_VIEW, EMAIL_SEND
         ));
-        createRoleIfAbsent(ROLE_SUCCESS_POC, "Customer success contact for an account", pickByNames(
+        createRoleIfAbsent(ROLE_SUCCESS_POC, "Customer success contact for an account", created, pickByNames(
                 CUSTOMER_VIEW, CUSTOMER_MANAGE,
                 PRODUCT_VIEW,
                 INVOICE_VIEW,
@@ -113,9 +122,10 @@ public class DataSeeder implements CommandLineRunner {
                 POC_ASSIGNABLE_SUCCESS,
                 PROMISE_VIEW,
                 SCOPE_OVERRIDE,
-                EXPORT_DATA
+                EXPORT_DATA,
+                EMAIL_VIEW, EMAIL_SEND
         ));
-        createRoleIfAbsent(ROLE_COLLECTION_POC, "Collections contact for an account", pickByNames(
+        createRoleIfAbsent(ROLE_COLLECTION_POC, "Collections contact for an account", created, pickByNames(
                 CUSTOMER_VIEW,
                 INVOICE_VIEW,
                 PAYMENT_VIEW, PAYMENT_MANAGE,
@@ -126,7 +136,8 @@ public class DataSeeder implements CommandLineRunner {
                 POC_ASSIGNABLE_COLLECTION,
                 PROMISE_VIEW, PROMISE_MANAGE, PROMISE_OVERRIDE,
                 SCOPE_OVERRIDE,
-                EXPORT_DATA
+                EXPORT_DATA,
+                EMAIL_VIEW, EMAIL_SEND
         ));
 
         if (!userRepository.existsByUsername("admin")) {
@@ -165,9 +176,23 @@ public class DataSeeder implements CommandLineRunner {
         return roleRepository.save(role);
     }
 
-    /** POC role: created once, then never reset, so admin customisations survive an upgrade. */
-    private Role createRoleIfAbsent(String name, String description, Set<Privilege> privs) {
-        return roleRepository.findByName(name).orElseGet(() -> {
+    /**
+     * POC role: created once, then never reset, so admin customisations survive an upgrade. Only a
+     * privilege created by this run — one the database did not have, so no admin can have removed
+     * it — is added to a role that already exists.
+     */
+    private Role createRoleIfAbsent(String name, String description, Set<String> createdPrivileges,
+                                    Set<Privilege> privs) {
+        return roleRepository.findByName(name).map(role -> {
+            Set<Privilege> arriving = privs.stream()
+                    .filter(p -> createdPrivileges.contains(p.getName()))
+                    .collect(Collectors.toSet());
+            if (arriving.isEmpty()) return role;
+            log.info("Adding new privilege(s) {} to POC role {}",
+                    arriving.stream().map(Privilege::getName).sorted().toList(), name);
+            role.getPrivileges().addAll(arriving);
+            return roleRepository.save(role);
+        }).orElseGet(() -> {
             log.info("Seeding POC role {}", name);
             return roleRepository.save(Role.builder()
                     .name(name).description(description).privileges(privs).build());
