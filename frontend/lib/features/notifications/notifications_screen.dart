@@ -41,6 +41,8 @@ class NotificationsScreen extends ConsumerWidget {
         idOf: (n) => n.id,
         emptyMessage: 'No notifications match this filter',
         onRowTap: (context, n) => _open(context, ref, n),
+        // Marking rows read here changes the bell's badge, which lives outside this table (D-55).
+        onBulkDone: () => ref.invalidate(unreadCountProvider),
         bulkActions: const [
           BulkActionSpec(action: 'MARK_READ', label: 'Mark read', icon: Icons.done_all),
           BulkActionSpec(

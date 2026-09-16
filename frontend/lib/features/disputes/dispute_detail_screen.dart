@@ -3,10 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/format.dart';
 import '../../shared/models/dispute.dart';
+import '../../shared/widgets/detail_scaffold.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../../core/table/table_providers.dart';
@@ -23,7 +24,12 @@ class DisputeDetailScreen extends ConsumerWidget {
       appBar: AppBar(title: Text('Dispute #$id')),
       body: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Failed: $e')),
+        // A dispute that is gone, or not this user's to see, reads as a sentence rather than a
+        // raw exception (D-54).
+        error: (e, _) => RecordUnavailable(
+          message: notFoundMessage(e, 'dispute'),
+          onBack: () => context.go('/disputes'),
+        ),
         data: (d) => _DisputeBody(dispute: d),
       ),
     );
@@ -103,7 +109,6 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.isAdmin ?? false;
     final d = widget.dispute;
-    final df = DateFormat.yMMMd().add_jm();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -123,7 +128,7 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Opened ${df.format(d.createdAt.toLocal())}'
+            'Opened ${formatDateTime(d.createdAt)}'
             '${d.customerName != null ? " by ${d.customerName}" : ""}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -131,7 +136,7 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
           _Section(label: 'Reason', body: Text(d.reason)),
           const SizedBox(height: 12),
           _Section(
-            label: 'Proposed change (JSON)',
+            label: 'Proposed change',
             body: SelectableText(
               _prettyJson(d.proposedChangeJson).isEmpty
                   ? '(none — customer only described the problem)'
@@ -145,7 +150,7 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
           ],
           if (d.resolvedAt != null) ...[
             const SizedBox(height: 12),
-            Text('Resolved ${df.format(d.resolvedAt!.toLocal())}',
+            Text('Resolved ${formatDateTime(d.resolvedAt)}',
                 style: Theme.of(context).textTheme.bodySmall),
           ],
           const SizedBox(height: 24),

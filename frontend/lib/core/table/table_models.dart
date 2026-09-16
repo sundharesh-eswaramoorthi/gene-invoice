@@ -8,7 +8,12 @@ class TableFilter {
   final String operator;
   final List<String> values;
 
-  const TableFilter(this.field, this.operator, this.values);
+  /// How to show the value in a chip where the raw value means nothing to the reader — a
+  /// customer's name rather than "184" (D-50). It is not part of the wire format or of equality:
+  /// it is only a label, and a filter restored from a URL falls back to showing the id.
+  final String? label;
+
+  const TableFilter(this.field, this.operator, this.values, {this.label});
 
   String get wire => '$field:$operator:${values.join(',')}';
 

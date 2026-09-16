@@ -152,20 +152,31 @@ class _CustomerPocEditorState extends ConsumerState<CustomerPocEditor> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             for (final poc in widget.pocs)
-              InputChip(
-                avatar: poc.primary
-                    ? const Icon(Icons.star, size: 16)
-                    : const Icon(Icons.person_outline, size: 16),
-                label: Text(
-                  poc.user.display + (poc.user.active ? '' : ' (inactive)'),
-                  style: TextStyle(fontWeight: poc.primary ? FontWeight.w600 : null),
+              // A chip with no handlers is drawn in Material's disabled style, which reads as
+              // "broken" to someone who simply may not edit. They get a plain chip (D-58).
+              if (!widget.editable)
+                Chip(
+                  avatar: poc.primary
+                      ? const Icon(Icons.star, size: 16)
+                      : const Icon(Icons.person_outline, size: 16),
+                  label: Text(
+                    poc.user.display + (poc.user.active ? '' : ' (inactive)'),
+                    style: TextStyle(fontWeight: poc.primary ? FontWeight.w600 : null),
+                  ),
+                )
+              else
+                InputChip(
+                  avatar: poc.primary
+                      ? const Icon(Icons.star, size: 16)
+                      : const Icon(Icons.person_outline, size: 16),
+                  label: Text(
+                    poc.user.display + (poc.user.active ? '' : ' (inactive)'),
+                    style: TextStyle(fontWeight: poc.primary ? FontWeight.w600 : null),
+                  ),
+                  onPressed: (_busy || poc.primary) ? null : () => _setPrimary(poc),
+                  tooltip: poc.primary ? 'Primary' : 'Tap to make primary',
+                  onDeleted: _busy ? null : () => _remove(poc),
                 ),
-                onPressed: (!widget.editable || _busy || poc.primary)
-                    ? null
-                    : () => _setPrimary(poc),
-                tooltip: poc.primary ? 'Primary' : 'Tap to make primary',
-                onDeleted: (!widget.editable || _busy) ? null : () => _remove(poc),
-              ),
             if (widget.editable)
               ActionChip(
                 avatar: const Icon(Icons.add, size: 16),

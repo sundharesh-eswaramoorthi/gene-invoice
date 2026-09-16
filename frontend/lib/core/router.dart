@@ -41,12 +41,15 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     // An unknown path — a mistyped link, or an old notification's /admin/... link — gets the same
     // "not found" page as a missing record, with a way home.
-    errorBuilder: (context, state) => Scaffold(
-      body: RecordUnavailable(
+    errorBuilder: (context, state) {
+      final page = RecordUnavailable(
         message: 'That page does not exist.',
         onBack: () => context.go('/'),
-      ),
-    ),
+      );
+      // Signed in, this belongs inside the app — sidebar and top bar included — like every
+      // other "does not exist" page (D-71).
+      return auth.user == null ? Scaffold(body: page) : AppShell(child: page);
+    },
     refreshListenable: _RouterRefresh(ref),
     redirect: (context, state) {
       final loggedIn = auth.user != null;

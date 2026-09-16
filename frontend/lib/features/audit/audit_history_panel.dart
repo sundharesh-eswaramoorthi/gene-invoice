@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
@@ -328,8 +327,6 @@ class _AuditTile extends StatelessWidget {
 
   const _AuditTile({super.key, required this.entry, required this.showRecord});
 
-  static final _when = DateFormat.yMMMd().add_jm();
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -345,14 +342,25 @@ class _AuditTile extends StatelessWidget {
       who = entry.changedByUserId == null && !entry.derived ? 'automatic' : null;
     }
     final meta = [
-      if (entry.createdAt != null) _when.format(entry.createdAt!.toLocal()),
+      // One date-time format across the app, from core/format.dart (D-63).
+      if (entry.createdAt != null) formatDateTime(entry.createdAt),
       if (who != null) who,
       if (entry.disputeId != null && entry.entityType != 'DISPUTE') 'via dispute #${entry.disputeId}',
     ].join(' • ');
 
+    // Each link is its own node, so a screen reader can reach the link without activating it
+    // instead of expanding the row (D-59).
     Widget link(String text, String? route) => route == null
         ? Text(text, style: linkStyle)
-        : InkWell(onTap: () => goGuarded(context, route), child: Text(text, style: linkStyle));
+        : Semantics(
+            container: true,
+            link: true,
+            label: text,
+            child: InkWell(
+              onTap: () => goGuarded(context, route),
+              child: ExcludeSemantics(child: Text(text, style: linkStyle)),
+            ),
+          );
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),

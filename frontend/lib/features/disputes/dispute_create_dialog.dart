@@ -154,6 +154,9 @@ class _DisputeCreateDialogState extends ConsumerState<_DisputeCreateDialog> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   initialValue: _action,
+                  // Without this the text keeps its natural width and runs under the arrow on a
+                  // phone (D-65).
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'What should change?'),
                   items: _actionOptions,
                   onChanged: (v) => setState(() => _action = v ?? ''),

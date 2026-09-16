@@ -159,8 +159,10 @@ class AppShell extends ConsumerWidget {
     );
   }
 
-  int _selectedIndex(String path, List<_NavEntry> entries) {
-    int best = 0;
+  /// Null when the current route is not one of the sidebar entries — Notifications, or a
+  /// customer's own customer page. Nothing should look selected then (D-62).
+  int? _selectedIndex(String path, List<_NavEntry> entries) {
+    int? best;
     int bestLen = -1;
     for (var i = 0; i < entries.length; i++) {
       final p = entries[i].path;
@@ -218,7 +220,7 @@ class _NotificationsBell extends ConsumerWidget {
 
 class _DrawerNav extends StatelessWidget {
   final List<_NavEntry> entries;
-  final int selectedIndex;
+  final int? selectedIndex;
   final ValueChanged<String> onSelect;
   const _DrawerNav({required this.entries, required this.selectedIndex, required this.onSelect});
 

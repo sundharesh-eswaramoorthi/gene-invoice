@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -24,6 +26,16 @@ class TableRequest {
 
   Map<String, dynamic> get apiParams => {...query.toApiParams(), ...extra};
 
+  /// The same view for the summary tiles, which count the whole filtered set: paging and sorting
+  /// cannot change them, so they must not be part of the key or every page change refetches
+  /// them (D-56, AC-D1).
+  TableRequest get forSummary => TableRequest(
+        entity: entity,
+        path: path,
+        query: TableQuery(filters: query.filters),
+        extra: extra,
+      );
+
   @override
   bool operator ==(Object other) =>
       other is TableRequest &&
@@ -39,7 +51,10 @@ class TableRequest {
 final tableSchemaProvider = FutureProvider.family<TableSchema, String>((ref, entity) async {
   // Each user gets their own schema (a customer sees no POC columns), so it is fetched afresh
   // whenever a different user signs in rather than kept from the previous one.
-  ref.watch(currentUserProvider.select((u) => u?.id));
+  final userId = ref.watch(currentUserProvider.select((u) => u?.id));
+  // Signing out changes that to nobody. There is no schema to fetch then, and asking for one
+  // without a token only produces a 401 in the console (D-70); the app is leaving the page anyway.
+  if (userId == null) return Completer<TableSchema>().future;
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/table-schemas/$entity');
   return TableSchema.fromJson(res.data as Map<String, dynamic>);
@@ -90,6 +105,20 @@ class PageSizeStore extends StateNotifier<Map<String, int>> {
   }
 
   int? sizeFor(String entity) => state[entity];
+
+  /// Forgets every remembered size. Called when a user signs out, so the next person at this
+  /// browser gets their own defaults rather than inheriting the last one's (D-57).
+  Future<void> clear() async {
+    state = const {};
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      for (final key in prefs.getKeys().where((k) => k.startsWith(_prefix)).toList()) {
+        await prefs.remove(key);
+      }
+    } catch (_) {
+      // The in-memory clear is what matters for this session.
+    }
+  }
 
   Future<void> write(String entity, int size) async {
     state = {...state, entity: size};

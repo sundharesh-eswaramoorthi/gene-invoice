@@ -163,7 +163,9 @@ class InvoicesScreen extends ConsumerWidget {
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/invoices/${inv.id}'),
           ),
-          if (canPromise && inv.balance > 0)
+          // A cancelled invoice owes nothing, whatever balance it last showed, and the backend
+          // refuses a promise on it (D-49).
+          if (canPromise && inv.balance > 0 && inv.status != InvoiceStatus.CANCELLED)
             IconButton(
               tooltip: 'Raise promise',
               icon: const Icon(Icons.handshake_outlined, size: 18),

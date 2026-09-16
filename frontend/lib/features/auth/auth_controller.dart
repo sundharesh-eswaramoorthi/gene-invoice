@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/table/table_providers.dart';
 import '../../shared/models/auth_models.dart';
 
 class AuthState {
@@ -61,6 +62,8 @@ class AuthController extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     await _ref.read(tokenStorageProvider).clear();
+    // The next person at this browser should get their own table defaults, not this one's (D-57).
+    await _ref.read(pageSizeStoreProvider.notifier).clear();
     state = const AuthState();
   }
 }

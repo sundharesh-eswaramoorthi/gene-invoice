@@ -124,8 +124,11 @@ class DashboardScreen extends ConsumerWidget {
               ),
               OutlinedButton.icon(
                 icon: const Icon(Icons.payments_outlined),
-                label: Text(
-                    user?.has(Privileges.paymentManage) ?? false ? 'Record payment' : 'My payments'),
+                // Staff without PAYMENT_MANAGE land on every payment in the organisation, so the
+                // button must not call it "My payments" (D-67).
+                label: Text((user?.has(Privileges.paymentManage) ?? false)
+                    ? 'Record payment'
+                    : ((user?.isCustomer ?? false) ? 'My payments' : 'All payments')),
                 onPressed: () => context.go('/payments'),
               ),
               if (canSeePromises)

@@ -56,6 +56,10 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
   /// does not refetch, and the top section never reloads (AC-C3).
   final Set<int> _visited = {};
 
+  /// The top pane scrolls when it is taller than its half of the screen; its scrollbar is the
+  /// only cue that there is more below (D-64).
+  final ScrollController _topScroll = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +106,7 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
   @override
   void dispose() {
     _controller.dispose();
+    _topScroll.dispose();
     super.dispose();
   }
 
@@ -156,7 +161,11 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
         header,
         Flexible(
           flex: 5,
-          child: SingleChildScrollView(child: widget.top),
+          child: Scrollbar(
+            controller: _topScroll,
+            thumbVisibility: true,
+            child: SingleChildScrollView(controller: _topScroll, child: widget.top),
+          ),
         ),
         const Divider(height: 1),
         Flexible(

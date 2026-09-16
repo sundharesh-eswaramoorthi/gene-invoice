@@ -165,15 +165,20 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
           ? 'Edit promise'
           : 'Payment promise${widget.customerName == null ? '' : ' • ${widget.customerName}'}'),
       content: SizedBox(
-        width: 520,
+        // A phone has nowhere near 520px to give (D-60).
+        width: MediaQuery.sizeOf(context).width < 600 ? double.maxFinite : 520,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
+              // Side by side when there is room; stacked on a phone, where two fields in a row
+              // cut the amount's label and push the date onto a second line (D-60).
+              Flex(
+                direction: MediaQuery.sizeOf(context).width < 600 ? Axis.vertical : Axis.horizontal,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
+                  Flexible(
                     child: TextField(
                       controller: _amount,
                       autofocus: true,
@@ -182,8 +187,8 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                       onChanged: (_) => setState(() {}),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                  const SizedBox(width: 12, height: 12),
+                  Flexible(
                     child: InkWell(
                       onTap: () async {
                         final picked = await showDatePicker(

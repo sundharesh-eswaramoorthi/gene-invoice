@@ -217,7 +217,11 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                 ? TextField(
                     controller: _name,
                     decoration: InputDecoration(errorText: _fieldErrors['name']),
-                    onChanged: (_) => setState(() => _dirty = true),
+                    onChanged: (v) => setState(() {
+                      _dirty = true;
+                      // Drop the server's complaint as soon as it no longer applies (D-52).
+                      if (v.trim().isNotEmpty) _fieldErrors.remove('name');
+                    }),
                   )
                 : ReadOnlyValue(c.name),
           ),

@@ -66,6 +66,10 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
 
   final Widget Function(BuildContext context, Map<String, dynamic> summary)? tiles;
   final List<BulkActionSpec> bulkActions;
+
+  /// Called after a bulk action has run, for anything outside the table that its rows feed —
+  /// the bell's unread badge after "Mark read", say (D-55).
+  final VoidCallback? onBulkDone;
   final bool canExport;
 
   /// Lets a screen switch row selection off. It is off anyway when the caller has neither a bulk
@@ -88,6 +92,7 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
     required this.parse,
     required this.idOf,
     required this.columns,
+    this.onBulkDone,
     this.extraParams = const {},
     this.onRowTap,
     this.rowActions,
@@ -146,7 +151,7 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
 
   void _refresh() {
     ref.invalidate(tablePageProvider(_request));
-    ref.invalidate(tableSummaryProvider(_request));
+    ref.invalidate(tableSummaryProvider(_request.forSummary));
     _clearSelection();
   }
 
@@ -161,7 +166,10 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.header != null) widget.header!,
-        if (widget.tiles != null) _SummaryTiles(request: _request, builder: widget.tiles!),
+        // On a phone the tiles scroll with the rows instead of standing above them, where they
+        // left barely one card's worth of list (D-61).
+        if (widget.tiles != null && !isNarrow)
+          _SummaryTiles(request: _request, builder: widget.tiles!),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -230,7 +238,12 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
               final rows = page.content.map(widget.parse).toList();
               return RefreshIndicator(
                 onRefresh: () async => _refresh(),
-                child: isNarrow ? _cardList(rows) : _dataTable(rows, schema),
+                child: isNarrow
+                    ? _cardList(rows,
+                        header: widget.tiles == null
+                            ? null
+                            : _SummaryTiles(request: _request, builder: widget.tiles!))
+                    : _dataTable(rows, schema),
               );
             },
           ),
@@ -338,13 +351,16 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
       ? child
       : ConstrainedBox(constraints: BoxConstraints(maxWidth: c.maxWidth!), child: child);
 
-  Widget _cardList(List<T> rows) {
+  /// [header] scrolls above the first card — the summary tiles on a phone (D-61).
+  Widget _cardList(List<T> rows, {Widget? header}) {
+    final lead = header == null ? 0 : 1;
     return ListView.separated(
       padding: const EdgeInsets.all(8),
-      itemCount: rows.length,
+      itemCount: rows.length + lead,
       separatorBuilder: (_, __) => const SizedBox(height: 6),
       itemBuilder: (context, i) {
-        final row = rows[i];
+        if (header != null && i == 0) return header;
+        final row = rows[i - lead];
         final id = widget.idOf(row);
         return Card(
           margin: EdgeInsets.zero,
@@ -438,6 +454,7 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
       if (mounted) {
         _showBulkResult((res.data as Map).cast<String, dynamic>());
         _refresh();
+        widget.onBulkDone?.call();
       }
     } catch (e) {
       if (mounted) {
@@ -600,7 +617,7 @@ class _SummaryTiles extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(tableSummaryProvider(request));
+    final async = ref.watch(tableSummaryProvider(request.forSummary));
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: async.when(
@@ -830,6 +847,9 @@ class _PaginationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // On a phone the pager keeps only what the list cannot show by itself — which page this is,
+    // and how to move — so the rows get that height back (D-61).
+    final compact = MediaQuery.sizeOf(context).width < 760;
     return Material(
       elevation: 2,
       child: Padding(
@@ -840,23 +860,28 @@ class _PaginationBar extends StatelessWidget {
           alignment: WrapAlignment.end,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('Rows'),
-                const SizedBox(width: 6),
-                DropdownButton<int>(
-                  value: pageSizes.contains(page.size) ? page.size : pageSizes.first,
-                  underline: const SizedBox.shrink(),
-                  items: pageSizes
-                      .map((s) => DropdownMenuItem(value: s, child: Text('$s')))
-                      .toList(),
-                  onChanged: (s) => s == null ? null : onSize(s),
-                ),
-              ],
-            ),
-            Text('${page.firstRowNumber}–${page.lastRowNumber} of ${page.totalElements}'),
-            Text('Page ${page.page + 1} of ${page.totalPages}'),
+            if (!compact)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Rows'),
+                  const SizedBox(width: 6),
+                  DropdownButton<int>(
+                    value: pageSizes.contains(page.size) ? page.size : pageSizes.first,
+                    underline: const SizedBox.shrink(),
+                    items: pageSizes
+                        .map((s) => DropdownMenuItem(value: s, child: Text('$s')))
+                        .toList(),
+                    onChanged: (s) => s == null ? null : onSize(s),
+                  ),
+                ],
+              ),
+            if (!compact)
+              Text('${page.firstRowNumber}–${page.lastRowNumber} of ${page.totalElements}'),
+            // Past the last page there is no current page to name (D-69).
+            Text(page.totalPages > 0 && page.page >= page.totalPages
+                ? '${page.totalPages} pages'
+                : 'Page ${page.page + 1} of ${page.totalPages}'),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [

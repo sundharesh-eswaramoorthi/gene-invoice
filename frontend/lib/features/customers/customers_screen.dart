@@ -109,15 +109,15 @@ class CustomersScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Name',
             sortKey: 'name',
-            cell: (context, c) => Row(
-              mainAxisSize: MainAxisSize.min,
+            // Wrap, not Row: on a phone card the badge belongs under the name rather than
+            // under the Open icon (D-51).
+            cell: (context, c) => Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                if (canSeePoc && c.pocMissing)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 6),
-                    child: PocMissingBadge(),
-                  ),
+                if (canSeePoc && c.pocMissing) const PocMissingBadge(),
               ],
             ),
           ),

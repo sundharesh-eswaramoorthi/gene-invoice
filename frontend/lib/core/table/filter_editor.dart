@@ -95,7 +95,7 @@ class _FilterEditorDialogState extends State<_FilterEditorDialog> {
           setState(() => _error = 'Pick a record');
           return null;
         }
-        return TableFilter(column.name, op, ['${_reference!.id}']);
+        return TableFilter(column.name, op, ['${_reference!.id}'], label: _reference!.label);
       case ColumnType.boolean:
         return TableFilter(column.name, op, [_valueA.text.isEmpty ? 'true' : _valueA.text]);
       case ColumnType.date:
@@ -338,5 +338,5 @@ String describeFilter(TableFilter f, TableSchema? schema) {
   if (f.operator == 'between' && f.values.length == 2) {
     return '$label ${f.values[0]} – ${f.values[1]}';
   }
-  return '$label ${operatorLabel(f.operator)} ${f.values.join(', ')}';
+  return '$label ${operatorLabel(f.operator)} ${f.label ?? f.values.join(', ')}';
 }
