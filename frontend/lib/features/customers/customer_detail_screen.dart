@@ -7,11 +7,15 @@ import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/customer.dart';
+import '../../shared/models/email.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
+import '../../shared/widgets/email_list_editor.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/disputes_tab.dart';
+import '../email/compose_email_dialog.dart';
+import '../email/email_tab.dart';
 import '../poc/customer_poc_editor.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
@@ -32,6 +36,8 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
   final _phone = TextEditingController();
   final _email = TextEditingController();
   final _address = TextEditingController();
+  List<String> _otherEmails = const [];
+  final _otherEmailInput = TextEditingController();
   bool _seeded = false;
   bool _dirty = false;
   bool _saving = false;
@@ -43,6 +49,12 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
   void initState() {
     super.initState();
     _unsaved = ref.read(unsavedChangesProvider)..register(_confirmDiscard);
+    _otherEmailInput.addListener(_onOtherEmailTyped);
+  }
+
+  /// An address typed into the add box is an edit too, so Save is offered for it.
+  void _onOtherEmailTyped() {
+    if (_otherEmailInput.text.trim().isNotEmpty && !_dirty) setState(() => _dirty = true);
   }
 
   @override
@@ -52,6 +64,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     _phone.dispose();
     _email.dispose();
     _address.dispose();
+    _otherEmailInput.dispose();
     super.dispose();
   }
 
@@ -62,6 +75,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     _phone.text = c.phone ?? '';
     _email.text = c.email ?? '';
     _address.text = c.address ?? '';
+    _otherEmails = c.additionalEmails;
   }
 
   Future<bool> _confirmDiscard() async {
@@ -95,14 +109,22 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       setState(() => _fieldErrors['name'] = 'Name is required');
       return;
     }
+    final otherEmails = withTypedEmail(_otherEmails, _otherEmailInput.text);
+    if (otherEmails == null) {
+      setState(() => _error = 'Other emails: "${_otherEmailInput.text.trim()}" is not an email address');
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ref.read(dioProvider).put('/api/customers/${widget.id}', data: {
         'name': _name.text.trim(),
         'phone': _phone.text.trim(),
         'email': _email.text.trim(),
+        'additionalEmails': otherEmails,
         'address': _address.text.trim(),
       });
+      _otherEmails = otherEmails;
+      _otherEmailInput.clear();
       ref.invalidate(customerDetailProvider(widget.id));
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);
@@ -131,6 +153,10 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     final canSeeDisputes = user?.hasAny(
             [Privileges.disputeView, Privileges.disputeCreate, Privileges.disputeManage]) ??
         false;
+    // Emails are staff correspondence; a customer login never sees them, whatever its role holds.
+    final isStaff = user != null && !user.isCustomer;
+    final canSendEmail = isStaff && user.has(Privileges.emailSend);
+    final canSeeEmails = isStaff && user.has(Privileges.emailView);
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -152,6 +178,13 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             onBack: () => goGuarded(context, '/customers'),
             titleTrailing: [
               if (canSeePoc && customer.pocMissing) const PocMissingBadge(),
+              if (canSendEmail)
+                TextButton.icon(
+                  icon: const Icon(Icons.email_outlined, size: 18),
+                  label: const Text('Send email'),
+                  onPressed: () => showSendEmailDialog(context,
+                      type: EmailTargetType.customer, id: customer.id, label: customer.name),
+                ),
             ],
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) => context.go('/customers/${widget.id}?tab=$slug'),
@@ -171,6 +204,14 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                   icon: Icons.handshake_outlined,
                   builder: (context) =>
                       PromisesTab(customerId: customer.id, customerName: customer.name),
+                ),
+              if (canSeeEmails)
+                DetailTab(
+                  slug: 'email',
+                  label: 'Email',
+                  icon: Icons.email_outlined,
+                  builder: (context) =>
+                      EmailTab(type: EmailTargetType.customer, id: customer.id),
                 ),
               if (canViewAudit)
                 DetailTab(
@@ -245,6 +286,18 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                       onChanged: (_) => setState(() => _dirty = true),
                     )
                   : ReadOnlyValue(c.email ?? ''),
+            ),
+            DetailGridItem(
+              label: 'Other emails',
+              child: EmailListEditor(
+                emails: _otherEmails,
+                enabled: canEdit,
+                input: _otherEmailInput,
+                onChanged: (list) => setState(() {
+                  _otherEmails = list;
+                  _dirty = true;
+                }),
+              ),
             ),
             DetailGridItem(
               label: 'Phone',

@@ -28,6 +28,34 @@ class TableColumnSpec<T> {
   });
 }
 
+/// The rows a bulk action applies to: the ticked ids, or everything matching the filter.
+@immutable
+class BulkSelection {
+  final List<int> ids;
+  final bool allMatching;
+
+  /// How many rows that is, for saying so before anything runs (AC-D7).
+  final int count;
+  final String? sort;
+  final List<String> filters;
+
+  const BulkSelection({
+    required this.ids,
+    required this.allMatching,
+    required this.count,
+    required this.sort,
+    required this.filters,
+  });
+
+  /// The selection as every bulk endpoint takes it.
+  Map<String, dynamic> toJson() => {
+        if (!allMatching) 'ids': ids,
+        if (allMatching) 'selectAllMatchingFilter': true,
+        'sort': sort,
+        'filters': filters,
+      };
+}
+
 /// A bulk action offered in the selection toolbar.
 class BulkActionSpec {
   final String action;
@@ -38,12 +66,18 @@ class BulkActionSpec {
   /// Collects extra parameters. Return null to abandon the action.
   final Future<Map<String, dynamic>?> Function(BuildContext context)? buildParams;
 
+  /// Runs an action that has a flow of its own — a form to fill in, its own endpoint and result —
+  /// instead of the confirm-then-post to `{path}/bulk`. Resolves true when rows changed, so the
+  /// table refreshes and the selection clears.
+  final Future<bool> Function(BuildContext context, BulkSelection selection)? run;
+
   const BulkActionSpec({
     required this.action,
     required this.label,
     required this.icon,
     this.destructive = false,
     this.buildParams,
+    this.run,
   });
 }
 
@@ -79,6 +113,9 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
   final String emptyMessage;
   final Widget? header;
 
+  /// False for a list that offers no filtering, such as the Inbox. Page actions still show.
+  final bool showFilterBar;
+
   /// Page-level actions such as "New invoice", shown at the end of the filter bar. They sit in
   /// the layout rather than floating over it, so they can never cover the pagination controls.
   final List<Widget> actions;
@@ -104,6 +141,7 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
     this.emptyMessage = 'No rows match this filter',
     this.header,
     this.actions = const [],
+    this.showFilterBar = true,
   });
 
   @override
@@ -170,34 +208,37 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         // left barely one card's worth of list (D-61).
         if (widget.tiles != null && !isNarrow)
           _SummaryTiles(request: _request, builder: widget.tiles!),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _FilterBar(
-                schema: schema,
-                query: widget.query,
-                lockedFilters: pageAsync.valueOrNull?.lockedFilters ?? const [],
-                onQueryChanged: (q) => widget.onQueryChanged(q),
+        if (widget.showFilterBar || widget.actions.isNotEmpty)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: widget.showFilterBar
+                    ? _FilterBar(
+                        schema: schema,
+                        query: widget.query,
+                        lockedFilters: pageAsync.valueOrNull?.lockedFilters ?? const [],
+                        onQueryChanged: (q) => widget.onQueryChanged(q),
+                      )
+                    : const SizedBox.shrink(),
               ),
-            ),
-            if (widget.actions.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 8, 12, 8),
-                // Page actions sit beside the filter bar, so they take a compact height that
-                // lines up with its chips.
-                child: Theme(
-                  data: Theme.of(context).copyWith(
-                    filledButtonTheme: FilledButtonThemeData(
-                      style: FilledButton.styleFrom(minimumSize: const Size(64, 40))
-                          .merge(Theme.of(context).filledButtonTheme.style),
+              if (widget.actions.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(0, 8, 12, 8),
+                  // Page actions sit beside the filter bar, so they take a compact height that
+                  // lines up with its chips.
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      filledButtonTheme: FilledButtonThemeData(
+                        style: FilledButton.styleFrom(minimumSize: const Size(64, 40))
+                            .merge(Theme.of(context).filledButtonTheme.style),
+                      ),
                     ),
+                    child: Wrap(spacing: 8, runSpacing: 8, children: widget.actions),
                   ),
-                  child: Wrap(spacing: 8, runSpacing: 8, children: widget.actions),
                 ),
-              ),
-          ],
-        ),
+            ],
+          ),
         if (_selected.isNotEmpty || _selectAllMatching)
           _SelectionToolbar(
             selectedCount: _selected.length,
@@ -420,7 +461,25 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
 
   // ---- bulk actions -----------------------------------------------------------
 
+  BulkSelection get _selection => BulkSelection(
+        ids: _selected.toList(),
+        allMatching: _selectAllMatching,
+        count: _selectAllMatching
+            ? (ref.read(tablePageProvider(_request)).valueOrNull?.totalElements ?? 0)
+            : _selected.length,
+        sort: widget.query.sort,
+        filters: widget.query.filters.map((f) => f.wire).toList(),
+      );
+
   Future<void> _runBulkAction(BulkActionSpec spec) async {
+    if (spec.run != null) {
+      final changed = await spec.run!(context, _selection);
+      if (changed && mounted) {
+        _refresh();
+        widget.onBulkDone?.call();
+      }
+      return;
+    }
     Map<String, dynamic>? params;
     if (spec.buildParams != null) {
       params = await spec.buildParams!(context);

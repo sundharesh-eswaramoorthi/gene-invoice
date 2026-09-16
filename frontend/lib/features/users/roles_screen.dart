@@ -6,6 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
+import '../../shared/widgets/email_list_editor.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
@@ -59,6 +60,8 @@ class RolesScreen extends ConsumerWidget {
           TableColumnSpec(
               label: 'Description', cell: (context, r) => Text(r.description ?? '—')),
           TableColumnSpec(
+              label: 'Email', sortKey: 'email', cell: (context, r) => Text(r.email ?? '—')),
+          TableColumnSpec(
             label: 'Privileges',
             cell: (context, r) => Text('${r.privileges.length}'),
             numeric: true,
@@ -100,6 +103,7 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _description;
+  late final TextEditingController _email;
   late Set<String> _selected;
   bool _saving = false;
   String? _error;
@@ -109,12 +113,13 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
     super.initState();
     _name = TextEditingController(text: widget.existing?.name ?? '');
     _description = TextEditingController(text: widget.existing?.description ?? '');
+    _email = TextEditingController(text: widget.existing?.email ?? '');
     _selected = (widget.existing?.privileges ?? const []).toSet();
   }
 
   @override
   void dispose() {
-    _name.dispose(); _description.dispose();
+    _name.dispose(); _description.dispose(); _email.dispose();
     super.dispose();
   }
 
@@ -126,6 +131,7 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
       final body = {
         'name': _name.text.trim(),
         'description': _description.text.trim(),
+        'email': _email.text.trim(),
         'privileges': _selected.toList(),
       };
       if (widget.existing == null) {
@@ -171,6 +177,19 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
                         controller: _description,
                         decoration: const InputDecoration(labelText: 'Description'),
                         inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.roleDescription)],
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _email,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          helperText: 'Shown as the sender when an email goes out from this role',
+                        ),
+                        inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.email)],
+                        validator: (v) => (v == null || v.trim().isEmpty || looksLikeEmail(v))
+                            ? null
+                            : 'Enter an email address',
                       ),
                       const SizedBox(height: 12),
                       Text('Privileges', style: Theme.of(context).textTheme.titleSmall),

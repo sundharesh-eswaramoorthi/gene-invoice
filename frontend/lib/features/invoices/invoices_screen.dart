@@ -8,10 +8,12 @@ import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
+import '../../shared/models/email.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
+import '../email/compose_email_dialog.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
@@ -34,6 +36,7 @@ class InvoicesScreen extends ConsumerWidget {
     final canManage = user?.has(Privileges.invoiceManage) ?? false;
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canPromise = user?.has(Privileges.promiseManage) ?? false;
+    final canEmail = user?.has(Privileges.emailSend) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
 
@@ -41,6 +44,12 @@ class InvoicesScreen extends ConsumerWidget {
       body: DataTableScaffold<InvoiceSummary>(
         entity: 'invoices',
         actions: [
+          if (canEmail)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.email_outlined),
+              label: const Text('Send email'),
+              onPressed: () => showSendEmailDialog(context, type: EmailTargetType.invoice),
+            ),
           if (canManage)
             FilledButton.icon(
               icon: const Icon(Icons.add),
@@ -79,6 +88,14 @@ class InvoicesScreen extends ConsumerWidget {
           ],
         ),
         bulkActions: [
+          if (canEmail)
+            BulkActionSpec(
+              action: 'SEND_EMAIL',
+              label: 'Send email',
+              icon: Icons.email_outlined,
+              run: (context, selection) =>
+                  sendBulkEmail(context, EmailTargetType.invoice, selection),
+            ),
           if (canManage)
             const BulkActionSpec(
               action: 'CANCEL',
@@ -164,6 +181,13 @@ class InvoicesScreen extends ConsumerWidget {
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/invoices/${inv.id}'),
           ),
+          if (canEmail)
+            IconButton(
+              tooltip: 'Send email',
+              icon: const Icon(Icons.email_outlined, size: 18),
+              onPressed: () => showSendEmailDialog(context,
+                  type: EmailTargetType.invoice, id: inv.id, label: inv.invoiceNumber),
+            ),
           // A cancelled invoice owes nothing, whatever balance it last showed, and the backend
           // refuses a promise on it (D-49).
           if (canPromise && inv.balance > 0 && inv.status != InvoiceStatus.CANCELLED)

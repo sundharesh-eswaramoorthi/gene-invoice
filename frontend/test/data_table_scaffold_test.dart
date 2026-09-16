@@ -36,6 +36,7 @@ Future<void> _pump(
   bool canExport = false,
   List<BulkActionSpec> bulkActions = const [],
   ValueChanged<TableQuery>? onQueryChanged,
+  bool showFilterBar = true,
 }) async {
   tester.view.physicalSize = const Size(1366, 900);
   tester.view.devicePixelRatio = 1;
@@ -70,6 +71,7 @@ Future<void> _pump(
                 ],
                 canExport: canExport,
                 bulkActions: bulkActions,
+                showFilterBar: showFilterBar,
               ),
             ),
           ],
@@ -135,6 +137,48 @@ void main() {
 
     await tester.tap(find.text('Go to last page'));
     expect(requested?.page, 0);
+  });
+
+  testWidgets('a bulk action with its own flow gets the selection and refreshes the table after',
+      (tester) async {
+    BulkSelection? received;
+    await _pump(
+      tester,
+      page: _page([
+        {'id': 1, 'name': 'Acme Ltd'},
+        {'id': 2, 'name': 'Globex Corp'},
+      ]),
+      bulkActions: [
+        BulkActionSpec(
+          action: 'SEND_EMAIL',
+          label: 'Send email',
+          icon: Icons.email_outlined,
+          run: (context, selection) async {
+            received = selection;
+            return true;
+          },
+        ),
+      ],
+    );
+
+    await tester.tap(find.byType(Checkbox).at(2));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send email'));
+    await tester.pumpAndSettle();
+
+    expect(received?.ids, [2]);
+    expect(received?.count, 1);
+    expect(received?.toJson(), {'ids': [2], 'sort': null, 'filters': <String>[]});
+    // The table refreshed and the selection cleared, so the toolbar is gone.
+    expect(find.text('1 selected'), findsNothing);
+  });
+
+  testWidgets('a list without filters shows no filter bar', (tester) async {
+    await _pump(tester, showFilterBar: false, page: _page([
+      {'id': 1, 'name': 'Acme Ltd'},
+    ]));
+    expect(find.text('Add filter'), findsNothing);
+    expect(find.text('Acme Ltd'), findsOneWidget);
   });
 
   test('row numbers are 0–0 on an empty page, even past the end', () {

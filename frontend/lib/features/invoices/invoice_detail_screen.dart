@@ -9,6 +9,7 @@ import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
+import '../../shared/models/email.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
@@ -17,6 +18,8 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
 import '../disputes/disputes_tab.dart';
+import '../email/compose_email_dialog.dart';
+import '../email/email_tab.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
@@ -127,6 +130,10 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     final canSeeDisputes = user?.hasAny(
             [Privileges.disputeView, Privileges.disputeCreate, Privileges.disputeManage]) ??
         false;
+    // Emails are staff correspondence; a customer login never sees them, whatever its role holds.
+    final isStaff = user != null && !user.isCustomer;
+    final canSendEmail = isStaff && user.has(Privileges.emailSend);
+    final canSeeEmails = isStaff && user.has(Privileges.emailView);
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -149,6 +156,13 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             titleTrailing: [
               if (canSeePoc && inv.pocMissing) const PocMissingBadge(),
               InvoiceStatusChip(status: inv.status),
+              if (canSendEmail)
+                TextButton.icon(
+                  icon: const Icon(Icons.email_outlined, size: 18),
+                  label: const Text('Send email'),
+                  onPressed: () => showSendEmailDialog(context,
+                      type: EmailTargetType.invoice, id: inv.id, label: inv.invoiceNumber),
+                ),
               if (canSeeDisputes && user!.canRaiseDispute)
                 TextButton.icon(
                   icon: const Icon(Icons.flag_outlined, size: 18),
@@ -187,6 +201,13 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                     customerName: inv.customerName,
                     invoiceId: inv.id,
                   ),
+                ),
+              if (canSeeEmails)
+                DetailTab(
+                  slug: 'email',
+                  label: 'Email',
+                  icon: Icons.email_outlined,
+                  builder: (context) => EmailTab(type: EmailTargetType.invoice, id: inv.id),
                 ),
               if (canViewAudit)
                 DetailTab(

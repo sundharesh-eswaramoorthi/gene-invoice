@@ -5,6 +5,9 @@ class Customer {
   final String name;
   final String? phone;
   final String? email;
+
+  /// Other addresses the customer can be emailed at, besides [email].
+  final List<String> additionalEmails;
   final String? address;
   final double creditBalance;
   final String? username;
@@ -21,6 +24,7 @@ class Customer {
     required this.name,
     this.phone,
     this.email,
+    this.additionalEmails = const [],
     this.address,
     required this.creditBalance,
     this.username,
@@ -47,6 +51,8 @@ class Customer {
         name: json['name'] as String,
         phone: json['phone'] as String?,
         email: json['email'] as String?,
+        additionalEmails:
+            ((json['additionalEmails'] as List?) ?? const []).map((e) => e.toString()).toList(),
         address: json['address'] as String?,
         creditBalance: (json['creditBalance'] as num? ?? 0).toDouble(),
         username: json['username'] as String?,

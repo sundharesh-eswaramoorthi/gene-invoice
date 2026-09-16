@@ -10,4 +10,7 @@ abstract final class FieldLimits {
   static const paymentNotes = 300;
   static const paymentMethod = 40;
   static const promiseNotes = 1000;
+  static const emailSubject = 200;
+  static const emailBody = 10000;
+  static const customerExtraEmails = 10;
 }

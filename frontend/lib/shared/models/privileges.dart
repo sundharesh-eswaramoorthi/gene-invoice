@@ -42,4 +42,8 @@ class Privileges {
 
   // Tables
   static const exportData = 'EXPORT_DATA';
+
+  // In-app email
+  static const emailView = 'EMAIL_VIEW';
+  static const emailSend = 'EMAIL_SEND';
 }

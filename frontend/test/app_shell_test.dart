@@ -17,7 +17,7 @@ const _longNamedUser = CurrentUser(
   customerId: null,
 );
 
-Future<void> _pumpShell(WidgetTester tester, Size size) async {
+Future<void> _pumpShell(WidgetTester tester, Size size, {CurrentUser user = _longNamedUser}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -36,7 +36,7 @@ Future<void> _pumpShell(WidgetTester tester, Size size) async {
   );
   await tester.pumpWidget(ProviderScope(
     overrides: [
-      currentUserProvider.overrideWithValue(_longNamedUser),
+      currentUserProvider.overrideWithValue(user),
       unreadCountProvider.overrideWith((ref) => Stream.value(3)),
     ],
     child: MaterialApp.router(routerConfig: router),
@@ -44,7 +44,28 @@ Future<void> _pumpShell(WidgetTester tester, Size size) async {
   await tester.pumpAndSettle();
 }
 
+List<String> _railLabels(WidgetTester tester) => tester
+    .widget<NavigationRail>(find.byType(NavigationRail))
+    .destinations
+    .map((d) => (d.label as Text).data!)
+    .toList();
+
 void main() {
+  testWidgets('Inbox sits directly below Dashboard for staff, and customers have none', (tester) async {
+    await _pumpShell(tester, const Size(1366, 900));
+    expect(_railLabels(tester).take(2), ['Dashboard', 'Inbox']);
+
+    await _pumpShell(tester, const Size(1366, 900), user: const CurrentUser(
+      id: 9,
+      username: 'acme',
+      fullName: 'Acme Ltd',
+      role: 'CUSTOMER',
+      privileges: {Privileges.notificationView},
+      customerId: 3,
+    ));
+    expect(_railLabels(tester), isNot(contains('Inbox')));
+  });
+
   testWidgets('on a phone a long account label never covers the menu button', (tester) async {
     await _pumpShell(tester, const Size(400, 820));
 

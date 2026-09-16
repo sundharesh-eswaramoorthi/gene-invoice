@@ -19,6 +19,9 @@ class SearchPickerField<T> extends StatelessWidget {
   final bool required;
   final String? errorText;
 
+  /// What the search box says it searches by.
+  final String searchLabel;
+
   const SearchPickerField({
     super.key,
     required this.label,
@@ -29,6 +32,7 @@ class SearchPickerField<T> extends StatelessWidget {
     this.subtitleOf,
     this.required = false,
     this.errorText,
+    this.searchLabel = 'Search by name',
   });
 
   @override
@@ -52,24 +56,45 @@ class SearchPickerField<T> extends StatelessWidget {
   }
 
   Future<void> _open(BuildContext context) async {
-    final picked = await showDialog<T>(
+    final picked = await showSearchPicker<T>(
       context: context,
-      builder: (_) => _SearchPickerDialog<T>(
-        title: 'Choose ${label.toLowerCase()}',
-        labelOf: labelOf,
-        subtitleOf: subtitleOf,
-        search: search,
-      ),
+      title: 'Choose ${label.toLowerCase()}',
+      labelOf: labelOf,
+      subtitleOf: subtitleOf,
+      search: search,
+      searchLabel: searchLabel,
     );
     if (picked != null) onChanged(picked);
   }
 }
+
+/// The search dialog on its own, for a button that adds a record rather than a field that holds
+/// one. Resolves to the record picked, or null when cancelled.
+Future<T?> showSearchPicker<T>({
+  required BuildContext context,
+  required String title,
+  required String Function(T item) labelOf,
+  required Future<List<T>> Function(String search) search,
+  String? Function(T item)? subtitleOf,
+  String searchLabel = 'Search by name',
+}) =>
+    showDialog<T>(
+      context: context,
+      builder: (_) => _SearchPickerDialog<T>(
+        title: title,
+        labelOf: labelOf,
+        subtitleOf: subtitleOf,
+        search: search,
+        searchLabel: searchLabel,
+      ),
+    );
 
 class _SearchPickerDialog<T> extends StatefulWidget {
   final String title;
   final String Function(T item) labelOf;
   final String? Function(T item)? subtitleOf;
   final Future<List<T>> Function(String search) search;
+  final String searchLabel;
 
   const _SearchPickerDialog({
     super.key,
@@ -77,6 +102,7 @@ class _SearchPickerDialog<T> extends StatefulWidget {
     required this.labelOf,
     required this.subtitleOf,
     required this.search,
+    required this.searchLabel,
   });
 
   @override
@@ -116,9 +142,9 @@ class _SearchPickerDialogState<T> extends State<_SearchPickerDialog<T>> {
           children: [
             TextField(
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Search by name',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                labelText: widget.searchLabel,
+                prefixIcon: const Icon(Icons.search),
               ),
               onChanged: _onSearchChanged,
             ),

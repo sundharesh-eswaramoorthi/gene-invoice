@@ -9,6 +9,8 @@ import '../features/customers/customers_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/disputes/dispute_detail_screen.dart';
 import '../features/disputes/disputes_screen.dart';
+import '../features/email/inbox_email_screen.dart';
+import '../features/email/inbox_screen.dart';
 import '../features/invoices/invoice_detail_screen.dart';
 import '../features/invoices/invoice_form_screen.dart';
 import '../features/invoices/invoices_screen.dart';
@@ -66,6 +68,20 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(path: '/', builder: (c, s) => const DashboardScreen()),
+
+          GoRoute(
+            path: '/inbox',
+            builder: (c, s) => InboxScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('inbox'), defaultSort: 'sentAt,desc'),
+            ),
+          ),
+          GoRoute(
+            path: '/inbox/:id',
+            builder: (c, s) => pageForId(s,
+                noun: 'email',
+                backTo: '/inbox',
+                build: (id) => InboxEmailScreen(key: ValueKey('inbox-$id'), id: id)),
+          ),
 
           // List pages open unfiltered for every role; a scope the server enforces comes back
           // with the page and is shown as a locked chip.

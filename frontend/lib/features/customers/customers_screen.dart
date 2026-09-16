@@ -10,8 +10,11 @@ import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/customer.dart';
+import '../../shared/models/email.dart';
 import '../../shared/models/privileges.dart';
+import '../../shared/widgets/email_list_editor.dart';
 import '../auth/auth_controller.dart';
+import '../email/compose_email_dialog.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
@@ -47,6 +50,7 @@ class CustomersScreen extends ConsumerWidget {
     final canManage = user?.has(Privileges.customerManage) ?? false;
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canPromise = user?.has(Privileges.promiseManage) ?? false;
+    final canEmail = user?.has(Privileges.emailSend) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
 
@@ -54,6 +58,12 @@ class CustomersScreen extends ConsumerWidget {
       body: DataTableScaffold<Customer>(
         entity: 'customers',
         actions: [
+          if (canEmail)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.email_outlined),
+              label: const Text('Send email'),
+              onPressed: () => showSendEmailDialog(context, type: EmailTargetType.customer),
+            ),
           if (canManage)
             FilledButton.icon(
               icon: const Icon(Icons.add),
@@ -96,6 +106,14 @@ class CustomersScreen extends ConsumerWidget {
           ],
         ),
         bulkActions: [
+          if (canEmail)
+            BulkActionSpec(
+              action: 'SEND_EMAIL',
+              label: 'Send email',
+              icon: Icons.email_outlined,
+              run: (context, selection) =>
+                  sendBulkEmail(context, EmailTargetType.customer, selection),
+            ),
           // Bulk changes need CUSTOMER_MANAGE as well as the right to assign POCs.
           if (canManage && canAssignPoc)
             const BulkActionSpec(
@@ -158,6 +176,13 @@ class CustomersScreen extends ConsumerWidget {
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/customers/${c.id}'),
           ),
+          if (canEmail)
+            IconButton(
+              tooltip: 'Send email',
+              icon: const Icon(Icons.email_outlined, size: 18),
+              onPressed: () => showSendEmailDialog(context,
+                  type: EmailTargetType.customer, id: c.id, label: c.name),
+            ),
           if (canPromise && c.outstanding > 0)
             IconButton(
               tooltip: 'Raise promise',
@@ -259,6 +284,8 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
   late final TextEditingController _phone;
   late final TextEditingController _email;
   late final TextEditingController _address;
+  late List<String> _otherEmails;
+  final _otherEmailInput = TextEditingController();
   final _username = TextEditingController();
   final _password = TextEditingController();
   bool _saving = false;
@@ -273,6 +300,7 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
     _phone = TextEditingController(text: widget.existing?.phone ?? '');
     _email = TextEditingController(text: widget.existing?.email ?? '');
     _address = TextEditingController(text: widget.existing?.address ?? '');
+    _otherEmails = widget.existing?.additionalEmails ?? const [];
   }
 
   @override
@@ -283,11 +311,17 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
     _address.dispose();
     _username.dispose();
     _password.dispose();
+    _otherEmailInput.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    final otherEmails = withTypedEmail(_otherEmails, _otherEmailInput.text);
+    if (otherEmails == null) {
+      setState(() => _error = 'Other emails: "${_otherEmailInput.text.trim()}" is not an email address');
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -299,6 +333,7 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
           'name': _name.text.trim(),
           'phone': _phone.text.trim(),
           'email': _email.text.trim(),
+          'additionalEmails': otherEmails,
           'address': _address.text.trim(),
           'username': _username.text.trim(),
           'password': _password.text,
@@ -308,6 +343,7 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
           'name': _name.text.trim(),
           'phone': _phone.text.trim(),
           'email': _email.text.trim(),
+          'additionalEmails': otherEmails,
           'address': _address.text.trim(),
           if (_password.text.isNotEmpty) 'password': _password.text,
         });
@@ -343,6 +379,17 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
                 const SizedBox(height: 8),
                 TextFormField(
                     controller: _email, decoration: const InputDecoration(labelText: 'Email')),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('Other emails', style: Theme.of(context).textTheme.bodySmall),
+                ),
+                const SizedBox(height: 4),
+                EmailListEditor(
+                  emails: _otherEmails,
+                  input: _otherEmailInput,
+                  onChanged: (list) => setState(() => _otherEmails = list),
+                ),
                 const SizedBox(height: 8),
                 TextFormField(
                     controller: _address,

@@ -20,6 +20,8 @@ class _NavEntry {
 
 const _entries = <_NavEntry>[
   _NavEntry('Dashboard', Icons.dashboard_outlined, '/', []),
+  // Every staff login has an Inbox; customer addresses are only recorded on emails.
+  _NavEntry('Inbox', Icons.inbox_outlined, '/inbox', [], hideForCustomer: true),
   _NavEntry('Invoices', Icons.receipt_long_outlined, '/invoices',
       [Privileges.invoiceView, Privileges.invoiceManage]),
   _NavEntry('Payments', Icons.payments_outlined, '/payments',
