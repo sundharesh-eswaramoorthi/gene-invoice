@@ -7,7 +7,8 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
 - **The feature** — POC ownership, Payment Promises, and the list/detail table framework
   ([PRD](../../requirements/poc-payment-promise-and-tables.md),
   [design notes](../../implementation/poc-payment-promise-and-tables.md)) — is implemented and
-  committed on `main` (`87c502c`). **Nothing is pushed**; ask the user before pushing.
+  committed on `main` (`87c502c`) and, like everything below, **pushed to `origin/main` on 16 Sep
+  2026** at the user's request. The GitHub repo (`sundharesh-eswaramoorthi/gene-invoice`) is public.
 - **A full regression run finished on 15 Sep 2026:** 503 cases across 10 areas (API and UI, all
   7 roles plus customer logins, desktop and phone width). 375 passed, 128 failed as reported.
   After every failure was reproduced by an independent verifier and duplicates were merged:
@@ -15,7 +16,7 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
   Re-checking the medium fixes on 16 Sep found five more (D-68…D-72), so `defects.md` now lists
   **72 — 12 high, 28 medium, 32 low.**
 - **71 of the 72 defects are fixed** — all 12 high, all 28 medium and 31 of the 32 low — committed
-  (not pushed) with regression tests, and re-verified against the regression environment
+  (and pushed) with regression tests, and re-verified against the regression environment
   (8083/8084). See the three "-severity fixes" sections below and the Status column in
   `defects.md`. **Only D-72 is open** (table row checkboxes are not in the accessibility tree).
   It was confirmed with `scripts/verify-low-fixes/probe-d72.js` — the invoices table exposes 160
@@ -72,7 +73,7 @@ Shared causes behind many medium defects (all fixed on 16 Sep): missing 400 hand
 
 ## High-severity fixes (second 15 Sep session)
 
-Committed on `main`, not pushed. Every commit carries its own regression tests.
+Committed on `main` and pushed to `origin/main` (16 Sep 2026). Every commit carries its own regression tests.
 
 | Commit | Defects | What changed |
 |---|---|---|
@@ -106,7 +107,7 @@ Found while verifying the high fixes, and fixed with the medium batch (re-checke
 
 ## Medium-severity fixes (16 Sep)
 
-Committed on `main`, not pushed. Every commit carries its own regression tests.
+Committed on `main` and pushed to `origin/main` (16 Sep 2026). Every commit carries its own regression tests.
 
 | Commit | Defects | What changed |
 |---|---|---|
@@ -141,7 +142,7 @@ disk, not committed. The browser run also found D-68…D-72, now logged in `defe
 
 ## Low-severity fixes (16 Sep)
 
-Committed on `main`, not pushed.
+Committed on `main` and pushed to `origin/main` (16 Sep 2026).
 
 | Commit | Defects | What changed |
 |---|---|---|
@@ -315,4 +316,18 @@ cd docs/regression/2026-09-15/scripts && npm install      # playwright-core; dri
 3. After backend changes, re-run `scripts/verify-high-fixes/api.js`,
    `scripts/verify-medium-fixes/api-group*.js` and `scripts/verify-low-fixes/api-low.js` (they
    create their own data on 8083); `scripts/verify-low-fixes/ui-low.js` needs 8084 rebuilt first.
-4. Nothing is pushed; ask the user before pushing.
+4. Everything up to `c54ccc8` is on `origin/main` (pushed 16 Sep 2026, when the user asked). The
+   repo is public. Push again only when the user asks.
+
+## After the regression work (16 Sep)
+
+- **Status colours** (`795c85c`, `065e1a9`): invoice, payment and dispute statuses are tinted pills
+  like promises, from one palette in `shared/widgets/status_chip.dart` (blue open, orange under
+  way, green settled, red refused/broken, grey cancelled/voided). Left as plain text on purpose:
+  History headlines and the filter dialog, which still shows raw values like `PARTIALLY_PAID`.
+- **Collapsible sidebar** (`c54ccc8`): contracted to icons by default, widens on hover, and the
+  button at its top pins it open. The pin is not remembered across reloads.
+- **Demo environment**: API on 8088 and UI on 8089, Postgres DB `geneinvoice_demo` (logins
+  `admin`/`admin123`, everyone else `Demo1234!`). It holds 107 customers, 1,012 invoices,
+  769 payments, 156 promises and 83 disputes. The loader scripts and the jar live in that
+  session's scratchpad and disappear with it; the database stays.
