@@ -3101,14 +3101,27 @@ Replace the built-in selection column with a leading column of our own, each cel
 Checkbox ("Select row <name>"), and keep DataTable's `showCheckboxColumn` off.
 
 
-**Left open on purpose (16 Sep 2026)**
+**Still open after an attempt (16 Sep 2026)**
 
 
-The rest of the low defects were fixed in this session; this one was not. It needs its own
-selection column in the shared table, which every list screen and the bulk and export flows
-depend on (W-13 covers them), and the result can only be judged with a real screen reader —
-neither the analyzer nor the semantics snapshots this session used would show whether it works.
-Worth doing together with the other accessibility work (D-59) and a screen-reader pass.
+Confirmed first: `scripts/verify-low-fixes/probe-d72.js` dumps the accessibility tree of
+`#/invoices` as admin. At 1366px it holds 245 nodes — 160 cells, 8 column headers, 60 buttons —
+and exactly one checkbox node, the "Add filter" button. No row checkbox is exposed.
+
+Then the obvious fix was tried and reverted: Material's built-in selection column
+(`showCheckboxColumn`) was replaced with a leading column of our own holding a
+`Semantics(label: 'Select row', checked: …)` around a `Checkbox`. The tree then showed 180 cells
+instead of 160 — so the cell was there — but still **zero** checkbox nodes
+(`scripts/verify-low-fixes/ui-d72.js`, L-UI-05 FAIL, result in `ui-d72.json`). Which widget draws
+the checkbox is therefore not the cause; something about how this app's tables reach the
+CanvasKit semantics tree is, and the same tree is what a screen reader reads.
+
+What to try next: run the app with `SemanticsDebugger` or `debugDumpSemanticsTree` to see whether
+Flutter creates the node at all and where it is dropped; check whether the cells' `onTap`
+(the row-opens-the-record behaviour) merges the cell subtree and swallows the checkbox; and
+confirm any fix with a real screen reader, not only with a semantics snapshot. Note that
+`verify-medium-fixes/ui/g4a.json` recorded `W13.rowCheckboxes: 0` before this attempt too, so the
+selection flow it checks has been clicking by position all along.
 
 
 **Evidence**

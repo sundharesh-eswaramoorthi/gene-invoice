@@ -17,9 +17,13 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
 - **71 of the 72 defects are fixed** — all 12 high, all 28 medium and 31 of the 32 low — committed
   (not pushed) with regression tests, and re-verified against the regression environment
   (8083/8084). See the three "-severity fixes" sections below and the Status column in
-  `defects.md`. **Only D-72 is open** (table row checkboxes are not in the accessibility tree):
-  it needs a selection column of our own in the shared table and a real screen-reader pass, so it
-  was left for the accessibility work rather than changed blind — see its entry in `defects.md`.
+  `defects.md`. **Only D-72 is open** (table row checkboxes are not in the accessibility tree).
+  It was confirmed with `scripts/verify-low-fixes/probe-d72.js` — the invoices table exposes 160
+  cells and 8 column headers but no row checkbox — and then attempted: replacing Material's
+  selection column with a labelled `Semantics` + `Checkbox` of our own left the tree with zero
+  checkbox nodes just the same, so that change was reverted. Which widget draws the checkbox is
+  not the cause. See its entry in `defects.md` for what to try next; it needs Flutter's semantics
+  debugger and a real screen reader, not another blind swap.
 - Automated suites are green: backend `mvn test` 193/193 (22 classes), `flutter analyze` clean,
   `flutter test` 45/45.
 - **Waiting on the user — the user's deployment (8082/8081) does not have group 5 yet.** The user
