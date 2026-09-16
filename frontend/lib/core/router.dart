@@ -48,7 +48,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
       // Signed in, this belongs inside the app — sidebar and top bar included — like every
       // other "does not exist" page (D-71).
-      return auth.user == null ? Scaffold(body: page) : AppShell(child: page);
+      return auth.user == null
+          ? Scaffold(body: page)
+          : AppShell(path: state.uri.toString(), child: page);
     },
     refreshListenable: _RouterRefresh(ref),
     redirect: (context, state) {

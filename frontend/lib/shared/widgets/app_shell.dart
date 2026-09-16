@@ -41,7 +41,13 @@ const _entries = <_NavEntry>[
 
 class AppShell extends ConsumerWidget {
   final Widget child;
-  const AppShell({super.key, required this.child});
+
+  /// Which route the sidebar should reflect. The shell normally reads this from the router, but a
+  /// page built outside any matched route — the "does not exist" page (D-71) — has to pass it:
+  /// GoRouterState.of throws there, which left that page blank.
+  final String? path;
+
+  const AppShell({super.key, required this.child, this.path});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -59,7 +65,7 @@ class AppShell extends ConsumerWidget {
       return user != null && user.hasAny(e.requiredAnyOf);
     }).toList();
 
-    final currentPath = GoRouterState.of(context).matchedLocation;
+    final currentPath = path ?? GoRouterState.of(context).matchedLocation;
     final selected = _selectedIndex(currentPath, visible);
 
     return Scaffold(
