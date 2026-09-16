@@ -242,9 +242,9 @@ Since 16 Sep there is exactly one environment. The regression copy (8083/8084), 
 |---|---|
 | Backend | `:8082` — `java -jar backend/target/gene-invoice-backend-0.0.1-SNAPSHOT.jar`, profile `dev`, Postgres DB `geneinvoice` at `localhost:5433` (container `gene-invoice-db`; the only database in it) |
 | Web | `:8081` — `python3 -m http.server 8081 --directory <absolute path>/frontend/build/web`, built with `API_BASE_URL=http://localhost:8082` |
-| Data | The former demo data: 107 customers, 1,012 invoices, 769 payments, 156 promises, 83 disputes |
-| Logins | `admin/admin123`, `cashier/cashier123`; every other account uses `Demo1234!` |
-| Backups | `~/gene-invoice-db-backups/2026-09-16/`: this data (`geneinvoice_demo.sql.gz`), the user's original `geneinvoice`, `geneinvoice_preview`, `geneinvoice_rt`. Restore into an empty database with `gunzip -c <file> \| docker exec -i gene-invoice-db psql -U geneinvoice -d <db>` |
+| Data | Cinema-themed demo data from `docs/demo-data/` (16 Sep 2026): 107 customers, 1,013 invoices, 768 payments, 156 promises, 83 disputes, dated Sep 2025 – Sep 2026 |
+| Logins | `admin/admin123` (Rajinikanth), `cashier/cashier123` (Amitabh Bachchan); every other account uses `Demo1234!`, e.g. `shahrukh.khan`, `rocky.bhai` |
+| Backups | `~/gene-invoice-db-backups/2026-09-16/`: the demo data this replaced as it was just before (`geneinvoice_before_theme.sql.gz`) and an earlier copy of it (`geneinvoice_demo.sql.gz`), the user's original `geneinvoice`, `geneinvoice_preview`, `geneinvoice_rt`. Restore into an empty database with `gunzip -c <file> \| docker exec -i gene-invoice-db psql -U geneinvoice -d <db>` |
 
 Ports 8086/8087 and the `geneinvt1-*` containers belong to a different project; leave them alone.
 
@@ -333,7 +333,9 @@ cd docs/regression/2026-09-15/scripts && npm install      # playwright-core; dri
   History headlines and the filter dialog, which still shows raw values like `PARTIALLY_PAID`.
 - **Collapsible sidebar** (`c54ccc8`): contracted to icons by default, widens on hover, and the
   button at its top pins it open. The pin is not remembered across reloads.
-- **Demo data, now the only data**: generated on a separate demo stack (8088/8089, DB
-  `geneinvoice_demo`), which then replaced everything else. It is the `geneinvoice` database behind
-  8081/8082 — see "Running environments". The loader scripts lived in that session's scratchpad
-  and are gone; the data itself is backed up in `~/gene-invoice-db-backups/2026-09-16/`.
+- **Demo data, now the only data**: first generated on a separate demo stack (8088/8089, DB
+  `geneinvoice_demo`) whose loader scripts are gone; later on 16 Sep replaced by cinema-themed data
+  (film stars as staff, film characters as customers, vehicles as products) from the committed
+  generator in `docs/demo-data/` (see its README). It is the `geneinvoice` database behind
+  8081/8082 — see "Running environments". The earlier demo data is backed up in
+  `~/gene-invoice-db-backups/2026-09-16/geneinvoice_before_theme.sql.gz`.
