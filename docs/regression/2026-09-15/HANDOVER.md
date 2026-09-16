@@ -27,12 +27,9 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
   debugger and a real screen reader, not another blind swap.
 - Automated suites are green: backend `mvn test` 193/193 (22 classes), `flutter analyze` clean,
   `flutter test` 45/45.
-- **Waiting on the user — the user's deployment (8082/8081) does not have group 5 yet.** The user
-  approved applying it ("go", 16 Sep), but restarting 8082 was refused by the session's automatic
-  permission check, so the user must run the restart or allow it. Then run the promise recompute:
-  preview first, and apply only if it still shows the approved changes — see "Deploying group 5 to
-  the user's data" below.
-- Next after that: the low defects.
+- **One environment runs now** (16 Sep, at the user's request): frontend 8081, backend 8082 on the
+  current code, and a single database `geneinvoice` holding the former demo data. Everything else
+  was removed, and every dropped database is backed up — see "Running environments".
 
 ## What is in this folder
 
@@ -40,7 +37,7 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
 |---|---|
 | `HANDOVER.md` | This file — start here |
 | `report/index.html` | The full interactive report (open it in a browser; works offline). Published copy: https://claude.ai/artifact/JEa2ujkXpq8GX9xzxyvVth |
-| `defects.md` | All 72 confirmed defects: severity, repro, expected/actual, root cause (file:line), suggested fix, screenshot. **Status** column: high and medium FIXED (commit; checks that passed), low OPEN |
+| `defects.md` | All 72 confirmed defects: severity, repro, expected/actual, root cause (file:line), suggested fix, screenshot. **Status** column: FIXED for every defect except D-72 (commit; checks that passed); D-72 OPEN |
 | `test-results.md` | Pass/fail per area, every case per area, verifier verdicts, recommendations, what was not tested |
 | `test-cases.csv` | All 503 cases (area, id, feature, kind, title, status, severity, steps, expected, actual, evidence, codeRef) |
 | `report/shots/` | Screenshot evidence for 36 defects |
@@ -154,13 +151,15 @@ Verification: `scripts/verify-low-fixes/api-low.js` (L-01…L-09, all pass again
 1366 and 400 of the layout-only fixes, in `shots/`, not committed). The high and medium API checks
 were re-run against the same build and all still pass.
 
-## Deploying to the user's data
+## Deploying to the user's data (no longer applies)
 
-None of the 16 Sep work is on 8082/8081 yet — group 5 (`d83d1d8`, `bf1613f`) or the low-severity
-fixes (`9b6a2a2`, `89d151b`, `358e30a`). Deploy them together; only group 5 needs the extra step
-below. A dry run on a copy of the user's data
-(DB `geneinvoice_preview`, made with `pg_dump | psql` inside the `gene-invoice-db` container) found
-3 of 34 promises would change. The user saw these and approved on 16 Sep:
+This became moot on 16 Sep: at the user's request the original data was replaced by the demo data
+(whose promises were created under the new rules), and 8082 now runs the current code. The
+original database and the dry-run copy survive only as backups
+(`~/gene-invoice-db-backups/2026-09-16/geneinvoice.sql.gz`, `geneinvoice_preview.sql.gz`).
+`POST /api/promises/recompute` remains for any future change to the counting rule. For the record,
+a dry run on a copy of the original data found 3 of 34 promises would change, which the user
+approved:
 
 | Promise | Customer | Status | Fulfilled |
 |---|---|---|---|
@@ -168,10 +167,7 @@ below. A dry run on a copy of the user's data
 | #23 | zz-promise-cust | BROKEN (unchanged) | 530 → 0 (the late money counts for #5, still in time) |
 | #26 | zz-promise-cust | BROKEN (unchanged) | 1,000 → 500 (capped at the promise) |
 
-Steps: redeploy the backend and web app as under "Running environments". Then, as admin, run
-`POST http://localhost:8082/api/promises/recompute` (it previews by default), check that it
-still shows the rows above, and only then run it with `?apply=true`. Drop `geneinvoice_preview`
-afterwards (`docker exec gene-invoice-db psql -U geneinvoice -d postgres -c "DROP DATABASE geneinvoice_preview"`).
+(The recompute was never applied to that data; it no longer exists outside the backup.)
 
 ## What the first 15 Sep session changed (now in `87c502c`)
 
@@ -239,11 +235,18 @@ Files touched by this session:
 
 ## Running environments
 
-| | User's deployment | Regression test environment |
-|---|---|---|
-| Backend | `:8082` — `java -jar backend/target/gene-invoice-backend-0.0.1-SNAPSHOT.jar`, profile `dev`, Postgres `geneinvoice` at `localhost:5433` (container `gene-invoice-db`) | `:8083` — a copy of the jar in the session scratchpad, Postgres DB `geneinvoice_rt` |
-| Web | `:8081` — `python3 -m http.server` serving `frontend/build/web` (built with `API_BASE_URL=http://localhost:8082`) | `:8084` — a separate web build in the scratchpad pointing at 8083 |
-| Logins | `admin/admin123`, `cashier/cashier123` | same, plus users created by the run (password `Passw0rd!`) |
+Since 16 Sep there is exactly one environment. The regression copy (8083/8084), the demo stack
+(8088/8089) and the dry-run database were removed at the user's request.
+
+| | The one environment |
+|---|---|
+| Backend | `:8082` — `java -jar backend/target/gene-invoice-backend-0.0.1-SNAPSHOT.jar`, profile `dev`, Postgres DB `geneinvoice` at `localhost:5433` (container `gene-invoice-db`; the only database in it) |
+| Web | `:8081` — `python3 -m http.server 8081 --directory <absolute path>/frontend/build/web`, built with `API_BASE_URL=http://localhost:8082` |
+| Data | The former demo data: 107 customers, 1,012 invoices, 769 payments, 156 promises, 83 disputes |
+| Logins | `admin/admin123`, `cashier/cashier123`; every other account uses `Demo1234!` |
+| Backups | `~/gene-invoice-db-backups/2026-09-16/`: this data (`geneinvoice_demo.sql.gz`), the user's original `geneinvoice`, `geneinvoice_preview`, `geneinvoice_rt`. Restore into an empty database with `gunzip -c <file> \| docker exec -i gene-invoice-db psql -U geneinvoice -d <db>` |
+
+Ports 8086/8087 and the `geneinvt1-*` containers belong to a different project; leave them alone.
 
 Port 8080 is taken by another container (`dood-srv`), which is why the app runs on 8082.
 There is no local `psql`; run it inside the container (`docker exec gene-invoice-db psql …`).
@@ -257,18 +260,16 @@ SPRING_PROFILES_ACTIVE=dev DB_URL=jdbc:postgresql://localhost:5433/geneinvoice D
   DB_PASSWORD=geneinvoice nohup java -jar target/gene-invoice-backend-0.0.1-SNAPSHOT.jar \
   --server.port=8082 > /tmp/gene-invoice-8082.log 2>&1 &
 cd ../frontend && flutter build web --dart-define=API_BASE_URL=http://localhost:8082   # 8081 serves it from disk
+# Only if 8081 is down. The path must be absolute: a relative one resolves against the shell's
+# current folder and every request becomes a 404.
+nohup python3 -m http.server 8081 --directory "$PWD/build/web" > /tmp/gene-invoice-8081.log 2>&1 &
 ```
 
-Remove the test environment when done (the scratchpad copy disappears with the old session anyway):
-
-```bash
-kill $(lsof -nP -iTCP:8083 -sTCP:LISTEN -t) $(lsof -nP -iTCP:8084 -sTCP:LISTEN -t)
-docker exec gene-invoice-db psql -U geneinvoice -d postgres -c "DROP DATABASE geneinvoice_rt"
-```
-
-Recreate it for a re-run: `CREATE DATABASE geneinvoice_rt`; copy the jar out of `target/` and run it
-on 8083 with `DB_URL=jdbc:postgresql://localhost:5433/geneinvoice_rt`; build the web app with
-`--dart-define=API_BASE_URL=http://localhost:8083 --output <dir>` and serve it on 8084.
+There is no regression test environment any more, so the check scripts under `scripts/` (which
+target 8083/8084) need one recreated first: `CREATE DATABASE geneinvoice_rt`; copy the jar out of
+`target/` and run it on 8083 with `DB_URL=jdbc:postgresql://localhost:5433/geneinvoice_rt`; build
+the web app with `--dart-define=API_BASE_URL=http://localhost:8083 --output <absolute dir>` and
+serve it on 8084. Remove it again afterwards, so only the one environment remains.
 
 ## Re-running the regression scripts
 
@@ -306,16 +307,21 @@ cd docs/regression/2026-09-15/scripts && npm install      # playwright-core; dri
 - The session's automatic permission check treats restarting 8082 as a production deploy and may
   refuse it. Hand the user the commands rather than working around it.
 - List endpoints accept only `size` 10, 20 or 50; anything else is a 400.
+- `python3 -m http.server --directory` resolves a relative path against the shell's current
+  folder, which a tool session may have moved. Give it an absolute path, or every request is a 404.
+- Postgres will not drop or rename a database that has open connections: stop the services first,
+  or use `DROP DATABASE … WITH (FORCE)`.
 
 ## Suggested next steps
 
-1. Deploy to 8082/8081 and run the promise recompute (see "Deploying to the user's data"). Nothing
-   from 16 Sep is on the user's own instance yet.
+1. Nothing to deploy: 8081/8082 already run the current code. After any further change, redeploy
+   as under "Running environments".
 2. D-72, the one defect still open, together with a screen-reader pass over the tables and the
    History panel (D-59 changed that too).
 3. After backend changes, re-run `scripts/verify-high-fixes/api.js`,
    `scripts/verify-medium-fixes/api-group*.js` and `scripts/verify-low-fixes/api-low.js` (they
-   create their own data on 8083); `scripts/verify-low-fixes/ui-low.js` needs 8084 rebuilt first.
+   create their own data on 8083 and 8084, so recreate that test environment first — see
+   "Running environments" — and remove it again afterwards).
 4. Everything up to `c54ccc8` is on `origin/main` (pushed 16 Sep 2026, when the user asked). The
    repo is public. Push again only when the user asks.
 
@@ -327,7 +333,7 @@ cd docs/regression/2026-09-15/scripts && npm install      # playwright-core; dri
   History headlines and the filter dialog, which still shows raw values like `PARTIALLY_PAID`.
 - **Collapsible sidebar** (`c54ccc8`): contracted to icons by default, widens on hover, and the
   button at its top pins it open. The pin is not remembered across reloads.
-- **Demo environment**: API on 8088 and UI on 8089, Postgres DB `geneinvoice_demo` (logins
-  `admin`/`admin123`, everyone else `Demo1234!`). It holds 107 customers, 1,012 invoices,
-  769 payments, 156 promises and 83 disputes. The loader scripts and the jar live in that
-  session's scratchpad and disappear with it; the database stays.
+- **Demo data, now the only data**: generated on a separate demo stack (8088/8089, DB
+  `geneinvoice_demo`), which then replaced everything else. It is the `geneinvoice` database behind
+  8081/8082 — see "Running environments". The loader scripts lived in that session's scratchpad
+  and are gone; the data itself is backed up in `~/gene-invoice-db-backups/2026-09-16/`.
