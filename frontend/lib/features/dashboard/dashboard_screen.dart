@@ -13,6 +13,7 @@ import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
 import 'dashboard_charts.dart';
 import 'dashboard_providers.dart';
+import 'dashboard_tables.dart';
 
 /// Which cards a user gets. It goes by privileges rather than role names, because an admin can
 /// reshape any role. The server enforces the same rules and scopes every figure, so this only
@@ -23,19 +24,36 @@ class DashboardAccess {
   final bool promises;
   final bool isCustomer;
 
+  /// May open a customer from a ranking row.
+  final bool customers;
+
+  /// May see who the Collection POC is (AC-A8).
+  final bool pocs;
+
   const DashboardAccess({
     required this.invoices,
     required this.payments,
     required this.promises,
     required this.isCustomer,
+    required this.customers,
+    required this.pocs,
   });
 
-  factory DashboardAccess.of(CurrentUser? user) => DashboardAccess(
-        invoices: user?.has(Privileges.invoiceView) ?? false,
-        payments: user?.has(Privileges.paymentView) ?? false,
-        promises: user?.has(Privileges.promiseView) ?? false,
-        isCustomer: user?.isCustomer ?? false,
-      );
+  factory DashboardAccess.of(CurrentUser? user) {
+    final staff = user != null && !user.isCustomer;
+    return DashboardAccess(
+      invoices: user?.has(Privileges.invoiceView) ?? false,
+      payments: user?.has(Privileges.paymentView) ?? false,
+      promises: user?.has(Privileges.promiseView) ?? false,
+      isCustomer: user?.isCustomer ?? false,
+      customers: staff && user.has(Privileges.customerView),
+      pocs: staff && user.has(Privileges.pocView),
+    );
+  }
+
+  /// Rankings compare customers with each other, which is for staff only; the server refuses a
+  /// customer login too.
+  bool get rankings => !isCustomer;
 
   /// A customer pays; staff collect.
   String get collectedLabel => isCustomer ? 'Paid' : 'Collected';
@@ -71,6 +89,11 @@ class DashboardScreen extends ConsumerWidget {
               if (access.invoices) (1, const _AgingCard()),
               if (access.promises) (1, const _PromiseStatusCard()),
             ]),
+            _CardRow(sideBySide: wide, cards: [
+              if (access.rankings && access.invoices) (1, _TopOutstandingCard(access: access)),
+              if (access.rankings && access.payments) (1, _TopPayingCard(access: access)),
+            ]),
+            if (access.promises) _UpcomingPromisesCard(access: access),
           ],
         );
       }),
@@ -351,7 +374,8 @@ class _InvoiceStatusCard extends ConsumerWidget {
               color: invoiceStatusColor(context, status),
               link: _link(status),
             );
-        // Orange and green are hard to tell apart for some readers, so they never touch.
+        // Orange and green are hard to tell apart for some readers, so another status sits
+        // between them whenever it has any invoices; the legend names every slice regardless.
         return StatusDonut(noun: 'invoices', slices: [
           slice(InvoiceStatus.FULLY_PAID, 'fullyPaidCount'),
           slice(InvoiceStatus.UNPAID, 'unpaidCount'),
@@ -389,6 +413,8 @@ class _PromiseStatusCard extends ConsumerWidget {
     return DashboardCard(
       title: 'Promises by status',
       subtitle: 'Cancelled promises are left out',
+      // The summary runs under the same scope as the promises list.
+      book: ref.watch(upcomingPromisesProvider).valueOrNull?.book ?? false,
       child: asyncCard(ref.watch(promiseSummaryProvider), (s) {
         DonutSlice slice(PromiseStatus status, String key) => DonutSlice(
               label: promiseStatusLabel(status),
@@ -397,7 +423,8 @@ class _PromiseStatusCard extends ConsumerWidget {
               link: _link(status),
             );
         // Kept (green) sits opposite Partially kept (orange), the pair that is hardest to tell
-        // apart; the legend names every slice as well.
+        // apart, so they touch only when Open and Broken are both empty; the legend names every
+        // slice regardless.
         return StatusDonut(noun: 'promises', slices: [
           slice(PromiseStatus.OPEN, 'openCount'),
           slice(PromiseStatus.PARTIALLY_KEPT, 'partiallyKeptCount'),
@@ -405,6 +432,73 @@ class _PromiseStatusCard extends ConsumerWidget {
           slice(PromiseStatus.KEPT, 'keptCount'),
         ]);
       }),
+    );
+  }
+}
+
+class _TopOutstandingCard extends ConsumerWidget {
+  final DashboardAccess access;
+  const _TopOutstandingCard({required this.access});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ranking = ref.watch(topOutstandingProvider);
+    return DashboardCard(
+      title: 'Top customers by outstanding',
+      subtitle: 'The five owing the most today',
+      book: ranking.valueOrNull?.coverage == Coverage.book,
+      action: access.customers
+          ? TextButton(
+              onPressed: () => context.go('/customers?sort=outstanding,desc'),
+              child: const Text('All customers'),
+            )
+          : null,
+      child: asyncCard(
+          ranking, (r) => TopOutstandingTable(ranking: r, canOpenCustomer: access.customers)),
+    );
+  }
+}
+
+class _TopPayingCard extends ConsumerWidget {
+  final DashboardAccess access;
+  const _TopPayingCard({required this.access});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ranking = ref.watch(topPayingProvider);
+    final months = ref.watch(dashboardMonthsProvider);
+    final book = ranking.valueOrNull?.coverage == Coverage.book;
+    return DashboardCard(
+      title: 'Top paying customers',
+      subtitle: book
+          ? 'Last $months months, paid against your invoices'
+          : 'The five who paid the most in the last $months months',
+      book: book,
+      child:
+          asyncCard(ranking, (r) => TopPayingTable(ranking: r, canOpenCustomer: access.customers)),
+    );
+  }
+}
+
+class _UpcomingPromisesCard extends ConsumerWidget {
+  final DashboardAccess access;
+  const _UpcomingPromisesCard({required this.access});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final upcoming = ref.watch(upcomingPromisesProvider);
+    return DashboardCard(
+      title: 'Upcoming promises',
+      subtitle: 'The next ten due, open or partly kept',
+      book: upcoming.valueOrNull?.book ?? false,
+      action: TextButton(
+        onPressed: () => context.go(UpcomingPromises.listLink(todayUtc())),
+        child: const Text('View all'),
+      ),
+      child: asyncCard(
+          upcoming,
+          (u) => UpcomingPromisesTable(
+              promises: u.promises, showCustomer: !access.isCustomer, showPoc: access.pocs)),
     );
   }
 }

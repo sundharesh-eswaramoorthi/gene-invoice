@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
+import '../../shared/models/promise.dart';
 
 /// Whose records a dashboard card covers, as the server worked it out. Only [book] is labelled on
 /// screen: a POC limited to their own book should not mistake it for the whole organisation.
@@ -193,6 +195,42 @@ final promiseSummaryProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   return _map(res.data);
 });
 
+/// The next promises falling due, soonest first, and whether they are limited to the caller's book.
+class UpcomingPromises {
+  final List<PaymentPromise> promises;
+  final bool book;
+
+  const UpcomingPromises({required this.promises, required this.book});
+
+  /// The same view on the promises list.
+  static String listLink(DateTime today) => Uri(path: '/promises', queryParameters: {
+        'sort': 'promisedDate,asc',
+        'f': _upcomingFilters(today),
+      }).toString();
+}
+
+List<String> _upcomingFilters(DateTime today) => [
+      'status:in:OPEN,PARTIALLY_KEPT',
+      'promisedDate:gte:${DateFormat('yyyy-MM-dd').format(today)}',
+    ];
+
+final upcomingPromisesProvider = FutureProvider.autoDispose<UpcomingPromises>((ref) async {
+  final res = await ref.watch(dioProvider).get('/api/promises', queryParameters: {
+    'size': 10,
+    'sort': 'promisedDate,asc',
+    'filter': _upcomingFilters(todayUtc()),
+  });
+  final data = _map(res.data);
+  return UpcomingPromises(
+    promises: ((data['content'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>()
+        .map(PaymentPromise.fromJson)
+        .toList(),
+    // A POC held to their own book gets it as a locked filter (AC-A6).
+    book: ((data['lockedFilters'] as List?) ?? const []).isNotEmpty,
+  );
+});
+
 /// Every provider the dashboard reads, for pull-to-refresh.
 void refreshDashboard(WidgetRef ref) {
   ref.invalidate(billedByMonthProvider);
@@ -202,4 +240,5 @@ void refreshDashboard(WidgetRef ref) {
   ref.invalidate(topPayingProvider);
   ref.invalidate(invoiceSummaryProvider);
   ref.invalidate(promiseSummaryProvider);
+  ref.invalidate(upcomingPromisesProvider);
 }
