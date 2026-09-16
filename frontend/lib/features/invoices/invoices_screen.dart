@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -12,10 +13,104 @@ import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
+import '../emails/email_compose_dialog.dart';
+import '../emails/email_send.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
 import '../promises/promises_screen.dart' show pickPocParams;
+/// The record picker behind the Invoices list-page "Send email" action.
+class _PickInvoiceDialog extends ConsumerStatefulWidget {
+  const _PickInvoiceDialog();
+
+  @override
+  ConsumerState<_PickInvoiceDialog> createState() => _PickInvoiceDialogState();
+}
+
+class _PickInvoiceDialogState extends ConsumerState<_PickInvoiceDialog> {
+  final _search = TextEditingController();
+  List<InvoiceSummary> _results = const [];
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _runSearch();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runSearch() async {
+    setState(() => _loading = true);
+    try {
+      final results = await searchInvoices(ref.read(dioProvider), _search.text.trim());
+      if (mounted) setState(() => _results = results);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Send email — choose an invoice'),
+      content: SizedBox(
+        width: 420,
+        height: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                labelText: 'Search by invoice number',
+                suffixIcon: Icon(Icons.search),
+              ),
+              onSubmitted: (_) => _runSearch(),
+            ),
+            const SizedBox(height: 8),
+            if (_loading) const LinearProgressIndicator(),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final inv in _results)
+                    ListTile(
+                      title: Text(inv.invoiceNumber),
+                      subtitle: Text(inv.customerName),
+                      onTap: () => Navigator.of(context).pop(inv),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Cancel')),
+      ],
+    );
+  }
+}
+
+/// Invoices whose invoice number contains [search], newest first — the record picker behind the
+/// Invoices list-page "Send email" action.
+Future<List<InvoiceSummary>> searchInvoices(Dio dio, String search) async {
+  final res = await dio.get('/api/invoices', queryParameters: {
+    'size': 20,
+    'sort': 'invoiceDate,desc',
+    if (search.isNotEmpty) 'filter': ['invoiceNumber:contains:$search'],
+  });
+  return ((res.data as Map)['content'] as List)
+      .cast<Map<String, dynamic>>()
+      .map(InvoiceSummary.fromJson)
+      .toList();
+}
 
 final invoiceDetailProvider =
     FutureProvider.autoDispose.family<InvoiceDetail, int>((ref, id) async {
@@ -46,6 +141,13 @@ class InvoicesScreen extends ConsumerWidget {
               icon: const Icon(Icons.add),
               label: const Text('New invoice'),
               onPressed: () => context.go('/invoices/new'),
+            ),
+          // List-page entry point: pick an invoice, then the same compose dialog as everywhere.
+          if (canManage)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.email_outlined),
+              label: const Text('Send email'),
+              onPressed: () => _sendEmailToPickedInvoice(context, ref),
             ),
         ],
         path: '/api/invoices',
@@ -79,6 +181,16 @@ class InvoicesScreen extends ConsumerWidget {
           ],
         ),
         bulkActions: [
+          // One compose form applies per selected row; the backend creates one Email per
+          // recipient-bearing row and counts zero-recipient rows as skipped (FAIL1).
+          if (canManage)
+            BulkActionSpec(
+              action: 'SEND_EMAIL',
+              label: 'Send email',
+              icon: Icons.email_outlined,
+              buildParams: (context) => showEmailComposeDialog(
+                  context, contextLabel: 'the selected invoices'),
+            ),
           if (canManage)
             const BulkActionSpec(
               action: 'CANCEL',
@@ -163,7 +275,13 @@ class InvoicesScreen extends ConsumerWidget {
             tooltip: 'Open',
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/invoices/${inv.id}'),
-          ),
+          ),          if (canManage)
+            IconButton(
+              tooltip: 'Send email',
+              icon: const Icon(Icons.email_outlined, size: 18),
+              onPressed: () => sendEmailForRecord(context, ref,
+                  recordType: 'invoices', recordId: inv.id, recordLabel: inv.invoiceNumber),
+            ),
           // A cancelled invoice owes nothing, whatever balance it last showed, and the backend
           // refuses a promise on it (D-49).
           if (canPromise && inv.balance > 0 && inv.status != InvoiceStatus.CANCELLED)
@@ -186,6 +304,16 @@ class InvoicesScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _sendEmailToPickedInvoice(BuildContext context, WidgetRef ref) async {
+    final picked = await showDialog<InvoiceSummary>(
+      context: context,
+      builder: (_) => const _PickInvoiceDialog(),
+    );
+    if (picked == null || !context.mounted) return;
+    await sendEmailForRecord(context, ref,
+        recordType: 'invoices', recordId: picked.id, recordLabel: picked.invoiceNumber);
   }
 
   Future<void> _cancel(BuildContext context, WidgetRef ref, InvoiceSummary inv) async {

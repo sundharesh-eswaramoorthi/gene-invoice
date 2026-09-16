@@ -100,6 +100,7 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _description;
+  late final TextEditingController _email;
   late Set<String> _selected;
   bool _saving = false;
   String? _error;
@@ -109,12 +110,13 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
     super.initState();
     _name = TextEditingController(text: widget.existing?.name ?? '');
     _description = TextEditingController(text: widget.existing?.description ?? '');
+    _email = TextEditingController(text: widget.existing?.email ?? '');
     _selected = (widget.existing?.privileges ?? const []).toSet();
   }
 
   @override
   void dispose() {
-    _name.dispose(); _description.dispose();
+    _name.dispose(); _description.dispose(); _email.dispose();
     super.dispose();
   }
 
@@ -126,6 +128,8 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
       final body = {
         'name': _name.text.trim(),
         'description': _description.text.trim(),
+        // Optional; blank clears it. Used when this role is chosen as an Email's From.
+        'email': _email.text.trim(),
         'privileges': _selected.toList(),
       };
       if (widget.existing == null) {
@@ -171,6 +175,13 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
                         controller: _description,
                         decoration: const InputDecoration(labelText: 'Description'),
                         inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.roleDescription)],
+                      ),
+                      TextFormField(
+                        controller: _email,
+                        decoration: const InputDecoration(
+                            labelText: 'Email address (optional)',
+                            hintText: 'Used when this role is an Email\'s From'),
+                        inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.email)],
                       ),
                       const SizedBox(height: 12),
                       Text('Privileges', style: Theme.of(context).textTheme.titleSmall),

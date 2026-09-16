@@ -19,7 +19,8 @@ class _NavEntry {
 }
 
 const _entries = <_NavEntry>[
-  _NavEntry('Dashboard', Icons.dashboard_outlined, '/', []),
+  _NavEntry('Dashboard', Icons.dashboard_outlined, '/', []),  // Directly below Dashboard, for every internal user; hidden from customer accounts (FR14/FR18).
+  _NavEntry('Inbox', Icons.inbox_outlined, '/inbox', [], hideForCustomer: true),
   _NavEntry('Invoices', Icons.receipt_long_outlined, '/invoices',
       [Privileges.invoiceView, Privileges.invoiceManage]),
   _NavEntry('Payments', Icons.payments_outlined, '/payments',
@@ -37,6 +38,9 @@ const _entries = <_NavEntry>[
       [Privileges.userView, Privileges.userManage]),
   _NavEntry('Roles', Icons.admin_panel_settings_outlined, '/roles',
       [Privileges.roleView, Privileges.roleManage]),
+  // Administrator-only settings, gated on the existing role-management authority.
+  _NavEntry('Settings', Icons.tune_outlined, '/settings', [Privileges.roleManage],
+      hideForCustomer: true),
 ];
 
 class AppShell extends ConsumerWidget {

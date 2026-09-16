@@ -12,6 +12,8 @@ import '../../core/table/table_providers.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
+import '../emails/email_compose_dialog.dart';
+import '../emails/email_send.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
@@ -60,6 +62,13 @@ class CustomersScreen extends ConsumerWidget {
               label: const Text('New customer'),
               onPressed: () => _openCreateForm(context, ref),
             ),
+          // List-page entry point: pick a customer, then the same compose dialog as everywhere.
+          if (canManage)
+            OutlinedButton.icon(
+              icon: const Icon(Icons.email_outlined),
+              label: const Text('Send email'),
+              onPressed: () => _sendEmailToPickedCustomer(context, ref),
+            ),
         ],
         path: '/api/customers',
         query: query,
@@ -96,6 +105,16 @@ class CustomersScreen extends ConsumerWidget {
           ],
         ),
         bulkActions: [
+          // One compose form applies per selected row; the backend creates one Email per
+          // recipient-bearing row and counts zero-recipient rows as skipped (FAIL1).
+          if (canManage)
+            BulkActionSpec(
+              action: 'SEND_EMAIL',
+              label: 'Send email',
+              icon: Icons.email_outlined,
+              buildParams: (context) => showEmailComposeDialog(
+                  context, contextLabel: 'the selected customers'),
+            ),
           // Bulk changes need CUSTOMER_MANAGE as well as the right to assign POCs.
           if (canManage && canAssignPoc)
             const BulkActionSpec(
@@ -157,7 +176,13 @@ class CustomersScreen extends ConsumerWidget {
             tooltip: 'Open',
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/customers/${c.id}'),
-          ),
+          ),          if (canManage)
+            IconButton(
+              tooltip: 'Send email',
+              icon: const Icon(Icons.email_outlined, size: 18),
+              onPressed: () => sendEmailForRecord(context, ref,
+                  recordType: 'customers', recordId: c.id, recordLabel: c.name),
+            ),
           if (canPromise && c.outstanding > 0)
             IconButton(
               tooltip: 'Raise promise',
@@ -171,6 +196,16 @@ class CustomersScreen extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _sendEmailToPickedCustomer(BuildContext context, WidgetRef ref) async {
+    final picked = await showDialog<Customer>(
+      context: context,
+      builder: (_) => const _PickCustomerDialog(),
+    );
+    if (picked == null || !context.mounted) return;
+    await sendEmailForRecord(context, ref,
+        recordType: 'customers', recordId: picked.id, recordLabel: picked.name);
   }
 
   Future<void> _openCreateForm(BuildContext context, WidgetRef ref) async {
@@ -242,6 +277,85 @@ Future<Map<String, dynamic>?> _pickCustomerPocParams(BuildContext context) async
   );
   if (ok != true || picked == null) return null;
   return {'userId': picked!.id, 'pocType': type.name, 'primary': '$primary'};
+}
+
+/// The record picker behind the Customers list-page "Send email" action.
+class _PickCustomerDialog extends ConsumerStatefulWidget {
+  const _PickCustomerDialog();
+
+  @override
+  ConsumerState<_PickCustomerDialog> createState() => _PickCustomerDialogState();
+}
+
+class _PickCustomerDialogState extends ConsumerState<_PickCustomerDialog> {
+  final _search = TextEditingController();
+  List<Customer> _results = const [];
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _runSearch();
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  Future<void> _runSearch() async {
+    setState(() => _loading = true);
+    try {
+      final results = await searchCustomers(ref.read(dioProvider), _search.text.trim());
+      if (mounted) setState(() => _results = results);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Send email — choose a customer'),
+      content: SizedBox(
+        width: 420,
+        height: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _search,
+              decoration: const InputDecoration(
+                labelText: 'Search by name',
+                suffixIcon: Icon(Icons.search),
+              ),
+              onSubmitted: (_) => _runSearch(),
+            ),
+            const SizedBox(height: 8),
+            if (_loading) const LinearProgressIndicator(),
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final c in _results)
+                    ListTile(
+                      title: Text(c.name),
+                      subtitle: c.email == null ? null : Text(c.email!),
+                      onTap: () => Navigator.of(context).pop(c),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text('Cancel')),
+      ],
+    );
+  }
 }
 
 /// Create / edit form for the customer's own contact fields.

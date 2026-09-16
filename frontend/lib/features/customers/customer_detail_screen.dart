@@ -12,6 +12,8 @@ import '../../shared/widgets/detail_scaffold.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/disputes_tab.dart';
+import '../emails/email_send.dart';
+import '../emails/emails_tab.dart';
 import '../poc/customer_poc_editor.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
@@ -151,12 +153,29 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             subtitle: customer.username == null ? null : '@${customer.username}',
             onBack: () => goGuarded(context, '/customers'),
             titleTrailing: [
+              // Details-page entry point for the shared compose flow (FR2).
+              if (canEdit)
+                TextButton.icon(
+                  icon: const Icon(Icons.email_outlined, size: 18),
+                  label: const Text('Send email'),
+                  onPressed: () => sendEmailForRecord(context, ref,
+                      recordType: 'customers',
+                      recordId: customer.id,
+                      recordLabel: customer.name),
+                ),
               if (canSeePoc && customer.pocMissing) const PocMissingBadge(),
             ],
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) => context.go('/customers/${widget.id}?tab=$slug'),
             top: _top(customer, canEdit: canEdit, canSeePoc: canSeePoc, canAssignPoc: canAssignPoc),
             tabs: [
+              // Newest first: the customer's own Emails plus its invoices', labelled (FR12).
+              DetailTab(
+                slug: 'emails',
+                label: 'Emails',
+                icon: Icons.email_outlined,
+                builder: (context) => EmailsTab(customerId: customer.id),
+              ),
               if (canSeeDisputes)
                 DetailTab(
                   slug: 'disputes',

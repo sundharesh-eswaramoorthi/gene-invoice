@@ -29,12 +29,14 @@ class AppRole {
   final int id;
   final String name;
   final String? description;
+  final String? email;
   final List<String> privileges;
 
   const AppRole({
     required this.id,
     required this.name,
     this.description,
+    this.email,
     required this.privileges,
   });
 
@@ -42,6 +44,7 @@ class AppRole {
         id: (json['id'] as num).toInt(),
         name: json['name'] as String,
         description: json['description'] as String?,
+        email: json['email'] as String?,
         privileges: ((json['privileges'] as List?) ?? const [])
             .map((e) => e.toString())
             .toList(),

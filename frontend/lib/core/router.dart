@@ -9,6 +9,7 @@ import '../features/customers/customers_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/disputes/dispute_detail_screen.dart';
 import '../features/disputes/disputes_screen.dart';
+import '../features/emails/inbox_screen.dart';
 import '../features/invoices/invoice_detail_screen.dart';
 import '../features/invoices/invoice_form_screen.dart';
 import '../features/invoices/invoices_screen.dart';
@@ -17,6 +18,7 @@ import '../features/payments/payment_detail_screen.dart';
 import '../features/payments/payments_screen.dart';
 import '../features/products/products_screen.dart';
 import '../features/promises/promises_screen.dart';
+import '../features/settings/settings_screen.dart';
 import '../features/users/roles_screen.dart';
 import '../features/users/users_screen.dart';
 import '../shared/widgets/app_shell.dart';
@@ -28,8 +30,10 @@ import 'unsaved_changes.dart';
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authControllerProvider);
 
-  /// The page size this user last chose for a table, or the default.
-  int sizeFor(String entity) => ref.read(pageSizeStoreProvider)[entity] ?? 20;
+  /// The page size this user last chose for a table, or the default. The Inbox is the one
+  /// table whose default is 25 rather than 20 (AC24); the backend schema enforces its sizes.
+  int sizeFor(String entity) =>
+      ref.read(pageSizeStoreProvider)[entity] ?? (entity == 'inbox' ? 25 : 20);
 
   /// Leaving an editable detail screen asks about its unsaved edits first, however the user
   /// leaves (AC-C3). A sign-out is never held up: the session is already gone.
@@ -66,6 +70,22 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(path: '/', builder: (c, s) => const DashboardScreen()),
+          // The Email Inbox sits directly below Dashboard for every internal user; the backend
+          // remains the owner-scoped boundary, so no privilege is attached to the route.
+          GoRoute(
+            path: '/inbox',
+            builder: (c, s) => InboxScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('inbox'), defaultSort: 'sentAt,desc'),
+            ),
+          ),
+
+          // Administrator settings (the global admin-email fallback); hidden from others by the
+          // AppShell entry and refused by the backend's role-management authority.
+          GoRoute(
+            path: '/settings',
+            onExit: mayLeave,
+            builder: (c, s) => const SettingsScreen(),
+          ),
 
           // List pages open unfiltered for every role; a scope the server enforces comes back
           // with the page and is shown as a locked chip.

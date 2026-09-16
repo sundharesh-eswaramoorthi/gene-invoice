@@ -17,6 +17,8 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
 import '../disputes/disputes_tab.dart';
+import '../emails/email_send.dart';
+import '../emails/emails_tab.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
@@ -147,6 +149,16 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             subtitle: '${inv.customerName} • ${formatDate(inv.invoiceDate)}',
             onBack: () => goGuarded(context, '/invoices'),
             titleTrailing: [
+              // Details-page entry point for the shared compose flow (FR2).
+              if (canEdit)
+                TextButton.icon(
+                  icon: const Icon(Icons.email_outlined, size: 18),
+                  label: const Text('Send email'),
+                  onPressed: () => sendEmailForRecord(context, ref,
+                      recordType: 'invoices',
+                      recordId: inv.id,
+                      recordLabel: inv.invoiceNumber),
+                ),
               if (canSeePoc && inv.pocMissing) const PocMissingBadge(),
               InvoiceStatusChip(status: inv.status),
               if (canSeeDisputes && user!.canRaiseDispute)
@@ -166,6 +178,13 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                 context.go('/invoices/${widget.id}?tab=$slug'),
             top: _top(inv, canEdit: canEdit, canAssignPoc: canAssignPoc, canSeePoc: canSeePoc),
             tabs: [
+              // Invoice-only: an Email appears here exactly when linked to this invoice (FR13).
+              DetailTab(
+                slug: 'emails',
+                label: 'Emails',
+                icon: Icons.email_outlined,
+                builder: (context) => EmailsTab(invoiceId: inv.id),
+              ),
               if (canSeeDisputes)
                 DetailTab(
                   slug: 'disputes',
