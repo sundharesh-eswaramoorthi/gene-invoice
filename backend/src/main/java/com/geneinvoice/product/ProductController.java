@@ -30,6 +30,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 @RestController
@@ -146,7 +148,9 @@ public class ProductController {
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.PRODUCT_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         List<Long> ids = resolveIds(req);
-        List<Product> products = repository.findAllById(ids);
+        // findAllById ignores order, so put the rows back the way the filter and sort asked (D-41).
+        List<Product> products = new ArrayList<>(repository.findAllById(ids));
+        products.sort(Comparator.comparingInt(p -> ids.indexOf(p.getId())));
         String csv = Csv.of(List.of("Id", "Name", "Description", "Price", "Active"),
                 products.stream().map(p -> List.<Object>of(p.getId(), p.getName(),
                         p.getDescription() == null ? "" : p.getDescription(),

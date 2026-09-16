@@ -70,6 +70,32 @@ class TableQueryTest extends IntegrationTestBase {
 
     // ---- AC-D1 / AC-D2: paging never over-fetches and is stably ordered ---------
 
+    // ---- D-40: paging and sort validation ---------------------------------------
+
+    @Test
+    void aSortDirectionThatIsNeitherAscNorDescIsRefused() throws Exception {
+        invoice(acme, "10.00", 1, sales);
+
+        mockMvc.perform(get("/api/invoices").with(as(admin)).param("sort", "invoiceDate,sideways"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message",
+                        org.hamcrest.Matchers.containsString("asc or desc")));
+        mockMvc.perform(get("/api/invoices").with(as(admin)).param("sort", "invoiceDate,DESC"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void aPageFarPastTheEndIsEmptyRatherThanAServerError() throws Exception {
+        invoice(acme, "10.00", 1, sales);
+
+        // page * size overflows int arithmetic here.
+        JsonNode page = getJson(get("/api/invoices").with(as(admin))
+                .param("page", String.valueOf(Integer.MAX_VALUE)).param("size", "20"));
+
+        assertThat(page.get("content").size()).isZero();
+        assertThat(page.get("totalElements").asLong()).isEqualTo(1);
+    }
+
     @Test
     void aPageNeverReturnsMoreRowsThanThePageSize() throws Exception {
         for (int i = 0; i < 25; i++) invoice(acme, "10.00", 1, sales);

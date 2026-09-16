@@ -4,6 +4,7 @@ import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Emails;
+import com.geneinvoice.common.Passwords;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.query.Aggregates;
 import com.geneinvoice.common.query.PageResponse;
@@ -203,6 +204,7 @@ public class CustomerService {
                 .name(in.name()).phone(in.phone()).email(email).address(in.address())
                 .build());
 
+        Passwords.require(in.password());
         userRepository.save(User.builder()
                 .username(in.username())
                 .email(email)
@@ -241,6 +243,7 @@ public class CustomerService {
             linked.setFullName(in.name());
             linked.setEmail(email);
             if (in.password() != null && !in.password().isBlank()) {
+                Passwords.require(in.password());
                 linked.setPassword(passwordEncoder.encode(in.password()));
             }
             userRepository.save(linked);

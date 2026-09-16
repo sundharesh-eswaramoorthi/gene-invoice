@@ -25,6 +25,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -77,8 +79,11 @@ public class RoleController {
         if (ids.isEmpty() && !req.allMatching()) {
             throw new BadRequestException("Provide ids or set selectAllMatchingFilter");
         }
+        // findAllById ignores order, so put the rows back the way the filter and sort asked (D-41).
+        List<Role> roles = new ArrayList<>(roleRepository.findAllById(ids));
+        roles.sort(Comparator.comparingInt(r -> ids.indexOf(r.getId())));
         String csv = Csv.of(List.of("Id", "Name", "Description", "Privileges"),
-                roleRepository.findAllById(ids).stream().map(r -> List.<Object>of(
+                roles.stream().map(r -> List.<Object>of(
                         r.getId(), r.getName(), r.getDescription() == null ? "" : r.getDescription(),
                         String.join(" ", r.getPrivileges().stream().map(Privilege::getName).sorted().toList())
                 )).toList());

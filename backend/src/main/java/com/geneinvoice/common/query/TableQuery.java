@@ -36,7 +36,13 @@ public record TableQuery(int page, int size, String sortField, boolean sortAscen
         } else {
             String[] bits = sortSpec.split(",");
             field = bits[0].trim();
-            asc = bits.length < 2 || !"desc".equalsIgnoreCase(bits[1].trim());
+            // A direction that is neither asc nor desc is a mistake worth saying out loud, rather
+            // than silently sorting the other way (D-40).
+            String direction = bits.length < 2 ? "asc" : bits[1].trim();
+            if (!"asc".equalsIgnoreCase(direction) && !"desc".equalsIgnoreCase(direction)) {
+                throw new BadRequestException("sort direction must be asc or desc, not " + direction);
+            }
+            asc = !"desc".equalsIgnoreCase(direction);
             schema.requireSortable(field);
         }
 

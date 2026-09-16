@@ -70,6 +70,44 @@ class BulkActionTest extends IntegrationTestBase {
         return objectMapper.readTree(result.getResponse().getContentAsString());
     }
 
+    // ---- D-45, D-46: an ADD_POC request that could never work --------------------
+
+    private org.springframework.test.web.servlet.ResultActions addPoc(User caller, Map<String, Object> body)
+            throws Exception {
+        return mockMvc.perform(post("/api/customers/bulk").with(as(caller))
+                .contentType(MediaType.APPLICATION_JSON).content(json(body)));
+    }
+
+    @Test
+    void anAddPocRequestNoRowCouldSatisfyIsOneBadRequest() throws Exception {
+        // Sales POCs live on invoices, not on customers: wrong for every row, so it is not
+        // "every row skipped" but a single 400.
+        addPoc(admin, request("ADD_POC", "ids", List.of(acme.getId(), globex.getId()),
+                        "params", Map.of("userId", collections.getId(), "pocType", "SALES")))
+                .andExpect(status().isBadRequest());
+
+        User gone = user("gus.gone", DataSeeder.ROLE_COLLECTION_POC);
+        gone.setActive(false);
+        userRepository.save(gone);
+        addPoc(admin, request("ADD_POC", "ids", List.of(acme.getId()),
+                        "params", Map.of("userId", gone.getId(), "pocType", "COLLECTION")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void bulkAddPocWithoutPocAssignIsForbiddenNotABadRequest() throws Exception {
+        String roleName = "CUSTOMER_MANAGE_NO_POC";
+        mockMvc.perform(post("/api/roles").with(as(admin)).contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("name", roleName,
+                                "privileges", List.of("CUSTOMER_VIEW", "CUSTOMER_MANAGE")))))
+                .andExpect(status().isOk());
+        User manager = user("mandy.manager", roleName);
+
+        addPoc(manager, request("ADD_POC", "ids", List.of(acme.getId()),
+                        "params", Map.of("userId", collections.getId(), "pocType", "COLLECTION")))
+                .andExpect(status().isForbidden());
+    }
+
     private Map<String, Object> request(String action, Object... kv) {
         Map<String, Object> m = new HashMap<>();
         m.put("action", action);

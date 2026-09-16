@@ -82,7 +82,8 @@ public class DisputeService {
         notificationService.notifyAdmins(NOTIF_OPENED,
                 "New dispute from " + custName,
                 req.reason(),
-                "/admin/disputes/" + d.getId());
+                // The app has no /admin/disputes route; link where the dispute actually opens (D-53).
+                "/disputes/" + d.getId());
 
         return d;
     }

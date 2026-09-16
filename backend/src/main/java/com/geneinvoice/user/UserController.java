@@ -4,6 +4,7 @@ import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Emails;
+import com.geneinvoice.common.Passwords;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.bulk.BulkDtos;
@@ -35,6 +36,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -115,6 +118,7 @@ public class UserController {
         if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
             throw new BadRequestException("Email already exists");
         }
+        Passwords.require(in.password());
         Role role = roleRepository.findById(in.roleId())
                 .orElseThrow(() -> new NotFoundException("Role not found"));
         if ("CUSTOMER".equalsIgnoreCase(role.getName())) {
@@ -148,6 +152,7 @@ public class UserController {
         }
         if (in.fullName() != null) u.setFullName(in.fullName());
         if (in.password() != null && !in.password().isBlank()) {
+            Passwords.require(in.password());
             u.setPassword(passwordEncoder.encode(in.password()));
         }
         if (in.roleId() != null) {
@@ -227,7 +232,10 @@ public class UserController {
     @PostMapping("/export")
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.USER_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
-        List<User> users = userRepository.findAllById(resolveIds(req));
+        List<Long> ids = resolveIds(req);
+        // findAllById ignores order, so put the rows back the way the filter and sort asked (D-41).
+        List<User> users = new ArrayList<>(userRepository.findAllById(ids));
+        users.sort(Comparator.comparingInt(u -> ids.indexOf(u.getId())));
         String csv = Csv.of(List.of("Id", "Username", "Full name", "Email", "Role", "Active"),
                 users.stream().map(u -> List.<Object>of(u.getId(), u.getUsername(),
                         u.getFullName() == null ? "" : u.getFullName(),

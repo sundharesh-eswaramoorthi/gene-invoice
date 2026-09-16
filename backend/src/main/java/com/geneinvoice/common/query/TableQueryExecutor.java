@@ -47,7 +47,13 @@ public class TableQueryExecutor {
 
         TypedQuery<T> tq = em.createQuery(cq);
         if (query.size() != Integer.MAX_VALUE) {
-            tq.setFirstResult(query.page() * query.size());
+            // A page number far past the end overflows int arithmetic; there is nothing on it
+            // anyway, so it is an empty page rather than a 500 (D-40).
+            long offset = (long) query.page() * query.size();
+            if (offset > Integer.MAX_VALUE) {
+                return new Page<>(List.of(), count(type, schema, query, scope));
+            }
+            tq.setFirstResult((int) offset);
             tq.setMaxResults(query.size());
         } else {
             tq.setMaxResults(BULK_ID_LIMIT);

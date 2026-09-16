@@ -116,13 +116,13 @@ public class PocService {
         User user = requireAssignable(userId, type);
 
         if (customerPocRepository.findByCustomerIdAndUserIdAndPocType(customerId, userId, type).isPresent()) {
-            throw new BadRequestException(user.getUsername() + " is already a " + type.label()
+            throw new AlreadyAssignedException(user.getUsername() + " is already a " + type.label()
                     + " for this customer");
         }
 
         boolean first = customerPocRepository.findByCustomerIdAndPocType(customerId, type).isEmpty();
         boolean primary = makePrimary || first;
-        if (primary) clearPrimary(customerId, type);
+        CustomerPoc demoted = primary ? clearPrimary(customerId, type) : null;
 
         CustomerPoc poc = customerPocRepository.save(CustomerPoc.builder()
                 .customer(customer)
@@ -138,8 +138,25 @@ public class PocService {
                 currentUser.require().getId(), null,
                 "Added " + type.label() + " " + user.getUsername());
 
+        // The seat that lost "primary" to this one changed too, and its history should say so (D-44).
+        if (demoted != null) {
+            auditService.record("CUSTOMER", customerId, AUDIT_POC_PRIMARY_CHANGED,
+                    new PocAuditSnapshot(type.name(), demoted.getUser().getId(),
+                            demoted.getUser().getUsername(), true),
+                    new PocAuditSnapshot(type.name(), user.getId(), user.getUsername(), true),
+                    currentUser.require().getId(), null,
+                    "Primary " + type.label() + " is now " + user.getUsername());
+        }
+
         notifyAssignee(user, type, "customer " + customer.getName(), "/customers/" + customerId);
         return poc;
+    }
+
+    /** The customer already has that person in that seat; a bulk caller reports this as skipped. */
+    public static class AlreadyAssignedException extends BadRequestException {
+        public AlreadyAssignedException(String message) {
+            super(message);
+        }
     }
 
     @Transactional
@@ -157,13 +174,15 @@ public class PocService {
         customerPocRepository.flush();
 
         // Never leave a dangling primary: promote the oldest remaining holder of that kind (AC-A4).
+        CustomerPoc promoted = null;
         if (wasPrimary) {
-            customerPocRepository.findByCustomerIdAndPocType(customerId, type).stream()
+            promoted = customerPocRepository.findByCustomerIdAndPocType(customerId, type).stream()
                     .min((a, b) -> Long.compare(a.getId(), b.getId()))
-                    .ifPresent(next -> {
-                        next.setPrimary(true);
-                        customerPocRepository.save(next);
-                    });
+                    .orElse(null);
+            if (promoted != null) {
+                promoted.setPrimary(true);
+                customerPocRepository.save(promoted);
+            }
         }
 
         auditService.record("CUSTOMER", customerId, AUDIT_POC_REMOVED,
@@ -171,6 +190,16 @@ public class PocService {
                 null,
                 currentUser.require().getId(), null,
                 "Removed " + type.label() + " " + removed.getUsername());
+
+        // Someone else became primary without anyone asking for it; that belongs in the history (D-44).
+        if (promoted != null) {
+            auditService.record("CUSTOMER", customerId, AUDIT_POC_PRIMARY_CHANGED,
+                    new PocAuditSnapshot(type.name(), removed.getId(), removed.getUsername(), true),
+                    new PocAuditSnapshot(type.name(), promoted.getUser().getId(),
+                            promoted.getUser().getUsername(), true),
+                    currentUser.require().getId(), null,
+                    "Primary " + type.label() + " is now " + promoted.getUser().getUsername());
+        }
     }
 
     @Transactional
@@ -196,14 +225,17 @@ public class PocService {
         return saved;
     }
 
-    private void clearPrimary(Long customerId, PocType type) {
+    /** Returns the seat that was primary, so the caller can record the change (D-44). */
+    private CustomerPoc clearPrimary(Long customerId, PocType type) {
+        CustomerPoc was = null;
         for (CustomerPoc existing : customerPocRepository.findByCustomerIdAndPocType(customerId, type)) {
             if (existing.isPrimary()) {
                 existing.setPrimary(false);
-                customerPocRepository.save(existing);
+                was = customerPocRepository.save(existing);
             }
         }
         customerPocRepository.flush();
+        return was;
     }
 
     /** Tells the newly assigned person, unless they assigned themselves. */

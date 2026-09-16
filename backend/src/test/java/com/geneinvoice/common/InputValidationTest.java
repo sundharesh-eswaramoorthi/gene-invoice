@@ -108,6 +108,40 @@ class InputValidationTest extends IntegrationTestBase {
                 .filter(n -> n.getLink() != null && n.getLink().endsWith("/" + id))
                 .findFirst().orElseThrow();
         assertThat(toAdmin.getMessage()).hasSize(Notification.MESSAGE_MAX).endsWith("…");
+        // D-53: the link must be a route the app actually has.
+        assertThat(toAdmin.getLink()).isEqualTo("/disputes/" + id);
+    }
+
+    // ---- D-47, D-48: things that are not there ----------------------------------
+
+    @Test
+    void aProductTakenOutOfTheCatalogueCannotGoOnANewInvoice() throws Exception {
+        Product retired = product("Retired widget", "50.00");
+        retired.setActive(false);
+        productRepository.save(retired);
+
+        send(post("/api/invoices"), Map.of("customerId", acme.getId(),
+                        "salesPocUserId", admin.getId(),
+                        "items", List.of(Map.of("productId", retired.getId(), "quantity", 1))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value("Retired widget is no longer an active product"));
+    }
+
+    @Test
+    void anUnknownInvoiceIdOnAPaymentIsRefusedInsteadOfBecomingCredit() throws Exception {
+        long before = paymentRepository.count();
+
+        send(post("/api/payments"), Map.of("customerId", acme.getId(), "amount", 25,
+                        "collectionPocUserId", collector.getId(),
+                        "invoiceIds", List.of(invoice.getId(), 99999999L)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message",
+                        org.hamcrest.Matchers.containsString("Invoice not found")));
+
+        assertThat(paymentRepository.count()).isEqualTo(before);
+        assertThat(customerRepository.findById(acme.getId()).orElseThrow().getCreditBalance())
+                .isEqualByComparingTo("0");
     }
 
     // ---- D-30: amounts finer than a cent ----------------------------------------

@@ -3,6 +3,7 @@ package com.geneinvoice.auth;
 import com.geneinvoice.auth.dto.LoginRequest;
 import com.geneinvoice.auth.dto.LoginResponse;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Passwords;
 import com.geneinvoice.user.User;
 import com.geneinvoice.user.UserRepository;
 import jakarta.validation.Valid;
@@ -70,9 +71,7 @@ public class AuthController {
 
     @PostMapping("/change-password")
     public Map<String, String> changePassword(@Valid @RequestBody ChangePasswordRequest req) {
-        if (req.newPassword().length() < 6) {
-            throw new BadRequestException("New password must be at least 6 characters");
-        }
+        Passwords.require(req.newPassword());
         User u = currentUser.require();
         if (!passwordEncoder.matches(req.currentPassword(), u.getPassword())) {
             throw new BadRequestException("Current password is incorrect");

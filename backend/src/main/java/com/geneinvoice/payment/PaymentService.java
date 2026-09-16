@@ -66,7 +66,16 @@ public class PaymentService {
                 Set.copyOf(chosen));
         List<Invoice> targets;
         if (!chosen.isEmpty()) {
-            targets = new ArrayList<>(invoiceRepository.findAllById(chosen));
+            List<Invoice> loaded = new ArrayList<>(invoiceRepository.findAllById(chosen));
+            // An id that matches no invoice would otherwise be ignored and the money would quietly
+            // become customer credit (D-48).
+            List<Long> missing = chosen.stream()
+                    .filter(id -> loaded.stream().noneMatch(inv -> inv.getId().equals(id)))
+                    .toList();
+            if (!missing.isEmpty()) {
+                throw new NotFoundException("Invoice not found: " + missing);
+            }
+            targets = loaded;
             for (Invoice inv : targets) {
                 if (!inv.getCustomer().getId().equals(customer.getId())) {
                     throw new BadRequestException(

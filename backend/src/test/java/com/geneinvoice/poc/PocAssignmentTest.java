@@ -220,6 +220,40 @@ class PocAssignmentTest extends IntegrationTestBase {
 
     // ---- AC-A7: every assignment change is audited -------------------------------
 
+    // ---- D-44: a primary seat that changes by itself is still a change -----------
+
+    @Test
+    void takingOverAsPrimaryRecordsTheSeatThatWasDemoted() throws Exception {
+        pocService.add(acme.getId(), PocType.COLLECTION, collections.getId(), true);
+        User cora = user("cora.collections", DataSeeder.ROLE_COLLECTION_POC);
+
+        pocService.add(acme.getId(), PocType.COLLECTION, cora.getId(), true);
+
+        mockMvc.perform(get("/api/audit").with(as(admin))
+                        .param("entityType", "CUSTOMER")
+                        .param("entityId", acme.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.action=='POC_PRIMARY_CHANGED')]").isNotEmpty());
+    }
+
+    @Test
+    void removingThePrimaryPocRecordsWhoWasPromotedInItsPlace() throws Exception {
+        CustomerPoc primary = pocService.add(acme.getId(), PocType.COLLECTION, collections.getId(), true);
+        User cora = user("cora.collections", DataSeeder.ROLE_COLLECTION_POC);
+        pocService.add(acme.getId(), PocType.COLLECTION, cora.getId(), false);
+
+        pocService.remove(acme.getId(), primary.getId());
+
+        assertThat(customerPocRepository.findByCustomerIdAndPocType(acme.getId(), PocType.COLLECTION))
+                .singleElement()
+                .satisfies(seat -> assertThat(seat.isPrimary()).isTrue());
+        mockMvc.perform(get("/api/audit").with(as(admin))
+                        .param("entityType", "CUSTOMER")
+                        .param("entityId", acme.getId().toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.action=='POC_PRIMARY_CHANGED')]").isNotEmpty());
+    }
+
     @Test
     void assigningAndRemovingAPocWritesAuditEntries() throws Exception {
         CustomerPoc seat = pocService.add(acme.getId(), PocType.SUCCESS, success.getId(), true);

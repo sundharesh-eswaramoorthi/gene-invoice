@@ -135,7 +135,9 @@ public class CustomerController {
                     "Unknown bulk action: " + req.action() + " (expected one of " + BULK_ACTIONS + ")");
         }
         if (!currentUser.canAssignPoc(userRepository)) {
-            throw new BadRequestException("You may not change POC assignments");
+            // Not allowed is 403, not "bad request" (D-46).
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "You may not change POC assignments");
         }
         Long userId = req.longParam("userId");
         String type = req.stringParam("pocType");
@@ -144,10 +146,15 @@ public class CustomerController {
         }
         PocType pocType = PocType.parse(type);
         boolean makePrimary = Boolean.parseBoolean(String.valueOf(req.stringParam("primary")));
+        // A request that could not work for any row at all is one 400, not every row skipped (D-45).
+        if (pocType == PocType.SALES) {
+            throw new BadRequestException("Sales POC is assigned per invoice, not per customer");
+        }
+        pocService.requireAssignable(userId, pocType);
         return bulkExecutor.run(req, ids, truncated, id -> {
             try {
                 pocService.add(id, pocType, userId, makePrimary);
-            } catch (BadRequestException e) {
+            } catch (PocService.AlreadyAssignedException e) {
                 // Already holding that seat is not a failure — report it as skipped.
                 throw new BulkExecutor.IneligibleException(e.getMessage());
             }

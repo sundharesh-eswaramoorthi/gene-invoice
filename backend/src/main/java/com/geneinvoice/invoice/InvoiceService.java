@@ -138,6 +138,10 @@ public class InvoiceService {
             if (in.quantity() < 1) throw new BadRequestException("Quantity must be positive");
             Product p = productRepository.findById(in.productId())
                     .orElseThrow(() -> new NotFoundException("Product not found: " + in.productId()));
+            // A product taken out of the catalogue should not appear on a new line (D-47).
+            if (!p.isActive()) {
+                throw new BadRequestException(p.getName() + " is no longer an active product");
+            }
             BigDecimal unitPrice = in.unitPrice() != null ? in.unitPrice() : p.getPrice();
             if (unitPrice.signum() < 0) throw new BadRequestException("Unit price cannot be negative");
             Money.requireCents(unitPrice, "Unit price");

@@ -46,6 +46,42 @@ class UserRoleAdminTest extends IntegrationTestBase {
 
     // ---- D-27 -------------------------------------------------------------------
 
+    // ---- D-42: one password rule everywhere -------------------------------------
+
+    private Long viewerRoleId() {
+        return roleRepository.findAll().stream().filter(r -> "VIEWER".equals(r.getName()))
+                .findFirst().orElseThrow().getId();
+    }
+
+    @Test
+    void aPasswordShorterThanSixCharactersIsRefusedWhereverItCanBeSet() throws Exception {
+        String tooShort = "abc12";
+        send(post("/api/users"), Map.of("username", unique("shorty"), "password", tooShort,
+                        "roleId", viewerRoleId()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Password must be at least 6 characters"));
+
+        User vic = user("vic.viewer", "VIEWER");
+        send(put("/api/users/" + vic.getId()), Map.of("password", tooShort))
+                .andExpect(status().isBadRequest());
+        send(post("/api/customers"), Map.of("name", unique("Short Ltd"),
+                        "username", unique("short.login"), "password", tooShort))
+                .andExpect(status().isBadRequest());
+
+        send(post("/api/users"), Map.of("username", unique("okpass"), "password", "abc123",
+                        "roleId", viewerRoleId()))
+                .andExpect(status().isOk());
+    }
+
+    // ---- D-43: deleting something that isn't there ------------------------------
+
+    @Test
+    void deletingARoleThatDoesNotExistIsNotFound() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/roles/99999999").with(as(admin)))
+                .andExpect(status().isNotFound());
+    }
+
     @Test
     void anEmailAlreadyInUseInAnyCaseIsRefused() throws Exception {
         User vera = user("vera.viewer", "VIEWER");
