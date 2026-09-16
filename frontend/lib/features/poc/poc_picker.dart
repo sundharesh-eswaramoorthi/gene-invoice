@@ -16,6 +16,10 @@ class PocPicker extends StatelessWidget {
   final String? errorText;
   final String? labelOverride;
 
+  /// False where the surrounding layout already labels the field — a DetailGrid cell, say — so
+  /// the name does not appear twice, once above the box and again inside it.
+  final bool showLabel;
+
   const PocPicker({
     super.key,
     required this.type,
@@ -25,6 +29,7 @@ class PocPicker extends StatelessWidget {
     this.required = false,
     this.errorText,
     this.labelOverride,
+    this.showLabel = true,
   });
 
   @override
@@ -34,7 +39,8 @@ class PocPicker extends StatelessWidget {
 
     if (!enabled) {
       return InputDecorator(
-        decoration: InputDecoration(labelText: label, border: InputBorder.none),
+        decoration:
+            InputDecoration(labelText: showLabel ? label : null, border: InputBorder.none),
         child: Text(value?.display ?? '—'),
       );
     }
@@ -43,7 +49,7 @@ class PocPicker extends StatelessWidget {
       onTap: () => _openPicker(context),
       child: InputDecorator(
         decoration: InputDecoration(
-          labelText: required ? '$label *' : label,
+          labelText: !showLabel ? null : (required ? '$label *' : label),
           errorText: errorText,
           suffixIcon: value != null && !required
               ? IconButton(

@@ -237,6 +237,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                 child: PocPicker(
                   type: PocType.COLLECTION,
                   value: _collectionPoc,
+                  showLabel: false,
                   enabled: canEdit && canAssignPoc,
                   required: true,
                   onChanged: (u) => setState(() {

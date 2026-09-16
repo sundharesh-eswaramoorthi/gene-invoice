@@ -237,6 +237,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                 child: PocPicker(
                   type: PocType.SALES,
                   value: _salesPoc,
+                  showLabel: false,
                   enabled: canEdit && canAssignPoc,
                   required: true,
                   onChanged: (u) => setState(() {
