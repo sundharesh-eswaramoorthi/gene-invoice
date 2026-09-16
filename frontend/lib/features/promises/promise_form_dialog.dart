@@ -8,6 +8,7 @@ import '../../core/field_limits.dart';
 import '../../core/format.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/promise.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../poc/poc_providers.dart';
 import '../poc/poc_picker.dart';
 
@@ -103,13 +104,13 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
   List<_InvoiceOption> _options(List<InvoiceSummary> outstanding) {
     final options = [
       for (final i in outstanding)
-        _InvoiceOption(i.id, i.invoiceNumber, statusLabel(i.status), i.balance, live: true),
+        _InvoiceOption(i.id, i.invoiceNumber, i.status, statusLabel(i.status), i.balance, live: true),
     ];
     final shown = {for (final o in options) o.id};
     for (final linked in widget.existing?.invoices ?? const <PromiseInvoiceRef>[]) {
       if (shown.contains(linked.id)) continue;
       final status = InvoiceStatus.values.asNameMap()[linked.status];
-      options.add(_InvoiceOption(linked.id, linked.invoiceNumber,
+      options.add(_InvoiceOption(linked.id, linked.invoiceNumber, status,
           status == null ? linked.status : statusLabel(status), linked.balance,
           live: status != InvoiceStatus.CANCELLED));
     }
@@ -245,9 +246,20 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                                 dense: true,
                                 value: _invoiceIds.contains(o.id),
                                 title: Text(o.invoiceNumber),
-                                subtitle: Text(o.live
-                                    ? '${o.status} • balance ${formatMoney(o.balance)}'
-                                    : '${o.status} • no longer owed'),
+                                subtitle: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(o.statusText,
+                                        style: TextStyle(
+                                            color: o.status == null
+                                                ? null
+                                                : invoiceStatusColor(context, o.status!),
+                                            fontWeight: FontWeight.w600)),
+                                    Text(o.live
+                                        ? ' • balance ${formatMoney(o.balance)}'
+                                        : ' • no longer owed'),
+                                  ],
+                                ),
                                 onChanged: (on) => setState(() {
                                   if (on == true) {
                                     _invoiceIds.add(o.id);
@@ -321,13 +333,18 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
 class _InvoiceOption {
   final int id;
   final String invoiceNumber;
-  final String status;
+
+  /// Null only when the server sent a status this build does not know; [statusText] still shows
+  /// whatever came back, just without a colour.
+  final InvoiceStatus? status;
+  final String statusText;
   final double balance;
 
   /// False for a cancelled invoice, which owes nothing any more.
   final bool live;
 
-  const _InvoiceOption(this.id, this.invoiceNumber, this.status, this.balance, {required this.live});
+  const _InvoiceOption(this.id, this.invoiceNumber, this.status, this.statusText, this.balance,
+      {required this.live});
 }
 
 final _outstandingInvoicesProvider =
@@ -423,8 +440,12 @@ class _OverrideDialogState extends ConsumerState<_OverrideDialog> {
               decoration: const InputDecoration(labelText: 'Status'),
               items: PromiseStatus.values
                   .where((s) => s != PromiseStatus.CANCELLED)
-                  .map((s) =>
-                      DropdownMenuItem(value: s, child: Text(promiseStatusLabel(s))))
+                  .map((s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(promiseStatusLabel(s),
+                          style: TextStyle(
+                              color: promiseStatusColor(context, s),
+                              fontWeight: FontWeight.w600))))
                   .toList(),
               onChanged: (s) => setState(() => _status = s ?? _status),
             ),

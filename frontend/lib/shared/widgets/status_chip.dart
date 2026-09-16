@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/dispute.dart';
 import '../models/invoice.dart';
 import '../models/payment.dart';
+import '../models/promise.dart';
 
 /// Colour-coded status chips for invoices, payments and disputes, in the same shape payment
 /// promises have always used (`PromiseStatusChip` in features/promises/promises_tab.dart).
@@ -30,6 +31,28 @@ Color paymentStatusColor(BuildContext context, PaymentStatus s) {
     PaymentStatus.ACTIVE => Colors.green.shade700,
     PaymentStatus.VOIDED => scheme.outline,
   };
+}
+
+/// Lives here rather than with the promise widgets, so every screen can reach it. The chip that
+/// uses it, `PromiseStatusChip`, stays in features/promises/promises_tab.dart.
+Color promiseStatusColor(BuildContext context, PromiseStatus s) {
+  final scheme = Theme.of(context).colorScheme;
+  return switch (s) {
+    PromiseStatus.OPEN => scheme.primary,
+    PromiseStatus.KEPT => Colors.green.shade700,
+    PromiseStatus.PARTIALLY_KEPT => Colors.orange.shade800,
+    PromiseStatus.BROKEN => scheme.error,
+    PromiseStatus.CANCELLED => scheme.outline,
+  };
+}
+
+/// For the places that only have the raw wire value ("PARTIALLY_PAID") rather than the enum.
+/// An unknown value takes the neutral colour instead of guessing.
+Color invoiceStatusColorFromWire(BuildContext context, String? wire) {
+  final parsed = InvoiceStatus.values.asNameMap()[wire];
+  return parsed == null
+      ? Theme.of(context).colorScheme.outline
+      : invoiceStatusColor(context, parsed);
 }
 
 Color disputeStatusColor(BuildContext context, DisputeStatus s) {

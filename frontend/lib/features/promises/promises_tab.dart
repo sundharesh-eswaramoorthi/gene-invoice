@@ -10,17 +10,8 @@ import '../auth/auth_controller.dart';
 import 'promise_form_dialog.dart';
 import 'promise_providers.dart';
 
-/// Colour-codes a promise status consistently wherever it appears.
-Color promiseStatusColor(BuildContext context, PromiseStatus s) {
-  final scheme = Theme.of(context).colorScheme;
-  return switch (s) {
-    PromiseStatus.OPEN => scheme.primary,
-    PromiseStatus.KEPT => Colors.green.shade700,
-    PromiseStatus.PARTIALLY_KEPT => Colors.orange.shade800,
-    PromiseStatus.BROKEN => scheme.error,
-    PromiseStatus.CANCELLED => scheme.outline,
-  };
-}
+// promiseStatusColor now lives in shared/widgets/status_chip.dart, beside the colours for
+// invoices, payments and disputes, so every screen can use the same palette.
 
 class PromiseStatusChip extends StatelessWidget {
   final PromiseStatus status;
@@ -176,12 +167,13 @@ class PromiseCard extends ConsumerWidget {
                 spacing: 6,
                 runSpacing: 4,
                 children: promise.invoices
-                    .map((i) => Chip(
-                          visualDensity: VisualDensity.compact,
-                          // A cancelled invoice owes nothing, whatever balance it last showed.
-                          label: Text(i.status == 'CANCELLED'
+                    // A cancelled invoice owes nothing, whatever balance it last showed. The chip
+                    // takes that invoice's own status colour.
+                    .map((i) => StatusChip(
+                          label: i.status == 'CANCELLED'
                               ? '${i.invoiceNumber} • cancelled'
-                              : '${i.invoiceNumber} • ${formatMoney(i.balance)} left'),
+                              : '${i.invoiceNumber} • ${formatMoney(i.balance)} left',
+                          color: invoiceStatusColorFromWire(context, i.status),
                         ))
                     .toList(),
               ),

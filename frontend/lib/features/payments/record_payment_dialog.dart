@@ -270,8 +270,19 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
               ...promises.map((p) => CheckboxListTile(
                     dense: true,
                     value: _selectedPromises.contains(p.id),
-                    title: Text(
-                        '${formatMoney(p.amount)} by ${formatDate(p.promisedDate)} • ${promiseStatusLabel(p.status)}'),
+                    title: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(
+                          child: Text(
+                              '${formatMoney(p.amount)} by ${formatDate(p.promisedDate)} • '),
+                        ),
+                        Text(promiseStatusLabel(p.status),
+                            style: TextStyle(
+                                color: promiseStatusColor(context, p.status),
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
                     subtitle: Text('Remaining ${formatMoney(p.remainingAmount)}'),
                     onChanged: (on) => setState(() {
                       if (on == true) {

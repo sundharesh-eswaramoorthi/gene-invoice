@@ -265,8 +265,16 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 title: Text(inv.invoiceNumber),
-                subtitle: Text(
-                    '${statusLabel(inv.status)} • allocated ${formatMoney(inv.allocatedAmount)}'),
+                subtitle: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(statusLabel(inv.status),
+                        style: TextStyle(
+                            color: invoiceStatusColor(context, inv.status),
+                            fontWeight: FontWeight.w600)),
+                    Text(' • allocated ${formatMoney(inv.allocatedAmount)}'),
+                  ],
+                ),
                 trailing: Text(
                     'Total ${formatMoney(inv.total)} • Bal ${formatMoney(inv.balance)}'),
                 onTap: () => goGuarded(context, '/invoices/${inv.id}'),
