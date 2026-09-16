@@ -20,6 +20,7 @@ Spring Boot backend + Flutter frontend (web, iOS, Android) for an invoice / bill
 - **Product** — sellable item with `price`
 - **Invoice** — many `InvoiceItem`s, derived `status` (`UNPAID` / `PARTIALLY_PAID` / `FULLY_PAID` / `CANCELLED`)
 - **Payment** — links to one or more invoices (oldest first); overpayment is added to the customer's credit balance and consumed by the next invoice automatically
+- **Email** — kept inside the app, never delivered: about a customer or an invoice, from a user or a role, to users, roles and the customer's addresses; staff read theirs in the Inbox ([design notes](docs/implementation/email.md))
 
 ## Quick start
 
@@ -97,6 +98,9 @@ All `/api/**` endpoints (except `/api/auth/**`) require `Authorization: Bearer <
 | GET    | `/api/payments`                     | `PAYMENT_VIEW`             |
 | POST   | `/api/payments`                     | `PAYMENT_MANAGE`           |
 | GET    | `/api/payments/credits/{customerId}`| `PAYMENT_VIEW`             |
+| GET    | `/api/emails?customerId=` / `?invoiceId=` | `EMAIL_VIEW`         |
+| POST   | `/api/emails`, `/api/emails/bulk`   | `EMAIL_SEND`               |
+| GET/POST | `/api/inbox/**`                   | (any staff login)          |
 
 ### Login
 
