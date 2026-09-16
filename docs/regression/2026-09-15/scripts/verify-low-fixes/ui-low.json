@@ -1,0 +1,72 @@
+{
+  "checks": [
+    {
+      "id": "L-UI-01",
+      "defect": "D-69",
+      "name": "past the last page the pager gives the page count, not a page that does not exist",
+      "status": "PASS",
+      "detail": {
+        "pagerTexts": [
+          "This page is past the end",
+          "568 rows on 29 pages",
+          "Go to last page",
+          "29 pages",
+          "First page",
+          "Previous page"
+        ]
+      }
+    },
+    {
+      "id": "L-UI-02",
+      "defect": "D-71",
+      "name": "the \"does not exist\" page keeps the sidebar and top bar",
+      "status": "PASS",
+      "detail": {
+        "found": [
+          "Dashboard\nTab 1 of 9",
+          "Invoices\nTab 2 of 9",
+          "That page does not exist."
+        ]
+      }
+    },
+    {
+      "id": "L-UI-03",
+      "defect": "D-66",
+      "name": "dispute detail says \"Proposed change\", not \"Proposed change (JSON)\"",
+      "status": "PASS",
+      "detail": {
+        "matches": [
+          "Proposed change",
+          "Edit the JSON below to fine-tune what gets applied on approve. Leave blank to use the customer's proposed change.",
+          "Invoice history"
+        ]
+      }
+    },
+    {
+      "id": "L-UI-04",
+      "defect": "D-67",
+      "name": "staff without PAYMENT_MANAGE are offered \"All payments\"",
+      "status": "PASS",
+      "detail": {
+        "buttons": [
+          "All payments"
+        ]
+      }
+    }
+  ],
+  "shots": [
+    "lo-69-past-the-end-1366",
+    "lo-71-unknown-path-1366",
+    "lo-66-dispute-detail-1366",
+    "lo-64-customer-detail-1366",
+    "lo-51-customers-1366",
+    "lo-67-dashboard-viewer-1366",
+    "lo-58-poc-chips-viewer-1366",
+    "lo-61-invoices-400",
+    "lo-61-promises-400",
+    "lo-60-customer-promises-400"
+  ],
+  "apiErrors_admin": [],
+  "apiErrors_viewer": [],
+  "apiErrors_phone": []
+}

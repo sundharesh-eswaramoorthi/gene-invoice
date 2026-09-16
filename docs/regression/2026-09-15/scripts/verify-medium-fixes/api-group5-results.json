@@ -7,21 +7,21 @@
     "detail": {
       "payment": 200,
       "first": {
-        "id": 170,
+        "id": 192,
         "amount": 100,
         "status": "KEPT",
         "fulfilledAmount": 100,
         "payments": [
-          184
+          206
         ]
       },
       "second": {
-        "id": 171,
+        "id": 193,
         "amount": 100,
         "status": "KEPT",
         "fulfilledAmount": 0,
         "payments": [
-          184
+          206
         ]
       },
       "counted": 100
@@ -34,16 +34,16 @@
     "status": "PASS",
     "detail": {
       "earlier": {
-        "id": 173,
+        "id": 195,
         "amount": 100,
         "status": "KEPT",
         "fulfilledAmount": 100,
         "payments": [
-          185
+          207
         ]
       },
       "later": {
-        "id": 172,
+        "id": 194,
         "amount": 100,
         "status": "OPEN",
         "fulfilledAmount": 0,
@@ -61,12 +61,12 @@
       "olderInvoice": "UNPAID",
       "promisedInvoice": "FULLY_PAID",
       "promise": {
-        "id": 174,
+        "id": 196,
         "amount": 100,
         "status": "KEPT",
         "fulfilledAmount": 100,
         "payments": [
-          186
+          208
         ]
       }
     }
@@ -78,7 +78,7 @@
     "status": "PASS",
     "detail": {
       "status": 400,
-      "message": "Promise 175 covers none of the chosen invoices, so this payment would not count towards it",
+      "message": "Promise 197 covers none of the chosen invoices, so this payment would not count towards it",
       "paymentsRecorded": 0
     }
   },
@@ -89,11 +89,11 @@
     "status": "PASS",
     "detail": {
       "tab": [
-        173
+        195
       ],
       "customerPromises": [
-        172,
-        173
+        194,
+        195
       ]
     }
   },

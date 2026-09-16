@@ -87,8 +87,8 @@
       "laterPaidBefore": 123,
       "paymentInvoicesBeforeVoid": [
         {
-          "id": 426,
-          "invoiceNumber": "INV-20260915-0406",
+          "id": 533,
+          "invoiceNumber": "INV-20260916-0030",
           "total": 23,
           "paidAmount": 23,
           "balance": 0,
@@ -96,8 +96,8 @@
           "allocatedAmount": 23
         },
         {
-          "id": 427,
-          "invoiceNumber": "INV-20260915-0407",
+          "id": 534,
+          "invoiceNumber": "INV-20260916-0031",
           "total": 123,
           "paidAmount": 123,
           "balance": 0,
@@ -127,12 +127,12 @@
           200
         ],
         "numbers": [
-          "INV-20260915-0413",
-          "INV-20260915-0409",
-          "INV-20260915-0411",
-          "INV-20260915-0408",
-          "INV-20260915-0410",
-          "INV-20260915-0412"
+          "INV-20260916-0037",
+          "INV-20260916-0033",
+          "INV-20260916-0036",
+          "INV-20260916-0032",
+          "INV-20260916-0034",
+          "INV-20260916-0035"
         ]
       },
       {
@@ -145,12 +145,12 @@
           200
         ],
         "numbers": [
-          "INV-20260915-0418",
-          "INV-20260915-0414",
-          "INV-20260915-0415",
-          "INV-20260915-0416",
-          "INV-20260915-0417",
-          "INV-20260915-0419"
+          "INV-20260916-0038",
+          "INV-20260916-0040",
+          "INV-20260916-0043",
+          "INV-20260916-0039",
+          "INV-20260916-0041",
+          "INV-20260916-0042"
         ]
       }
     ]
@@ -192,7 +192,7 @@
     "status": "PASS",
     "detail": {
       "probes": {
-        "/api/invoices?filter=salesPocUserId%3Aeq%3A611": [
+        "/api/invoices?filter=salesPocUserId%3Aeq%3A733": [
           400,
           "Unknown column: salesPocUserId"
         ],
@@ -204,19 +204,19 @@
           400,
           "Unknown column: salesPocName"
         ],
-        "/api/invoices/summary?filter=salesPocUserId%3Aeq%3A611": [
+        "/api/invoices/summary?filter=salesPocUserId%3Aeq%3A733": [
           400,
           "Unknown column: salesPocUserId"
         ],
-        "/api/payments?filter=collectionPocUserId%3Aeq%3A612": [
+        "/api/payments?filter=collectionPocUserId%3Aeq%3A734": [
           400,
           "Unknown column: collectionPocUserId"
         ],
-        "/api/promises?filter=collectionPocUserId%3Aeq%3A612": [
+        "/api/promises?filter=collectionPocUserId%3Aeq%3A734": [
           400,
           "Unknown column: collectionPocUserId"
         ],
-        "/api/customers?filter=successPocUserId%3Aeq%3A612": [
+        "/api/customers?filter=successPocUserId%3Aeq%3A734": [
           400,
           "Unknown column: successPocUserId"
         ]
@@ -249,7 +249,7 @@
       "untick": 200,
       "addCancelled": [
         400,
-        "Invoice INV-20260915-0426 is cancelled and cannot be promised against"
+        "Invoice INV-20260916-0050 is cancelled and cannot be promised against"
       ]
     }
   }

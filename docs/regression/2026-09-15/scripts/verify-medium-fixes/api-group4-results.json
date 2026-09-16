@@ -5,11 +5,11 @@
     "name": "midnight belongs to today: every \"through yesterday\" filter counts 1, gte today counts 1",
     "status": "PASS",
     "detail": {
-      "lte 2026-09-14": 1,
-      "between 2026-09-14": 1,
+      "lte 2026-09-15": 1,
+      "between 2026-09-15": 1,
       "relative yesterday": 1,
       "relative past": 1,
-      "gte 2026-09-15": 1
+      "gte 2026-09-16": 1
     }
   },
   {
@@ -19,14 +19,14 @@
     "status": "PASS",
     "detail": {
       "invoice": [
-        "INV-20260915-0442",
+        "INV-20260916-0066",
         451234.5,
-        "INV-20260915-0442 — 451234.50"
+        "INV-20260916-0066 — 451234.50"
       ],
       "payment": [
-        "#176",
+        "#202",
         1000,
-        "Payment #176 — 1000.00"
+        "Payment #202 — 1000.00"
       ]
     }
   }

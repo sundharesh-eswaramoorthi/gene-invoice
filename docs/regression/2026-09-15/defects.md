@@ -2,7 +2,7 @@
 
 72 confirmed defects (12 high, 28 medium, 32 low): 67 from this run after independent re-verification and de-duplication, plus D-68…D-72, found while re-checking the medium fixes on 16 Sep 2026. Severity: high = core flow, money or security wrong; medium = partly wrong or confusing; low = cosmetic or minor.
 
-Status column is for tracking fixes in later sessions (all OPEN as of this run). Medium-severity fixes were re-verified on 16 Sep 2026 against the same environment: API checks in `scripts/verify-medium-fixes/api-group1.js`…`api-group5.js` (ids M1-…M5-, results next to each script), UI checks in `scripts/verify-medium-fixes/ui/` (W-01…W-18 in `ui-results.json`; W-12 re-checked after the follow-up fix by `w12r.js`). High-severity fixes were re-verified on 15 Sep 2026 against the rebuilt regression environment: API checks in `scripts/verify-high-fixes/api.js` (results in `api-results.json`, ids V-01…V-12), UI checks in `scripts/verify-high-fixes/ui/`.
+Status column is for tracking fixes in later sessions (all OPEN as of this run). Medium-severity fixes were re-verified on 16 Sep 2026 against the same environment: API checks in `scripts/verify-medium-fixes/api-group1.js`…`api-group5.js` (ids M1-…M5-, results next to each script), UI checks in `scripts/verify-medium-fixes/ui/` (W-01…W-18 in `ui-results.json`; W-12 re-checked after the follow-up fix by `w12r.js`). Low-severity fixes were re-verified on 16 Sep 2026 too: `scripts/verify-low-fixes/api-low.js` (L-01…L-09) and `scripts/verify-low-fixes/ui-low.js` (L-UI-01…L-UI-04, plus screenshots of the layout-only fixes). D-72 is the one defect left open. High-severity fixes were re-verified on 15 Sep 2026 against the rebuilt regression environment: API checks in `scripts/verify-high-fixes/api.js` (results in `api-results.json`, ids V-01…V-12), UI checks in `scripts/verify-high-fixes/ui/`.
 
 | ID | Severity | Kind | Area | Title | Status |
 |---|---|---|---|---|---|
@@ -45,38 +45,38 @@ Status column is for tracking fixes in later sessions (all OPEN as of this run).
 | D-37 | medium | UI | promises | After an override from a Promises list row, the row and tiles stay stale until the user navigates away | FIXED (44fc64f; W-08 pass) |
 | D-38 | medium | UI | ui-sweep | On phones the detail header breaks the invoice number mid-token and squeezes the subtitle | FIXED (7552dd6; W-16 pass) |
 | D-39 | medium | API+UI | ui-sweep | The dispute target text shows money unformatted with a raw enum: 'INVOICE INV-… — 451234.50' | FIXED (7552dd6; M4-02, W-17 pass) |
-| D-40 | low | API | table-framework | Paging and sort validation gaps: a huge page number overflows int and returns 500; an invalid sort direction is silently treated as asc | OPEN |
-| D-41 | low | API | auth-users-roles | CSV export ignores the requested sort for users, roles and products (rows come back in id or undefined order) | OPEN |
-| D-42 | low | API | auth-users-roles | Admin can set a 1-character password through the user create and update API | OPEN |
-| D-43 | low | API | auth-users-roles | DELETE /api/roles/{unknown id} returns 200 | OPEN |
-| D-44 | low | API | customers-products | Automatic primary-POC changes (promotion on remove, demotion on add-as-primary) are not audited | OPEN |
-| D-45 | low | API | customers-products | An invalid bulk ADD_POC request (pocType SALES, an inactive user) is reported as every row skipped instead of one 400 | OPEN |
-| D-46 | low | API | customers-products | Bulk ADD_POC without POC_ASSIGN returns 400 instead of 403 | OPEN |
-| D-47 | low | API | customers-products | The backend accepts an inactive product on a new invoice | OPEN |
-| D-48 | low | API | payments-credit | An unknown invoiceId on a payment is silently ignored and the money becomes credit | OPEN |
-| D-49 | low | UI | invoices | Cancelled invoices still offer 'Raise promise', which the backend then rejects | OPEN |
-| D-50 | low | UI | table-framework | Reference filter chips show the raw id ('Customer is 184') instead of the name | OPEN |
-| D-51 | low | UI | customers-products | The 'POC missing' badge on phone customer cards runs under the Open icon | OPEN |
-| D-52 | low | UI | customers-products | The 'Name is required' error stays after a valid name is typed on Customer Details | OPEN |
-| D-53 | low | API | disputes-notifications | The DISPUTE_OPENED notification link /admin/disputes/{id} is not a frontend route | OPEN |
-| D-54 | low | UI | disputes-notifications | Dispute detail shows a raw DioException on 403 or 404 | OPEN |
-| D-55 | low | UI | disputes-notifications | The bell badge isn't refreshed after bulk Mark read and stays stale until the 30s poll | OPEN |
-| D-56 | low | UI | table-framework | Summary tiles are refetched on every page change, so each page change makes two requests (AC-D1) | OPEN |
-| D-57 | low | UI | table-framework | Page size is remembered per device, not per user | OPEN |
-| D-58 | low | UI | permissions-scoping | A viewer sees POC seats as grey, disabled-looking chips | OPEN |
-| D-59 | low | UI | detail-history-dashboard | Screen-reader users can't expand single-link History rows; activating the row follows the link | OPEN |
-| D-60 | low | UI | ui-sweep | On phones the Raise promise dialog wraps the date onto a second line and cuts the amount label | OPEN |
-| D-61 | low | UI | ui-sweep | Phone list pages leave about 350px (roughly 1.3 cards) for rows | OPEN |
-| D-62 | low | UI | ui-sweep | The sidebar highlights 'Dashboard' on Notifications and on the customer's own customer page | OPEN |
-| D-63 | low | UI | ui-sweep | Date-time formats differ between screens | OPEN |
-| D-64 | low | UI | ui-sweep | The Customer Details top pane clips the POC editors mid-label with no scroll cue | OPEN |
-| D-65 | low | UI | ui-sweep | On phones the 'What should change?' dropdown text runs under the arrow | OPEN |
-| D-66 | low | UI | ui-sweep | Dispute detail shows developer wording to users: 'INVOICE history', 'Proposed change (JSON)' | OPEN |
-| D-67 | low | UI | ui-sweep | The dashboard shows staff without PAYMENT_MANAGE a 'My payments' button that opens all payments | OPEN |
+| D-40 | low | API | table-framework | Paging and sort validation gaps: a huge page number overflows int and returns 500; an invalid sort direction is silently treated as asc | FIXED (9b6a2a2; L-01 pass) |
+| D-41 | low | API | auth-users-roles | CSV export ignores the requested sort for users, roles and products (rows come back in id or undefined order) | FIXED (9b6a2a2; L-02 pass) |
+| D-42 | low | API | auth-users-roles | Admin can set a 1-character password through the user create and update API | FIXED (9b6a2a2; L-03 pass) |
+| D-43 | low | API | auth-users-roles | DELETE /api/roles/{unknown id} returns 200 | FIXED (9b6a2a2; L-04 pass (came with the D-27 fix)) |
+| D-44 | low | API | customers-products | Automatic primary-POC changes (promotion on remove, demotion on add-as-primary) are not audited | FIXED (9b6a2a2; L-05 pass) |
+| D-45 | low | API | customers-products | An invalid bulk ADD_POC request (pocType SALES, an inactive user) is reported as every row skipped instead of one 400 | FIXED (9b6a2a2; L-06 pass) |
+| D-46 | low | API | customers-products | Bulk ADD_POC without POC_ASSIGN returns 400 instead of 403 | FIXED (9b6a2a2; L-06 pass) |
+| D-47 | low | API | customers-products | The backend accepts an inactive product on a new invoice | FIXED (9b6a2a2; L-07 pass) |
+| D-48 | low | API | payments-credit | An unknown invoiceId on a payment is silently ignored and the money becomes credit | FIXED (9b6a2a2; L-08 pass) |
+| D-49 | low | UI | invoices | Cancelled invoices still offer 'Raise promise', which the backend then rejects | FIXED (89d151b; code change, no browser check) |
+| D-50 | low | UI | table-framework | Reference filter chips show the raw id ('Customer is 184') instead of the name | FIXED (89d151b; code change, no browser check) |
+| D-51 | low | UI | customers-products | The 'POC missing' badge on phone customer cards runs under the Open icon | FIXED (89d151b; screenshot lo-51-customers-1366) |
+| D-52 | low | UI | customers-products | The 'Name is required' error stays after a valid name is typed on Customer Details | FIXED (89d151b; code change, no browser check) |
+| D-53 | low | API | disputes-notifications | The DISPUTE_OPENED notification link /admin/disputes/{id} is not a frontend route | FIXED (9b6a2a2; L-09 pass) |
+| D-54 | low | UI | disputes-notifications | Dispute detail shows a raw DioException on 403 or 404 | FIXED (89d151b; code change, no browser check) |
+| D-55 | low | UI | disputes-notifications | The bell badge isn't refreshed after bulk Mark read and stays stale until the 30s poll | FIXED (89d151b; code change, no browser check) |
+| D-56 | low | UI | table-framework | Summary tiles are refetched on every page change, so each page change makes two requests (AC-D1) | FIXED (89d151b; code change, no browser check) |
+| D-57 | low | UI | table-framework | Page size is remembered per device, not per user | FIXED (89d151b; code change, no browser check) |
+| D-58 | low | UI | permissions-scoping | A viewer sees POC seats as grey, disabled-looking chips | FIXED (89d151b; screenshot lo-58-poc-chips-viewer-1366) |
+| D-59 | low | UI | detail-history-dashboard | Screen-reader users can't expand single-link History rows; activating the row follows the link | FIXED (89d151b; code change, no browser check) |
+| D-60 | low | UI | ui-sweep | On phones the Raise promise dialog wraps the date onto a second line and cuts the amount label | FIXED (89d151b; screenshot lo-60-customer-promises-400) |
+| D-61 | low | UI | ui-sweep | Phone list pages leave about 350px (roughly 1.3 cards) for rows | FIXED (89d151b; screenshot lo-61-invoices-400) |
+| D-62 | low | UI | ui-sweep | The sidebar highlights 'Dashboard' on Notifications and on the customer's own customer page | FIXED (89d151b; code change, no browser check) |
+| D-63 | low | UI | ui-sweep | Date-time formats differ between screens | FIXED (89d151b; code change, no browser check) |
+| D-64 | low | UI | ui-sweep | The Customer Details top pane clips the POC editors mid-label with no scroll cue | FIXED (89d151b; screenshot lo-64-customer-detail-1366) |
+| D-65 | low | UI | ui-sweep | On phones the 'What should change?' dropdown text runs under the arrow | FIXED (89d151b; code change, no browser check) |
+| D-66 | low | UI | ui-sweep | Dispute detail shows developer wording to users: 'INVOICE history', 'Proposed change (JSON)' | FIXED (89d151b; L-UI-03 pass) |
+| D-67 | low | UI | ui-sweep | The dashboard shows staff without PAYMENT_MANAGE a 'My payments' button that opens all payments | FIXED (89d151b; L-UI-04 pass) |
 | D-68 | medium | API | disputes-notifications | A dispute reason of 1,001–2,000 characters fails with 409 'This change conflicts with existing data' | FIXED (bf1613f; M5-07 pass) |
-| D-69 | low | UI | table-framework | A page past the end still reads 'Page 100 of 24' in the pager | OPEN |
-| D-70 | low | UI | table-framework | Signing out fires a request that fails with 401 (the table schema is re-fetched for nobody) | OPEN |
-| D-71 | low | UI | ui-sweep | The 'That page does not exist.' page has no sidebar or top bar | OPEN |
+| D-69 | low | UI | table-framework | A page past the end still reads 'Page 100 of 24' in the pager | FIXED (89d151b; L-UI-01 pass) |
+| D-70 | low | UI | table-framework | Signing out fires a request that fails with 401 (the table schema is re-fetched for nobody) | FIXED (89d151b; code change, no browser check) |
+| D-71 | low | UI | ui-sweep | The 'That page does not exist.' page has no sidebar or top bar | FIXED (89d151b, 358e30a; L-UI-02 pass) |
 | D-72 | low | UI | ui-sweep | Table row checkboxes are missing from the accessibility tree | OPEN |
 
 ## D-01 — A deactivated user's existing JWT keeps full read/write API access for up to 24h
@@ -3090,13 +3090,25 @@ The checkboxes are drawn and clickable but not exposed, so the re-check had to c
 **Root cause**
 
 ```text
-Not investigated; the checkboxes are DataTable's built-in selection column (data_table_scaffold.dart).
+The checkboxes come from Flutter's DataTable selection column (showCheckboxColumn in
+data_table_scaffold.dart), which builds them itself: there is nothing in this codebase to label.
 ```
 
 **Suggested fix**
 
 
-Give the selection cells a semantic label and check them with a screen reader.
+Replace the built-in selection column with a leading column of our own, each cell a labelled
+Checkbox ("Select row <name>"), and keep DataTable's `showCheckboxColumn` off.
+
+
+**Left open on purpose (16 Sep 2026)**
+
+
+The rest of the low defects were fixed in this session; this one was not. It needs its own
+selection column in the shared table, which every list screen and the bulk and export flows
+depend on (W-13 covers them), and the result can only be judged with a real screen reader —
+neither the analyzer nor the semantics snapshots this session used would show whether it works.
+Worth doing together with the other accessibility work (D-59) and a screen-reader pass.
 
 
 **Evidence**

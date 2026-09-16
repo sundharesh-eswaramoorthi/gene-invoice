@@ -14,10 +14,14 @@ Start a new session with: *"Read `docs/regression/2026-09-15/HANDOVER.md` and co
   **67 confirmed defects — 12 high, 27 medium, 28 low.** Verdict: **not ready for release.**
   Re-checking the medium fixes on 16 Sep found five more (D-68…D-72), so `defects.md` now lists
   **72 — 12 high, 28 medium, 32 low.**
-- **All 12 high and all 28 medium defects are fixed**, committed (not pushed) with regression tests,
-  and re-verified against the regression environment (8083/8084) — see "High-severity fixes" and
-  "Medium-severity fixes" below and the Status column in `defects.md`. The 32 low defects are open.
-- Automated suites are green: backend `mvn test` 181/181, `flutter analyze` clean, `flutter test` 45/45.
+- **71 of the 72 defects are fixed** — all 12 high, all 28 medium and 31 of the 32 low — committed
+  (not pushed) with regression tests, and re-verified against the regression environment
+  (8083/8084). See the three "-severity fixes" sections below and the Status column in
+  `defects.md`. **Only D-72 is open** (table row checkboxes are not in the accessibility tree):
+  it needs a selection column of our own in the shared table and a real screen-reader pass, so it
+  was left for the accessibility work rather than changed blind — see its entry in `defects.md`.
+- Automated suites are green: backend `mvn test` 193/193 (22 classes), `flutter analyze` clean,
+  `flutter test` 45/45.
 - **Waiting on the user — the user's deployment (8082/8081) does not have group 5 yet.** The user
   approved applying it ("go", 16 Sep), but restarting 8082 was refused by the session's automatic
   permission check, so the user must run the restart or allow it. Then run the promise recompute:
@@ -131,9 +135,25 @@ against 8083) and `scripts/verify-medium-fixes/ui/` (W-01…W-18 in `ui-results.
 failed at 1366 px, was fixed in `bf1613f`, and passes in the re-check `w12r.js`). Screenshots are on
 disk, not committed. The browser run also found D-68…D-72, now logged in `defects.md`.
 
-## Deploying group 5 to the user's data
+## Low-severity fixes (16 Sep)
 
-Nothing from `d83d1d8` or `bf1613f` is on 8082/8081 yet. A dry run on a copy of the user's data
+Committed on `main`, not pushed.
+
+| Commit | Defects | What changed |
+|---|---|---|
+| `9b6a2a2` | D-40…D-48, D-53 | API: a sort direction other than asc/desc is a 400 and a page past `Integer.MAX_VALUE` is an empty page, not a 500. The users, roles and products exports follow the requested sort. One password rule (6 characters) for user create/update, customer logins and change-password (`common/Passwords`). Deleting an unknown role is a 404 (came with D-27). The automatic primary-POC promotion and demotion are audited as `POC_PRIMARY_CHANGED`. A bulk ADD_POC that could work for no row is one 400 and missing `POC_ASSIGN` is a 403, while "already holds that seat" stays a skipped row (`PocService.AlreadyAssignedException`). A deactivated product cannot go on a new invoice line. An unknown invoiceId on a payment is a 404 before any money moves. The dispute notification links to `/disputes/{id}`. |
+| `89d151b`, `358e30a` | D-49…D-52, D-54…D-67, D-69…D-71 | UI: no "Raise promise" on a cancelled invoice; reference filter chips show the name that was picked; the "POC missing" badge wraps under the name; typing clears "Name is required"; a missing dispute reads as a sentence; the bell badge refreshes after bulk Mark read (`onBulkDone`); summary tiles are keyed on the filters alone, so paging no longer refetches them; remembered page sizes are cleared on sign-out; a viewer sees plain POC chips; History links are their own accessibility nodes; the Raise promise dialog fits a phone; on a phone the summary tiles scroll with the rows and the pager keeps only the page and arrows; nothing in the sidebar is highlighted on pages that are not in it; one date-time format; the detail top pane has a visible scrollbar; the dispute dropdown no longer runs under its arrow; "Proposed change" instead of "(JSON)"; staff see "All payments"; past the end the pager says "N pages"; signing out no longer fetches a schema without a token; and "That page does not exist." renders inside the app shell (`AppShell.path`, since `GoRouterState.of` throws in the router's error builder). |
+
+Verification: `scripts/verify-low-fixes/api-low.js` (L-01…L-09, all pass against 8083) and
+`scripts/verify-low-fixes/ui-low.js` (L-UI-01…L-UI-04 pass in a real browser, plus screenshots at
+1366 and 400 of the layout-only fixes, in `shots/`, not committed). The high and medium API checks
+were re-run against the same build and all still pass.
+
+## Deploying to the user's data
+
+None of the 16 Sep work is on 8082/8081 yet — group 5 (`d83d1d8`, `bf1613f`) or the low-severity
+fixes (`9b6a2a2`, `89d151b`, `358e30a`). Deploy them together; only group 5 needs the extra step
+below. A dry run on a copy of the user's data
 (DB `geneinvoice_preview`, made with `pg_dump | psql` inside the `gene-invoice-db` container) found
 3 of 34 promises would change. The user saw these and approved on 16 Sep:
 
@@ -284,9 +304,11 @@ cd docs/regression/2026-09-15/scripts && npm install      # playwright-core; dri
 
 ## Suggested next steps
 
-1. Deploy group 5 on 8082/8081 and run the promise recompute (see "Deploying group 5 to the user's
-   data").
-2. Fix the 32 low defects (D-40…D-67, D-69…D-72). D-69…D-72 came out of the medium re-check.
-3. After backend changes, re-run `scripts/verify-high-fixes/api.js` and
-   `scripts/verify-medium-fixes/api-group*.js` (they create their own data on 8083).
+1. Deploy to 8082/8081 and run the promise recompute (see "Deploying to the user's data"). Nothing
+   from 16 Sep is on the user's own instance yet.
+2. D-72, the one defect still open, together with a screen-reader pass over the tables and the
+   History panel (D-59 changed that too).
+3. After backend changes, re-run `scripts/verify-high-fixes/api.js`,
+   `scripts/verify-medium-fixes/api-group*.js` and `scripts/verify-low-fixes/api-low.js` (they
+   create their own data on 8083); `scripts/verify-low-fixes/ui-low.js` needs 8084 rebuilt first.
 4. Nothing is pushed; ask the user before pushing.
