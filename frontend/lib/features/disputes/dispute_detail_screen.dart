@@ -110,126 +110,137 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.isAdmin ?? false;
     final d = widget.dispute;
+    final theme = Theme.of(context);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    final details = <Widget>[
+      Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  disputeTargetText(d),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              DisputeStatusChip(status: d.status),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Opened ${formatDateTime(d.createdAt)}'
-            '${d.customerName != null ? " by ${d.customerName}" : ""}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          _Section(label: 'Reason', body: Text(d.reason)),
-          const SizedBox(height: 12),
-          _Section(
-            label: 'Proposed change',
-            body: SelectableText(
-              _prettyJson(d.proposedChangeJson).isEmpty
-                  ? '(none — customer only described the problem)'
-                  : _prettyJson(d.proposedChangeJson),
-              style: const TextStyle(fontFamily: 'monospace'),
-            ),
-          ),
-          if (d.adminNotes != null && d.adminNotes!.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            _Section(label: 'Admin notes', body: Text(d.adminNotes!)),
-          ],
-          if (d.resolvedAt != null) ...[
-            const SizedBox(height: 12),
-            Text('Resolved ${formatDateTime(d.resolvedAt)}',
-                style: Theme.of(context).textTheme.bodySmall),
-          ],
-          const SizedBox(height: 24),
-          if (canManage && d.status == DisputeStatus.PENDING) ...[
-            const Divider(),
-            Text('Resolve', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-            const Text(
-              'Edit the JSON below to fine-tune what gets applied on approve. '
-              'Leave blank to use the customer\'s proposed change.',
-              style: TextStyle(fontStyle: FontStyle.italic),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _appliedCtrl,
-              maxLines: 8,
-              style: const TextStyle(fontFamily: 'monospace'),
-              decoration: const InputDecoration(
-                labelText: 'Applied change (JSON)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _adminNotesCtrl,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'Admin notes (shown to customer)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-            ],
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                FilledButton.icon(
-                  icon: const Icon(Icons.check),
-                  label: const Text('Approve'),
-                  onPressed: _saving ? null : () => _resolve('approve'),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  icon: const Icon(Icons.close),
-                  label: const Text('Deny'),
-                  onPressed: _saving ? null : () => _resolve('deny'),
-                ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 24),
-          const Divider(),
-          Text('${disputeTargetLabel(d.targetType)} history',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          AuditHistoryPanel(entityType: d.targetType.name, entityId: d.targetId),
+          Expanded(child: Text(disputeTargetText(d), style: theme.textTheme.titleLarge)),
+          DisputeStatusChip(status: d.status),
         ],
       ),
-    );
-  }
-}
-
-class _Section extends StatelessWidget {
-  final String label;
-  final Widget body;
-  const _Section({required this.label, required this.body});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: Theme.of(context).textTheme.titleSmall),
+      const SizedBox(height: 4),
+      Text(
+        'Opened ${formatDateTime(d.createdAt)}'
+        '${d.customerName != null ? " by ${d.customerName}" : ""}'
+        '${d.resolvedAt != null ? " • resolved ${formatDateTime(d.resolvedAt)}" : ""}',
+        style: theme.textTheme.bodySmall,
+      ),
+      const SizedBox(height: 12),
+      DetailGrid(items: [
+        DetailGridItem(label: 'Reason', child: Text(d.reason)),
+        DetailGridItem(
+          label: 'Proposed change',
+          child: SelectableText(
+            _prettyJson(d.proposedChangeJson).isEmpty
+                ? '(none — customer only described the problem)'
+                : _prettyJson(d.proposedChangeJson),
+            style: const TextStyle(fontFamily: 'monospace'),
+          ),
+        ),
+        if (d.adminNotes != null && d.adminNotes!.isNotEmpty)
+          DetailGridItem(label: 'Admin notes', child: Text(d.adminNotes!)),
+      ]),
+      if (canManage && d.status == DisputeStatus.PENDING) ...[
+        const Divider(height: 32),
+        Text('Resolve', style: theme.textTheme.titleMedium),
         const SizedBox(height: 4),
-        body,
+        const Text(
+          'Edit the JSON to fine-tune what gets applied on approve. '
+          "Leave it blank to use the customer's proposed change.",
+          style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        DetailGrid(items: [
+          DetailGridItem(
+            label: 'Applied change (JSON)',
+            child: TextField(
+              controller: _appliedCtrl,
+              minLines: 3,
+              maxLines: 6,
+              style: const TextStyle(fontFamily: 'monospace'),
+              decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+            ),
+          ),
+          DetailGridItem(
+            label: 'Admin notes (shown to customer)',
+            child: TextField(
+              controller: _adminNotesCtrl,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+            ),
+          ),
+        ]),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+        ],
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            FilledButton.icon(
+              icon: const Icon(Icons.check),
+              label: const Text('Approve'),
+              onPressed: _saving ? null : () => _resolve('approve'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.close),
+              label: const Text('Deny'),
+              onPressed: _saving ? null : () => _resolve('deny'),
+            ),
+          ],
+        ),
       ],
-    );
+    ];
+
+    final historyTitle =
+        Text('${disputeTargetLabel(d.targetType)} history', style: theme.textTheme.titleMedium);
+    final history = AuditHistoryPanel(entityType: d.targetType.name, entityId: d.targetId);
+
+    return LayoutBuilder(builder: (context, constraints) {
+      // Narrow: one scroll, as before.
+      if (constraints.maxWidth < 1000) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ...details,
+              const Divider(height: 32),
+              historyTitle,
+              const SizedBox(height: 8),
+              history,
+            ],
+          ),
+        );
+      }
+      // Wide: the dispute and its resolution on the left, the record's history in its own column
+      // on the right, so neither pushes the other down the page.
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 3,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: details),
+            ),
+          ),
+          const VerticalDivider(width: 1),
+          Expanded(
+            flex: 2,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [historyTitle, const SizedBox(height: 8), history],
+              ),
+            ),
+          ),
+        ],
+      );
+    });
   }
 }

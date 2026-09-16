@@ -9,7 +9,6 @@ import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
-import '../../shared/models/invoice.dart';
 import '../../shared/models/payment.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
@@ -214,92 +213,151 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     required bool canSeePoc,
     required bool canAssignPoc,
   }) {
+    // Fields in columns, Save beside the figures and the allocations as compact rows, so the top
+    // of an ordinary payment fits without scrolling. A phone stacks and scrolls the page.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
+          _figuresAndSave(
+            [
               _figure(context, 'Amount', formatMoney(p.amount)),
               _figure(context, 'Credit applied', formatMoney(p.creditApplied)),
               _figure(context, 'Method', p.method ?? '—'),
             ],
+            canEdit: canEdit,
           ),
           const SizedBox(height: 12),
-          if (canSeePoc)
-            DetailField(
-              label: 'Collection POC',
-              child: PocPicker(
-                type: PocType.COLLECTION,
-                value: _collectionPoc,
-                enabled: canEdit && canAssignPoc,
-                required: true,
-                onChanged: (u) => setState(() {
-                  _collectionPoc = u;
-                  _dirty = true;
-                }),
+          DetailGrid(items: [
+            if (canSeePoc)
+              DetailGridItem(
+                label: 'Collection POC',
+                child: PocPicker(
+                  type: PocType.COLLECTION,
+                  value: _collectionPoc,
+                  enabled: canEdit && canAssignPoc,
+                  required: true,
+                  onChanged: (u) => setState(() {
+                    _collectionPoc = u;
+                    _dirty = true;
+                  }),
+                ),
               ),
+            DetailGridItem(
+              label: 'Notes',
+              span: 2,
+              child: canEdit
+                  ? TextField(
+                      controller: _notes,
+                      minLines: 1,
+                      maxLines: 2,
+                      inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.paymentNotes)],
+                      decoration: const InputDecoration(isDense: true),
+                      onChanged: (_) => setState(() => _dirty = true),
+                    )
+                  : ReadOnlyValue(p.notes ?? ''),
             ),
-          DetailField(
-            label: 'Notes',
-            child: canEdit
-                ? TextField(
-                    controller: _notes,
-                    maxLines: 2,
-                    inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.paymentNotes)],
-                    onChanged: (_) => setState(() => _dirty = true),
-                  )
-                : ReadOnlyValue(p.notes ?? ''),
-          ),
-          const SizedBox(height: 8),
+          ]),
+          const SizedBox(height: 12),
           Text('Invoice allocations', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 4),
           if (p.invoices.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: Text('No invoices linked — the whole amount went to customer credit'),
-            ),
-          ...p.invoices.map((inv) => ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(inv.invoiceNumber),
-                subtitle: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(statusLabel(inv.status),
-                        style: TextStyle(
-                            color: invoiceStatusColor(context, inv.status),
-                            fontWeight: FontWeight.w600)),
-                    Text(' • allocated ${formatMoney(inv.allocatedAmount)}'),
-                  ],
-                ),
-                trailing: Text(
-                    'Total ${formatMoney(inv.total)} • Bal ${formatMoney(inv.balance)}'),
-                onTap: () => goGuarded(context, '/invoices/${inv.id}'),
-              )),
+            )
+          else
+            _allocations(p),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child:
                   Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
+        ],
+      ),
+    );
+  }
+
+  /// The figures on the left and, for someone who may edit, Save on the right of the same line —
+  /// a row of its own under the fields was a whole line of height spent on one button.
+  Widget _figuresAndSave(List<Widget> figures, {required bool canEdit}) => Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Wrap(spacing: 12, runSpacing: 12, children: figures),
           if (canEdit)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Row(
-                children: [
-                  FilledButton.icon(
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('Save changes'),
-                    onPressed: (!_dirty || _saving) ? null : _save,
-                  ),
-                  const SizedBox(width: 12),
-                  if (_dirty)
-                    Text('Unsaved changes',
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_dirty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Text('Unsaved changes',
                         style: TextStyle(color: Theme.of(context).colorScheme.tertiary)),
-                ],
+                  ),
+                FilledButton.icon(
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Save changes'),
+                  onPressed: (!_dirty || _saving) ? null : _save,
+                ),
+              ],
+            ),
+        ],
+      );
+
+  /// The invoices this payment went to: one short row each, and a row opens its invoice.
+  Widget _allocations(PaymentRecord p) {
+    final theme = Theme.of(context);
+    final head = theme.textTheme.labelMedium;
+    Widget cells(List<Widget> c) => Row(children: [
+          Expanded(flex: 3, child: c[0]),
+          Expanded(flex: 2, child: c[1]),
+          Expanded(flex: 2, child: c[2]),
+          Expanded(flex: 2, child: c[3]),
+          Expanded(flex: 2, child: c[4]),
+        ]);
+    Widget right(String s, {TextStyle? style}) => Text(s, textAlign: TextAlign.right, style: style);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 900),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+            child: cells([
+              Text('Invoice', style: head),
+              Text('Status', style: head),
+              right('Allocated', style: head),
+              right('Total', style: head),
+              right('Balance', style: head),
+            ]),
+          ),
+          for (final inv in p.invoices)
+            DecoratedBox(
+              decoration:
+                  BoxDecoration(border: Border(top: BorderSide(color: theme.dividerColor))),
+              child: InkWell(
+                onTap: () => goGuarded(context, '/invoices/${inv.id}'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6),
+                  child: cells([
+                    Text(inv.invoiceNumber,
+                        style: TextStyle(
+                            color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
+                    Align(
+                        alignment: Alignment.centerLeft,
+                        child: InvoiceStatusChip(status: inv.status)),
+                    right(formatMoney(inv.allocatedAmount)),
+                    right(formatMoney(inv.total)),
+                    right(formatMoney(inv.balance)),
+                  ]),
+                ),
               ),
             ),
         ],

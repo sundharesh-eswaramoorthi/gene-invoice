@@ -56,8 +56,8 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
   /// does not refetch, and the top section never reloads (AC-C3).
   final Set<int> _visited = {};
 
-  /// The top pane scrolls when it is taller than its half of the screen; its scrollbar is the
-  /// only cue that there is more below (D-64).
+  /// The top pane scrolls only when its content is taller than the room it may take (about half
+  /// the page); its scrollbar is then the cue that there is more below (D-64).
   final ScrollController _topScroll = ScrollController();
 
   @override
@@ -156,29 +156,33 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
       );
     }
 
-    return Column(
-      children: [
-        header,
-        Flexible(
-          flex: 5,
-          child: Scrollbar(
-            controller: _topScroll,
-            thumbVisibility: true,
-            child: SingleChildScrollView(controller: _topScroll, child: widget.top),
+    return LayoutBuilder(
+      builder: (context, constraints) => Column(
+        children: [
+          header,
+          // The top pane is as tall as its content, not a fixed half of the page, so an ordinary
+          // record shows in full with nothing to scroll. Only a genuinely tall top (or a short
+          // window) scrolls, and it never takes more than about half the page from the tabs.
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: constraints.maxHeight * 0.55),
+            child: Scrollbar(
+              controller: _topScroll,
+              thumbVisibility: true,
+              child: SingleChildScrollView(controller: _topScroll, child: widget.top),
+            ),
           ),
-        ),
-        const Divider(height: 1),
-        Flexible(
-          flex: 5,
-          child: Column(
-            children: [
-              Align(alignment: Alignment.centerLeft, child: tabBar),
-              const Divider(height: 1),
-              Expanded(child: tabViews),
-            ],
+          const Divider(height: 1),
+          Expanded(
+            child: Column(
+              children: [
+                Align(alignment: Alignment.centerLeft, child: tabBar),
+                const Divider(height: 1),
+                Expanded(child: tabViews),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -262,38 +266,59 @@ class _PinnedTabBar extends SliverPersistentHeaderDelegate {
       oldDelegate.tabBar != tabBar || oldDelegate.color != color;
 }
 
-/// A read-only or editable field row used by the detail screens' top sections.
-class DetailField extends StatelessWidget {
+/// One cell of a [DetailGrid]: a label above its field.
+class DetailGridItem {
   final String label;
   final Widget child;
-  final double labelWidth;
 
-  const DetailField({
-    super.key,
-    required this.label,
-    required this.child,
-    this.labelWidth = 150,
-  });
+  /// How many columns the cell spans when the grid has that many (a notes field across two, say).
+  final int span;
+
+  const DetailGridItem({required this.label, required this.child, this.span = 1});
+}
+
+/// Lays a detail page's fields out in columns rather than one full-width row each, so the top of
+/// the page shows a record at a glance: three columns when there is room, two on a medium window,
+/// one on a phone. Labels sit above their fields, which saves the width a side label would take.
+class DetailGrid extends StatelessWidget {
+  final List<DetailGridItem> items;
+  final double spacing;
+
+  const DetailGrid({super.key, required this.items, this.spacing = 16});
+
+  /// Columns for a grid this wide. Public so a test can pin the breakpoints.
+  static int columnsFor(double width) => width >= 1000 ? 3 : (width >= 640 ? 2 : 1);
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return LayoutBuilder(builder: (context, constraints) {
+      final columns = columnsFor(constraints.maxWidth);
+      // Floored so rounding can never push the last cell of a row onto the next one.
+      final unit = ((constraints.maxWidth - spacing * (columns - 1)) / columns).floorToDouble();
+      return Wrap(
+        spacing: spacing,
+        runSpacing: 12,
         children: [
-          SizedBox(
-            width: labelWidth,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(label, style: Theme.of(context).textTheme.labelLarge),
+          for (final item in items)
+            SizedBox(
+              width: unit * _span(item, columns) + spacing * (_span(item, columns) - 1),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(item.label, style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 6),
+                  item.child,
+                ],
+              ),
             ),
-          ),
-          Expanded(child: child),
         ],
-      ),
-    );
+      );
+    });
   }
+
+  static int _span(DetailGridItem item, int columns) =>
+      item.span < 1 ? 1 : (item.span > columns ? columns : item.span);
 }
 
 /// A read-only value, used where the caller lacks the privilege to edit (AC-C2).

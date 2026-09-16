@@ -196,123 +196,140 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     required bool canSeePoc,
     required bool canAssignPoc,
   }) {
+    void pocsChanged() {
+      ref.invalidate(customerDetailProvider(c.id));
+      ref.invalidate(customerPocsProvider(c.id));
+      ref.invalidate(tablePageProvider);
+      ref.invalidate(auditHistoryProvider);
+    }
+
+    // Fields in columns and Save beside the figures, so on an ordinary window the whole top fits
+    // without scrolling. A phone stacks everything in one column and scrolls the page instead.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
+          _figuresAndSave(
+            [
               _figure(context, 'Outstanding', formatMoney(c.outstanding),
                   accent: c.outstanding > 0 ? Theme.of(context).colorScheme.error : null),
               _figure(context, 'Credit balance', formatMoney(c.creditBalance)),
             ],
+            canEdit: canEdit,
           ),
           const SizedBox(height: 12),
-          DetailField(
-            label: 'Name',
-            child: canEdit
-                ? TextField(
-                    controller: _name,
-                    decoration: InputDecoration(errorText: _fieldErrors['name']),
-                    onChanged: (v) => setState(() {
-                      _dirty = true;
-                      // Drop the server's complaint as soon as it no longer applies (D-52).
-                      if (v.trim().isNotEmpty) _fieldErrors.remove('name');
-                    }),
-                  )
-                : ReadOnlyValue(c.name),
-          ),
-          DetailField(
-            label: 'Phone',
-            child: canEdit
-                ? TextField(
-                    controller: _phone,
-                    onChanged: (_) => setState(() => _dirty = true),
-                  )
-                : ReadOnlyValue(c.phone ?? ''),
-          ),
-          DetailField(
-            label: 'Email',
-            child: canEdit
-                ? TextField(
-                    controller: _email,
-                    onChanged: (_) => setState(() => _dirty = true),
-                  )
-                : ReadOnlyValue(c.email ?? ''),
-          ),
-          DetailField(
-            label: 'Address',
-            child: canEdit
-                ? TextField(
-                    controller: _address,
-                    maxLines: 2,
-                    onChanged: (_) => setState(() => _dirty = true),
-                  )
-                : ReadOnlyValue(c.address ?? ''),
-          ),
-          if (canSeePoc) ...[
-            const Divider(height: 24),
-            DetailField(
-              label: 'Customer Success POCs',
-              child: CustomerPocEditor(
-                customerId: c.id,
-                type: PocType.SUCCESS,
-                pocs: c.successPocs ?? const [],
-                editable: canAssignPoc,
-                onChanged: () {
-                  ref.invalidate(customerDetailProvider(c.id));
-                  ref.invalidate(customerPocsProvider(c.id));
-                  ref.invalidate(tablePageProvider);
-                  ref.invalidate(auditHistoryProvider);
-                },
-              ),
+          DetailGrid(items: [
+            DetailGridItem(
+              label: 'Name',
+              child: canEdit
+                  ? TextField(
+                      controller: _name,
+                      decoration:
+                          InputDecoration(isDense: true, errorText: _fieldErrors['name']),
+                      onChanged: (v) => setState(() {
+                        _dirty = true;
+                        // Drop the server's complaint as soon as it no longer applies (D-52).
+                        if (v.trim().isNotEmpty) _fieldErrors.remove('name');
+                      }),
+                    )
+                  : ReadOnlyValue(c.name),
             ),
-            DetailField(
-              label: 'Collection POCs',
-              child: CustomerPocEditor(
-                customerId: c.id,
-                type: PocType.COLLECTION,
-                pocs: c.collectionPocs ?? const [],
-                editable: canAssignPoc,
-                onChanged: () {
-                  ref.invalidate(customerDetailProvider(c.id));
-                  ref.invalidate(customerPocsProvider(c.id));
-                  ref.invalidate(tablePageProvider);
-                  ref.invalidate(auditHistoryProvider);
-                },
-              ),
+            DetailGridItem(
+              label: 'Email',
+              child: canEdit
+                  ? TextField(
+                      controller: _email,
+                      decoration: const InputDecoration(isDense: true),
+                      onChanged: (_) => setState(() => _dirty = true),
+                    )
+                  : ReadOnlyValue(c.email ?? ''),
             ),
-          ],
+            DetailGridItem(
+              label: 'Phone',
+              child: canEdit
+                  ? TextField(
+                      controller: _phone,
+                      decoration: const InputDecoration(isDense: true),
+                      onChanged: (_) => setState(() => _dirty = true),
+                    )
+                  : ReadOnlyValue(c.phone ?? ''),
+            ),
+            DetailGridItem(
+              label: 'Address',
+              child: canEdit
+                  ? TextField(
+                      controller: _address,
+                      minLines: 1,
+                      maxLines: 2,
+                      decoration: const InputDecoration(isDense: true),
+                      onChanged: (_) => setState(() => _dirty = true),
+                    )
+                  : ReadOnlyValue(c.address ?? ''),
+            ),
+            if (canSeePoc)
+              DetailGridItem(
+                label: 'Customer Success POCs',
+                child: CustomerPocEditor(
+                  customerId: c.id,
+                  type: PocType.SUCCESS,
+                  pocs: c.successPocs ?? const [],
+                  editable: canAssignPoc,
+                  onChanged: pocsChanged,
+                ),
+              ),
+            if (canSeePoc)
+              DetailGridItem(
+                label: 'Collection POCs',
+                child: CustomerPocEditor(
+                  customerId: c.id,
+                  type: PocType.COLLECTION,
+                  pocs: c.collectionPocs ?? const [],
+                  editable: canAssignPoc,
+                  onChanged: pocsChanged,
+                ),
+              ),
+          ]),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child:
                   Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
-          if (canEdit)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Row(
-                children: [
-                  FilledButton.icon(
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('Save changes'),
-                    onPressed: (!_dirty || _saving) ? null : _save,
-                  ),
-                  const SizedBox(width: 12),
-                  if (_dirty)
-                    Text('Unsaved changes',
-                        style: TextStyle(color: Theme.of(context).colorScheme.tertiary)),
-                ],
-              ),
-            ),
         ],
       ),
     );
   }
+
+  /// The figures on the left and, for someone who may edit, Save on the right of the same line —
+  /// a row of its own under the fields was a whole line of height spent on one button.
+  Widget _figuresAndSave(List<Widget> figures, {required bool canEdit}) => Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Wrap(spacing: 12, runSpacing: 12, children: figures),
+          if (canEdit)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_dirty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Text('Unsaved changes',
+                        style: TextStyle(color: Theme.of(context).colorScheme.tertiary)),
+                  ),
+                FilledButton.icon(
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Save changes'),
+                  onPressed: (!_dirty || _saving) ? null : _save,
+                ),
+              ],
+            ),
+        ],
+      );
 
   Widget _figure(BuildContext context, String label, String value, {Color? accent}) =>
       Container(

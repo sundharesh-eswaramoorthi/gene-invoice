@@ -212,84 +212,140 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     required bool canAssignPoc,
     required bool canSeePoc,
   }) {
+    // Fields in columns, Save beside the figures and the line items as a compact table, so the
+    // top of an ordinary invoice fits without scrolling. A phone stacks and scrolls the page.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
+          _figuresAndSave(
+            [
               _figure(context, 'Total', formatMoney(inv.total)),
               _figure(context, 'Paid', formatMoney(inv.paidAmount)),
               _figure(context, 'Balance', formatMoney(inv.balance),
                   accent: inv.balance > 0 ? Theme.of(context).colorScheme.error : null),
             ],
+            canEdit: canEdit,
           ),
           const SizedBox(height: 12),
-          if (canSeePoc)
-            DetailField(
-              label: 'Sales POC',
-              child: PocPicker(
-                type: PocType.SALES,
-                value: _salesPoc,
-                enabled: canEdit && canAssignPoc,
-                required: true,
-                onChanged: (u) => setState(() {
-                  _salesPoc = u;
-                  _dirty = true;
-                }),
+          DetailGrid(items: [
+            if (canSeePoc)
+              DetailGridItem(
+                label: 'Sales POC',
+                child: PocPicker(
+                  type: PocType.SALES,
+                  value: _salesPoc,
+                  enabled: canEdit && canAssignPoc,
+                  required: true,
+                  onChanged: (u) => setState(() {
+                    _salesPoc = u;
+                    _dirty = true;
+                  }),
+                ),
               ),
+            DetailGridItem(
+              label: 'Notes',
+              span: 2,
+              child: canEdit
+                  ? TextField(
+                      controller: _notes,
+                      minLines: 1,
+                      maxLines: 2,
+                      inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.invoiceNotes)],
+                      decoration:
+                          const InputDecoration(isDense: true, hintText: 'Internal notes'),
+                      onChanged: (_) => setState(() => _dirty = true),
+                    )
+                  : ReadOnlyValue(inv.notes ?? ''),
             ),
-          DetailField(
-            label: 'Notes',
-            child: canEdit
-                ? TextField(
-                    controller: _notes,
-                    maxLines: 2,
-                    inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.invoiceNotes)],
-                    decoration: const InputDecoration(hintText: 'Internal notes'),
-                    onChanged: (_) => setState(() => _dirty = true),
-                  )
-                : ReadOnlyValue(inv.notes ?? ''),
-          ),
-          const SizedBox(height: 8),
-          Text('Line items', style: Theme.of(context).textTheme.titleSmall),
-          const Text(
-            'Line items change only through an approved dispute.',
-            style: TextStyle(fontSize: 12),
+          ]),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.end,
+            children: [
+              Text('Line items', style: Theme.of(context).textTheme.titleSmall),
+              Text('Change only through an approved dispute.',
+                  style: TextStyle(
+                      fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            ],
           ),
           const SizedBox(height: 4),
-          ...inv.items.map((it) => ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                title: Text(it.productName),
-                subtitle: Text('${it.quantity} × ${formatMoney(it.unitPrice)}'),
-                trailing: Text(formatMoney(it.lineTotal)),
-              )),
+          _lineItems(inv),
           if (_error != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child:
                   Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
             ),
+        ],
+      ),
+    );
+  }
+
+  /// The figures on the left and, for someone who may edit, Save on the right of the same line —
+  /// a row of its own under the fields was a whole line of height spent on one button.
+  Widget _figuresAndSave(List<Widget> figures, {required bool canEdit}) => Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Wrap(spacing: 12, runSpacing: 12, children: figures),
           if (canEdit)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Row(
-                children: [
-                  FilledButton.icon(
-                    icon: const Icon(Icons.save_outlined),
-                    label: const Text('Save changes'),
-                    onPressed: (!_dirty || _saving) ? null : _save,
-                  ),
-                  const SizedBox(width: 12),
-                  if (_dirty)
-                    Text('Unsaved changes',
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_dirty)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Text('Unsaved changes',
                         style: TextStyle(color: Theme.of(context).colorScheme.tertiary)),
-                ],
-              ),
+                  ),
+                FilledButton.icon(
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Save changes'),
+                  onPressed: (!_dirty || _saving) ? null : _save,
+                ),
+              ],
+            ),
+        ],
+      );
+
+  /// The line items as a compact table: one short row each, instead of a two-line list tile per item.
+  Widget _lineItems(InvoiceDetail inv) {
+    final theme = Theme.of(context);
+    final head = theme.textTheme.labelMedium;
+    Widget cell(Widget child) =>
+        Padding(padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 6), child: child);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Table(
+        columnWidths: const {
+          0: FlexColumnWidth(3),
+          1: FlexColumnWidth(1),
+          2: FlexColumnWidth(1.5),
+          3: FlexColumnWidth(1.5),
+        },
+        defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+        children: [
+          TableRow(children: [
+            cell(Text('Product', style: head)),
+            cell(Text('Qty', style: head, textAlign: TextAlign.right)),
+            cell(Text('Unit price', style: head, textAlign: TextAlign.right)),
+            cell(Text('Line total', style: head, textAlign: TextAlign.right)),
+          ]),
+          for (final it in inv.items)
+            TableRow(
+              decoration: BoxDecoration(border: Border(top: BorderSide(color: theme.dividerColor))),
+              children: [
+                cell(Text(it.productName)),
+                cell(Text('${it.quantity}', textAlign: TextAlign.right)),
+                cell(Text(formatMoney(it.unitPrice), textAlign: TextAlign.right)),
+                cell(Text(formatMoney(it.lineTotal), textAlign: TextAlign.right)),
+              ],
             ),
         ],
       ),
