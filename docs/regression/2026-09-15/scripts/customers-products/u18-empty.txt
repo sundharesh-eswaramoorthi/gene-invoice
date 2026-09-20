@@ -1,7 +1,0 @@
-[group] "Dismiss" @683,450 1366x900
-[null] "New product" @683,267 380x32
-[null] "Required" @534,351 50x16
-[null] "Required" @534,491 50x16
-[switch] "Active" @683,531 380x48
-[button] "Cancel" @839,595 67x32
-[button] "Save" @683,630 380x38

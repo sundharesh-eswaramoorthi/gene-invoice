@@ -1,6 +1,0 @@
-[group] "Dismiss" @683,450 1366x900
-[null] "Record payment" @683,269 540x32
-[button] "Customer *" @683,321 540x40
-[button] "Collection POC *\nSelect…" @683,373 540x40
-[button] "Cancel" @919,593 67x32
-[button] "Record" @683,628 540x38

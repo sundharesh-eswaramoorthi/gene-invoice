@@ -1,5 +1,0 @@
-[group] "Dismiss" @683,600 1366x1200
-[null] "Discard unsaved changes?" @683,535 375x32
-[null] "You have edits on this customer that have not been saved." @683,577 375x20
-[button] "Keep editing" @819,627 102x32
-[button] "Discard" @683,662 375x38

@@ -1,5 +1,0 @@
-[group] "Dismiss" @683,450 1366x900
-[null] "New customer" @683,224 420x32
-[null] "Login credentials (customer can sign in with these)" @619,496 292x16
-[button] "Cancel" @859,638 67x32
-[button] "Save" @683,673 420x38

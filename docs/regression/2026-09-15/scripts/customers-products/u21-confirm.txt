@@ -1,5 +1,0 @@
-[group] "Dismiss" @683,450 1366x900
-[null] "Deactivate?" @683,385 250x32
-[null] "This will apply \"Deactivate\" to 1 record." @683,427 250x20
-[button] "Cancel" @775,477 67x32
-[button] "Confirm" @683,512 250x38

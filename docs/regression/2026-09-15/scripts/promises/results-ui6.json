@@ -1,9 +1,0 @@
-[
-  {
-    "id": "PRM-UI16",
-    "title": "Bulk cancel from the Promises list: select all on page, toolbar action, confirm with exact count, result",
-    "status": "PASS",
-    "actual": "toolbar: 2 selected; confirm dialog: [\"Cancel promises?\",\"This will apply \\\"Cancel promises\\\" to 2 records.\\n\\nThis cannot be undone.\",\"Cancel\",\"Confirm\"]; after confirm: [\"2 records updated\"]; API CANCELLED/CANCELLED; rows now [\"Cancelled\",\"Cancelled\"]; tiles [\"2\",\"0 • ₹0.00\",\"0 • ₹0.00\",\"0 • ₹0.00\",\"0 • ₹0.00\",\"₹0.00\"]",
-    "evidence": "/private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui6-16a-selected.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui6-16b-confirm.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui6-16c-result.png ; /private/tmp/claude-501/-Users-srinivasans-Git-DooD-Test-gene-invoice-main/320ba3a2-3a45-4782-b3a9-c7047d64db55/scratchpad/rt/promises/shots/ui6-16d-list-after.png"
-  }
-]

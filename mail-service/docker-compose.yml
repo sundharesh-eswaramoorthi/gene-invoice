@@ -1,5 +1,5 @@
 # RabbitMQ for the mail service's send queue. The database is `genemail` in the existing Postgres
-# (geneinvt1-main-db on localhost:5435); the service itself runs as a jar (README.md).
+# (geneinvt1-main-db on localhost:5435); the service itself runs as a jar.
 services:
   rabbitmq:
     image: rabbitmq:3.13-management

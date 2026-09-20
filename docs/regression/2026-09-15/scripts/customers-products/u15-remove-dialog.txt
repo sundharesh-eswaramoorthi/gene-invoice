@@ -1,5 +1,0 @@
-[group] "Dismiss" @683,600 1366x1200
-[null] "Remove CPUICS-MU2T3BZO9230?" @683,535 875x32
-[null] "They are the primary Customer Success POC. Another holder is promoted automatically, or the primary is cleared if there is nobody else." @683,577 875x20
-[button] "Keep" @1093,627 56x32
-[button] "Remove" @683,662 875x38
