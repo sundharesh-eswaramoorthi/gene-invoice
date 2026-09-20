@@ -42,4 +42,12 @@ class Privileges {
 
   // Tables
   static const exportData = 'EXPORT_DATA';
+
+  // Email
+  static const emailView = 'EMAIL_VIEW';
+  static const emailSend = 'EMAIL_SEND';
+
+  // Documents
+  static const documentView = 'DOCUMENT_VIEW';
+  static const documentManage = 'DOCUMENT_MANAGE';
 }

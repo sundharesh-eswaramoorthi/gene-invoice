@@ -24,6 +24,10 @@ import java.util.List;
  * ever see its own rows and no filter can widen that (AC-D10). A POC without
  * {@link Privileges#SCOPE_OVERRIDE} is <em>defaulted</em> to their own book: the same predicate is
  * applied, and reported back as a locked filter chip so the UI can say so out loud (AC-A6).
+ *
+ * <p>Only {@code SCOPE_OVERRIDE} lifts the restriction. A caller without it who is not that kind
+ * of POC has an <em>empty</em> book of that kind, not an unrestricted one: a sales rep is nobody's
+ * Collection POC, so their payments and promises books are empty rather than the company's.
  */
 @Component
 @RequiredArgsConstructor
@@ -90,10 +94,15 @@ public class ScopeResolver {
             predicates.add((root, q, cb) -> cb.equal(root.get("id"), own));
             return new Scope(predicates, List.of());
         }
-        if (canSeeEverything() || !isAnyPoc()) {
+        if (canSeeEverything()) {
             return Scope.empty();
         }
         Long meId = me.getId();
+        // Holding no POC seat of any kind is an empty book, not the whole company: the caller has
+        // no way past their own scope, so the list is empty and the chip still says why (AC-A6).
+        if (!isAnyPoc()) {
+            return nothing("myBook:eq:" + meId);
+        }
         predicates.add((root, q, cb) -> cb.or(customerHasPocSeat(root, q, cb, meId),
                 customerHasInvoiceOwnedBy(root, q, cb, meId)));
         locked.add("myBook:eq:" + meId);
@@ -131,13 +140,24 @@ public class ScopeResolver {
                     List.of((root, q, cb) -> cb.equal(root.get(customerAssociation).get("id"), own)),
                     List.of());
         }
-        if (canSeeEverything() || !isAssignableAs(type)) {
+        if (canSeeEverything()) {
             return Scope.empty();
         }
         Long meId = me.getId();
+        // Not being this kind of POC is an empty book, never permission to see every row of it: a
+        // sales rep's payments book is the payments where they are the Collection POC — none —
+        // and not the company's (§7). The by-id reads that hang off these rows follow suit.
+        if (!isAssignableAs(type)) {
+            return nothing(lockedColumn + ":eq:" + meId);
+        }
         return new Scope(
                 List.of((root, q, cb) -> book.build(root, q, cb, meId)),
                 List.of(lockedColumn + ":eq:" + meId));
+    }
+
+    /** A book with nothing in it: matches no row, and still reports the chip that explains it. */
+    private static Scope nothing(String lockedFilter) {
+        return new Scope(List.of((root, q, cb) -> cb.disjunction()), List.of(lockedFilter));
     }
 
     private Predicate customerHasPocSeat(Root<?> root, CriteriaQuery<?> q, CriteriaBuilder cb, Long meId) {

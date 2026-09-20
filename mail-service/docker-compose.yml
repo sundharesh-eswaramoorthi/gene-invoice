@@ -1,0 +1,19 @@
+# RabbitMQ for the mail service's send queue. The database is `genemail` in the existing Postgres
+# (geneinvt1-main-db on localhost:5435); the service itself runs as a jar (README.md).
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: geneinvt1-rabbitmq
+    ports:
+      - "5672:5672"     # AMQP
+      - "15672:15672"   # management UI, guest / guest from localhost
+    volumes:
+      - geneinvt1_rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  geneinvt1_rabbitmq_data:

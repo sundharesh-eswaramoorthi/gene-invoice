@@ -40,6 +40,34 @@ void main() {
     expect(chip.top, greaterThanOrEqualTo(title.bottom));
   });
 
+  testWidgets('on a desktop a narrow top pane starts at the left edge, not in the middle', (tester) async {
+    tester.view.physicalSize = const Size(1366, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: DetailScaffold(
+          title: 'Dispute #84',
+          top: const Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [Text('Reason')],
+            ),
+          ),
+          tabs: [
+            DetailTab(slug: 'email', label: 'Email', icon: Icons.mail_outline, builder: (_) => const SizedBox()),
+          ],
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(tester.getRect(find.text('Reason')).left, lessThan(40));
+  });
+
   testWidgets('on a desktop the chips share the title row', (tester) async {
     await _pumpDetail(tester, const Size(1366, 900));
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -74,6 +75,30 @@ public class GlobalExceptionHandler {
                 ApiError.validation(req.getRequestURI(), errors));
     }
 
+    /**
+     * Field errors found by a service rather than by annotations — where the fields arrive inside a
+     * bulk action's params, say, so both paths answer in the same shape.
+     */
+    @ExceptionHandler(InvalidFieldsException.class)
+    public ResponseEntity<ApiError> invalidFields(InvalidFieldsException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                ApiError.validation(req.getRequestURI(), ex.getFieldErrors()));
+    }
+
+    /** Thrown with the message for each invalid field, keyed by the field's name in the request. */
+    public static class InvalidFieldsException extends RuntimeException {
+        private final Map<String, String> fieldErrors;
+
+        public InvalidFieldsException(Map<String, String> fieldErrors) {
+            super("One or more fields are invalid: " + fieldErrors.keySet());
+            this.fieldErrors = Map.copyOf(fieldErrors);
+        }
+
+        public Map<String, String> getFieldErrors() {
+            return fieldErrors;
+        }
+    }
+
     /** Unreadable JSON, a missing body, or a value of the wrong type inside the body. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> unreadable(HttpMessageNotReadableException ex, HttpServletRequest req) {
@@ -122,6 +147,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> conflict(DataIntegrityViolationException ex, HttpServletRequest req) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
                 ApiError.of(409, "Conflict", "This change conflicts with existing data", req.getRequestURI()));
+    }
+
+    /**
+     * Two requests reached the same row at the same moment and this one lost — an optimistic
+     * version that moved under it, a lock it could not take, a row another transaction had already
+     * deleted. Nothing was written, and the caller can simply try again, so it is a 409 with a
+     * sentence they can act on rather than "Unexpected error" (PPD-03).
+     */
+    @ExceptionHandler(ConcurrencyFailureException.class)
+    public ResponseEntity<ApiError> concurrency(ConcurrencyFailureException ex, HttpServletRequest req) {
+        log.warn("Concurrent change on {} {}: {}", req.getMethod(), req.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiError.of(409, "Conflict",
+                "This record changed while you were working on it; reload and try again",
+                req.getRequestURI()));
     }
 
     @ExceptionHandler(Exception.class)

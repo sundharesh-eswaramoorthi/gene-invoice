@@ -1,7 +1,9 @@
 package com.geneinvoice.common.bulk;
 
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.query.TableQueryExecutor;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import java.util.List;
 import java.util.Map;
@@ -15,6 +17,15 @@ public class BulkDtos {
      */
     public record BulkRequest(
             @NotBlank String action,
+            /**
+             * Bounded by the same limit a filtered selection is capped at, so one request cannot
+             * force a result with an outcome line per id — the dialog renders every one of them
+             * (TBL-08). The normal UI never sends more than a page and uses
+             * {@code selectAllMatchingFilter} beyond that.
+             */
+            @Size(max = TableQueryExecutor.BULK_ID_LIMIT,
+                    message = "cannot name more than " + TableQueryExecutor.BULK_ID_LIMIT
+                            + " records at once; use selectAllMatchingFilter instead")
             List<Long> ids,
             Boolean selectAllMatchingFilter,
             String sort,

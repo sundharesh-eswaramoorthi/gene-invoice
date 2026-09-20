@@ -42,6 +42,7 @@ public class PaymentController {
     private final ScopeResolver scopeResolver;
     private final BulkExecutor bulkExecutor;
     private final UserRepository userRepository;
+    private final TableQueryExecutor queryExecutor;
 
     /** Customer logins cannot filter or sort on the Collection POC columns (AC-A8). */
     private TableSchema schema() {
@@ -98,7 +99,12 @@ public class PaymentController {
         if (callerCustomer != null && !callerCustomer.equals(customerId)) {
             throw new AccessDeniedException("Not allowed");
         }
+        // A customer's name and credit balance are the customer's own, so this is gated exactly
+        // where GET /api/customers/{id} is: outside the caller's book it is a 404, not a lookup
+        // anyone holding PAYMENT_VIEW can walk the id space with (AUTH-02).
         Customer c = customerRepository.findById(customerId)
+                .filter(found -> queryExecutor.inScope(Customer.class, TableSchemas.CUSTOMERS,
+                        customerId, scopeResolver.forCustomers().predicates()))
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
         return new CustomerCreditDto(c.getId(), c.getName(), c.getCreditBalance());
     }

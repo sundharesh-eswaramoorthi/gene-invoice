@@ -5,14 +5,21 @@ import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Emails;
 import com.geneinvoice.common.Passwords;
+import com.geneinvoice.common.Strings;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.query.Aggregates;
 import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.common.GlobalExceptionHandler;
+import com.geneinvoice.document.DocumentCascade;
+import com.geneinvoice.email.EmailCascade;
+import com.geneinvoice.invoice.InvoiceDates;
+import com.geneinvoice.invoice.InvoiceProperties;
 import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.invoice.InvoiceStatus;
+import com.geneinvoice.invoice.PaymentTerm;
 import com.geneinvoice.poc.CustomerPoc;
 import com.geneinvoice.poc.CustomerPocRepository;
 import com.geneinvoice.poc.PocDtos;
@@ -52,6 +59,9 @@ public class CustomerService {
     private final TableQueryExecutor queryExecutor;
     private final AuditService auditService;
     private final CurrentUser currentUser;
+    private final InvoiceProperties invoiceProperties;
+    private final DocumentCascade documentCascade;
+    private final EmailCascade emailCascade;
 
     // ---- reads -----------------------------------------------------------------
 
@@ -154,6 +164,11 @@ public class CustomerService {
             outstanding.put((Long) row[0], Aggregates.asMoney(row[1]));
         }
 
+        Map<Long, BigDecimal> overdue = new HashMap<>();
+        for (Object[] row : invoiceRepository.sumOverdueByCustomer(ids, InvoiceDates.today())) {
+            overdue.put((Long) row[0], Aggregates.asMoney(row[1]));
+        }
+
         Map<Long, String> usernames = new HashMap<>();
         for (Long id : ids) {
             userRepository.findByCustomerId(id).ifPresent(u -> usernames.put(id, u.getUsername()));
@@ -174,10 +189,15 @@ public class CustomerService {
             List<PocDtos.CustomerPocDto> collection = mine.stream()
                     .filter(s -> s.getPocType() == PocType.COLLECTION)
                     .map(PocDtos.CustomerPocDto::from).toList();
+            PaymentTerm term = c.getPaymentTerm() == null
+                    ? invoiceProperties.defaultTerm()
+                    : c.getPaymentTerm();
             return new CustomerDtos.CustomerDto(
                     c.getId(), c.getName(), c.getPhone(), c.getEmail(), c.getAddress(),
                     c.getCreditBalance(), usernames.get(c.getId()),
+                    c.getPaymentTerm(), term.label(),
                     outstanding.getOrDefault(c.getId(), BigDecimal.ZERO),
+                    overdue.getOrDefault(c.getId(), BigDecimal.ZERO),
                     showPoc ? success : null,
                     showPoc ? collection : null,
                     showPoc ? (success.isEmpty() || collection.isEmpty()) : null,
@@ -189,26 +209,39 @@ public class CustomerService {
 
     @Transactional
     public Customer create(CustomerDtos.CustomerCreateRequest in) {
-        if (userRepository.existsByUsername(in.username())) {
+        // Trimmed before it is checked and before it is stored: an untrimmed username is one the
+        // customer cannot sign in with, because they are told it without its spaces (CP-12).
+        String username = Strings.trim(in.username());
+        // Case-insensitively: a customer login called "ADMIN" would be indistinguishable from
+        // the administrator's in every list that names people by username (CP-06).
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
             throw new BadRequestException("Username already taken");
         }
-        // The login shares the customer's email, and user emails are unique.
+        // The login shares the customer's email, and user emails are unique. The customers are
+        // checked too: a customer outlives a deleted login, and the freed address must not then
+        // be reusable, or every email to either customer would land in one inbox (CP-05).
         String email = Emails.normalize(in.email());
-        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
+        if (email != null
+                && (userRepository.existsByEmailIgnoreCase(email)
+                        || repository.existsByEmailIgnoreCase(email))) {
             throw new BadRequestException("Email already exists");
         }
         Role customerRole = roleRepository.findByName("CUSTOMER")
                 .orElseThrow(() -> new IllegalStateException("CUSTOMER role not seeded"));
 
         Customer c = repository.save(Customer.builder()
-                .name(in.name()).phone(in.phone()).email(email).address(in.address())
+                // Trimmed, and a box the user left empty is stored as nothing rather than as an
+                // empty string, so the list shows its "—" placeholder (CP-15).
+                .name(Strings.trim(in.name())).phone(Strings.blankToNull(in.phone()))
+                .email(email).address(Strings.blankToNull(in.address()))
+                .paymentTerm(settableTerm(in.paymentTerm()))
                 .build());
 
         Passwords.require(in.password());
         userRepository.save(User.builder()
-                .username(in.username())
+                .username(username)
                 .email(email)
-                .fullName(in.name())
+                .fullName(Strings.trim(in.name()))
                 .password(passwordEncoder.encode(in.password()))
                 .role(customerRole)
                 .customerId(c.getId())
@@ -228,46 +261,91 @@ public class CustomerService {
         Object before = snapshot(c);
         String email = Emails.normalize(in.email());
         User linked = userRepository.findByCustomerId(id).orElse(null);
-        // The login shares the customer's email, and user emails are unique.
+        // The login shares the customer's email, and user emails are unique; no other customer
+        // may hold it either, login or no login (CP-05).
+        if (email != null && !email.equalsIgnoreCase(c.getEmail())
+                && repository.existsByEmailIgnoreCaseAndIdNot(email, id)) {
+            throw new BadRequestException("Email already exists");
+        }
         if (linked != null && email != null && !email.equalsIgnoreCase(linked.getEmail())
                 && userRepository.existsByEmailIgnoreCaseAndIdNot(email, linked.getId())) {
             throw new BadRequestException("Email already exists");
         }
-        c.setName(in.name());
-        c.setPhone(in.phone());
+        PaymentTerm previousTerm = c.getPaymentTerm();
+        c.setName(Strings.trim(in.name()));
+        c.setPhone(Strings.blankToNull(in.phone()));
         c.setEmail(email);
-        c.setAddress(in.address());
+        c.setAddress(Strings.blankToNull(in.address()));
+        c.setPaymentTerm(settableTerm(in.paymentTerm()));
         Customer saved = repository.save(c);
 
         if (linked != null) {
-            linked.setFullName(in.name());
+            linked.setFullName(Strings.trim(in.name()));
             linked.setEmail(email);
             if (in.password() != null && !in.password().isBlank()) {
                 Passwords.require(in.password());
                 linked.setPassword(passwordEncoder.encode(in.password()));
+                // The customer's own open sessions end with the password they were signed in
+                // with, exactly as a staff account's do (AUTH-04).
+                linked.setCredentialsChangedAt(java.time.Instant.now());
             }
             userRepository.save(linked);
         }
         auditService.record(ENTITY, id, "CUSTOMER_UPDATED", before, snapshot(saved),
                 currentUser.require().getId(), null, null);
+        // Terms decide the due date of every invoice raised from now on, so the change gets an
+        // entry of its own, old → new, rather than only a line in the snapshot (AC-A8).
+        if (previousTerm != saved.getPaymentTerm()) {
+            auditService.record(ENTITY, id, "CUSTOMER_PAYMENT_TERM_CHANGED",
+                    previousTerm == null ? null : previousTerm.name(),
+                    saved.getPaymentTerm() == null ? null : saved.getPaymentTerm().name(),
+                    currentUser.require().getId(), null, null);
+        }
         return saved;
     }
 
     @Transactional
     public void delete(Long id) {
         requireInBook(id);
+        Customer c = repository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Customer not found"));
+        // What is about to go, read before the cascade takes it (CP-04).
+        Object before = snapshot(c);
+        // Its documents go with it, in this transaction, so none is left downloadable (AC-C5).
+        documentCascade.onCustomerDeleted(id);
+        // The emails recorded against it stay — they are a record of something that was said —
+        // but stop claiming the customer is still there to link to (CP-13).
+        emailCascade.onCustomerDeleted(id);
         for (CustomerPoc seat : customerPocRepository.findByCustomerIdOrderByPocTypeAscPrimaryDescIdAsc(id)) {
             customerPocRepository.delete(seat);
         }
         userRepository.findByCustomerId(id).ifPresent(userRepository::delete);
         repository.deleteById(id);
+        // Removing a customer takes its login, its POC seats and every document on it and on its
+        // invoices and payments with it. It is the most destructive write on this entity and was
+        // the only one leaving no trail at all (CP-04).
+        auditService.record(ENTITY, id, "CUSTOMER_DELETED", before, null,
+                currentUser.require().getId(), null, "Customer deleted");
+    }
+
+    /**
+     * Terms a customer may be set to. CUSTOM means "somebody typed a date on one invoice", which
+     * is not something a customer can be permanently on (§2.1).
+     */
+    private static PaymentTerm settableTerm(PaymentTerm term) {
+        if (term == PaymentTerm.CUSTOM) {
+            throw new GlobalExceptionHandler.InvalidFieldsException(Map.of("paymentTerm",
+                    "Custom terms belong on one invoice; pick one of " + PaymentTerm.SETTABLE));
+        }
+        return term;
     }
 
     private Object snapshot(Customer c) {
         return new CustomerAuditSnapshot(c.getId(), c.getName(), c.getPhone(), c.getEmail(),
-                c.getAddress(), c.getCreditBalance());
+                c.getAddress(), c.getCreditBalance(), c.getPaymentTerm());
     }
 
     public record CustomerAuditSnapshot(Long id, String name, String phone, String email,
-                                        String address, BigDecimal creditBalance) {}
+                                        String address, BigDecimal creditBalance,
+                                        PaymentTerm paymentTerm) {}
 }

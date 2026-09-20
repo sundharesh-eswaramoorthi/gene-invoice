@@ -10,18 +10,25 @@ import com.geneinvoice.invoice.InvoiceService;
 import com.geneinvoice.invoice.InvoiceStatus;
 import com.geneinvoice.payment.PaymentDtos;
 import com.geneinvoice.payment.PaymentService;
+import com.geneinvoice.audit.AuditLogRepository;
+import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.product.Product;
 import com.geneinvoice.user.User;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.test.web.servlet.MvcResult;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -34,6 +41,8 @@ class BulkActionTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
     @Autowired PaymentService paymentService;
+    @Autowired AuditLogRepository auditLogRepository;
+    @Autowired PlatformTransactionManager transactionManager;
 
     User admin;
     User sales;
@@ -118,7 +127,7 @@ class BulkActionTest extends IntegrationTestBase {
     // ---- AC-D5: partial failure reports each row and drops none -----------------
 
     @Test
-    void aPartialFailureReportsWhichRowsSucceededAndWhichDidNot() throws Exception {
+    void aPartialRunReportsWhichRowsSucceededAndWhichDidNot() throws Exception {
         Invoice cancellable = invoice(acme, "10.00", sales);
         Invoice paid = invoice(acme, "10.00", sales);
         paymentService.record(new PaymentDtos.CreatePaymentRequest(acme.getId(),
@@ -131,9 +140,12 @@ class BulkActionTest extends IntegrationTestBase {
         assertThat(result.get("requested").asInt()).isEqualTo(2);
         assertThat(result.get("succeeded").size()).isEqualTo(1);
         assertThat(result.get("succeeded").get(0).asLong()).isEqualTo(cancellable.getId());
-        assertThat(result.get("failed").size()).isEqualTo(1);
-        assertThat(result.get("failed").get(0).get("id").asLong()).isEqualTo(paid.getId());
-        assertThat(result.get("failed").get(0).get("reason").asText())
+        // Holding a payment is an eligibility rule, not something going wrong, so the row is
+        // skipped with its reason rather than reported to the user as an error (TBL-05).
+        assertThat(result.get("failed")).isEmpty();
+        assertThat(result.get("skipped").size()).isEqualTo(1);
+        assertThat(result.get("skipped").get(0).get("id").asLong()).isEqualTo(paid.getId());
+        assertThat(result.get("skipped").get(0).get("reason").asText())
                 .contains("Cannot cancel an invoice with payments");
 
         // Every requested id is accounted for, and the good one really did commit.
@@ -147,21 +159,123 @@ class BulkActionTest extends IntegrationTestBase {
     }
 
     @Test
-    void aFailingRowDoesNotRollBackTheRowsThatAlreadySucceeded() throws Exception {
+    void aRowThatDoesNotQualifyDoesNotRollBackTheRowsThatAlreadySucceeded() throws Exception {
         Invoice a = invoice(acme, "10.00", sales);
         Invoice b = invoice(acme, "10.00", sales);
         Invoice c = invoice(acme, "10.00", sales);
-        invoiceService.cancel(b.getId()); // already cancelled: will fail in the batch
+        invoiceService.cancel(b.getId()); // already cancelled: the batch will pass over it
 
         JsonNode result = bulk(admin, "/api/invoices/bulk",
                 request("CANCEL", "ids", List.of(a.getId(), b.getId(), c.getId())));
 
         assertThat(result.get("succeeded").size()).isEqualTo(2);
-        assertThat(result.get("failed").size()).isEqualTo(1);
+        assertThat(result.get("failed")).isEmpty();
+        assertThat(result.get("skipped").size()).isEqualTo(1);
         assertThat(invoiceRepository.findById(a.getId()).orElseThrow().getStatus())
                 .isEqualTo(InvoiceStatus.CANCELLED);
         assertThat(invoiceRepository.findById(c.getId()).orElseThrow().getStatus())
                 .isEqualTo(InvoiceStatus.CANCELLED);
+    }
+
+    // ---- TBL-08: the explicit ids list is bounded --------------------------------
+
+    /**
+     * A filtered selection is capped at BULK_ID_LIMIT; the explicit-ids path was not, so one
+     * request could ask for 100,000 rows and get an outcome line for every one of them back — a
+     * multi-megabyte response the dialog would then try to render (TBL-08).
+     */
+    @Test
+    void aBulkRequestNamingMoreIdsThanTheLimitIsRefused() throws Exception {
+        List<Long> tooMany = java.util.stream.LongStream
+                .rangeClosed(1, TableQueryExecutor.BULK_ID_LIMIT + 1).boxed().toList();
+
+        mockMvc.perform(post("/api/products/bulk").with(as(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request("ACTIVATE", "ids", tooMany))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.ids").exists());
+    }
+
+    /** The limit itself is still accepted, so the refusal quotes the real boundary. */
+    @Test
+    void aBulkRequestNamingExactlyTheLimitIsAccepted() throws Exception {
+        List<Long> atTheLimit = java.util.stream.LongStream
+                .rangeClosed(1, TableQueryExecutor.BULK_ID_LIMIT).boxed().toList();
+
+        mockMvc.perform(post("/api/products/bulk").with(as(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request("ACTIVATE", "ids", atTheLimit))))
+                .andExpect(status().isOk());
+    }
+
+    // ---- TBL-07: two bulk runs over the same rows at the same time ----------------
+
+    /**
+     * Two runs of the same cancel used to read the rows before either committed, so both answered
+     * "succeeded" for every id and the audit log held an INVOICE_CANCELLED entry per run rather
+     * than per invoice. Only one run can actually cancel a given invoice; the other finds it
+     * already cancelled and skips it, which is a row that did not qualify rather than an error
+     * the user is shown (TBL-07).
+     *
+     * <p>The race is made deterministic: one cancel's transaction is held open while the bulk run
+     * starts inside that window, which is exactly where the bulk used to read the row.
+     */
+    @Test
+    void aBulkCancelThatLosesTheRaceSkipsTheRowRatherThanClaimingIt() throws Exception {
+        Invoice contested = invoice(acme, "10.00", sales);
+        Invoice untouched = invoice(acme, "10.00", sales);
+
+        TransactionTemplate transactions = new TransactionTemplate(transactionManager);
+        CountDownLatch cancelInFlight = new CountDownLatch(1);
+        AtomicReference<Throwable> holderFailure = new AtomicReference<>();
+
+        Thread holder = new Thread(() -> {
+            actAs(admin);
+            try {
+                transactions.executeWithoutResult(status -> {
+                    invoiceService.cancel(contested.getId());
+                    // Cancelled, not yet committed: where the bulk used to read it as live.
+                    cancelInFlight.countDown();
+                    sleep(600);
+                });
+            } catch (Throwable t) {
+                cancelInFlight.countDown();
+                holderFailure.set(t);
+            }
+        }, "cancel-holder");
+        holder.start();
+        cancelInFlight.await(5, TimeUnit.SECONDS);
+
+        JsonNode result = bulk(admin, "/api/invoices/bulk",
+                request("CANCEL", "ids", List.of(contested.getId(), untouched.getId())));
+        holder.join(30_000);
+        assertThat(holderFailure.get()).isNull();
+
+        assertThat(result.get("succeeded").size()).isEqualTo(1);
+        assertThat(result.get("succeeded").get(0).asLong()).isEqualTo(untouched.getId());
+        assertThat(result.get("failed"))
+                .as("losing a race is not something going wrong for the user to read as an error")
+                .isEmpty();
+        assertThat(result.get("skipped").size()).isEqualTo(1);
+        assertThat(result.get("skipped").get(0).get("id").asLong()).isEqualTo(contested.getId());
+
+        // One cancellation of that invoice, not one per run.
+        long entries = auditLogRepository.findAll().stream()
+                .filter(a -> "INVOICE".equals(a.getEntityType())
+                        && contested.getId().equals(a.getEntityId()))
+                .filter(a -> "INVOICE_CANCELLED".equals(a.getAction()))
+                .count();
+        assertThat(entries).isEqualTo(1);
+        assertThat(invoiceRepository.findById(contested.getId()).orElseThrow().getStatus())
+                .isEqualTo(InvoiceStatus.CANCELLED);
+    }
+
+    private static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @Test
@@ -319,7 +433,8 @@ class BulkActionTest extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        assertThat(csv).startsWith("Invoice #,Customer,Date,Total,Paid,Balance,Status,Sales POC");
+        assertThat(csv).startsWith(
+                "Invoice #,Customer,Date,Due date,Total,Paid,Balance,Status,Overdue,Sales POC");
         assertThat(csv).contains("Acme Ltd").contains("sam.sales");
     }
 

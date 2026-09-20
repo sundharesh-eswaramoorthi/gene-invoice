@@ -69,6 +69,13 @@ class DashboardTest extends IntegrationTestBase {
                 rep.getId(), List.of(new InvoiceDtos.LineInput(widget.getId(), 1, new BigDecimal(amount)))));
     }
 
+    /** An invoice with a due date of its own, which is what the ageing chart measures. */
+    private Invoice invoice(Customer c, User rep, String amount, Instant date, LocalDate due) {
+        return invoiceService.create(new InvoiceDtos.CreateInvoiceRequest(c.getId(), date, due,
+                null, null, rep.getId(),
+                List.of(new InvoiceDtos.LineInput(widget.getId(), 1, new BigDecimal(amount)))));
+    }
+
     private Payment pay(Customer c, String amount, List<Long> invoiceIds) {
         return paymentService.record(new PaymentDtos.CreatePaymentRequest(c.getId(),
                 new BigDecimal(amount), "Cash", null, invoiceIds, collector.getId(), null));
@@ -112,27 +119,34 @@ class DashboardTest extends IntegrationTestBase {
                 .containsExactly(0L, 1L, 1L);
     }
 
+    /**
+     * The measure is days past the due date, not days since the invoice date (D4). An invoice
+     * raised 45 days ago on 60-day terms is not late at all, though the old chart aged it into
+     * "31–60 days" beside invoices that really were overdue.
+     */
     @Test
-    void outstandingIsBucketedByDaysSinceTheInvoiceDate() {
-        invoice(acme, sales, "100.00", at(TODAY, 9));
-        invoice(acme, sales, "100.00", at(TODAY.minusDays(30), 9));
-        Invoice partlyPaid = invoice(acme, sales, "100.00", at(TODAY.minusDays(31), 9));
+    void outstandingIsBucketedByDaysPastTheDueDate() {
+        Instant raised = at(TODAY.minusDays(120), 9);
+        invoice(acme, sales, "100.00", at(TODAY.minusDays(45), 9), TODAY.plusDays(15));
+        invoice(acme, sales, "100.00", raised, TODAY);
+        Invoice partlyPaid = invoice(acme, sales, "100.00", raised, TODAY.minusDays(31));
         pay(acme, "40.00", List.of(partlyPaid.getId()));
-        invoice(acme, sales, "100.00", at(TODAY.minusDays(90), 9));
-        invoice(globex, sales, "100.00", at(TODAY.minusDays(91), 9));
-        Invoice settled = invoice(globex, sales, "100.00", at(TODAY.minusDays(100), 9));
+        invoice(acme, sales, "100.00", raised, TODAY.minusDays(90));
+        invoice(globex, sales, "100.00", raised, TODAY.minusDays(91));
+        Invoice settled = invoice(globex, sales, "100.00", raised, TODAY.minusDays(100));
         pay(globex, "100.00", List.of(settled.getId()));
-        Invoice cancelled = invoice(globex, sales, "100.00", at(TODAY.minusDays(120), 9));
+        Invoice cancelled = invoice(globex, sales, "100.00", raised, TODAY.minusDays(120));
         invoiceService.cancel(cancelled.getId());
 
         List<DashboardDtos.AgeBucket> buckets = dashboardService.outstandingByAge(TODAY).buckets();
 
         assertThat(buckets).extracting(DashboardDtos.AgeBucket::label)
-                .containsExactly("0–30 days", "31–60 days", "61–90 days", "Over 90 days");
+                .containsExactly("Not yet due", "1–30 days", "31–60 days",
+                        "61–90 days", "Over 90 days");
         assertThat(buckets).extracting(b -> b.amount().toPlainString())
-                .containsExactly("200.00", "60.00", "100.00", "100.00");
+                .containsExactly("200.00", "0.00", "60.00", "100.00", "100.00");
         assertThat(buckets).extracting(DashboardDtos.AgeBucket::count)
-                .containsExactly(2L, 1L, 1L, 1L);
+                .containsExactly(2L, 0L, 1L, 1L, 1L);
     }
 
     @Test

@@ -12,6 +12,7 @@ import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.user.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ public class PaymentPromiseController {
     private final PaymentPromiseService service;
     private final BulkExecutor bulkExecutor;
     private final CurrentUser currentUser;
+    private final UserRepository userRepository;
 
     /** Customer logins cannot filter or sort on the Collection POC columns (AC-A8). */
     private TableSchema schema() {
@@ -57,7 +59,10 @@ public class PaymentPromiseController {
      * previews what would change; {@code apply=true} saves it, audited, without notifications.
      */
     @PostMapping("/recompute")
-    @PreAuthorize("hasRole('ADMIN')")
+    // Keyed on the privilege that already means "may take charge of promise status by hand",
+    // rather than on a role name: this was the one endpoint in the app that a tailored
+    // administrator role carrying every privilege still could not reach (AUTH-05).
+    @PreAuthorize("hasAuthority('" + Privileges.PROMISE_OVERRIDE + "')")
     public List<PaymentPromiseService.RecomputeChange> recompute(
             @RequestParam(defaultValue = "false") boolean apply) {
         return service.recomputeAll(apply);
@@ -120,16 +125,24 @@ public class PaymentPromiseController {
     public BulkDtos.BulkResult bulk(@Valid @RequestBody BulkDtos.BulkRequest req) {
         List<Long> ids = resolveIds(req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
+        // "Already cancelled" is a row that did not qualify, not one that went wrong, and is
+        // reported as skipped like every other list's is (TBL-05).
         return switch (req.action()) {
             case "CANCEL" -> bulkExecutor.run(req, ids, truncated,
-                    id -> service.cancel(id, req.stringParam("reason")));
+                    BulkExecutor.eligibility(id -> service.cancel(id, req.stringParam("reason"))));
             case "REASSIGN_COLLECTION_POC" -> {
                 Long userId = req.longParam("userId");
                 if (userId == null) {
                     throw new BadRequestException("REASSIGN_COLLECTION_POC requires params.userId");
                 }
+                // The privilege is checked once for the whole request, as the payments list does:
+                // it is the caller that is or is not allowed to move a Collection POC, not the
+                // individual row (PPD-05).
+                if (!currentUser.canAssignPoc(userRepository)) {
+                    throw new BadRequestException("You may not change the Collection POC");
+                }
                 yield bulkExecutor.run(req, ids, truncated,
-                        id -> service.reassignCollectionPoc(id, userId));
+                        BulkExecutor.eligibility(id -> service.reassignCollectionPoc(id, userId)));
             }
             default -> throw new BadRequestException(
                     "Unknown bulk action: " + req.action() + " (expected one of " + BULK_ACTIONS + ")");

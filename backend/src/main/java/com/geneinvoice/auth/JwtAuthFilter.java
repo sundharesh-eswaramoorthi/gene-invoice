@@ -40,6 +40,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         chain.doFilter(request, response);
                         return;
                     }
+                    // And it outlives the password it was minted against: changing a password is
+                    // how somebody ends a session another person has taken, so a token from
+                    // before the change is no longer this account's (AUTH-04).
+                    if (userDetails instanceof AppUserDetails app
+                            && !JwtService.isCurrent(claims, app.getUser().getCredentialsChangedAt())) {
+                        chain.doFilter(request, response);
+                        return;
+                    }
                     UsernamePasswordAuthenticationToken auth =
                             new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                     auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));

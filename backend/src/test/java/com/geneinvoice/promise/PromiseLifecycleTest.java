@@ -73,6 +73,52 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         return promiseRepository.findById(id).orElseThrow().getStatus();
     }
 
+    // ---- PPD-02: a promise kept is kept, whatever the date says ----------------
+
+    /**
+     * A promise of part of a larger invoice, paid in full and on time, is kept from the moment the
+     * money lands. It used to read "Partially kept" with nothing left to pay until the promised
+     * date went by, and then turn into "Kept" on the same facts (PPD-02).
+     */
+    @Test
+    void anInvoiceScopedPromisePaidInFullBeforeItsDateIsKept() {
+        Invoice big = invoice("1000.00", 1);
+        PromiseDtos.PromiseDto part = promise("200", TOMORROW, List.of(big.getId()));
+
+        pay("200.00", List.of(big.getId()));
+
+        PromiseDtos.PromiseDto kept = promiseService.dto(part.id());
+        assertThat(kept.status()).isEqualTo(PromiseStatus.KEPT);
+        assertThat(kept.fulfilledAmount()).isEqualByComparingTo("200.00");
+        assertThat(kept.remainingAmount()).isEqualByComparingTo("0.00");
+    }
+
+    /** And it is still kept once the date has gone: the same facts cannot mean two things. */
+    @Test
+    void thatPromiseIsStillKeptOnceThePromisedDateHasPassed() {
+        Invoice big = invoice("1000.00", 1);
+        PromiseDtos.PromiseDto part = promise("200", TOMORROW, List.of(big.getId()));
+        pay("200.00", List.of(big.getId()));
+
+        PaymentPromise stored = promiseRepository.findById(part.id()).orElseThrow();
+        stored.setPromisedDate(YESTERDAY);
+        promiseRepository.saveAndFlush(stored);
+        promiseService.sweepOverdue();
+
+        assertThat(statusOf(part.id())).isEqualTo(PromiseStatus.KEPT);
+    }
+
+    /** Short of the promise, it is still only partly kept — the fix is not "everything is kept". */
+    @Test
+    void anInvoiceScopedPromisePaidShortBeforeItsDateIsOnlyPartlyKept() {
+        Invoice big = invoice("1000.00", 1);
+        PromiseDtos.PromiseDto part = promise("200", TOMORROW, List.of(big.getId()));
+
+        pay("150.00", List.of(big.getId()));
+
+        assertThat(statusOf(part.id())).isEqualTo(PromiseStatus.PARTIALLY_KEPT);
+    }
+
     // ---- AC-B1 / AC-B2: validation ---------------------------------------------
 
     @Test

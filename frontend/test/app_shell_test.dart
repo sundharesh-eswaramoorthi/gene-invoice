@@ -17,7 +17,7 @@ const _longNamedUser = CurrentUser(
   customerId: null,
 );
 
-Future<void> _pumpShell(WidgetTester tester, Size size) async {
+Future<void> _pumpShell(WidgetTester tester, Size size, {int unread = 3}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -37,7 +37,7 @@ Future<void> _pumpShell(WidgetTester tester, Size size) async {
   await tester.pumpWidget(ProviderScope(
     overrides: [
       currentUserProvider.overrideWithValue(_longNamedUser),
-      unreadCountProvider.overrideWith((ref) => Stream.value(3)),
+      unreadCountProvider.overrideWith((ref) => Stream.value(unread)),
     ],
     child: MaterialApp.router(routerConfig: router),
   ));
@@ -57,6 +57,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(Drawer), findsOneWidget);
     expect(find.text('notifications page'), findsNothing);
+  });
+
+  testWidgets('a three-figure unread count sits at the corner of the bell, not over it',
+      (tester) async {
+    await _pumpShell(tester, const Size(1366, 900), unread: 150);
+
+    final bell = tester.getRect(find.byIcon(Icons.notifications_outlined));
+    final badge = tester.getRect(find.text('99+'));
+    expect(badge.right, lessThanOrEqualTo(1366));
+
+    // The count belongs at the icon's corner. It used to grow down and to the left over the
+    // bell, leaving a sliver of it and no way to tell what the button was (UI-06).
+    final over = Rect.fromLTRB(
+      badge.left > bell.left ? badge.left : bell.left,
+      badge.top > bell.top ? badge.top : bell.top,
+      badge.right < bell.right ? badge.right : bell.right,
+      badge.bottom < bell.bottom ? badge.bottom : bell.bottom,
+    );
+    final covered =
+        over.width <= 0 || over.height <= 0 ? 0.0 : over.width * over.height;
+    expect(covered / (bell.width * bell.height), lessThan(0.2),
+        reason: 'badge $badge covers bell $bell');
   });
 
   testWidgets('on a desktop the account label shows, cut short', (tester) async {

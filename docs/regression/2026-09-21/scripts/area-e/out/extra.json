@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-09-20T18:52:13.515Z",
+  "conjunction": {
+    "documentPrivilegesButNoRecordPrivilege": {
+      "listInvoiceDocs": 403,
+      "countInvoiceDocs": 403,
+      "downloadInvoiceDoc": 403,
+      "uploadInvoiceDoc": 403,
+      "deleteInvoiceDoc": 403,
+      "patchInvoiceDoc": 403,
+      "getInvoice": 403
+    },
+    "recordPrivilegeButNoDocumentPrivilege": {
+      "listInvoiceDocs": 403,
+      "countInvoiceDocs": 403,
+      "downloadInvoiceDoc": 403,
+      "uploadInvoiceDoc": 403,
+      "deleteInvoiceDoc": 403,
+      "patchInvoiceDoc": 403,
+      "getInvoice": 200
+    },
+    "recordViewButNoRecordManage": {
+      "listInvoiceDocs": 200,
+      "countInvoiceDocs": 200,
+      "downloadInvoiceDoc": 200,
+      "uploadInvoiceDoc": 403,
+      "deleteInvoiceDoc": 403,
+      "patchInvoiceDoc": 403,
+      "getInvoice": 200
+    },
+    "exportDataWithoutInvoiceView": 403,
+    "invoiceViewWithoutExportData": 403,
+    "bothPresent": 200,
+    "ageingWithoutInvoiceView": 403,
+    "overdueFilterWithoutInvoiceView": 403
+  },
+  "coverage": {
+    "SALES_POC": {
+      "ageingStatus": 200,
+      "coverage": "BOOK",
+      "bucketsTotal": 1185,
+      "bucketsCount": 12,
+      "visibleInvoices": 13,
+      "pageCoversAll": true,
+      "visibleOpenBalance": 1185,
+      "visibleOpenCount": 12,
+      "lockedFilters": [
+        "salesPocUserId:eq:59"
+      ]
+    },
+    "CUSTOMER": {
+      "ageingStatus": 200,
+      "coverage": "OWN",
+      "bucketsTotal": 1185,
+      "bucketsCount": 12,
+      "visibleInvoices": 13,
+      "pageCoversAll": true,
+      "visibleOpenBalance": 1185,
+      "visibleOpenCount": 12,
+      "lockedFilters": []
+    }
+  },
+  "roles": {
+    "docsOnly": "E-DOCS-NO-RECORD-mua6b0i7b128",
+    "invOnly": "E-INV-NO-DOCVIEW-mua6b0n57567",
+    "readOnlyRecord": "E-DOCMANAGE-NO-INVMANAGE-mua6b0qz8fda",
+    "exportOnly": "E-EXPORT-ONLY-mua672ewcde3"
+  }
+}

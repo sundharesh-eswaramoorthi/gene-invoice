@@ -7,6 +7,9 @@ import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceDtos;
 import com.geneinvoice.invoice.InvoiceService;
 import com.geneinvoice.invoice.InvoiceStatus;
+import com.geneinvoice.payment.Payment;
+import com.geneinvoice.payment.PaymentDtos;
+import com.geneinvoice.payment.PaymentService;
 import com.geneinvoice.product.Product;
 import com.geneinvoice.user.User;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -30,9 +34,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class BookScopeByIdTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
+    @Autowired PaymentService paymentService;
 
     User admin;
     User sales;
+    User collections;
     Customer acme;
     Customer globex;
     Invoice mine;
@@ -42,6 +48,7 @@ class BookScopeByIdTest extends IntegrationTestBase {
     void setUp() {
         admin = userRepository.findByUsername("admin").orElseThrow();
         sales = user("sam.sales", DataSeeder.ROLE_SALES_POC);
+        collections = user("cara.collections", DataSeeder.ROLE_COLLECTION_POC);
         User otherSales = user("sid.sales", DataSeeder.ROLE_SALES_POC);
         acme = customer("Acme Ltd");
         globex = customer("Globex Corp");
@@ -69,6 +76,56 @@ class BookScopeByIdTest extends IntegrationTestBase {
 
         mockMvc.perform(get("/api/invoices/" + mine.getId()).with(as(sales))).andExpect(status().isOk());
         mockMvc.perform(get("/api/invoices/" + theirs.getId()).with(as(admin))).andExpect(status().isOk());
+    }
+
+    /**
+     * A sales rep is nobody's Collection POC, so no payment is in their book — and the reads that
+     * hang off a payment follow it. All of these used to answer in full, in the same session in
+     * which the customer behind them was a 404 (AUTH-01).
+     */
+    @Test
+    void aPaymentOutsideTheBookAndWhatHangsOffItAreAllOutOfReach() throws Exception {
+        actAs(admin);
+        Payment theirPayment = paymentService.record(new PaymentDtos.CreatePaymentRequest(
+                globex.getId(), new java.math.BigDecimal("10.00"), "Cash", null,
+                List.of(theirs.getId()), collections.getId(), null));
+
+        mockMvc.perform(get("/api/payments/" + theirPayment.getId()).with(as(sales)))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/audit").with(as(sales))
+                        .param("entityType", "PAYMENT")
+                        .param("entityId", theirPayment.getId().toString()))
+                .andExpect(status().isNotFound());
+        // AC-C11: a POC cannot reach documents on a record outside their book. Documents mirror
+        // the record, so this follows from the same scope.
+        mockMvc.perform(get("/api/documents").with(as(sales))
+                        .param("entityType", "PAYMENT")
+                        .param("entityId", theirPayment.getId().toString()))
+                .andExpect(status().isNotFound());
+        // And an admin still reaches all of it.
+        mockMvc.perform(get("/api/payments/" + theirPayment.getId()).with(as(admin)))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * The credit balance hangs off the customer, so it is gated where the customer is. It used to
+     * answer with the customer's name and credit to anyone holding PAYMENT_VIEW, who could then
+     * walk the id space — in the same session in which GET /api/customers/{id} was a 404 (AUTH-02).
+     */
+    @Test
+    void aCustomersCreditIsOutOfReachWhereverTheCustomerIs() throws Exception {
+        mockMvc.perform(get("/api/customers/" + globex.getId()).with(as(sales)))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(get("/api/payments/credits/" + globex.getId()).with(as(sales)))
+                .andExpect(status().isNotFound());
+
+        // Their own customer's credit is theirs to see, and an admin sees everyone's.
+        mockMvc.perform(get("/api/payments/credits/" + acme.getId()).with(as(sales)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customerName").value("Acme Ltd"));
+        mockMvc.perform(get("/api/payments/credits/" + globex.getId()).with(as(admin)))
+                .andExpect(status().isOk());
     }
 
     @Test

@@ -7,6 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../core/unsaved_changes.dart';
+import '../../shared/models/customer.dart';
+import '../../shared/models/payment_term.dart';
 
 class AuditEntry {
   /// Null for an event derived from a record older than its audit trail.
@@ -98,6 +100,11 @@ Object? _decode(String? raw) {
   }
 }
 
+/// A payment term as the app names it everywhere else, or null when the snapshot carries none.
+/// An unknown value still reads as words, so a term added to the backend later shows something.
+String? _termLabel(Object? value) =>
+    value is String ? (parsePaymentTerm(value)?.label ?? humanizeEnum(value)) : null;
+
 String? _statusOf(Object? snapshot) => switch (snapshot) {
       String s => s,
       Map<String, dynamic> m => m['status'] as String?,
@@ -135,6 +142,38 @@ String? _headline(String action, Object? before, Object? after) {
       final to = _statusOf(after);
       if (from == null || to == null || from == to) return null;
       return '${humanizeEnum(from)} → ${humanizeEnum(to)}';
+    // The whole point of an entry of its own is the move, without reading two snapshots side by
+    // side (AC-A8): the old date, the new one, and the terms it now runs on.
+    case 'INVOICE_DUE_DATE_CHANGED':
+      final was = formatUtcDate(b?['dueDate']);
+      final now = formatUtcDate(a?['dueDate']);
+      final term = _termLabel(a?['paymentTerm']);
+      if (was == now) return term == null ? null : 'on $term';
+      return term == null ? '$was → $now' : '$was → $now · $term';
+    case 'CUSTOMER_PAYMENT_TERM_CHANGED':
+      // A bare term name on each side; none on either side is the system default (D1).
+      final was = _termLabel(before) ?? Customer.systemDefaultTerms;
+      final now = _termLabel(after) ?? Customer.systemDefaultTerms;
+      return was == now ? null : '$was → $now';
+    case 'INVOICE_DUE_DATES_BACKFILLED':
+      final filled = a?['invoices'];
+      if (filled is! num) return null;
+      final term = _termLabel(a?['paymentTerm']);
+      final count = '${filled.toInt()} invoice${filled == 1 ? '' : 's'}';
+      return term == null ? count : '$count · $term';
+    case 'DOCUMENT_UPLOADED':
+    case 'DOCUMENT_DELETED':
+      return (a ?? b)?['filename'] as String?;
+    case 'DOCUMENT_UPDATED':
+      final name = (a ?? b)?['filename'] as String?;
+      final was = b?['visibility'] as String?;
+      final now = a?['visibility'] as String?;
+      final changed = [
+        if (name != null) name,
+        if (was != null && now != null && was != now)
+          '${humanizeEnum(was)} → ${humanizeEnum(now)}',
+      ];
+      return changed.isEmpty ? null : changed.join(' · ');
     default:
       return null;
   }
@@ -162,12 +201,22 @@ final auditHistoryProvider =
 const _actionLabels = <String, String>{
   'CUSTOMER_CREATED': 'Customer created',
   'CUSTOMER_UPDATED': 'Customer details updated',
+  // Terms decide every invoice raised from now on, so they get a row of their own (AC-A8).
+  'CUSTOMER_PAYMENT_TERM_CHANGED': 'Payment terms changed',
+  // Destructive writes leave a trail of their own (CP-04); the record is gone, so these read on
+  // the deleted entity's own history, which staff can still open.
+  'CUSTOMER_DELETED': 'Customer deleted',
+  'PRODUCT_DELETED': 'Product deleted',
+  'USER_DELETED': 'User deleted',
   'POC_ASSIGNED': 'POC assigned',
   'POC_REMOVED': 'POC removed',
   'POC_PRIMARY_CHANGED': 'Primary POC changed',
   'INVOICE_CREATED': 'Invoice created',
   'INVOICE_UPDATED': 'Invoice updated',
   'INVOICE_CANCELLED': 'Invoice cancelled',
+  'INVOICE_DUE_DATE_CHANGED': 'Due date changed',
+  // One entry for the whole upgrade, filed against the book rather than an invoice (§2.5).
+  'INVOICE_DUE_DATES_BACKFILLED': 'Due dates backfilled',
   'PAYMENT_RECORDED': 'Payment recorded',
   'PAYMENT_UPDATED': 'Payment updated',
   'PAYMENT_APPLIED': 'Payment applied',
@@ -181,6 +230,18 @@ const _actionLabels = <String, String>{
   'DISPUTE_OPENED': 'Dispute opened',
   'DISPUTE_APPROVED': 'Dispute approved',
   'DISPUTE_DENIED': 'Dispute denied',
+  // A document's own events read on the record it hangs off (§4.4).
+  'DOCUMENT_UPLOADED': 'Document uploaded',
+  'DOCUMENT_UPDATED': 'Document updated',
+  'DOCUMENT_DELETED': 'Document removed',
+  // The product and user pages show their own timelines.
+  'PRODUCT_CREATED': 'Product created',
+  'PRODUCT_UPDATED': 'Product updated',
+  'PRODUCT_ACTIVATED': 'Product activated',
+  'PRODUCT_DEACTIVATED': 'Product deactivated',
+  'USER_UPDATED': 'User updated',
+  'USER_ACTIVATED': 'User activated',
+  'USER_DEACTIVATED': 'User deactivated',
 };
 
 String auditActionLabel(String action) => _actionLabels[action] ?? humanizeEnum(action);

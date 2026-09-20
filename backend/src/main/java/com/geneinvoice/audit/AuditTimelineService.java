@@ -4,7 +4,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.dispute.Dispute;
@@ -82,9 +81,15 @@ public class AuditTimelineService {
         Related r = new Related();
         switch (entityType) {
             case "CUSTOMER" -> {
-                r.customer(customerRepository.findById(entityId)
-                        .orElseThrow(() -> new NotFoundException("Customer not found")));
-                if (includeRelated) {
+                Customer customer = customerRepository.findById(entityId).orElse(null);
+                if (customer == null) {
+                    // Deleted: the trail is all that is left of it, and the deletion is in it
+                    // (CP-04). Whether this caller may read it was settled before we got here.
+                    r.add(entityType, entityId, null);
+                } else {
+                    r.customer(customer);
+                }
+                if (customer != null && includeRelated) {
                     invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(entityId).forEach(r::invoice);
                     paymentRepository.findByCustomerIdOrderByPaidAtDesc(entityId).forEach(r::payment);
                     promiseRepository.findByCustomerIdOrderByPromisedDateDesc(entityId).forEach(r::promise);
@@ -93,9 +98,13 @@ public class AuditTimelineService {
                 }
             }
             case "INVOICE" -> {
-                r.invoice(invoiceRepository.findById(entityId)
-                        .orElseThrow(() -> new NotFoundException("Invoice not found")));
-                if (includeRelated) {
+                Invoice invoice = invoiceRepository.findById(entityId).orElse(null);
+                if (invoice == null) {
+                    r.add(entityType, entityId, null);
+                } else {
+                    r.invoice(invoice);
+                }
+                if (invoice != null && includeRelated) {
                     promiseRepository.findByInvoiceId(entityId).forEach(r::promise);
                     disputeRepository.findByTargetTypeAndTargetId(DisputeTargetType.INVOICE, entityId)
                             .forEach(r::dispute);
@@ -103,9 +112,13 @@ public class AuditTimelineService {
                 }
             }
             case "PAYMENT" -> {
-                r.payment(paymentRepository.findById(entityId)
-                        .orElseThrow(() -> new NotFoundException("Payment not found")));
-                if (includeRelated) {
+                Payment payment = paymentRepository.findById(entityId).orElse(null);
+                if (payment == null) {
+                    r.add(entityType, entityId, null);
+                } else {
+                    r.payment(payment);
+                }
+                if (payment != null && includeRelated) {
                     promiseRepository.findByPaymentId(entityId).forEach(r::promise);
                     disputeRepository.findByTargetTypeAndTargetId(DisputeTargetType.PAYMENT, entityId)
                             .forEach(r::dispute);
@@ -143,6 +156,9 @@ public class AuditTimelineService {
         List<Entry> out = new ArrayList<>();
         for (Entry e : entries) {
             if (e.action().contains("POC")) continue;
+            // A customer login sees only SHARED documents (AC-C12), and the history must not be a
+            // way round that: an entry about an internal file is not mentioned to them at all.
+            if (e.action().startsWith(DOCUMENT_ACTION) && !sharedDocument(e)) continue;
             String before = stripPoc(e.beforeJson());
             String after = stripPoc(e.afterJson());
             if (before != null && before.equals(after)) continue;
@@ -291,7 +307,41 @@ public class AuditTimelineService {
         }
     }
 
-    /** Removes every key naming a POC, at any depth. Unreadable input is withheld, not passed on. */
+    /** Every audit action about a document; all of them name a file and who attached it. */
+    private static final String DOCUMENT_ACTION = "DOCUMENT_";
+
+    /** The one visibility a customer login may be told a document has (§4.5, D7). */
+    private static final String SHARED = "SHARED";
+
+    /**
+     * Fields that name a member of staff rather than a POC, and so are withheld from a customer
+     * login for the same reason the POC fields are (AC-A8). Matched on the whole name, since these
+     * carry no marker of their own the way a "…Poc…" field does.
+     */
+    private static final Set<String> STAFF_NAME_FIELDS =
+            Set.of("uploadedby", "changedby", "createdby", "resolvedby", "assignedby", "recordedby");
+
+    /**
+     * Whether an entry about a document is about one the customer can see anyway. Every snapshot
+     * the entry carries has to say {@code SHARED}: a file that was internal at either end of the
+     * change is not theirs to know about, and an entry this cannot read is withheld rather than
+     * guessed at.
+     */
+    private boolean sharedDocument(Entry e) {
+        return isShared(e.beforeJson()) && isShared(e.afterJson());
+    }
+
+    /** True for an absent snapshot (an upload has no before, a delete no after) or a SHARED one. */
+    private boolean isShared(String json) {
+        if (json == null) return true;
+        JsonNode node = readTree(json);
+        return node != null && SHARED.equals(node.path("visibility").asText(null));
+    }
+
+    /**
+     * Removes every key naming a POC or a member of staff, at any depth. Unreadable input is
+     * withheld, not passed on.
+     */
     private String stripPoc(String json) {
         JsonNode node = readTree(json);
         if (node == null) return null;
@@ -303,13 +353,18 @@ public class AuditTimelineService {
         if (node instanceof ObjectNode obj) {
             List<String> doomed = new ArrayList<>();
             obj.fieldNames().forEachRemaining(name -> {
-                if (name.toLowerCase(Locale.ROOT).contains("poc")) doomed.add(name);
+                if (hiddenFromCustomer(name)) doomed.add(name);
             });
             obj.remove(doomed);
             obj.elements().forEachRemaining(this::stripPoc);
         } else if (node != null && node.isArray()) {
             node.forEach(this::stripPoc);
         }
+    }
+
+    private static boolean hiddenFromCustomer(String field) {
+        String name = field.toLowerCase(Locale.ROOT);
+        return name.contains("poc") || STAFF_NAME_FIELDS.contains(name);
     }
 
     // ---- what a timeline covers --------------------------------------------------

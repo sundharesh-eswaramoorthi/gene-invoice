@@ -1,4 +1,5 @@
 import '../../features/poc/poc_providers.dart';
+import 'payment_term.dart';
 
 enum InvoiceStatus { UNPAID, PARTIALLY_PAID, FULLY_PAID, CANCELLED }
 
@@ -22,6 +23,20 @@ class InvoiceSummary {
   final int customerId;
   final String customerName;
   final DateTime invoiceDate;
+
+  /// When the money is due (§2.2). Null only on a payload from before due dates existed.
+  final DateTime? dueDate;
+
+  /// The terms the due date came from, `CUSTOM` when it was typed instead (§2.1).
+  final PaymentTerm? paymentTerm;
+
+  /// The server's name for [paymentTerm], so a term this build does not know still reads well.
+  final String? paymentTermLabel;
+
+  /// Derived by the server from today's date, never stored (D3).
+  final bool overdue;
+  final int daysOverdue;
+
   final double total;
   final double paidAmount;
   final double balance;
@@ -39,6 +54,11 @@ class InvoiceSummary {
     required this.customerId,
     required this.customerName,
     required this.invoiceDate,
+    this.dueDate,
+    this.paymentTerm,
+    this.paymentTermLabel,
+    this.overdue = false,
+    this.daysOverdue = 0,
     required this.total,
     required this.paidAmount,
     required this.balance,
@@ -47,12 +67,20 @@ class InvoiceSummary {
     this.pocMissing = false,
   });
 
+  /// What to call this invoice's terms on screen.
+  String get termsLabel => paymentTermLabel ?? paymentTerm?.label ?? '—';
+
   factory InvoiceSummary.fromJson(Map<String, dynamic> json) => InvoiceSummary(
         id: (json['id'] as num).toInt(),
         invoiceNumber: json['invoiceNumber'] as String,
         customerId: (json['customerId'] as num).toInt(),
         customerName: json['customerName'] as String,
         invoiceDate: DateTime.parse(json['invoiceDate'] as String),
+        dueDate: parseDueDate(json['dueDate']),
+        paymentTerm: parsePaymentTerm(json['paymentTerm'] as String?),
+        paymentTermLabel: json['paymentTermLabel'] as String?,
+        overdue: json['overdue'] as bool? ?? false,
+        daysOverdue: (json['daysOverdue'] as num? ?? 0).toInt(),
         total: (json['total'] as num).toDouble(),
         paidAmount: (json['paidAmount'] as num).toDouble(),
         balance: (json['balance'] as num).toDouble(),
@@ -63,6 +91,11 @@ class InvoiceSummary {
         pocMissing: json['pocMissing'] as bool? ?? false,
       );
 }
+
+/// A `yyyy-MM-dd` due date, which is a calendar fact rather than a moment: it is read as a local
+/// date so it shows the same day wherever the browser is.
+DateTime? parseDueDate(Object? wire) =>
+    wire == null ? null : DateTime.tryParse(wire.toString());
 
 class InvoiceLine {
   final int? id;
@@ -102,6 +135,11 @@ class InvoiceDetail extends InvoiceSummary {
     required super.customerId,
     required super.customerName,
     required super.invoiceDate,
+    super.dueDate,
+    super.paymentTerm,
+    super.paymentTermLabel,
+    super.overdue,
+    super.daysOverdue,
     required super.total,
     required super.paidAmount,
     required super.balance,
@@ -119,6 +157,11 @@ class InvoiceDetail extends InvoiceSummary {
         customerId: (json['customerId'] as num).toInt(),
         customerName: json['customerName'] as String,
         invoiceDate: DateTime.parse(json['invoiceDate'] as String),
+        dueDate: parseDueDate(json['dueDate']),
+        paymentTerm: parsePaymentTerm(json['paymentTerm'] as String?),
+        paymentTermLabel: json['paymentTermLabel'] as String?,
+        overdue: json['overdue'] as bool? ?? false,
+        daysOverdue: (json['daysOverdue'] as num? ?? 0).toInt(),
         total: (json['total'] as num).toDouble(),
         paidAmount: (json['paidAmount'] as num).toDouble(),
         balance: (json['balance'] as num).toDouble(),
@@ -135,4 +178,36 @@ class InvoiceDetail extends InvoiceSummary {
             ? null
             : DateTime.parse(json['createdAt'] as String),
       );
+}
+
+/// What `GET /api/invoices/due-date-preview` answers: when an invoice raised for this customer
+/// today would fall due, and the terms that date came from (§2.2).
+class DueDatePreview {
+  final DateTime dueDate;
+  final PaymentTerm? paymentTerm;
+  final String paymentTermLabel;
+
+  /// True when the terms are the customer's own rather than the system default.
+  final bool fromCustomer;
+
+  const DueDatePreview({
+    required this.dueDate,
+    required this.paymentTerm,
+    required this.paymentTermLabel,
+    required this.fromCustomer,
+  });
+
+  /// The invoice date the server worked the due date out from, so changing the terms on the form
+  /// recomputes the date the server itself would have given.
+  DateTime? get invoiceDate => paymentTerm?.basisOf(dueDate);
+
+  factory DueDatePreview.fromJson(Map<String, dynamic> json) {
+    final term = parsePaymentTerm(json['paymentTerm'] as String?);
+    return DueDatePreview(
+      dueDate: DateTime.parse(json['dueDate'] as String),
+      paymentTerm: term,
+      paymentTermLabel: json['paymentTermLabel'] as String? ?? term?.label ?? '',
+      fromCustomer: json['source'] == 'CUSTOMER',
+    );
+  }
 }

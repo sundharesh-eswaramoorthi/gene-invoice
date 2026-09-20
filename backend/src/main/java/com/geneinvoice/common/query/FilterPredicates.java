@@ -1,6 +1,7 @@
 package com.geneinvoice.common.query;
 
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Strings;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -37,7 +38,8 @@ final class FilterPredicates {
                     : cb.isNotNull(path);
             case CONTAINS -> cb.like(
                     cb.lower((Expression<String>) path),
-                    "%" + escapeLike(spec.first().toLowerCase(Locale.ROOT)) + "%", '\\');
+                    "%" + Strings.escapeLike(spec.first().toLowerCase(Locale.ROOT)) + "%",
+                    Strings.LIKE_ESCAPE);
             case EQ -> cb.equal(path, ValueCoercion.coerce(javaType, spec.first(), column));
             case NEQ -> cb.or(cb.isNull(path),
                     cb.notEqual(path, ValueCoercion.coerce(javaType, spec.first(), column)));
@@ -111,10 +113,5 @@ final class FilterPredicates {
 
     private static List<?> coerceAll(Class<?> javaType, List<String> values, String column) {
         return values.stream().map(v -> (Object) ValueCoercion.coerce(javaType, v, column)).toList();
-    }
-
-    /** Neutralise LIKE wildcards so a user's `%` is matched literally. */
-    private static String escapeLike(String s) {
-        return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 }

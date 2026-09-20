@@ -10,6 +10,7 @@ import '../../shared/models/dispute.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
+import '../email/email_actions.dart';
 
 class DisputesScreen extends ConsumerWidget {
   final TableQuery query;
@@ -19,6 +20,8 @@ class DisputesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final canExport = user?.has(Privileges.exportData) ?? false;
+    final canSendEmail = ref.watch(canSendEmailProvider);
+    final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.dispute);
 
     return Scaffold(
       body: DataTableScaffold<Dispute>(
@@ -31,6 +34,10 @@ class DisputesScreen extends ConsumerWidget {
         canExport: canExport,
         emptyMessage: 'No disputes match this filter',
         onRowTap: (context, d) => context.go('/disputes/${d.id}'),
+        actions: [if (sendEmail != null) sendEmail],
+        bulkActions: [
+          if (canSendEmail) sendEmailBulkAction(EmailEntityType.dispute),
+        ],
         columns: [
           // Target, Customer and Reason are capped so the table fits beside the sidebar at
           // 1366px (D-20); anything longer ends in "…" and shows in full on hover.
@@ -43,8 +50,14 @@ class DisputesScreen extends ConsumerWidget {
               child: Text(disputeTargetText(d), maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
           ),
+          // Sortable because the schema publishes it as sortable and the API honours it
+          // (poc-payment-promise-and-tables.md §6); without the key the column read as one of
+          // the deliberately unsortable ones and the sort was reachable only by editing the URL
+          // (TBL-10). It orders by the customer the dispute belongs to, as the schema's
+          // customerId column does.
           TableColumnSpec(
             label: 'Customer',
+            sortKey: 'customerId',
             maxWidth: 160,
             cell: (context, d) => Tooltip(
               message: d.customerName ?? '',
@@ -76,6 +89,8 @@ class DisputesScreen extends ConsumerWidget {
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/disputes/${d.id}'),
           ),
+          sendEmailRowAction(context,
+              type: EmailEntityType.dispute, entityId: d.id, entityLabel: 'Dispute #${d.id}'),
         ],
       ),
     );

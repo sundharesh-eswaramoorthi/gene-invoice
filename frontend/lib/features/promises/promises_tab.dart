@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/unsaved_changes.dart';
+import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
 import '../../shared/widgets/status_chip.dart';
@@ -41,8 +43,10 @@ class PromisesTab extends ConsumerWidget {
   final int customerId;
   final String? customerName;
 
-  /// When set, the tab shows only promises covering this invoice and pre-scopes new ones.
-  final int? invoiceId;
+  /// When set, the tab shows only promises covering this invoice and pre-scopes new ones. The
+  /// whole invoice, not just its id: the Raise promise dialog shows it as a ticked, untickable
+  /// line, which it cannot do for an invoice it knows nothing about (UI-02).
+  final InvoiceSummary? invoice;
 
   /// When set, the tab shows only the promises this payment counts towards. Promises are raised
   /// from the customer or an invoice, so the tab offers no "Raise promise" here.
@@ -52,7 +56,7 @@ class PromisesTab extends ConsumerWidget {
     super.key,
     required this.customerId,
     this.customerName,
-    this.invoiceId,
+    this.invoice,
     this.paymentId,
   });
 
@@ -61,7 +65,8 @@ class PromisesTab extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.promiseManage) ?? false;
     final canOverride = user?.has(Privileges.promiseOverride) ?? false;
-    final scope = PromiseScope(customerId: customerId, invoiceId: invoiceId, paymentId: paymentId);
+    final scope =
+        PromiseScope(customerId: customerId, invoiceId: invoice?.id, paymentId: paymentId);
     final async = ref.watch(scopedPromisesProvider(scope));
 
     return Column(
@@ -79,7 +84,7 @@ class PromisesTab extends ConsumerWidget {
                     context: context,
                     customerId: customerId,
                     customerName: customerName,
-                    preselectedInvoiceIds: invoiceId == null ? const [] : [invoiceId!],
+                    preselectedInvoices: invoice == null ? const [] : [invoice!],
                   );
                   if (saved == true) ref.invalidate(scopedPromisesProvider(scope));
                 },
@@ -194,100 +199,109 @@ class PromiseCard extends ConsumerWidget {
               Text('Overridden: ${promise.overrideReason}',
                   style: Theme.of(context).textTheme.bodySmall),
             ],
-            if (canManage || canOverride)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Wrap(
-                  children: [
-                    if (canManage && promise.isLive)
-                      TextButton.icon(
-                        icon: const Icon(Icons.edit_outlined, size: 18),
-                        label: const Text('Edit'),
-                        onPressed: () async {
-                          final saved = await showPromiseDialog(
-                            context: context,
-                            customerId: promise.customerId,
-                            customerName: promise.customerName,
-                            existing: promise,
-                          );
-                          if (saved == true) onChanged();
-                        },
-                      ),
-                    if (canOverride && promise.isLive)
-                      TextButton.icon(
-                        icon: const Icon(Icons.rule, size: 18),
-                        label: Text(promise.statusOverridden ? 'Override…' : 'Override status'),
-                        onPressed: () async {
-                          final saved =
-                              await showOverrideDialog(context: context, promise: promise);
-                          if (saved == true) onChanged();
-                        },
-                      ),
-                    if (canManage && promise.isLive)
-                      TextButton.icon(
-                        icon: const Icon(Icons.cancel_outlined, size: 18),
-                        style: TextButton.styleFrom(
-                            foregroundColor: Theme.of(context).colorScheme.error),
-                        label: const Text('Cancel'),
-                        onPressed: () => _cancel(context, ref),
-                      ),
-                  ],
-                ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                children: [
+                  // Anyone who can see the card may open the promise's own page. The tab sits on
+                  // detail screens that guard unsaved edits, so the move asks about those first.
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new, size: 18),
+                    label: const Text('Open'),
+                    onPressed: () => goGuarded(context, '/promises/${promise.id}'),
+                  ),
+                  if (canManage && promise.isLive)
+                    TextButton.icon(
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('Edit'),
+                      onPressed: () async {
+                        final saved = await showPromiseDialog(
+                          context: context,
+                          customerId: promise.customerId,
+                          customerName: promise.customerName,
+                          existing: promise,
+                        );
+                        if (saved == true) onChanged();
+                      },
+                    ),
+                  if (canOverride && promise.isLive)
+                    TextButton.icon(
+                      icon: const Icon(Icons.rule, size: 18),
+                      label: Text(promise.statusOverridden ? 'Override…' : 'Override status'),
+                      onPressed: () async {
+                        final saved = await showOverrideDialog(context: context, promise: promise);
+                        if (saved == true) onChanged();
+                      },
+                    ),
+                  if (canManage && promise.isLive)
+                    TextButton.icon(
+                      icon: const Icon(Icons.cancel_outlined, size: 18),
+                      style: TextButton.styleFrom(
+                          foregroundColor: Theme.of(context).colorScheme.error),
+                      label: const Text('Cancel'),
+                      onPressed: () async {
+                        if (await cancelPromise(context, ref, promise)) onChanged();
+                      },
+                    ),
+                ],
               ),
+            ),
           ],
         ),
       ),
     );
   }
+}
 
-  Future<void> _cancel(BuildContext context, WidgetRef ref) async {
-    final reason = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Cancel this promise?'),
-        content: SizedBox(
-          width: 380,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Linked payments are unlinked. The payments themselves and their invoice '
-                'allocations are left untouched.',
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reason,
-                decoration: const InputDecoration(labelText: 'Reason (optional)'),
-              ),
-            ],
-          ),
+/// Asks for a reason and cancels [promise]. Resolves true once it is cancelled; a refusal from the
+/// server is shown as a snackbar on [context]. Shared by the promise card and the promise's page.
+Future<bool> cancelPromise(BuildContext context, WidgetRef ref, PaymentPromise promise) async {
+  final reason = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Cancel this promise?'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Linked payments are unlinked. The payments themselves and their invoice '
+              'allocations are left untouched.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reason,
+              decoration: const InputDecoration(labelText: 'Reason (optional)'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
-              child: const Text('Keep it')),
-          FilledButton(
-            style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(dialogContext).colorScheme.error),
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Cancel promise'),
-          ),
-        ],
       ),
-    );
-    if (ok != true) return;
-    try {
-      await ref
-          .read(dioProvider)
-          .post('/api/promises/${promise.id}/cancel', data: {'reason': reason.text.trim()});
-      onChanged();
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
-      }
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Keep it')),
+        FilledButton(
+          style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error),
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          child: const Text('Cancel promise'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return false;
+  try {
+    await ref
+        .read(dioProvider)
+        .post('/api/promises/${promise.id}/cancel', data: {'reason': reason.text.trim()});
+    return true;
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
     }
+    return false;
   }
 }
 

@@ -5,6 +5,11 @@ import com.geneinvoice.auth.AppUserDetails;
 import com.geneinvoice.auth.AppUserDetailsService;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.document.DocumentRepository;
+import com.geneinvoice.email.EmailRecipientRepository;
+import com.geneinvoice.email.EmailRepository;
+import com.geneinvoice.email.RecordingMailTransport;
+import com.geneinvoice.email.connection.GmailConnectionRepository;
 import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.notification.NotificationRepository;
 import com.geneinvoice.payment.PaymentRepository;
@@ -20,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,11 +40,14 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 
 /**
  * Boots the real application context against an in-memory database and clears the transactional
- * tables between tests, so each test reasons about exactly the rows it created.
+ * tables between tests, so each test reasons about exactly the rows it created. Mail goes to
+ * {@link RecordingMailTransport}, which stands in for the mail service and is reset to "not
+ * configured" before each test.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Import(RecordingMailTransport.Config.class)
 public abstract class IntegrationTestBase {
 
     @Autowired protected MockMvc mockMvc;
@@ -52,11 +61,21 @@ public abstract class IntegrationTestBase {
     @Autowired protected PaymentPromiseRepository promiseRepository;
     @Autowired protected CustomerPocRepository customerPocRepository;
     @Autowired protected NotificationRepository notificationRepository;
+    @Autowired protected DocumentRepository documentRepository;
+    @Autowired protected EmailRepository emailRepository;
+    @Autowired protected EmailRecipientRepository emailRecipientRepository;
+    @Autowired protected RecordingMailTransport mailTransport;
+    @Autowired protected GmailConnectionRepository gmailConnectionRepository;
     @Autowired protected PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void resetTransactionalData() {
         SecurityContextHolder.clearContext();
+        mailTransport.reset();
+        gmailConnectionRepository.deleteAll();
+        documentRepository.deleteAll();
+        emailRecipientRepository.deleteAll();
+        emailRepository.deleteAll();
         promiseRepository.deleteAll();
         paymentRepository.deleteAll();
         invoiceRepository.deleteAll();
@@ -67,6 +86,15 @@ public abstract class IntegrationTestBase {
         userRepository.findAll().stream()
                 .filter(u -> !List.of("admin", "cashier").contains(u.getUsername()))
                 .forEach(userRepository::delete);
+        // The seeded accounts survive, so they start every test as the seeder left them: a test
+        // that deactivates one — user administration has rules about the last active
+        // administrator — must not leave the next test unable to assign them as a POC.
+        userRepository.findAll().forEach(u -> {
+            if (!u.isActive()) {
+                u.setActive(true);
+                userRepository.save(u);
+            }
+        });
     }
 
     // ---- fixtures --------------------------------------------------------------
@@ -101,6 +129,10 @@ public abstract class IntegrationTestBase {
 
     protected Customer customer(String name) {
         return customerRepository.save(Customer.builder().name(name).build());
+    }
+
+    protected Customer customer(String name, String email) {
+        return customerRepository.save(Customer.builder().name(name).email(email).build());
     }
 
     protected Product product(String name, String price) {

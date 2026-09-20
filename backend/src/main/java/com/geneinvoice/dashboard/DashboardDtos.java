@@ -2,6 +2,7 @@ package com.geneinvoice.dashboard;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 public class DashboardDtos {
@@ -18,8 +19,15 @@ public class DashboardDtos {
     /** Oldest month first, every month present, empty ones as zero. */
     public record MonthlySeries(Coverage coverage, List<MonthPoint> months) {}
 
-    /** Outstanding balances by days since the invoice date; {@code toDays} is null on the last bucket. */
-    public record AgeBucket(String label, int fromDays, Integer toDays, BigDecimal amount, long count) {}
+    /**
+     * Outstanding balances by whole days past the due date (D4). A null bound is an open end:
+     * {@code fromDays} on "Not yet due", {@code toDays} on the last bucket. The two dates are the
+     * same bounds as the invoice list's {@code dueDate} filter takes them, so clicking a bucket
+     * lands on exactly the invoices behind its number (AC-B6).
+     */
+    public record AgeBucket(String label, Integer fromDays, Integer toDays,
+                            BigDecimal amount, long count,
+                            LocalDate dueDateFrom, LocalDate dueDateTo) {}
 
     public record OutstandingByAge(Coverage coverage, List<AgeBucket> buckets) {}
 

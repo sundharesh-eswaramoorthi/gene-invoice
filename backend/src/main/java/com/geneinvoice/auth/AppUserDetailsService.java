@@ -22,7 +22,9 @@ public class AppUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username)
+        // Case-insensitively, matching the uniqueness rule: one account, whatever case it is
+        // typed in, rather than "admin" signing in and "Admin" being refused (CP-06).
+        User user = userRepository.findByUsernameIgnoreCase(username)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
         return new AppUserDetails(user, buildAuthorities(user));
     }

@@ -1,6 +1,7 @@
 package com.geneinvoice.customer;
 
 import com.geneinvoice.common.FieldLimits;
+import com.geneinvoice.invoice.PaymentTerm;
 import com.geneinvoice.poc.PocDtos;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -15,7 +16,11 @@ public class CustomerDtos {
     public record CustomerDto(
             Long id, String name, String phone, String email,
             String address, BigDecimal creditBalance, String username,
+            /** Null means "use the system default"; the label names whichever applies. */
+            PaymentTerm paymentTerm, String paymentTermLabel,
             BigDecimal outstanding,
+            /** How much of the outstanding total is past its due date (AC-A6). */
+            BigDecimal overdueAmount,
             /** Null for a customer-scoped caller, who never sees POC identity (AC-A8). */
             List<PocDtos.CustomerPocDto> successPocs,
             List<PocDtos.CustomerPocDto> collectionPocs,
@@ -29,6 +34,8 @@ public class CustomerDtos {
             @Size(max = FieldLimits.PHONE) String phone,
             @Email @Size(max = FieldLimits.EMAIL) String email,
             @Size(max = FieldLimits.ADDRESS) String address,
+            /** Omitted means the system default; CUSTOM is refused (§2.1). */
+            PaymentTerm paymentTerm,
             @NotBlank @Size(max = FieldLimits.USERNAME) String username,
             @NotBlank String password
     ) {}
@@ -38,6 +45,7 @@ public class CustomerDtos {
             @Size(max = FieldLimits.PHONE) String phone,
             @Email @Size(max = FieldLimits.EMAIL) String email,
             @Size(max = FieldLimits.ADDRESS) String address,
+            PaymentTerm paymentTerm,
             String password
     ) {}
 

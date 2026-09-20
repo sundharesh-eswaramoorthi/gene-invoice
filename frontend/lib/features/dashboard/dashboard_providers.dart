@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/table/route_query.dart';
 import '../../shared/models/promise.dart';
 
 /// Whose records a dashboard card covers, as the server worked it out. Only [book] is labelled on
@@ -52,14 +53,25 @@ class MonthlySeries {
       );
 }
 
+/// One band of outstanding money by **days past due** (D4): the label is the server's, and the
+/// bounds say how late the invoices in it are. Both ends are open somewhere — [fromDays] is null
+/// on "not yet due", [toDays] on the last band.
 class AgeBucket {
   final String label;
-  final int fromDays;
+
+  /// Null on the first band, which has no lower end: those invoices are not late at all.
+  final int? fromDays;
 
   /// Null on the last, open-ended bucket.
   final int? toDays;
   final double amount;
   final int count;
+
+  /// The band's own due-date window, as the server worked it out (§3). The invoice list's
+  /// `dueDate` filter takes these two straight off, so a bar opens exactly the rows it counted
+  /// rather than the rows this browser's clock would pick (AC-B6). Null where the band is open.
+  final DateTime? dueDateFrom;
+  final DateTime? dueDateTo;
 
   const AgeBucket({
     required this.label,
@@ -67,16 +79,26 @@ class AgeBucket {
     required this.toDays,
     required this.amount,
     required this.count,
+    this.dueDateFrom,
+    this.dueDateTo,
   });
 
   factory AgeBucket.fromJson(Map<String, dynamic> json) => AgeBucket(
         label: json['label'] as String? ?? '',
-        fromDays: (json['fromDays'] as num? ?? 0).toInt(),
+        fromDays: (json['fromDays'] as num?)?.toInt(),
         toDays: (json['toDays'] as num?)?.toInt(),
         amount: _money(json['amount']),
         count: (json['count'] as num? ?? 0).toInt(),
+        dueDateFrom: _day(json['dueDateFrom']),
+        dueDateTo: _day(json['dueDateTo']),
       );
 }
+
+/// A bare `yyyy-MM-dd` from the server as the UTC day it names, the way every date on the wire
+/// is read here. Null for anything that is not one, so a bar is left without a link rather than
+/// sent to a wrong one.
+DateTime? _day(Object? value) =>
+    value == null ? null : DateTime.tryParse('${value}T00:00:00Z');
 
 class OutstandingByAge {
   final Coverage coverage;
@@ -203,10 +225,10 @@ class UpcomingPromises {
   const UpcomingPromises({required this.promises, required this.book});
 
   /// The same view on the promises list.
-  static String listLink(DateTime today) => Uri(path: '/promises', queryParameters: {
+  static String listLink(DateTime today) => RouteQuery.location('/promises', {
         'sort': 'promisedDate,asc',
         'f': _upcomingFilters(today),
-      }).toString();
+      });
 }
 
 List<String> _upcomingFilters(DateTime today) => [

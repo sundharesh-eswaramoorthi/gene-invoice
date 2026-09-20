@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
@@ -10,7 +11,9 @@ import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/product.dart';
+import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
+import '../email/email_actions.dart';
 
 /// Active products whose name contains [search], first page by name, for the invoice line
 /// pickers. An inactive product cannot go on a new invoice, so it is never offered.
@@ -26,6 +29,33 @@ Future<List<Product>> searchActiveProducts(Dio dio, String search) async {
       .toList();
 }
 
+final productDetailProvider =
+    FutureProvider.autoDispose.family<Product, int>((ref, id) async {
+  final dio = ref.watch(dioProvider);
+  final res = await dio.get('/api/products/$id');
+  return Product.fromJson(res.data as Map<String, dynamic>);
+});
+
+/// Opens the product form, for a new product or [existing], from the list or the details page.
+/// Once it saves, whatever shows the product is refreshed, and a new product the user asked to
+/// notify about gets the compose dialog — opened on [context], since the form's own is gone.
+Future<void> openProductForm(BuildContext context, WidgetRef ref, {Product? existing}) async {
+  final saved = await showDialog<({int id, bool notify})>(
+    context: context,
+    builder: (_) => ProductFormDialog(existing: existing),
+  );
+  if (saved == null) return;
+  ref.invalidate(tablePageProvider);
+  ref.invalidate(productDetailProvider(saved.id));
+  ref.invalidate(auditHistoryProvider);
+  if (!context.mounted) return;
+  await notifyByEmailAfterSave(context,
+      notify: saved.notify,
+      type: EmailEntityType.product,
+      entityId: saved.id,
+      event: EmailEvent.created);
+}
+
 class ProductsScreen extends ConsumerWidget {
   final TableQuery query;
   const ProductsScreen({super.key, required this.query});
@@ -35,16 +65,19 @@ class ProductsScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.productManage) ?? false;
     final canExport = user?.has(Privileges.exportData) ?? false;
+    final canSendEmail = ref.watch(canSendEmailProvider);
+    final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.product);
 
     return Scaffold(
       body: DataTableScaffold<Product>(
         entity: 'products',
         actions: [
+          if (sendEmail != null) sendEmail,
           if (canManage)
             FilledButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('New product'),
-              onPressed: () => _openForm(context, ref, null),
+              onPressed: () => openProductForm(context, ref),
             ),
         ],
         path: '/api/products',
@@ -54,15 +87,16 @@ class ProductsScreen extends ConsumerWidget {
         idOf: (p) => p.id,
         canExport: canExport,
         emptyMessage: 'No products match this filter',
-        onRowTap: canManage ? (context, p) => _openForm(context, ref, p) : null,
-        bulkActions: canManage
-            ? const [
-                BulkActionSpec(
-                    action: 'ACTIVATE', label: 'Activate', icon: Icons.check_circle_outline),
-                BulkActionSpec(
-                    action: 'DEACTIVATE', label: 'Deactivate', icon: Icons.block),
-              ]
-            : const [],
+        onRowTap: (context, p) => context.go('/products/${p.id}'),
+        bulkActions: [
+          if (canManage) ...const [
+            BulkActionSpec(
+                action: 'ACTIVATE', label: 'Activate', icon: Icons.check_circle_outline),
+            BulkActionSpec(
+                action: 'DEACTIVATE', label: 'Deactivate', icon: Icons.block),
+          ],
+          if (canSendEmail) sendEmailBulkAction(EmailEntityType.product),
+        ],
         columns: [
           TableColumnSpec(label: 'Name', sortKey: 'name', cell: (context, p) => Text(p.name)),
           TableColumnSpec(
@@ -82,43 +116,42 @@ class ProductsScreen extends ConsumerWidget {
               sortKey: 'active',
               cell: (context, p) => Text(p.active ? 'Yes' : 'No')),
         ],
-        rowActions: canManage
+        // Someone who may neither edit nor send email gets no empty action column.
+        rowActions: canManage || canSendEmail
             ? (context, p) => [
-                  IconButton(
-                    tooltip: 'Edit',
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    onPressed: () => _openForm(context, ref, p),
-                  ),
+                  if (canManage)
+                    IconButton(
+                      tooltip: 'Edit',
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      onPressed: () => openProductForm(context, ref, existing: p),
+                    ),
+                  sendEmailRowAction(context,
+                      type: EmailEntityType.product,
+                      entityId: p.id,
+                      entityLabel: 'Product ${p.name}'),
                 ]
             : null,
       ),
     );
   }
-
-  Future<void> _openForm(BuildContext context, WidgetRef ref, Product? existing) async {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (_) => _ProductForm(existing: existing),
-    );
-    if (saved == true) {
-      ref.invalidate(tablePageProvider);
-    }
-  }
 }
 
-class _ProductForm extends ConsumerStatefulWidget {
+/// Create / edit form for a product. Pops the saved product's id, and whether to write an email
+/// about it, so the caller can follow up once this dialog is gone; open it with [openProductForm].
+class ProductFormDialog extends ConsumerStatefulWidget {
   final Product? existing;
-  const _ProductForm({this.existing});
+  const ProductFormDialog({super.key, this.existing});
   @override
-  ConsumerState<_ProductForm> createState() => _ProductFormState();
+  ConsumerState<ProductFormDialog> createState() => _ProductFormDialogState();
 }
 
-class _ProductFormState extends ConsumerState<_ProductForm> {
+class _ProductFormDialogState extends ConsumerState<ProductFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _description;
   late final TextEditingController _price;
   late bool _active;
+  bool _notify = false;
   bool _saving = false;
   String? _error;
 
@@ -149,16 +182,21 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
       final dio = ref.read(dioProvider);
       final body = {
         'name': _name.text.trim(),
-        'description': _description.text.trim(),
+        // A box left empty means the product has no description, not that it has an empty one:
+        // the list then reads "—" rather than an empty cell (CP-15).
+        'description': optionalText(_description.text),
         'price': double.parse(_price.text.trim()),
         'active': _active,
       };
+      final int id;
       if (widget.existing == null) {
-        await dio.post('/api/products', data: body);
+        final res = await dio.post('/api/products', data: body);
+        id = ((res.data as Map)['id'] as num).toInt();
       } else {
-        await dio.put('/api/products/${widget.existing!.id}', data: body);
+        id = widget.existing!.id;
+        await dio.put('/api/products/$id', data: body);
       }
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) Navigator.of(context).pop((id: id, notify: _notify));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -180,6 +218,9 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
               TextFormField(
                 controller: _name,
                 decoration: const InputDecoration(labelText: 'Name'),
+                // Once the field has been touched its complaint goes as soon as it no longer
+                // applies, rather than waiting for the next Save (CP-09).
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
               ),
               const SizedBox(height: 8),
@@ -193,6 +234,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                 controller: _price,
                 decoration: const InputDecoration(labelText: 'Price'),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autovalidateMode: AutovalidateMode.onUserInteraction,
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Required';
                   final d = double.tryParse(v.trim());
@@ -207,6 +249,11 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
                 value: _active,
                 onChanged: (v) => setState(() => _active = v),
               ),
+              if (widget.existing == null)
+                NotifyByEmailCheckbox(
+                  value: _notify,
+                  onChanged: (v) => setState(() => _notify = v),
+                ),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -219,7 +266,7 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
       ),
       actions: [
         TextButton(
-            onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+            onPressed: _saving ? null : () => Navigator.of(context).pop(),
             child: const Text('Cancel')),
         FilledButton(
           onPressed: _saving ? null : _submit,

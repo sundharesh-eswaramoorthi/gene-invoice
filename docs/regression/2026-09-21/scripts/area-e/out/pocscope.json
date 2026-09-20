@@ -1,0 +1,104 @@
+{
+  "generatedAt": "2026-09-20T18:58:56.932Z",
+  "foreignRecord": {
+    "SALES_POC": {
+      "CUSTOMER": {
+        "list": 404,
+        "download": 404,
+        "upload": 403,
+        "uploadedId": null,
+        "deleteOwnUpload": null
+      },
+      "INVOICE": {
+        "list": 404,
+        "download": 404,
+        "upload": 404,
+        "uploadedId": null,
+        "deleteOwnUpload": null
+      },
+      "PAYMENT": {
+        "list": 404,
+        "download": 404,
+        "upload": 403,
+        "uploadedId": null,
+        "deleteOwnUpload": null
+      },
+      "record": {
+        "customer": 404,
+        "invoice": 404,
+        "payment": 404
+      }
+    },
+    "CUSTOMER_SUCCESS_POC": {
+      "CUSTOMER": {
+        "list": 200,
+        "download": 200,
+        "upload": 201,
+        "uploadedId": 168,
+        "deleteOwnUpload": 204
+      },
+      "INVOICE": {
+        "list": 200,
+        "download": 200,
+        "upload": 403,
+        "uploadedId": null,
+        "deleteOwnUpload": null
+      },
+      "PAYMENT": {
+        "list": 200,
+        "download": 200,
+        "upload": 403,
+        "uploadedId": null,
+        "deleteOwnUpload": null
+      },
+      "record": {
+        "customer": 200,
+        "invoice": 200,
+        "payment": 200
+      }
+    },
+    "COLLECTION_POC": {
+      "CUSTOMER": {
+        "list": 200,
+        "download": 200,
+        "upload": 403,
+        "uploadedId": null,
+        "deleteOwnUpload": null
+      },
+      "INVOICE": {
+        "list": 200,
+        "download": 200,
+        "upload": 403,
+        "uploadedId": null,
+        "deleteOwnUpload": null
+      },
+      "PAYMENT": {
+        "list": 200,
+        "download": 200,
+        "upload": 201,
+        "uploadedId": 169,
+        "deleteOwnUpload": 204
+      },
+      "record": {
+        "customer": 200,
+        "invoice": 200,
+        "payment": 200
+      }
+    }
+  },
+  "seats": {
+    "custB": [
+      {
+        "type": "COLLECTION",
+        "user": "e-mua672ch690a"
+      }
+    ],
+    "invBSalesPoc": "e-mua672911ea8",
+    "payBCollectionPoc": "e-mua672ch690a",
+    "probeUsers": {
+      "SALES_POC": "e-mua6721x7f5e",
+      "CUSTOMER_SUCCESS_POC": "e-mua6724d2b62",
+      "COLLECTION_POC": "e-mua6726tba1b"
+    }
+  }
+}

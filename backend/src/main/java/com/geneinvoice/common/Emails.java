@@ -9,8 +9,6 @@ public final class Emails {
     private Emails() {}
 
     public static String normalize(String raw) {
-        if (raw == null) return null;
-        String trimmed = raw.trim();
-        return trimmed.isEmpty() ? null : trimmed;
+        return Strings.blankToNull(raw);
     }
 }

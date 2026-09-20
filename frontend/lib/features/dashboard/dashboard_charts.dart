@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/table/route_query.dart';
 import 'dashboard_providers.dart';
 
 /// Billed and collected. Checked as a pair with the data-viz palette validator: they stay apart
@@ -569,23 +570,51 @@ class _LegendRow extends StatelessWidget {
   }
 }
 
-/// Outstanding money by age as labelled horizontal bars, oldest last. A row opens the invoices
-/// list filtered to that age.
+/// Outstanding money by days past due as labelled horizontal bars, latest last. A row opens the
+/// invoices list filtered to that bucket.
 class AgingBars extends StatelessWidget {
   final OutstandingByAge data;
   final DateTime today;
 
   const AgingBars({super.key, required this.data, required this.today});
 
-  /// The open invoices in [bucket], as filter chips on the invoices list.
-  static String linkFor(AgeBucket bucket, DateTime today) {
-    String daysAgo(int days) => _wireDate.format(today.subtract(Duration(days: days)));
-    final dated = bucket.toDays == null
-        ? 'invoiceDate:lte:${daysAgo(bucket.fromDays)}'
-        : 'invoiceDate:between:${daysAgo(bucket.toDays!)},${daysAgo(bucket.fromDays)}';
-    return Uri(path: '/invoices', queryParameters: {
+  /// The open invoices in [bucket], as filter chips on the invoices list: the same rows the
+  /// bucket counted, so the list's total matches the bar (AC-B6). The window is the server's own
+  /// `dueDateFrom`/`dueDateTo` where it sent them, so the bar and the bucket cannot disagree
+  /// about which day it is; a bucket that arrives without them falls back to its days-past-due
+  /// bounds against [today]. Null when neither can be written as a range — the bar is then not
+  /// clickable rather than wrong.
+  static String? linkFor(AgeBucket bucket, DateTime today) {
+    // A response that carried a window governs, even where that window makes no sense: working
+    // one out from the day counts instead would open a set of rows the bucket never counted.
+    final dated = bucket.dueDateFrom == null && bucket.dueDateTo == null
+        ? _windowFromDays(bucket, today)
+        : _window(bucket.dueDateFrom, bucket.dueDateTo);
+    if (dated == null) return null;
+    return RouteQuery.location('/invoices', {
       'f': ['status:in:UNPAID,PARTIALLY_PAID', dated],
-    }).toString();
+    });
+  }
+
+  /// The server's own bounds as one `dueDate` filter; at least one of them is there. Null for a
+  /// window that ends before it starts, which names no invoices at all.
+  static String? _window(DateTime? from, DateTime? to) {
+    if (from == null) return 'dueDate:lte:${_wireDate.format(to!)}';
+    if (to == null) return 'dueDate:gte:${_wireDate.format(from)}';
+    if (from.isAfter(to)) return null;
+    return 'dueDate:between:${_wireDate.format(from)},${_wireDate.format(to)}';
+  }
+
+  /// The same window worked out from how late the band is, for a server that sends only that.
+  static String? _windowFromDays(AgeBucket bucket, DateTime today) {
+    String dueAt(int daysOverdue) =>
+        _wireDate.format(today.subtract(Duration(days: daysOverdue)));
+    final fromDays = bucket.fromDays ?? 0;
+    // Not yet due: due today or later, with no far end (§3).
+    if (fromDays <= 0) return 'dueDate:gte:${dueAt(0)}';
+    if (bucket.toDays == null) return 'dueDate:lte:${dueAt(fromDays)}';
+    if (bucket.toDays! < fromDays) return null;
+    return 'dueDate:between:${dueAt(bucket.toDays!)},${dueAt(fromDays)}';
   }
 
   @override
@@ -598,57 +627,63 @@ class AgingBars extends StatelessWidget {
     return Column(
       children: [
         for (final b in data.buckets)
-          InkWell(
-            onTap: () => context.go(linkFor(b, today)),
-            borderRadius: BorderRadius.circular(6),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-              child: Row(
+          _bar(context, b, theme, muted, peak),
+      ],
+    );
+  }
+
+  /// One bucket's bar. A bucket the invoice list cannot be filtered to does not pretend to be a
+  /// link (AC-B6).
+  Widget _bar(
+      BuildContext context, AgeBucket b, ThemeData theme, TextStyle? muted, double peak) {
+    final link = linkFor(b, today);
+    return InkWell(
+      onTap: link == null ? null : () => context.go(link),
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 104,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    width: 104,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(b.label, style: theme.textTheme.bodyMedium),
-                        Text('${b.count} ${b.count == 1 ? 'invoice' : 'invoices'}', style: muted),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: LayoutBuilder(builder: (context, constraints) {
-                      final width = b.amount <= 0
-                          ? 0.0
-                          : math.max(2.0, constraints.maxWidth * b.amount / peak);
-                      return Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          height: 20,
-                          width: width,
-                          decoration: const BoxDecoration(
-                            color: magnitudeColor,
-                            borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 84,
-                    child: Tooltip(
-                      message: formatMoney(b.amount),
-                      child: Text(formatMoneyCompact(b.amount),
-                          textAlign: TextAlign.right,
-                          style:
-                              theme.textTheme.bodyMedium?.copyWith(fontFeatures: tabularFigures)),
-                    ),
-                  ),
+                  Text(b.label, style: theme.textTheme.bodyMedium),
+                  Text('${b.count} ${b.count == 1 ? 'invoice' : 'invoices'}', style: muted),
                 ],
               ),
             ),
-          ),
-      ],
+            Expanded(
+              child: LayoutBuilder(builder: (context, constraints) {
+                final width =
+                    b.amount <= 0 ? 0.0 : math.max(2.0, constraints.maxWidth * b.amount / peak);
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    height: 20,
+                    width: width,
+                    decoration: const BoxDecoration(
+                      color: magnitudeColor,
+                      borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
+                    ),
+                  ),
+                );
+              }),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: 84,
+              child: Tooltip(
+                message: formatMoney(b.amount),
+                child: Text(formatMoneyCompact(b.amount),
+                    textAlign: TextAlign.right,
+                    style: theme.textTheme.bodyMedium?.copyWith(fontFeatures: tabularFigures)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

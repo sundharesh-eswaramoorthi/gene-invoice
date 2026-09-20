@@ -4,6 +4,7 @@ import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.NotFoundException;
+import com.geneinvoice.common.Strings;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.notification.NotificationService;
@@ -14,8 +15,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -42,9 +47,11 @@ public class PocService {
 
     @Transactional(readOnly = true)
     public List<User> assignable(PocType type, String query, int limit) {
+        // The picker's box is a plain substring search, so the user's own % and _ match only
+        // themselves rather than acting as wildcards (CP-11).
         String pattern = (query == null || query.isBlank())
                 ? null
-                : "%" + query.trim().toLowerCase(Locale.ROOT) + "%";
+                : "%" + Strings.escapeLike(query.trim().toLowerCase(Locale.ROOT)) + "%";
         int capped = Math.min(Math.max(limit, 1), 100);
         return userRepository.findAssignable(type.assignabilityPrivilege(), pattern,
                 PageRequest.of(0, capped));
@@ -90,8 +97,10 @@ public class PocService {
 
     @Transactional(readOnly = true)
     public Optional<User> primaryFor(Long customerId, PocType type) {
-        return customerPocRepository.findByCustomerIdAndPocTypeAndPrimaryTrue(customerId, type)
-                .map(CustomerPoc::getUser);
+        // The oldest of them, on the off-chance a database from before the invariant was the
+        // database's own still holds two: a reader answers, it does not fail (CP-02).
+        return customerPocRepository.findByCustomerIdAndPocTypeAndPrimaryTrueOrderByIdAsc(customerId, type)
+                .stream().findFirst().map(CustomerPoc::getUser);
     }
 
     /**
@@ -100,10 +109,32 @@ public class PocService {
      */
     @Transactional(readOnly = true)
     public Optional<User> defaultAssignee(Long customerId, PocType type) {
-        return customerPocRepository.findByCustomerIdOrderByPocTypeAscPrimaryDescIdAsc(customerId).stream()
-                .filter(seat -> seat.getPocType() == type && seat.getUser().isActive())
-                .map(CustomerPoc::getUser)
-                .findFirst();
+        return activeHolders(customerId, type).stream().findFirst();
+    }
+
+    /**
+     * Everyone active in that kind of seat on the customer, the primary first and then in the order
+     * they were seated — so the first is always {@link #defaultAssignee}. Empty when nobody active is.
+     */
+    @Transactional(readOnly = true)
+    public List<User> activeHolders(Long customerId, PocType type) {
+        return activeHoldersByType(customerId).getOrDefault(type, List.of());
+    }
+
+    /**
+     * The whole book in one read: every kind of seat the customer has, each with its active holders
+     * in the order {@link #activeHolders} gives them. A caller that wants several kinds — the email
+     * form offers all three (L2) — reads the roster once instead of once per kind.
+     */
+    @Transactional(readOnly = true)
+    public Map<PocType, List<User>> activeHoldersByType(Long customerId) {
+        Map<PocType, List<User>> byType = new EnumMap<>(PocType.class);
+        for (CustomerPoc seat : customerPocRepository.findByCustomerIdOrderByPocTypeAscPrimaryDescIdAsc(customerId)) {
+            if (seat.getUser().isActive()) {
+                byType.computeIfAbsent(seat.getPocType(), t -> new ArrayList<>()).add(seat.getUser());
+            }
+        }
+        return byType;
     }
 
     @Transactional
@@ -111,8 +142,10 @@ public class PocService {
         if (type == PocType.SALES) {
             throw new BadRequestException("Sales POC is assigned per invoice, not per customer");
         }
-        Customer customer = customerRepository.findById(customerId)
-                .orElseThrow(() -> new NotFoundException("Customer not found"));
+        // The customer's own row first, so two people seating a POC at the same moment queue
+        // rather than both finding an empty group, both calling themselves the first seat and
+        // both ending up primary — after which "make primary" could never be answered (CP-02).
+        Customer customer = lockCustomer(customerId);
         User user = requireAssignable(userId, type);
 
         if (customerPocRepository.findByCustomerIdAndUserIdAndPocType(customerId, userId, type).isPresent()) {
@@ -120,7 +153,7 @@ public class PocService {
                     + " for this customer");
         }
 
-        boolean first = customerPocRepository.findByCustomerIdAndPocType(customerId, type).isEmpty();
+        boolean first = customerPocRepository.findByCustomerIdAndPocTypeForUpdate(customerId, type).isEmpty();
         boolean primary = makePrimary || first;
         CustomerPoc demoted = primary ? clearPrimary(customerId, type) : null;
 
@@ -161,6 +194,7 @@ public class PocService {
 
     @Transactional
     public void remove(Long customerId, Long pocId) {
+        lockCustomer(customerId);
         CustomerPoc poc = customerPocRepository.findById(pocId)
                 .orElseThrow(() -> new NotFoundException("POC assignment not found"));
         if (!poc.getCustomer().getId().equals(customerId)) {
@@ -176,13 +210,23 @@ public class PocService {
         // Never leave a dangling primary: promote the oldest remaining holder of that kind (AC-A4).
         CustomerPoc promoted = null;
         if (wasPrimary) {
-            promoted = customerPocRepository.findByCustomerIdAndPocType(customerId, type).stream()
-                    .min((a, b) -> Long.compare(a.getId(), b.getId()))
-                    .orElse(null);
+            List<CustomerPoc> remaining =
+                    customerPocRepository.findByCustomerIdAndPocTypeForUpdate(customerId, type);
+            // Any other seat still marked primary is cleared first. Promoting on top of one was
+            // how a customer left with two primaries could never be repaired by removing a
+            // seat — the count stayed at two and "make primary" went on failing (CP-02).
+            for (CustomerPoc other : remaining) {
+                if (other.isPrimary()) {
+                    other.setPrimary(false);
+                    customerPocRepository.save(other);
+                }
+            }
+            promoted = remaining.stream().min(Comparator.comparing(CustomerPoc::getId)).orElse(null);
             if (promoted != null) {
                 promoted.setPrimary(true);
                 customerPocRepository.save(promoted);
             }
+            customerPocRepository.flush();
         }
 
         auditService.record("CUSTOMER", customerId, AUDIT_POC_REMOVED,
@@ -204,14 +248,16 @@ public class PocService {
 
     @Transactional
     public CustomerPoc setPrimary(Long customerId, Long pocId) {
+        // Clearing the old primary and marking the new one is one change, and has to happen
+        // inside one serialised transaction: two people tapping different chips at the same
+        // moment used to leave both seats primary (CP-02).
+        lockCustomer(customerId);
         CustomerPoc poc = customerPocRepository.findById(pocId)
                 .orElseThrow(() -> new NotFoundException("POC assignment not found"));
         if (!poc.getCustomer().getId().equals(customerId)) {
             throw new BadRequestException("POC assignment does not belong to this customer");
         }
-        CustomerPoc previous = customerPocRepository
-                .findByCustomerIdAndPocTypeAndPrimaryTrue(customerId, poc.getPocType()).orElse(null);
-        clearPrimary(customerId, poc.getPocType());
+        CustomerPoc previous = clearPrimary(customerId, poc.getPocType());
         poc.setPrimary(true);
         CustomerPoc saved = customerPocRepository.save(poc);
 
@@ -225,17 +271,33 @@ public class PocService {
         return saved;
     }
 
-    /** Returns the seat that was primary, so the caller can record the change (D-44). */
+    /**
+     * Demotes every seat of that kind currently marked primary and returns the oldest of them, so
+     * the caller can record the change (D-44). Reading the group under the write lock is what
+     * makes clear-then-set one indivisible change; demoting every match rather than one is what
+     * lets a customer that already holds two primaries be repaired instead of jamming (CP-02).
+     */
     private CustomerPoc clearPrimary(Long customerId, PocType type) {
         CustomerPoc was = null;
-        for (CustomerPoc existing : customerPocRepository.findByCustomerIdAndPocType(customerId, type)) {
+        for (CustomerPoc existing : customerPocRepository.findByCustomerIdAndPocTypeForUpdate(customerId, type)) {
             if (existing.isPrimary()) {
                 existing.setPrimary(false);
-                was = customerPocRepository.save(existing);
+                CustomerPoc demoted = customerPocRepository.save(existing);
+                if (was == null) was = demoted;
             }
         }
         customerPocRepository.flush();
         return was;
+    }
+
+    /**
+     * The customer's own row, locked until the transaction ends. Every change to who is primary
+     * takes it first: the seat group it is about to rearrange may be empty, and an empty group
+     * has no row to lock (CP-02).
+     */
+    private Customer lockCustomer(Long customerId) {
+        return customerRepository.findByIdForUpdate(customerId)
+                .orElseThrow(() -> new NotFoundException("Customer not found"));
     }
 
     /** Tells the newly assigned person, unless they assigned themselves. */

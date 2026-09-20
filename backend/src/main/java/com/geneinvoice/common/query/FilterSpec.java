@@ -44,7 +44,24 @@ public record FilterSpec(String field, FilterOperator operator, List<String> val
         if (op.arity() == -1 && values.isEmpty()) {
             throw new BadRequestException("Operator " + op.wire() + " expects at least one value");
         }
+        values.forEach(v -> requireStorable(v, field));
         return new FilterSpec(field, op, values);
+    }
+
+    /**
+     * Refuses a value the database cannot hold, before it reaches a query (AC-D9). A NUL is the
+     * one such character: Postgres cannot store or compare it and answers the whole request —
+     * list and summary alike — with an error the caller can do nothing about, while trimming it
+     * away would quietly answer a different question. It is checked here rather than where values
+     * are coerced to their column's type, because {@code contains} and {@code is empty} never
+     * coerce anything, and {@code contains} is the operator a text filter actually uses (TBL-01).
+     * The value is not echoed back: it is exactly the character that has no place in a response.
+     */
+    static void requireStorable(String value, String field) {
+        if (value != null && value.indexOf('\0') >= 0) {
+            throw new BadRequestException(
+                    "Invalid value for column " + field + ": it contains a null character");
+        }
     }
 
     public String first() {

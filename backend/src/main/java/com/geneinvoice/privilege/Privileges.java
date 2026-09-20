@@ -56,6 +56,18 @@ public final class Privileges {
     public static final String PROMISE_MANAGE = "PROMISE_MANAGE";
     public static final String PROMISE_OVERRIDE = "PROMISE_OVERRIDE";
 
+    // ---- Email -----------------------------------------------------------------
+    /** May read the Email tab of records they can see, and their own Inbox. */
+    public static final String EMAIL_VIEW = "EMAIL_VIEW";
+    /** May compose and send email about records they can see, one at a time or in bulk. */
+    public static final String EMAIL_SEND = "EMAIL_SEND";
+
+    // ---- Documents -------------------------------------------------------------
+    /** May see and download the documents on records they can see. */
+    public static final String DOCUMENT_VIEW = "DOCUMENT_VIEW";
+    /** May attach a document to a record they can change, and edit or delete one. */
+    public static final String DOCUMENT_MANAGE = "DOCUMENT_MANAGE";
+
     // ---- Tables ----------------------------------------------------------------
     /** May export the current selection / filtered set as CSV. */
     public static final String EXPORT_DATA = "EXPORT_DATA";
@@ -74,6 +86,8 @@ public final class Privileges {
             POC_ASSIGNABLE_SALES, POC_ASSIGNABLE_SUCCESS, POC_ASSIGNABLE_COLLECTION,
             SCOPE_OVERRIDE,
             PROMISE_VIEW, PROMISE_MANAGE, PROMISE_OVERRIDE,
+            EMAIL_VIEW, EMAIL_SEND,
+            DOCUMENT_VIEW, DOCUMENT_MANAGE,
             EXPORT_DATA
     );
 }

@@ -1,0 +1,53 @@
+server:
+  port: ${PORT:8091}
+spring:
+  application:
+    name: gene-mail-service
+  datasource:
+    url: ${MAIL_DB_URL:jdbc:postgresql://localhost:5435/genemail}
+    username: ${MAIL_DB_USER:geneinvoice}
+    password: ${MAIL_DB_PASSWORD:geneinvoice}
+  jpa:
+    hibernate.ddl-auto: update
+    open-in-view: false
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+  task.scheduling.pool.size: 4          # webhook, sweeper, tracker, sync
+mail:
+  api-key: ${MAIL_API_KEY:}             # required, at least 16 characters
+  secrets-key: ${MAIL_SECRETS_KEY:}     # required, base64 of 32 bytes
+  queue: rabbit                         # rabbit | direct (tests)
+  webhook:
+    url: ${MAIL_WEBHOOK_URL:}           # e.g. http://localhost:8086/api/mail-service/events
+    secret: ${MAIL_WEBHOOK_SECRET:}     # required when url is set, at least 16 characters
+    interval-ms: 1000
+    batch-size: 100
+  send:
+    concurrency: 4
+    max-concurrency: 8
+    per-mailbox-interval-ms: 500
+    max-attempts: 3
+    sweep-interval-ms: 30000
+    # The waits before a second and a later attempt; also the TTLs of mail.send.retry.1m / .5m. RabbitMQ
+    # refuses to redeclare a queue with other arguments, so delete those two queues after changing them.
+    retry-delays: PT1M, PT5M
+  tracking:
+    interval-ms: 60000
+    delivered-after: PT15M
+    confirm-window: PT24H
+  sync:
+    enabled: ${MAIL_SYNC_ENABLED:true}
+    interval-ms: ${MAIL_SYNC_INTERVAL_MS:60000}
+  google:
+    api-base-url: ${GMAIL_API_BASE_URL:https://gmail.googleapis.com}
+    token-url: ${GOOGLE_TOKEN_URL:https://oauth2.googleapis.com/token}
+    tokeninfo-url: ${GOOGLE_TOKENINFO_URL:https://oauth2.googleapis.com/tokeninfo}
+    revoke-url: ${GOOGLE_REVOKE_URL:https://oauth2.googleapis.com/revoke}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

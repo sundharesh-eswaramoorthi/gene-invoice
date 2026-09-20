@@ -5,6 +5,7 @@ import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Emails;
 import com.geneinvoice.common.Passwords;
+import com.geneinvoice.common.Strings;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.bulk.BulkDtos;
@@ -15,6 +16,7 @@ import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.email.connection.GmailDisconnects;
 import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.payment.PaymentRepository;
 import com.geneinvoice.poc.CustomerPocRepository;
@@ -36,6 +38,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -57,17 +60,19 @@ public class UserController {
     private final PaymentRepository paymentRepository;
     private final PaymentPromiseRepository promiseRepository;
     private final CustomerPocRepository customerPocRepository;
+    private final GmailDisconnects gmailDisconnects;
 
     public record UserDto(Long id, String username, String email, String fullName,
                           boolean active, String role, Long customerId,
-                          List<String> privileges) {
+                          List<String> privileges, Instant createdAt) {
         static UserDto from(User u) {
             return new UserDto(u.getId(), u.getUsername(), u.getEmail(), u.getFullName(),
                     u.isActive(), u.getRole() == null ? null : u.getRole().getName(),
                     u.getCustomerId(),
                     u.getRole() == null ? List.of()
                             : u.getRole().getPrivileges().stream()
-                                    .map(com.geneinvoice.privilege.Privilege::getName).sorted().toList());
+                                    .map(com.geneinvoice.privilege.Privilege::getName).sorted().toList(),
+                    u.getCreatedAt());
         }
     }
 
@@ -111,7 +116,12 @@ public class UserController {
     @PostMapping
     @PreAuthorize("hasAuthority('" + Privileges.USER_MANAGE + "')")
     public UserDto create(@Valid @RequestBody CreateUserRequest in) {
-        if (userRepository.existsByUsername(in.username())) {
+        // Trimmed before it is checked and before it is stored, so the account can be signed
+        // into with the username its owner was given (CP-12).
+        String username = Strings.trim(in.username());
+        // Case-insensitively, so "ADMIN" cannot be minted beside "admin" and read as it in the
+        // users list, the audit trail and every export that names people by username (CP-06).
+        if (userRepository.existsByUsernameIgnoreCase(username)) {
             throw new BadRequestException("Username already exists");
         }
         String email = Emails.normalize(in.email());
@@ -125,7 +135,7 @@ public class UserController {
             throw new BadRequestException("Use POST /api/customers to create a customer account");
         }
         User u = User.builder()
-                .username(in.username())
+                .username(username)
                 .email(email)
                 .fullName(in.fullName())
                 .password(passwordEncoder.encode(in.password()))
@@ -139,7 +149,19 @@ public class UserController {
     @PreAuthorize("hasAuthority('" + Privileges.USER_MANAGE + "')")
     public UserDto update(@PathVariable Long id, @Valid @RequestBody UpdateUserRequest in) {
         User u = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not found"));
+        boolean deactivating = Boolean.FALSE.equals(in.active()) && u.isActive();
+        boolean movingRole = in.roleId() != null
+                && (u.getRole() == null || !in.roleId().equals(u.getRole().getId()));
+        // The same guard bulk() already applies, on the path a single PUT takes: an administrator
+        // who locks themselves out this way cannot get back in, and nothing in the app can undo
+        // it (AUTH-03). Every other edit of one's own account — name, email, password — is fine.
+        if (id.equals(currentUser.require().getId()) && (deactivating || movingRole)) {
+            throw new BadRequestException(
+                    "You cannot deactivate or change the role of your own account");
+        }
+        if (deactivating || movingRole) requireAdministratorsRemain(id);
         Object before = UserDto.from(u);
+        boolean couldSendEmail = GmailDisconnects.mayConnect(u);
         if (in.email() != null) {
             // Blank clears the email. Uniqueness is checked only on a change, so an account can
             // always be re-saved as it is.
@@ -154,6 +176,9 @@ public class UserController {
         if (in.password() != null && !in.password().isBlank()) {
             Passwords.require(in.password());
             u.setPassword(passwordEncoder.encode(in.password()));
+            // An administrator resetting somebody's password ends that person's open sessions
+            // too: it is the same act for the same reason (AUTH-04).
+            u.setCredentialsChangedAt(Instant.now());
         }
         if (in.roleId() != null) {
             Role role = roleRepository.findById(in.roleId())
@@ -164,28 +189,65 @@ public class UserController {
         User saved = userRepository.save(u);
         auditService.record("USER", id, "USER_UPDATED", before, UserDto.from(saved),
                 currentUser.require().getId(), null, null);
+        // Deactivated, or moved to a role without EMAIL_SEND: their Gmail connection goes (mail-service.md §5.6).
+        if (couldSendEmail && !GmailDisconnects.mayConnect(saved)) gmailDisconnects.request(List.of(id));
         return UserDto.from(saved);
     }
 
     /**
      * Deleting a user who owns POC assignments would orphan those records, so such a user is
      * deactivated instead: history stays readable and they drop out of the dropdowns (AC-A5).
+     * Either way their Gmail connection at the mail service goes (mail-service.md §5.6).
      */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.USER_MANAGE + "')")
     public Map<String, Object> delete(@PathVariable Long id) {
         User u = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not found"));
+        if (id.equals(currentUser.require().getId())) {
+            throw new BadRequestException("You cannot delete your own account");
+        }
+        // A customer's login is created and removed with the customer; deleting it on its own
+        // leaves a customer nobody can sign in as, and frees its email for a second customer to
+        // take (CP-05).
+        if (u.getCustomerId() != null) {
+            throw new BadRequestException("This is a customer's login; delete the customer instead");
+        }
+        requireAdministratorsRemain(id);
         long references = pocReferenceCount(id);
         if (references > 0) {
+            boolean couldSendEmail = GmailDisconnects.mayConnect(u);
             u.setActive(false);
             userRepository.save(u);
             auditService.record("USER", id, "USER_DEACTIVATED", null, UserDto.from(u),
                     currentUser.require().getId(), null,
                     "Deactivated instead of deleted: named as a POC on " + references + " record(s)");
+            if (couldSendEmail) gmailDisconnects.request(List.of(id));
             return Map.of("deleted", false, "deactivated", true, "pocReferences", references);
         }
+        boolean internal = u.getCustomerId() == null;
+        Object before = UserDto.from(u);
         userRepository.deleteById(id);
+        // The account is gone; the fact that somebody removed it is not (CP-04).
+        auditService.record("USER", id, "USER_DELETED", before, null,
+                currentUser.require().getId(), null, "User deleted");
+        // Whatever their role said lately: a connection made before a change of role is still theirs.
+        if (internal) gmailDisconnects.request(List.of(id));
         return Map.of("deleted", true, "deactivated", false, "pocReferences", 0);
+    }
+
+    /**
+     * Refuses a change that would leave nobody able to administer users. USER_MANAGE is the
+     * privilege this very endpoint sits behind, so once the last active holder of it is
+     * deactivated, moved to another role or deleted, nothing in the app can give it back and
+     * recovery needs a direct write to the database (AUTH-03).
+     *
+     * @param excludedUserId the account the change is about, counted as if it were already gone
+     */
+    private void requireAdministratorsRemain(Long excludedUserId) {
+        if (userRepository.countActiveHolders(Privileges.USER_MANAGE, excludedUserId, null) == 0) {
+            throw new BadRequestException("This is the last active account that can manage users;"
+                    + " give another account that ability first");
+        }
     }
 
     private long pocReferenceCount(Long userId) {
@@ -211,7 +273,8 @@ public class UserController {
         List<Long> ids = resolveIds(req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
         Long actor = currentUser.require().getId();
-        return bulkExecutor.run(req, ids, truncated, id -> {
+        List<Long> leftEmail = new ArrayList<>();
+        BulkDtos.BulkResult result = bulkExecutor.run(req, ids, truncated, id -> {
             if (id.equals(actor)) {
                 throw new BulkExecutor.IneligibleException("You cannot change your own account in bulk");
             }
@@ -222,11 +285,19 @@ public class UserController {
                         "Already " + (activate ? "active" : "inactive"));
             }
             Object before = UserDto.from(u);
+            boolean couldSendEmail = GmailDisconnects.mayConnect(u);
             u.setActive(activate);
             User saved = userRepository.save(u);
             auditService.record("USER", id, activate ? "USER_ACTIVATED" : "USER_DEACTIVATED",
                     before, UserDto.from(saved), actor, null, "Bulk action");
+            if (couldSendEmail && !GmailDisconnects.mayConnect(saved)) {
+                // Marked with the deactivation, so both stand or fall together; removed once all are done.
+                gmailDisconnects.mark(List.of(id));
+                leftEmail.add(id);
+            }
         });
+        gmailDisconnects.process(leftEmail);
+        return result;
     }
 
     @PostMapping("/export")

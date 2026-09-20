@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,16 +8,20 @@ import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/customer.dart';
+import '../../shared/models/payment_term.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/disputes_tab.dart';
+import '../documents/document_actions.dart';
+import '../email/email_actions.dart';
 import '../poc/customer_poc_editor.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
 import 'customers_screen.dart';
+import 'payment_term_field.dart';
 
 class CustomerDetailScreen extends ConsumerStatefulWidget {
   final int id;
@@ -32,9 +37,13 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
   final _phone = TextEditingController();
   final _email = TextEditingController();
   final _address = TextEditingController();
+
+  /// The terms this customer's new invoices take. Null means the system default (D1).
+  PaymentTerm? _term;
   bool _seeded = false;
   bool _dirty = false;
   bool _saving = false;
+  bool _deleting = false;
   String? _error;
   final Map<String, String?> _fieldErrors = {};
   late final UnsavedChanges _unsaved;
@@ -62,6 +71,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     _phone.text = c.phone ?? '';
     _email.text = c.email ?? '';
     _address.text = c.address ?? '';
+    _term = c.paymentTerm;
   }
 
   Future<bool> _confirmDiscard() async {
@@ -99,9 +109,14 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     try {
       await ref.read(dioProvider).put('/api/customers/${widget.id}', data: {
         'name': _name.text.trim(),
-        'phone': _phone.text.trim(),
-        'email': _email.text.trim(),
-        'address': _address.text.trim(),
+        // A box cleared means the customer has no phone or address, not that it has an empty
+        // one: the page and the list then read "—" rather than nothing at all (CP-15).
+        'phone': optionalText(_phone.text),
+        'email': optionalText(_email.text),
+        'address': optionalText(_address.text),
+        // Null is a legitimate value meaning "use the system default", so it is sent as one.
+        // Invoices already raised keep the date they were given (D1).
+        'paymentTerm': _term?.name,
       });
       ref.invalidate(customerDetailProvider(widget.id));
       ref.invalidate(tablePageProvider);
@@ -118,6 +133,67 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  /// Removes the customer, after a confirmation that names it and says what goes with it.
+  ///
+  /// `DELETE /api/customers/{id}` has always existed behind `CUSTOMER_MANAGE`, and nothing in the
+  /// app called it: a customer entered by mistake — a duplicate, the wrong name, the wrong login
+  /// — was permanent, and went on appearing in every list, picker and recipient list (CP-03).
+  Future<void> _delete(Customer c) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this customer?'),
+        // Named, because the button that opened this sits beside a name and nothing else, and
+        // the wrong customer is not recoverable.
+        content: Text(
+          '${c.name} is removed for good, and with it '
+          '${c.username == null ? 'its login' : 'its login @${c.username}'}, its POC seats, and '
+          'every document on it and on its invoices and payments. This cannot be undone.\n\n'
+          'A customer that still has invoices or payments is refused, and nothing changes.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Keep it')),
+          FilledButton(
+            style:
+                FilledButton.styleFrom(backgroundColor: Theme.of(dialogContext).colorScheme.error),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete customer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _deleting = true;
+      _error = null;
+    });
+    try {
+      await ref.read(dioProvider).delete('/api/customers/${widget.id}');
+      ref.invalidate(tablePageProvider);
+      ref.invalidate(tableSummaryProvider);
+      // There is nothing left to save, so leaving must not ask about the edits on screen.
+      _dirty = false;
+      messenger.showSnackBar(SnackBar(content: Text('${c.name} deleted')));
+      if (mounted) context.go('/customers');
+    } catch (e) {
+      if (mounted) setState(() => _error = _deleteRefusal(e));
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  /// A refused delete in words the user can act on. The server answers a foreign key with
+  /// "This change conflicts with existing data", which does not say which data or what to do
+  /// about it; every other refusal already carries its own sentence.
+  String _deleteRefusal(Object e) =>
+      (e is DioException && e.response?.statusCode == 409)
+          ? 'This customer has invoices or payments on it and cannot be deleted. '
+              'Nothing was changed.'
+          : apiErrorMessage(e);
 
   @override
   Widget build(BuildContext context) {
@@ -140,6 +216,13 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       ),
       data: (customer) {
         _seed(customer);
+        // A customer login reaches its own customer here, and may write about it too (E13).
+        final sendEmail = sendEmailHeaderButton(context, ref,
+            type: EmailEntityType.customer, entityId: customer.id, entityLabel: customer.name);
+        final documentsTab = documentsDetailTab(ref,
+            type: DocumentEntityType.customer, entityId: customer.id, entityLabel: customer.name);
+        final emailTab = emailDetailTab(ref,
+            type: EmailEntityType.customer, entityId: customer.id, entityLabel: customer.name);
         return PopScope(
           canPop: !_dirty,
           // Unsaved edits are asked about once, by goGuarded or else by the route's onExit.
@@ -152,6 +235,17 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             onBack: () => goGuarded(context, '/customers'),
             titleTrailing: [
               if (canSeePoc && customer.pocMissing) const PocMissingBadge(),
+              if (sendEmail != null) sendEmail,
+              // Only for those who may manage customers: the endpoint is behind the same
+              // privilege, so anyone else would only be offered a 403 (CP-03).
+              if (canEdit)
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Delete customer'),
+                  style: OutlinedButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error),
+                  onPressed: _deleting ? null : () => _delete(customer),
+                ),
             ],
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) => context.go('/customers/${widget.id}?tab=$slug'),
@@ -183,6 +277,8 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                         entityType: 'CUSTOMER', entityId: customer.id, includeRelated: true),
                   ),
                 ),
+              if (documentsTab != null) documentsTab,
+              if (emailTab != null) emailTab,
             ],
           ),
         );
@@ -214,7 +310,12 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
           _figuresAndSave(
             [
               _figure(context, 'Outstanding', formatMoney(c.outstanding),
-                  accent: c.outstanding > 0 ? Theme.of(context).colorScheme.error : null),
+                  accent: c.outstanding > 0 ? Theme.of(context).colorScheme.error : null,
+                  // What is owed and what is late are different facts, and collections work from
+                  // the second (AC-A6, US-A6).
+                  note: c.overdueAmount > 0
+                      ? 'of which ${formatMoney(c.overdueAmount)} overdue'
+                      : null),
               _figure(context, 'Credit balance', formatMoney(c.creditBalance)),
             ],
             canEdit: canEdit,
@@ -267,6 +368,20 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                       onChanged: (_) => setState(() => _dirty = true),
                     )
                   : ReadOnlyValue(c.address ?? ''),
+            ),
+            // What this customer's new invoices default to (US-A1). Invoices already raised keep
+            // the date they were given, whatever this is changed to (D1).
+            DetailGridItem(
+              label: 'Payment terms',
+              child: canEdit
+                  ? PaymentTermField(
+                      value: _term,
+                      onChanged: (t) => setState(() {
+                        _term = t;
+                        _dirty = true;
+                      }),
+                    )
+                  : ReadOnlyValue(c.termsLabel),
             ),
             if (canSeePoc)
               DetailGridItem(
@@ -331,7 +446,8 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         ],
       );
 
-  Widget _figure(BuildContext context, String label, String value, {Color? accent}) =>
+  Widget _figure(BuildContext context, String label, String value,
+          {Color? accent, String? note}) =>
       Container(
         width: 170,
         padding: const EdgeInsets.all(12),
@@ -349,6 +465,12 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                     .textTheme
                     .titleLarge
                     ?.copyWith(color: accent, fontWeight: FontWeight.w600)),
+            if (note != null)
+              Text(note,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Theme.of(context).colorScheme.error)),
           ],
         ),
       );

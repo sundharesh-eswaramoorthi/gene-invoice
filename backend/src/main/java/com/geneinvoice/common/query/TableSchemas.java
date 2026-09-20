@@ -3,7 +3,11 @@ package com.geneinvoice.common.query;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.dispute.DisputeStatus;
 import com.geneinvoice.dispute.DisputeTargetType;
+import com.geneinvoice.email.EmailDirection;
+import com.geneinvoice.email.EmailEntityType;
+import com.geneinvoice.email.EmailStatus;
 import com.geneinvoice.invoice.Invoice;
+import com.geneinvoice.invoice.InvoiceDates;
 import com.geneinvoice.invoice.InvoiceStatus;
 import com.geneinvoice.payment.PaymentStatus;
 import com.geneinvoice.poc.CustomerPoc;
@@ -19,6 +23,7 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,6 +52,7 @@ public final class TableSchemas {
             ColumnDef.of("customerName", "Customer name", ColumnType.TEXT)
                     .path(ColumnDef.nested("customer", "name")).build(),
             ColumnDef.of("invoiceDate", "Date", ColumnType.DATE).build(),
+            ColumnDef.of("dueDate", "Due date", ColumnType.DATE).build(),
             ColumnDef.of("total", "Total", ColumnType.MONEY).build(),
             ColumnDef.of("paidAmount", "Paid", ColumnType.MONEY).build(),
             ColumnDef.of("balance", "Balance", ColumnType.MONEY)
@@ -55,6 +61,14 @@ public final class TableSchemas {
                     .build(),
             ColumnDef.of("status", "Status", ColumnType.ENUM)
                     .enumValues(names(InvoiceStatus.class)).build(),
+            // Overdue is derived from the clock rather than stored (D3), so it is a filter and not
+            // a value; sorting by lateness is sorting by due date.
+            ColumnDef.of("overdue", "Overdue", ColumnType.BOOLEAN).notSortable()
+                    // There is no column to read: the filter below is the whole of it, and the
+                    // path is a stand-in that nothing resolves.
+                    .path((root, q, cb) -> root.get("id"))
+                    .filter((spec, root, q, cb) -> overduePredicate(spec, root, cb))
+                    .build(),
             ColumnDef.of("notes", "Notes", ColumnType.TEXT).notSortable().build(),
             ColumnDef.of("salesPocUserId", "Sales POC", ColumnType.REFERENCE)
                     .reference("pocUser").pocRestricted().notSortable()
@@ -62,6 +76,38 @@ public final class TableSchemas {
             ColumnDef.of("salesPocName", "Sales POC name", ColumnType.TEXT)
                     .pocRestricted().path(ColumnDef.nested("salesPoc", "fullName")).build(),
             ColumnDef.of("createdAt", "Created", ColumnType.DATE).build());
+
+    /**
+     * An invoice is overdue when its due date has gone, it still owes something, and it was not
+     * cancelled (D3). Built against the query's own root, so the caller's scope and filter chips
+     * still apply and a customer login filtering by overdue sees only their own (AC-A6). The
+     * summary tiles count the same rows through the same predicate (AC-A7).
+     */
+    public static Predicate invoiceOverdue(Root<?> root, CriteriaBuilder cb, LocalDate today) {
+        return cb.and(
+                cb.lessThan(root.<LocalDate>get("dueDate"), today),
+                cb.greaterThan(cb.diff(root.<BigDecimal>get("total"), root.<BigDecimal>get("paidAmount")),
+                        BigDecimal.ZERO),
+                cb.notEqual(root.get("status"), InvoiceStatus.CANCELLED));
+    }
+
+    private static Predicate overduePredicate(FilterSpec spec, Root<?> root, CriteriaBuilder cb) {
+        Predicate overdue = invoiceOverdue(root, cb, InvoiceDates.today());
+        // An invoice with no due date at all — only reachable where the upgrade could not make
+        // the column not null (§2.5) — is not overdue, the way Invoice#isOverdue reads it. Said
+        // here too, because SQL makes every comparison with a null unknown, which would drop the
+        // row out of both halves of the filter instead of one.
+        return asBoolean(spec.first())
+                ? overdue
+                : cb.or(cb.isNull(root.get("dueDate")), cb.not(overdue));
+    }
+
+    private static boolean asBoolean(String raw) {
+        String v = raw == null ? "" : raw.trim();
+        if (v.equalsIgnoreCase("true")) return true;
+        if (v.equalsIgnoreCase("false")) return false;
+        throw new BadRequestException("Expected true or false but got: " + raw);
+    }
 
     // ---- payments ------------------------------------------------------------------
 
@@ -205,11 +251,18 @@ public final class TableSchemas {
                     .build(),
             ColumnDef.of("createdAt", "Created", ColumnType.DATE).build());
 
-    /** amount - fulfilled, floored at zero so an overpayment never reads as a negative debt. */
+    /**
+     * amount - fulfilled, floored at zero so an overpayment never reads as a negative debt, and
+     * zero outright for a promise that is settled or withdrawn. Mirrors
+     * {@link com.geneinvoice.promise.PaymentPromise#getRemainingAmount()} so sorting and
+     * filtering on the column agree with the figure the row shows (PPD-04).
+     */
     static Expression<BigDecimal> promiseRemaining(Root<?> root, CriteriaQuery<?> q, CriteriaBuilder cb) {
         Expression<BigDecimal> diff = cb.diff(
                 root.<BigDecimal>get("amount"), root.<BigDecimal>get("fulfilledAmount"));
         return cb.<BigDecimal>selectCase()
+                .when(root.get("status").in(PromiseStatus.KEPT, PromiseStatus.CANCELLED),
+                        cb.literal(BigDecimal.ZERO))
                 .when(cb.lessThan(diff, BigDecimal.ZERO), cb.literal(BigDecimal.ZERO))
                 .otherwise(diff);
     }
@@ -309,12 +362,39 @@ public final class TableSchemas {
             ColumnDef.of("read", "Read", ColumnType.BOOLEAN).build(),
             ColumnDef.of("createdAt", "Received", ColumnType.DATE).build());
 
+    // ---- inbox ---------------------------------------------------------------------
+
+    /**
+     * Rows are email recipient rows — always the caller's own To rows — and most columns read
+     * through to the email. Who sent it is staff identity, so customer logins cannot filter on it.
+     */
+    public static final TableSchema INBOX = TableSchema.of("inbox", "occurredAt,desc",
+            ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
+            ColumnDef.of("subject", "Subject", ColumnType.TEXT)
+                    .path(ColumnDef.nested("email", "subject")).build(),
+            ColumnDef.of("fromName", "From", ColumnType.TEXT)
+                    .pocRestricted().path(ColumnDef.nested("email", "fromName")).build(),
+            ColumnDef.of("entityType", "About", ColumnType.ENUM)
+                    .enumValues(names(EmailEntityType.class))
+                    .path(ColumnDef.nested("email", "entityType")).build(),
+            ColumnDef.of("entityLabel", "Record", ColumnType.TEXT)
+                    .path(ColumnDef.nested("email", "entityLabel")).build(),
+            ColumnDef.of("direction", "Direction", ColumnType.ENUM)
+                    .enumValues(names(EmailDirection.class))
+                    .path(ColumnDef.nested("email", "direction")).build(),
+            ColumnDef.of("status", "Status", ColumnType.ENUM)
+                    .enumValues(names(EmailStatus.class))
+                    .path(ColumnDef.nested("email", "status")).build(),
+            ColumnDef.of("read", "Read", ColumnType.BOOLEAN).build(),
+            ColumnDef.of("occurredAt", "Received", ColumnType.DATE)
+                    .path(ColumnDef.nested("email", "occurredAt")).build());
+
     private static final Map<String, TableSchema> BY_ENTITY = buildIndex();
 
     private static Map<String, TableSchema> buildIndex() {
         Map<String, TableSchema> m = new LinkedHashMap<>();
         for (TableSchema s : List.of(INVOICES, PAYMENTS, CUSTOMERS, PROMISES, PRODUCTS,
-                USERS, ROLES, DISPUTES, NOTIFICATIONS)) {
+                USERS, ROLES, DISPUTES, NOTIFICATIONS, INBOX)) {
             m.put(s.entity(), s);
         }
         return Map.copyOf(m);

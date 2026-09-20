@@ -24,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -71,6 +72,18 @@ public class InvoiceController {
         return InvoiceDtos.InvoiceDto.from(service.get(id), scopeResolver.canSeePoc());
     }
 
+    /**
+     * The due date the customer's terms give, so the form can fill it in the moment a customer is
+     * picked (US-A2). It is only of use to someone raising an invoice, so it needs INVOICE_MANAGE.
+     */
+    @GetMapping("/due-date-preview")
+    @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
+    public InvoiceDtos.DueDatePreview dueDatePreview(
+            @RequestParam Long customerId,
+            @RequestParam(required = false) String invoiceDate) {
+        return service.previewDueDate(customerId, InvoiceDates.parse(invoiceDate));
+    }
+
     @PostMapping
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
     public InvoiceDtos.InvoiceDto create(@Valid @RequestBody InvoiceDtos.CreateInvoiceRequest req) {
@@ -101,8 +114,12 @@ public class InvoiceController {
         List<Long> ids = resolveIds(req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
 
+        // A row the action does not apply to — already cancelled, or holding a payment — is one
+        // that did not qualify, not one that went wrong, and is reported as skipped like every
+        // other list's does (TBL-05).
         return switch (req.action()) {
-            case "CANCEL" -> bulkExecutor.run(req, ids, truncated, service::cancel);
+            case "CANCEL" -> bulkExecutor.run(req, ids, truncated,
+                    BulkExecutor.eligibility(service::cancel));
             case "REASSIGN_SALES_POC" -> {
                 Long userId = req.longParam("userId");
                 if (userId == null) throw new BadRequestException("REASSIGN_SALES_POC requires params.userId");
@@ -110,7 +127,7 @@ public class InvoiceController {
                     throw new BadRequestException("You may not change the Sales POC");
                 }
                 yield bulkExecutor.run(req, ids, truncated,
-                        id -> service.reassignSalesPoc(id, userId));
+                        BulkExecutor.eligibility(id -> service.reassignSalesPoc(id, userId)));
             }
             default -> throw new BadRequestException(
                     "Unknown bulk action: " + req.action() + " (expected one of " + BULK_ACTIONS + ")");
@@ -127,13 +144,17 @@ public class InvoiceController {
                 .filter(i -> ids.contains(i.getId()))
                 .toList();
 
+        // Overdue is read from the clock at export time, exactly as the list shows it (D3).
+        LocalDate today = InvoiceDates.today();
         List<String> headers = new ArrayList<>(List.of(
-                "Invoice #", "Customer", "Date", "Total", "Paid", "Balance", "Status"));
+                "Invoice #", "Customer", "Date", "Due date", "Total", "Paid", "Balance",
+                "Status", "Overdue"));
         if (poc) headers.add("Sales POC");
         List<List<Object>> rows = invoices.stream().map(i -> {
             List<Object> row = new ArrayList<>(List.of(
                     i.getInvoiceNumber(), i.getCustomer().getName(), i.getInvoiceDate(),
-                    i.getTotal(), i.getPaidAmount(), i.getBalance(), i.getStatus()));
+                    i.getDueDate(), i.getTotal(), i.getPaidAmount(), i.getBalance(),
+                    i.getStatus(), i.isOverdue(today)));
             if (poc) row.add(i.getSalesPoc() == null ? "" : i.getSalesPoc().getUsername());
             return row;
         }).toList();

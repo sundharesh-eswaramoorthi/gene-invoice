@@ -59,8 +59,16 @@ change.
 | **`PROMISE_OVERRIDE`** | ✓ | — | — | — | — | — | ✓ |
 | **`EXPORT_DATA`** | ✓ | ✓ | — | — | ✓ | ✓ | ✓ |
 
-Two entries deserve a word:
+Three entries deserve a word:
 
+- **`CUSTOMER_MANAGE` includes removing a customer.** The customer detail screen offers "Delete
+  customer" to holders of it and to nobody else, confirming by name and saying what goes with the
+  record — its login, its POC seats and every document on it and on its invoices and payments.
+  `DELETE /api/customers/{id}` had existed behind this privilege since the beginning with no
+  caller anywhere in the app, so a customer entered by mistake was permanent and went on
+  appearing in every list, picker, POC-missing tile and recipient list (CP-03). A customer with
+  invoices or payments is refused by the database's own foreign keys; the screen says so in
+  words, since the 409 carries only "This change conflicts with existing data".
 - **`CUSTOMER` never gets `POC_VIEW`.** A customer-scoped account must see no POC field, column,
   filter or dropdown, and the API must not return POC identity to them (AC-A8). Withholding the
   privilege makes that structural rather than a per-endpoint reminder — and the DTO layer also
@@ -94,6 +102,11 @@ null POC, render a **"POC missing"** badge and are selectable with the `isEmpty`
 them: the historical assignment stays readable, they drop out of the dropdowns, and records naming
 them remain findable (AC-A5). The response says which happened.
 
+Wherever a screen still names a deactivated holder — the POC editor, a detail page, a list column
+— the name is followed by **"(inactive)"**. `PocService.activeHolders` / `defaultAssignee` skip
+them, so email and the defaults on new records go to the next active holder; an unmarked name
+would present somebody as the record's POC whom the app would not in fact write to (CP-07).
+
 ## 4. Payment Promise status
 
 Status is a **pure function of current facts**, recomputed on every relevant change, which makes it
@@ -106,9 +119,9 @@ onTime / late   = fulfilment from linked ACTIVE payments, split at end of the pr
 
 if invoice-scoped and live is empty        -> KEPT      # a dispute erased the debt
 if the promised date has not passed:
-    complete = invoice-scoped ? every live invoice has zero balance
-                              : onTime+late >= amount
-                                or (date reached and the account owes nothing)
+    complete = onTime+late >= amount                    # the promised money has arrived
+               or (invoice-scoped ? every live invoice has zero balance
+                                  : date reached and the account owes nothing)
     complete -> KEPT ; any fulfilment -> PARTIALLY_KEPT ; else OPEN
 else:                                                   # the date has gone
     onTime >= amount                                    -> KEPT
@@ -117,6 +130,12 @@ else:                                                   # the date has gone
     onTime > 0                                          -> PARTIALLY_KEPT
     else                                                -> BROKEN
 ```
+
+**The promised money arriving keeps the promise whichever side of the date it is read from.** Both
+branches test `>= amount` first, so an invoice-scoped promise for part of a larger invoice, paid in
+full and on time, is KEPT the moment the money lands rather than sitting at PARTIALLY_KEPT with
+"Remaining 0.00" until the date goes by (PPD-02). The extra ways to be complete differ, because
+only after the date can the split into on-time and late money be judged.
 
 **Paying late does not un-break a promise.** The customer did break their word; the money is still
 recorded in `fulfilledAmount`. AC-B3 and AC-B4 both describe transitions out of an *open* promise,
@@ -132,6 +151,18 @@ correct in list results, filters and totals for a user who never opens the recor
 
 **Overrides** pin a status until cleared; fulfilment keeps being tracked underneath.
 `DELETE /api/promises/{id}/override` hands the promise back to automatic tracking.
+
+**A promise covers the invoices the form showed, and only those.** The checklist in
+`promise_form_dialog.dart` is the customer's outstanding invoices *plus* every invoice the promise
+is already scoped to that they do not include: the invoice the screen was opened on (the callers
+hand over the `InvoiceSummary`, not a bare id) and, when editing, one linked earlier and since
+paid off or cancelled. Each appears ticked, can be unticked, and counts towards the shortfall
+hint — including while the outstanding list is still loading and after a request for it has
+failed, since an invoice with no checkbox is one nobody can see or untick. Building the list from
+the outstanding invoices alone meant a promise raised from a
+fully-paid or cancelled invoice was scoped to it with no checkbox to show for it: invoice-scoped
+with nothing owed, the tracker read it as KEPT the moment it was saved, and the brand-new promise
+came back already closed with money still shown as remaining (UI-02).
 
 ## 5. List API contract
 
@@ -162,10 +193,27 @@ GET /api/{entity}?page=0&size=20&sort=total,desc&filter=status:in:UNPAID,PARTIAL
 
 Companion endpoints per entity: `GET /api/{entity}/summary` (tiles over the whole filtered set),
 `POST /api/{entity}/bulk`, `POST /api/{entity}/export`.
-`GET /api/table-schemas/{entity}` publishes the columns the frontend builds its filter UI from.
+`GET /api/table-schemas/{entity}` publishes the columns the frontend builds its filter UI from,
+under that table's own view privilege; `/all` and the entity list return only the tables the
+caller may see (AUTH-07).
 
 Filter values reach the database only through criteria parameter binding — never as query text —
 and an unknown column, operator, value type or page size is rejected with a 400 (AC-D9).
+
+### 5.1 The same query in the browser's URL (AC-D4)
+
+A list page carries its query in its own URL — `?page=&size=&sort=&f=field:operator:value`, `f`
+repeated per chip — and `RouteQuery` (`lib/core/table/route_query.dart`) is the only thing that
+writes or reads it.
+
+Both directions treat a value as an opaque component: `Uri.encodeComponent` on the way out (a
+space becomes `%20`, a `+` becomes `%2B`) and a component decode on the way back, rather than
+`Uri(queryParameters:)` and `Uri.queryParametersAll`, which use the HTML-form convention where a
+space is written `+` and a `+` therefore only survives while its escape does. It does not survive:
+the address bar shows the escapes decoded, and the decoded form is what people copy, bookmark and
+paste. A filter on "+91 5551234" reopened as " 91 5551234" — a different query, no warning, and
+different rows (TBL-03). With neither character written literally, the link means the same thing
+encoded or decoded. A `+` in a URL is now always the character the user typed.
 
 ## 6. Sortable and filterable columns (AC-D3)
 
@@ -180,12 +228,19 @@ Date presets: `today, yesterday, last7Days, last30Days, thisMonth, lastMonth, th
 | **invoices** (default `invoiceDate,desc`) | `id` SF · `invoiceNumber` SF · `customerId` F(ref) · `customerName` SF · `invoiceDate` SF · `total` SF · `paidAmount` SF · `balance` SF *(computed `total − paid`)* · `status` SF · `notes` F · `salesPocUserId` F(ref, POC) · `salesPocName` SF(POC) · `createdAt` SF |
 | **payments** (default `paidAt,desc`) | `id` SF · `customerId` F(ref) · `customerName` SF · `amount` SF · `creditApplied` SF · `method` SF · `notes` F · `paidAt` SF · `status` SF · `collectionPocUserId` F(ref, POC) · `collectionPocName` SF(POC) |
 | **customers** (default `name,asc`) | `id` SF · `name` SF · `phone` SF · `email` SF · `address` F · `creditBalance` SF · `outstanding` SF *(subquery over live invoices)* · `successPocUserId` F(seat, POC) · `collectionPocUserId` F(seat, POC) · `createdAt` SF |
-| **promises** (default `promisedDate,desc`) | `id` SF · `customerId` F(ref) · `customerName` SF · `amount` SF · `fulfilledAmount` SF · `remainingAmount` SF *(computed, floored at 0)* · `promisedDate` SF · `status` SF · `statusOverridden` SF · `collectionPocUserId` F(ref, POC) · `collectionPocName` SF(POC) · `notes` F · `invoiceId` F(link table) · `createdAt` SF |
+| **promises** (default `promisedDate,desc`) | `id` SF · `customerId` F(ref) · `customerName` SF · `amount` SF · `fulfilledAmount` SF · `remainingAmount` SF *(computed, floored at 0, and zero outright once the promise is KEPT or CANCELLED)* · `promisedDate` SF · `status` SF · `statusOverridden` SF · `collectionPocUserId` F(ref, POC) · `collectionPocName` SF(POC) · `notes` F · `invoiceId` F(link table) · `createdAt` SF |
 | **products** (default `name,asc`) | `id` SF · `name` SF · `description` F · `price` SF · `active` SF · `createdAt` SF |
 | **users** (default `username,asc`) | `id` SF · `username` SF · `email` SF · `fullName` SF · `active` SF · `roleName` SF · `customerId` SF · `createdAt` SF |
 | **roles** (default `name,asc`) | `id` SF · `name` SF · `description` F |
 | **disputes** (default `createdAt,desc`) | `id` SF · `customerId` SF(ref) · `targetType` SF · `targetId` SF · `status` SF · `reason` F · `createdAt` SF · `resolvedAt` SF |
 | **notifications** (default `createdAt,desc`) | `id` SF · `type` SF · `title` SF · `message` F · `read` SF · `createdAt` SF |
+
+A column that renders free text somebody typed — a customer's name or email, a person's name in a
+POC column, a product description, a dispute reason, an email subject — is given a
+`TableColumnSpec.maxWidth` and ellipsised, with the whole value on hover. Uncapped, the column
+takes the width of its longest value: one customer with a legal 120-character name
+(`FieldLimits.FULL_NAME`) ran the customers table out to x≈2138 on a 1366px screen, leaving a
+checkbox and a wall of letters with every other column off the right-hand edge (UI-01, D-20).
 
 Columns marked **POC** are stripped from the schema and from every payload for a customer-scoped
 caller. The `successPocUserId` / `collectionPocUserId` columns on **customers** are to-many seats:
@@ -214,7 +269,13 @@ Collection POC · customers where I hold a POC seat **or** own one of their invo
 Ids are always re-resolved through the caller's scope, so ineligible rows are excluded rather than
 attempted (AC-D6). Each record runs in its own transaction, and every requested id lands in exactly
 one of `succeeded` / `failed` / `skipped` — nothing is dropped silently (AC-D5). A filtered set
-larger than 5000 comes back with `truncated: true` and the limit, rather than a silent cap.
+larger than 5000 comes back with `truncated: true` and the limit, rather than a silent cap; an
+explicit `ids` list longer than the same limit is refused as a field error on `ids` (TBL-08).
+
+`skipped` is for a row that did not qualify — already cancelled, already inactive, holding a
+payment that must be refunded first — and for one a concurrent writer reached first; `failed` is
+for something going wrong, which the dialog renders as an error. The single-record endpoints keep
+answering 400 for the same refusals (TBL-05, TBL-07).
 
 | Entity | Actions |
 |---|---|

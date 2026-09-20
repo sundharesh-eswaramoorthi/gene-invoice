@@ -118,8 +118,14 @@ public class PaymentPromise {
         this.updatedAt = Instant.now();
     }
 
-    /** What is still owed against the promised amount. */
+    /**
+     * What is still owed against the promised amount. A promise that is settled or withdrawn owes
+     * nothing whatever the arithmetic says: a promise kept because the debt went away elsewhere
+     * has a fulfilled amount of zero, and a cancelled one keeps the amount it was raised for, so
+     * both used to advertise money still outstanding beside a status saying otherwise (PPD-04).
+     */
     public BigDecimal getRemainingAmount() {
+        if (status == PromiseStatus.KEPT || status == PromiseStatus.CANCELLED) return BigDecimal.ZERO;
         BigDecimal remaining = amount.subtract(fulfilledAmount == null ? BigDecimal.ZERO : fulfilledAmount);
         return remaining.signum() < 0 ? BigDecimal.ZERO : remaining;
     }

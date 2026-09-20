@@ -1,0 +1,441 @@
+{
+  "roles": {
+    "EXPORT_ONLY": {
+      "id": 15,
+      "name": "E-EXPORT-ONLY-mua672ewcde3",
+      "description": "Area E: EXPORT_DATA without INVOICE_VIEW",
+      "privileges": [
+        "EXPORT_DATA"
+      ]
+    }
+  },
+  "users": {
+    "ADMIN": {
+      "id": 56,
+      "username": "e-mua671tre660",
+      "password": "Passw0rd!",
+      "role": "ADMIN"
+    },
+    "CASHIER": {
+      "id": 57,
+      "username": "e-mua671wnbcbd",
+      "password": "Passw0rd!",
+      "role": "CASHIER"
+    },
+    "VIEWER": {
+      "id": 58,
+      "username": "e-mua671z1c1fe",
+      "password": "Passw0rd!",
+      "role": "VIEWER"
+    },
+    "SALES_POC": {
+      "id": 59,
+      "username": "e-mua6721x7f5e",
+      "password": "Passw0rd!",
+      "role": "SALES_POC"
+    },
+    "CUSTOMER_SUCCESS_POC": {
+      "id": 60,
+      "username": "e-mua6724d2b62",
+      "password": "Passw0rd!",
+      "role": "CUSTOMER_SUCCESS_POC"
+    },
+    "COLLECTION_POC": {
+      "id": 61,
+      "username": "e-mua6726tba1b",
+      "password": "Passw0rd!",
+      "role": "COLLECTION_POC"
+    },
+    "SALES_POC_B": {
+      "id": 62,
+      "username": "e-mua672911ea8",
+      "password": "Passw0rd!",
+      "role": "SALES_POC"
+    },
+    "COLLECTION_POC_B": {
+      "id": 63,
+      "username": "e-mua672ch690a",
+      "password": "Passw0rd!",
+      "role": "COLLECTION_POC"
+    },
+    "EXPORT_ONLY": {
+      "id": 64,
+      "username": "e-mua672fdc2ce",
+      "password": "Passw0rd!",
+      "role": "EXPORT_ONLY"
+    },
+    "CUSTOMER": {
+      "id": null,
+      "username": "e-mua672hf0857",
+      "password": "Passw0rd!",
+      "role": "CUSTOMER",
+      "customerId": 23
+    }
+  },
+  "productId": 11,
+  "custA": {
+    "id": 23,
+    "name": "e-mua672hf0857",
+    "phone": "555-0100",
+    "email": "e-mua672hf0857@rt.local",
+    "address": "1 Test Way"
+  },
+  "custT": {
+    "id": 24,
+    "name": "e-mua672ki9b88",
+    "phone": "555-0100",
+    "email": "e-mua672ki9b88@rt.local",
+    "address": "1 Test Way"
+  },
+  "custB": {
+    "id": 25,
+    "name": "e-mua672mwf1df",
+    "username": "e-mua672mwf1df",
+    "password": "Passw0rd!"
+  },
+  "invA": {
+    "id": 64,
+    "invoiceNumber": "INV-20260920-0064",
+    "customerId": 23,
+    "customerName": "e-mua672hf0857",
+    "invoiceDate": "2026-09-20T18:49:09.783837Z",
+    "dueDate": "2026-11-04",
+    "paymentTerm": "NET_45",
+    "paymentTermLabel": "Net 45",
+    "overdue": false,
+    "daysOverdue": 0,
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "UNPAID",
+    "notes": "area E invA",
+    "items": [
+      {
+        "id": 66,
+        "productId": 11,
+        "productName": "e-prod-mua672h862df",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 59,
+      "username": "e-mua6721x7f5e",
+      "fullName": "E-MUA6721X7F5E",
+      "email": "e-mua6721x7f5e@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-20T18:49:09.784848Z"
+  },
+  "invOverdue": {
+    "id": 65,
+    "invoiceNumber": "INV-20260920-0065",
+    "customerId": 23,
+    "customerName": "e-mua672hf0857",
+    "invoiceDate": "2026-07-22T00:00:00Z",
+    "dueDate": "2026-08-11",
+    "paymentTerm": "CUSTOM",
+    "paymentTermLabel": "Custom",
+    "overdue": true,
+    "daysOverdue": 40,
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "UNPAID",
+    "notes": "area E overdue",
+    "items": [
+      {
+        "id": 67,
+        "productId": 11,
+        "productName": "e-prod-mua672h862df",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 59,
+      "username": "e-mua6721x7f5e",
+      "fullName": "E-MUA6721X7F5E",
+      "email": "e-mua6721x7f5e@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-20T18:49:09.799168Z"
+  },
+  "invB": {
+    "id": 66,
+    "invoiceNumber": "INV-20260920-0066",
+    "customerId": 25,
+    "customerName": "e-mua672mwf1df",
+    "invoiceDate": "2026-09-20T18:49:09.814637Z",
+    "dueDate": "2026-10-20",
+    "paymentTerm": "NET_30",
+    "paymentTermLabel": "Net 30",
+    "overdue": false,
+    "daysOverdue": 0,
+    "total": 100,
+    "paidAmount": 0,
+    "balance": 100,
+    "status": "UNPAID",
+    "notes": "area E invB",
+    "items": [
+      {
+        "id": 68,
+        "productId": 11,
+        "productName": "e-prod-mua672h862df",
+        "quantity": 1,
+        "unitPrice": 100,
+        "lineTotal": 100
+      }
+    ],
+    "salesPoc": {
+      "id": 62,
+      "username": "e-mua672911ea8",
+      "fullName": "E-MUA672911EA8",
+      "email": "e-mua672911ea8@rt.local",
+      "role": "SALES_POC",
+      "active": true
+    },
+    "pocMissing": false,
+    "createdAt": "2026-09-20T18:49:09.815695Z"
+  },
+  "payA": {
+    "id": 8,
+    "customerId": 23,
+    "customerName": "e-mua672hf0857",
+    "amount": 10,
+    "creditApplied": 0,
+    "method": "CASH",
+    "notes": null,
+    "paidAt": "2026-09-20T18:49:09.836100Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 65,
+        "invoiceNumber": "INV-20260920-0065",
+        "total": 100,
+        "paidAmount": 10,
+        "balance": 90,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 10
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 61,
+      "username": "e-mua6726tba1b",
+      "fullName": "E-MUA6726TBA1B",
+      "email": "e-mua6726tba1b@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "payB": {
+    "id": 9,
+    "customerId": 25,
+    "customerName": "e-mua672mwf1df",
+    "amount": 10,
+    "creditApplied": 0,
+    "method": "CASH",
+    "notes": null,
+    "paidAt": "2026-09-20T18:49:09.853515Z",
+    "status": "ACTIVE",
+    "invoices": [
+      {
+        "id": 66,
+        "invoiceNumber": "INV-20260920-0066",
+        "total": 100,
+        "paidAmount": 10,
+        "balance": 90,
+        "status": "PARTIALLY_PAID",
+        "allocatedAmount": 10
+      }
+    ],
+    "customerCreditBalance": 0,
+    "collectionPoc": {
+      "id": 63,
+      "username": "e-mua672ch690a",
+      "fullName": "E-MUA672CH690A",
+      "email": "e-mua672ch690a@rt.local",
+      "role": "COLLECTION_POC",
+      "active": true
+    },
+    "pocMissing": false
+  },
+  "docs": {
+    "custA_internal": {
+      "id": 29,
+      "entityType": "CUSTOMER",
+      "entityId": 23,
+      "entityLabel": "Customer e-mua672hf0857",
+      "entityLink": "/customers/23",
+      "filename": "e-custA-internal.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 69,
+      "sizeLabel": "69 B",
+      "visibility": "INTERNAL",
+      "description": "internal",
+      "uploadedBy": {
+        "userId": 1,
+        "name": "System Administrator"
+      },
+      "uploadedAt": "2026-09-20T18:49:09.874312Z",
+      "canDownload": true,
+      "canEdit": true,
+      "canDelete": true
+    },
+    "custA_shared": {
+      "id": 30,
+      "entityType": "CUSTOMER",
+      "entityId": 23,
+      "entityLabel": "Customer e-mua672hf0857",
+      "entityLink": "/customers/23",
+      "filename": "e-custA-shared.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 69,
+      "sizeLabel": "69 B",
+      "visibility": "SHARED",
+      "description": "shared",
+      "uploadedBy": {
+        "userId": 1,
+        "name": "System Administrator"
+      },
+      "uploadedAt": "2026-09-20T18:49:09.886168Z",
+      "canDownload": true,
+      "canEdit": true,
+      "canDelete": true
+    },
+    "invA_internal": {
+      "id": 31,
+      "entityType": "INVOICE",
+      "entityId": 64,
+      "entityLabel": "Invoice INV-20260920-0064",
+      "entityLink": "/invoices/64",
+      "filename": "e-invA-internal.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 69,
+      "sizeLabel": "69 B",
+      "visibility": "INTERNAL",
+      "description": null,
+      "uploadedBy": {
+        "userId": 1,
+        "name": "System Administrator"
+      },
+      "uploadedAt": "2026-09-20T18:49:09.896930Z",
+      "canDownload": true,
+      "canEdit": true,
+      "canDelete": true
+    },
+    "invA_shared": {
+      "id": 32,
+      "entityType": "INVOICE",
+      "entityId": 64,
+      "entityLabel": "Invoice INV-20260920-0064",
+      "entityLink": "/invoices/64",
+      "filename": "e-invA-shared.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 69,
+      "sizeLabel": "69 B",
+      "visibility": "SHARED",
+      "description": null,
+      "uploadedBy": {
+        "userId": 1,
+        "name": "System Administrator"
+      },
+      "uploadedAt": "2026-09-20T18:49:09.907325Z",
+      "canDownload": true,
+      "canEdit": true,
+      "canDelete": true
+    },
+    "payA_internal": {
+      "id": 33,
+      "entityType": "PAYMENT",
+      "entityId": 8,
+      "entityLabel": "Payment #8",
+      "entityLink": "/payments/8",
+      "filename": "e-payA-internal.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 69,
+      "sizeLabel": "69 B",
+      "visibility": "INTERNAL",
+      "description": null,
+      "uploadedBy": {
+        "userId": 1,
+        "name": "System Administrator"
+      },
+      "uploadedAt": "2026-09-20T18:49:09.919824Z",
+      "canDownload": true,
+      "canEdit": true,
+      "canDelete": true
+    },
+    "custB_internal": {
+      "id": 34,
+      "entityType": "CUSTOMER",
+      "entityId": 25,
+      "entityLabel": "Customer e-mua672mwf1df",
+      "entityLink": "/customers/25",
+      "filename": "e-custB-internal.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 69,
+      "sizeLabel": "69 B",
+      "visibility": "INTERNAL",
+      "description": null,
+      "uploadedBy": {
+        "userId": 1,
+        "name": "System Administrator"
+      },
+      "uploadedAt": "2026-09-20T18:49:09.930799Z",
+      "canDownload": true,
+      "canEdit": true,
+      "canDelete": true
+    },
+    "invB_internal": {
+      "id": 35,
+      "entityType": "INVOICE",
+      "entityId": 66,
+      "entityLabel": "Invoice INV-20260920-0066",
+      "entityLink": "/invoices/66",
+      "filename": "e-invB-internal.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 69,
+      "sizeLabel": "69 B",
+      "visibility": "INTERNAL",
+      "description": null,
+      "uploadedBy": {
+        "userId": 1,
+        "name": "System Administrator"
+      },
+      "uploadedAt": "2026-09-20T18:49:09.948695Z",
+      "canDownload": true,
+      "canEdit": true,
+      "canDelete": true
+    },
+    "payB_internal": {
+      "id": 36,
+      "entityType": "PAYMENT",
+      "entityId": 9,
+      "entityLabel": "Payment #9",
+      "entityLink": "/payments/9",
+      "filename": "e-payB-internal.pdf",
+      "contentType": "application/pdf",
+      "sizeBytes": 69,
+      "sizeLabel": "69 B",
+      "visibility": "INTERNAL",
+      "description": null,
+      "uploadedBy": {
+        "userId": 1,
+        "name": "System Administrator"
+      },
+      "uploadedAt": "2026-09-20T18:49:09.968085Z",
+      "canDownload": true,
+      "canEdit": true,
+      "canDelete": true
+    }
+  }
+}

@@ -10,6 +10,10 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
+        session_factory:
+          # Lets a test count the SQL of one request (CountingStatements); it counts nothing until
+          # a test asks it to.
+          statement_inspector: com.geneinvoice.CountingStatements
 
 app:
   jwt:
@@ -18,3 +22,21 @@ app:
   promises:
     # Long enough that the background sweeper never races a test; tests call sweepOverdue directly.
     sweep-interval-ms: 3600000
+  documents:
+    # A scratch directory of the machine's own, made at startup; never the repository's ./data.
+    local:
+      root: ${java.io.tmpdir}/geneinvoice-test-documents
+  mail:
+    # Tests hand email to a recording transport (RecordingMailTransport); the webhook tests switch
+    # this to mail-service in a context of their own.
+    transport: none
+    dispatch:
+      # Bulk sends are handed over inline, so a test sees the outcome as soon as the request returns.
+      async: false
+      # Tests sweep by calling the dispatcher directly.
+      sweep-interval-ms: 3600000
+    service:
+      # Nothing listens here: no test calls a real mail service.
+      url: http://127.0.0.1:9
+      api-key: test-mail-service-api-key
+      webhook-secret: test-mail-service-webhook-secret

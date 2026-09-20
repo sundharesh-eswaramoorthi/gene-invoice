@@ -1,0 +1,33 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:genemail-test;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate.ddl-auto: create-drop
+
+mail:
+  api-key: test-api-key-0123456789
+  # base64 of 32 bytes, for tests only
+  secrets-key: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
+  # Tests run the worker themselves (RecordingSendQueue); only the Testcontainers test uses RabbitMQ.
+  queue: direct
+  webhook:
+    url:
+    secret: test-webhook-secret-0123456789
+    # Long enough that no scheduled run races a test; tests call each job directly.
+    interval-ms: 3600000
+  send:
+    per-mailbox-interval-ms: 0
+    sweep-interval-ms: 3600000
+  tracking:
+    interval-ms: 3600000
+  sync:
+    enabled: true
+    interval-ms: 3600000
+
+management:
+  health:
+    rabbit:
+      enabled: false

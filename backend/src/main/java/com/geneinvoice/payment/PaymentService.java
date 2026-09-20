@@ -53,8 +53,11 @@ public class PaymentService {
 
     @Transactional
     public Payment record(PaymentDtos.CreatePaymentRequest req) {
-        Customer customer = customerRepository.findById(req.customerId())
-                .orElseThrow(() -> new NotFoundException("Customer not found"));
+        // The first lock of the money path, before anything of this customer's is read: two
+        // cashiers recording a payment for one customer at the same instant queue here instead of
+        // both reading the same paid amounts and credit balance and each writing their own
+        // figures over the other's, which loses one payment's money outright (PPD-01).
+        Customer customer = lockCustomer(req.customerId());
 
         // Mandatory on create, enforced here rather than only in the form (AC-A2).
         User collectionPoc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION);
@@ -66,7 +69,7 @@ public class PaymentService {
                 Set.copyOf(chosen));
         List<Invoice> targets;
         if (!chosen.isEmpty()) {
-            List<Invoice> loaded = new ArrayList<>(invoiceRepository.findAllById(chosen));
+            List<Invoice> loaded = new ArrayList<>(invoiceRepository.findAllByIdForUpdate(chosen));
             // An id that matches no invoice would otherwise be ignored and the money would quietly
             // become customer credit (D-48).
             List<Long> missing = chosen.stream()
@@ -83,7 +86,7 @@ public class PaymentService {
                 }
             }
         } else {
-            targets = new ArrayList<>(invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(customer.getId()));
+            targets = new ArrayList<>(invoiceRepository.findByCustomerIdForUpdate(customer.getId()));
         }
         targets.sort(Comparator.comparing((Invoice i) -> !payFirst.contains(i.getId())).thenComparing(OLDEST_FIRST));
 
@@ -168,12 +171,33 @@ public class PaymentService {
     private static final Comparator<Invoice> OLDEST_FIRST = Comparator.comparing(Invoice::getInvoiceDate);
 
     /**
+     * The first lock of every money path: the customer whose credit balance and invoices are
+     * about to move. Taking it before anything else, and before any invoice of theirs, gives the
+     * whole path one lock order, so two requests on one customer queue and never deadlock.
+     */
+    private Customer lockCustomer(Long customerId) {
+        return customerRepository.findByIdForUpdate(customerId)
+                .orElseThrow(() -> new NotFoundException("Customer not found"));
+    }
+
+    /** The invoices about to be written, locked by ascending id — the second half of that order. */
+    private void lockInvoices(List<Invoice> invoices) {
+        List<Long> ids = invoices.stream().map(Invoice::getId).filter(java.util.Objects::nonNull).toList();
+        if (!ids.isEmpty()) invoiceRepository.findAllByIdForUpdate(ids);
+    }
+
+    /**
      * Apply `amount` to the outstanding invoices in the order given (the caller's order: oldest
      * first, or a ticked promise's invoices first); leftover goes to credit. Returns what landed
      * on each invoice, for the caller to audit once the payment has an id.
      */
     private List<Movement> applyTo(Payment payment, List<Invoice> targets, BigDecimal amount) {
-        Customer customer = payment.getCustomer();
+        // Every row this is about to change is held under the write lock first, in the one order
+        // the whole money path uses: the customer, then the invoices by ascending id (PPD-01).
+        // Re-taking a lock this transaction already holds costs a query and changes nothing, so
+        // the method is safe to call from anywhere rather than only from a caller that knows.
+        Customer customer = lockCustomer(payment.getCustomer().getId());
+        lockInvoices(targets);
         List<Invoice> outstanding = new ArrayList<>(targets.stream()
                 .filter(i -> i.getStatus() != InvoiceStatus.FULLY_PAID && i.getStatus() != InvoiceStatus.CANCELLED)
                 .toList());
@@ -212,6 +236,7 @@ public class PaymentService {
         if (p.getStatus() == PaymentStatus.VOIDED) {
             throw new BadRequestException("Payment already voided");
         }
+        lockCustomer(p.getCustomer().getId());
         reverseAllocations(p);
         p.setStatus(PaymentStatus.VOIDED);
         Payment saved = paymentRepository.save(p);
@@ -227,6 +252,10 @@ public class PaymentService {
      * matters for credit older than the ledger.
      */
     private void reverseAllocations(Payment p) {
+        // Taking money back off an invoice is the same read-modify-write as putting it on, and
+        // needs the same locks, in the same order (PPD-01).
+        lockCustomer(p.getCustomer().getId());
+        lockInvoices(p.getAllocations().stream().map(PaymentAllocation::getInvoice).toList());
         for (PaymentAllocation alloc : new ArrayList<>(p.getAllocations())) {
             Invoice inv = alloc.getInvoice();
             Movement reversed = new Movement(inv, alloc.getAmount(), inv.getPaidAmount(), inv.getStatus());
@@ -263,12 +292,15 @@ public class PaymentService {
             throw new BadRequestException("Amount must be positive");
         }
         Money.requireCents(newAmount, "Amount");
+        // The customer's lock before either half of the move, so an approval and a payment on the
+        // same customer cannot interleave between the reversal and the re-application (PPD-01).
+        lockCustomer(p.getCustomer().getId());
         reverseAllocations(p);
         p.setAmount(newAmount);
         if (method != null) p.setMethod(method);
         if (notes != null) p.setNotes(notes);
         List<Invoice> targets = new ArrayList<>(
-                invoiceRepository.findByCustomerIdOrderByInvoiceDateDesc(p.getCustomer().getId()));
+                invoiceRepository.findByCustomerIdForUpdate(p.getCustomer().getId()));
         targets.sort(OLDEST_FIRST);
         List<Movement> applied = applyTo(p, targets, newAmount);
         Payment saved = paymentRepository.save(p);
@@ -283,8 +315,10 @@ public class PaymentService {
         Payment p = paymentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Payment not found"));
         Long callerCustomer = currentUser.customerIdOrNull();
+        // Another customer's payment answers exactly as a missing one does, which is what
+        // requireInBook already does for a POC outside their book (AUTH-08).
         if (callerCustomer != null && !callerCustomer.equals(p.getCustomer().getId())) {
-            throw new AccessDeniedException("Not allowed");
+            throw new NotFoundException("Payment not found");
         }
         requireInBook(id);
         return p;

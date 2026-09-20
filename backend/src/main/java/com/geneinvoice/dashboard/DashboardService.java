@@ -52,10 +52,15 @@ public class DashboardService {
     public static final int MAX_MONTHS = 24;
     public static final int MAX_LIMIT = 20;
 
-    private record Age(String label, int fromDays, Integer toDays) {}
+    /**
+     * One ageing bucket, in whole days past the due date (D4). A null bound is an open end: "Not
+     * yet due" has no lower one, the last bucket no upper one.
+     */
+    private record Age(String label, Integer fromDays, Integer toDays) {}
 
     private static final List<Age> AGES = List.of(
-            new Age("0–30 days", 0, 30),
+            new Age("Not yet due", null, 0),
+            new Age("1–30 days", 1, 30),
             new Age("31–60 days", 31, 60),
             new Age("61–90 days", 61, 90),
             new Age("Over 90 days", 91, null));
@@ -87,20 +92,24 @@ public class DashboardService {
                 points(window, em.createQuery(cq).getSingleResult()));
     }
 
-    /** What is still owed, by days since the invoice date. */
+    /**
+     * What is still owed, by whole days past the due date (D4). Every bucket is one pass of the
+     * same query (AC-B7), so the five numbers are of one moment and add up to the outstanding
+     * total the rest of the dashboard reports (AC-B3).
+     */
     @Transactional(readOnly = true)
     public DashboardDtos.OutstandingByAge outstandingByAge(LocalDate today) {
         ScopeResolver.Scope scope = scopeResolver.forInvoices();
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
         Root<Invoice> inv = cq.from(Invoice.class);
-        Expression<Instant> date = inv.get("invoiceDate");
+        Expression<LocalDate> dueDate = inv.get("dueDate");
         Expression<BigDecimal> balance = balance(cb, inv);
 
         List<Selection<?>> select = new ArrayList<>();
         for (Age age : AGES) {
-            select.add(Aggregates.sumWhen(cb, aged(cb, date, age, today), balance));
-            select.add(Aggregates.countWhen(cb, aged(cb, date, age, today)));
+            select.add(Aggregates.sumWhen(cb, overdueBy(cb, dueDate, age, today), balance));
+            select.add(Aggregates.countWhen(cb, overdueBy(cb, dueDate, age, today)));
         }
         cq.multiselect(select).where(open(cb, inv, scoped(inv, cq, cb, scope)).toArray(new Predicate[0]));
         Object[] row = em.createQuery(cq).getSingleResult();
@@ -109,7 +118,11 @@ public class DashboardService {
         for (int i = 0; i < AGES.size(); i++) {
             Age age = AGES.get(i);
             buckets.add(new DashboardDtos.AgeBucket(age.label(), age.fromDays(), age.toDays(),
-                    Aggregates.asMoney(row[2 * i]), Aggregates.asLong(row[2 * i + 1])));
+                    Aggregates.asMoney(row[2 * i]), Aggregates.asLong(row[2 * i + 1]),
+                    // The same bounds the other way round, as the invoice list's dueDate filter
+                    // takes them: the oldest date in the bucket comes from its largest lateness.
+                    age.toDays() == null ? null : today.minusDays(age.toDays()),
+                    age.fromDays() == null ? null : today.minusDays(age.fromDays())));
         }
         return new DashboardDtos.OutstandingByAge(coverage(scope), buckets);
     }
@@ -201,11 +214,15 @@ public class DashboardService {
             Join<PaymentAllocation, Invoice> invoice = alloc.join("invoice");
             List<Predicate> where = new ArrayList<>();
             where.add(cb.equal(payment.get("status"), PaymentStatus.ACTIVE));
-            where.add(invoice.get("id").in(idsInScope(Invoice.class, scopeResolver.forInvoices(), cq, cb)));
+            // What landed on the caller's own invoices, or — for someone who is a Collection POC
+            // as well — on a payment of their own. Either one is theirs to see, so the two are an
+            // or: a sales rep holds no payments book at all, and requiring both would leave them
+            // a collected figure of zero beside a billed figure of their whole book.
+            Predicate onMyInvoices =
+                    invoice.get("id").in(idsInScope(Invoice.class, scopeResolver.forInvoices(), cq, cb));
             ScopeResolver.Scope payments = scopeResolver.forPayments();
-            if (!payments.predicates().isEmpty()) {
-                where.add(payment.get("id").in(idsInScope(Payment.class, payments, cq, cb)));
-            }
+            where.add(payments.predicates().isEmpty() ? onMyInvoices
+                    : cb.or(onMyInvoices, payment.get("id").in(idsInScope(Payment.class, payments, cq, cb))));
             return new Collected(alloc.get("amount"), payment.get("paidAt"), payment.get("id"),
                     invoice.join("customer"), where);
         }
@@ -263,10 +280,6 @@ public class DashboardService {
         return month.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
 
-    private static Instant startOf(LocalDate day) {
-        return day.atStartOfDay(ZoneOffset.UTC).toInstant();
-    }
-
     private static Predicate within(CriteriaBuilder cb, Expression<Instant> date, List<YearMonth> window) {
         return cb.and(cb.greaterThanOrEqualTo(date, startOf(window.get(0))),
                 cb.lessThan(date, startOf(window.get(window.size() - 1).plusMonths(1))));
@@ -304,18 +317,27 @@ public class DashboardService {
     }
 
     /**
-     * An invoice dated {@code today - n} days is {@code n} days old. The first bucket has no newer
-     * bound, so an invoice dated ahead of today still counts somewhere.
+     * An invoice due on {@code today - n} is {@code n} days past due, so a bucket's days turn into
+     * a range of due dates by subtracting them from today. "Not yet due" has no lower bound on
+     * lateness, which makes it everything due today or later — an invoice due today is not late
+     * (AC-A9, AC-B1) — and the last bucket has no upper one, so every open invoice lands in
+     * exactly one bucket.
      */
-    private static Predicate aged(CriteriaBuilder cb, Expression<Instant> date, Age age, LocalDate today) {
+    private static Predicate overdueBy(CriteriaBuilder cb, Expression<LocalDate> dueDate, Age age,
+                                       LocalDate today) {
         List<Predicate> bounds = new ArrayList<>();
-        if (age.fromDays() > 0) {
-            bounds.add(cb.lessThan(date, startOf(today.minusDays(age.fromDays() - 1L))));
+        if (age.fromDays() != null) {
+            bounds.add(cb.lessThanOrEqualTo(dueDate, today.minusDays(age.fromDays())));
         }
         if (age.toDays() != null) {
-            bounds.add(cb.greaterThanOrEqualTo(date, startOf(today.minusDays(age.toDays()))));
+            bounds.add(cb.greaterThanOrEqualTo(dueDate, today.minusDays(age.toDays())));
         }
-        return cb.and(bounds.toArray(new Predicate[0]));
+        Predicate within = cb.and(bounds.toArray(new Predicate[0]));
+        // An invoice with no due date is not late (Invoice#isOverdue), so it belongs with the
+        // ones that are not yet due. It has to belong somewhere: a null is unknown to every
+        // comparison above, and a row in no bucket at all would take its balance off a chart
+        // that has to add up to the outstanding total (AC-B3).
+        return age.fromDays() == null ? cb.or(cb.isNull(dueDate), within) : within;
     }
 
     private static Expression<BigDecimal> balance(CriteriaBuilder cb, Root<Invoice> inv) {

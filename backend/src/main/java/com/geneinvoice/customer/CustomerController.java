@@ -2,6 +2,7 @@ package com.geneinvoice.customer;
 
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Money;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.BulkExecutor;
 import com.geneinvoice.common.bulk.Csv;
@@ -169,12 +170,20 @@ public class CustomerController {
                 service.allMatching(TableQuery.parseUnpaged(schema(), req.sort(), req.filters()))
                         .stream().filter(c -> ids.contains(c.getId())).toList());
 
+        // The terms and the overdue figure are what the list and the detail screen treat as
+        // first-class on a customer, and a collections user cannot work the ageing out of an
+        // export that leaves them behind. Money goes through one formatter, so a customer with
+        // no invoices reads 0.00 like every other row (CP-14).
         String csv = Csv.of(
-                List.of("Id", "Name", "Phone", "Email", "Credit balance", "Outstanding",
+                List.of("Id", "Name", "Phone", "Email", "Payment terms",
+                        "Credit balance", "Outstanding", "Overdue",
                         "Customer Success POCs", "Collection POCs"),
                 rows.stream().map(c -> List.<Object>of(
                         c.id(), c.name(), c.phone() == null ? "" : c.phone(),
-                        c.email() == null ? "" : c.email(), c.creditBalance(), c.outstanding(),
+                        c.email() == null ? "" : c.email(),
+                        c.paymentTermLabel() == null ? "" : c.paymentTermLabel(),
+                        Money.scale(c.creditBalance()), Money.scale(c.outstanding()),
+                        Money.scale(c.overdueAmount()),
                         joinPocs(c.successPocs()), joinPocs(c.collectionPocs()))).toList());
 
         return ResponseEntity.ok()
@@ -185,8 +194,13 @@ public class CustomerController {
 
     private String joinPocs(List<PocDtos.CustomerPocDto> pocs) {
         if (pocs == null || pocs.isEmpty()) return "";
+        // A deactivated seat holder is marked the way the list and the detail screen mark them:
+        // the export used to print the bare name, so it read as though that person were the POC
+        // to contact when the app would no longer route anything to them (CP-07).
         return pocs.stream()
-                .map(p -> p.user().username() + (p.primary() ? " (primary)" : ""))
+                .map(p -> p.user().username()
+                        + (p.primary() ? " (primary)" : "")
+                        + (p.user().active() ? "" : " (inactive)"))
                 .reduce((a, b) -> a + "; " + b).orElse("");
     }
 

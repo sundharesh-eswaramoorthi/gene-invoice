@@ -38,13 +38,34 @@ class BulkActionSpec {
   /// Collects extra parameters. Return null to abandon the action.
   final Future<Map<String, dynamic>?> Function(BuildContext context)? buildParams;
 
+  /// Where the action is posted. Null means the table's own `{path}/bulk`; an action another
+  /// feature owns — sending email from any list — names its own endpoint.
+  final String? endpoint;
+
+  /// The snackbar shown when every row succeeded. Null keeps "N records updated", which would
+  /// misdescribe an action that changes nothing on the rows themselves.
+  final String Function(int succeeded)? successMessage;
+
   const BulkActionSpec({
     required this.action,
     required this.label,
     required this.icon,
     this.destructive = false,
     this.buildParams,
+    this.endpoint,
+    this.successMessage,
   });
+}
+
+/// A filter offered on the filter bar as a chip to switch on and off — "Overdue only" on the
+/// invoices list. It stands for exactly one [TableFilter], which the filter bar therefore does
+/// not repeat as an ordinary chip while it is on.
+class QuickFilterSpec {
+  final String label;
+  final IconData? icon;
+  final TableFilter filter;
+
+  const QuickFilterSpec({required this.label, required this.filter, this.icon});
 }
 
 /// The list-page frame every table shares: filter-aware tiles, a filter bar, selection and
@@ -67,6 +88,9 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
   final Widget Function(BuildContext context, Map<String, dynamic> summary)? tiles;
   final List<BulkActionSpec> bulkActions;
 
+  /// One-tap filters shown on the filter bar, for the ones a list is worked from every day.
+  final List<QuickFilterSpec> quickFilters;
+
   /// Called after a bulk action has run, for anything outside the table that its rows feed —
   /// the bell's unread badge after "Mark read", say (D-55).
   final VoidCallback? onBulkDone;
@@ -79,8 +103,9 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
   final String emptyMessage;
   final Widget? header;
 
-  /// Page-level actions such as "New invoice", shown at the end of the filter bar. They sit in
-  /// the layout rather than floating over it, so they can never cover the pagination controls.
+  /// Page-level actions such as "New invoice", shown at the end of the filter bar, or below it on
+  /// a phone. They sit in the layout rather than floating over it, so they can never cover the
+  /// pagination controls.
   final List<Widget> actions;
 
   const DataTableScaffold({
@@ -99,6 +124,7 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
     this.mobileCard,
     this.tiles,
     this.bulkActions = const [],
+    this.quickFilters = const [],
     this.canExport = false,
     this.selectable = true,
     this.emptyMessage = 'No rows match this filter',
@@ -149,6 +175,31 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     });
   }
 
+  /// Whether a row reads as selected. With the whole filtered set selected that is every row,
+  /// so the ticks on screen agree with the count the toolbar states (TBL-06).
+  bool _isSelected(T row) => _selectAllMatching || _selected.contains(widget.idOf(row));
+
+  /// Ticking or unticking one row. While the whole filtered set is selected every row is ticked,
+  /// so unticking one has to mean something: the selection drops back to the rows on this page
+  /// less that one, and the toolbar's count follows — rather than silently reverting to whichever
+  /// rows happened to be ticked before "Select all" (TBL-06). Unticking the heading's checkbox
+  /// arrives here as one call per row and so ends with nothing selected, as it reads.
+  void _toggleRow(List<T> pageRows, T row, bool on) {
+    setState(() {
+      if (_selectAllMatching) {
+        _selectAllMatching = false;
+        _selected
+          ..clear()
+          ..addAll(pageRows.map(widget.idOf));
+      }
+      if (on) {
+        _selected.add(widget.idOf(row));
+      } else {
+        _selected.remove(widget.idOf(row));
+      }
+    });
+  }
+
   void _refresh() {
     ref.invalidate(tablePageProvider(_request));
     ref.invalidate(tableSummaryProvider(_request.forSummary));
@@ -162,6 +213,24 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     final schema = schemaAsync.valueOrNull;
     final isNarrow = MediaQuery.sizeOf(context).width < 760;
 
+    final filterBar = _FilterBar(
+      schema: schema,
+      query: widget.query,
+      quickFilters: widget.quickFilters,
+      lockedFilters: pageAsync.valueOrNull?.lockedFilters ?? const [],
+      onQueryChanged: (q) => widget.onQueryChanged(q),
+    );
+    // Page actions take a compact height that lines up with the filter chips.
+    final pageActions = Theme(
+      data: Theme.of(context).copyWith(
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(minimumSize: const Size(64, 40))
+              .merge(Theme.of(context).filledButtonTheme.style),
+        ),
+      ),
+      child: Wrap(spacing: 8, runSpacing: 8, children: widget.actions),
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -170,34 +239,22 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         // left barely one card's worth of list (D-61).
         if (widget.tiles != null && !isNarrow)
           _SummaryTiles(request: _request, builder: widget.tiles!),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _FilterBar(
-                schema: schema,
-                query: widget.query,
-                lockedFilters: pageAsync.valueOrNull?.lockedFilters ?? const [],
-                onQueryChanged: (q) => widget.onQueryChanged(q),
-              ),
-            ),
-            if (widget.actions.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(0, 8, 12, 8),
-                // Page actions sit beside the filter bar, so they take a compact height that
-                // lines up with its chips.
-                child: Theme(
-                  data: Theme.of(context).copyWith(
-                    filledButtonTheme: FilledButtonThemeData(
-                      style: FilledButton.styleFrom(minimumSize: const Size(64, 40))
-                          .merge(Theme.of(context).filledButtonTheme.style),
-                    ),
-                  ),
-                  child: Wrap(spacing: 8, runSpacing: 8, children: widget.actions),
-                ),
-              ),
-          ],
-        ),
+        // On a phone the actions get a line of their own. Beside the filter bar, a Row gives them
+        // all the width they ask for, and two buttons ("Send email", "New customer") would leave
+        // the filter chips a sliver; on their own line they wrap if even that is too narrow.
+        if (isNarrow) ...[
+          filterBar,
+          if (widget.actions.isNotEmpty)
+            Padding(padding: const EdgeInsets.fromLTRB(12, 0, 12, 8), child: pageActions),
+        ] else
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: filterBar),
+              if (widget.actions.isNotEmpty)
+                Padding(padding: const EdgeInsets.fromLTRB(0, 8, 12, 8), child: pageActions),
+            ],
+          ),
         if (_selected.isNotEmpty || _selectAllMatching)
           _SelectionToolbar(
             selectedCount: _selected.length,
@@ -248,17 +305,19 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
             },
           ),
         ),
-        pageAsync.maybeWhen(
-          data: (page) => _PaginationBar(
-            page: page,
-            pageSizes: schema?.pageSizes ?? const [10, 20, 50],
-            onPage: (p) => widget.onQueryChanged(widget.query.copyWith(page: p)),
-            onSize: (s) {
-              ref.read(pageSizeStoreProvider.notifier).write(widget.entity, s);
-              widget.onQueryChanged(widget.query.withSize(s));
-            },
-          ),
-          orElse: () => const SizedBox.shrink(),
+        // The bar outlives a failed request, because the Rows selector depends on the query
+        // alone: a size the server refuses — a hand-edited or stale link — is then fixable on the
+        // page, where Retry could only ask the same impossible question again (TBL-09). What
+        // describes the answer, the row count and the page arrows, waits for one.
+        _PaginationBar(
+          page: pageAsync.valueOrNull,
+          size: widget.query.size,
+          pageSizes: schema?.pageSizes ?? const [10, 20, 50],
+          onPage: (p) => widget.onQueryChanged(widget.query.copyWith(page: p)),
+          onSize: (s) {
+            ref.read(pageSizeStoreProvider.notifier).write(widget.entity, s);
+            widget.onQueryChanged(widget.query.withSize(s));
+          },
         ),
       ],
     );
@@ -273,79 +332,102 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         ? null
         : widget.columns.indexWhere((c) => c.sortKey == sortField);
 
-    // Sized to the space the table actually has — beside the navigation rail, not the whole
-    // window — so the last columns and the row actions start on screen. When the columns need
-    // more room, a scrollbar that is always visible says so.
-    return LayoutBuilder(
-      builder: (context, constraints) => Scrollbar(
-        controller: _hScroll,
-        thumbVisibility: true,
-        notificationPredicate: (n) => n.depth == 1,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.vertical,
-          child: SingleChildScrollView(
-            controller: _hScroll,
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: DataTable(
-                // Material's 56px gaps alone cost ~300px on a seven-column table, enough to push
-                // the row actions off-screen at 1366px (D-19, D-20).
-                columnSpacing: 24,
-                showCheckboxColumn: _selectable,
-                sortColumnIndex: (sortIndex != null && sortIndex >= 0) ? sortIndex : null,
-                sortAscending: ascending,
-                columns: [
-                  for (final c in widget.columns)
-                    DataColumn(
-                      label: _capped(c, Text(c.label,
-                          style: const TextStyle(fontWeight: FontWeight.w600))),
-                      numeric: c.numeric,
-                      onSort: c.sortKey == null
-                          ? null
-                          : (index, asc) => widget.onQueryChanged(
-                              widget.query.withSort('${c.sortKey},${asc ? 'asc' : 'desc'}')),
-                    ),
-                  if (widget.rowActions != null)
-                    const DataColumn(label: Text('')),
-                ],
-                rows: [
-                  for (final row in rows)
-                    DataRow(
-                      selected: _selected.contains(widget.idOf(row)),
-                      onSelectChanged: _selectable
-                          ? (on) => setState(() {
-                                _selectAllMatching = false;
-                                if (on == true) {
-                                  _selected.add(widget.idOf(row));
-                                } else {
-                                  _selected.remove(widget.idOf(row));
-                                }
-                              })
-                          : null,
-                      cells: [
-                        for (final c in widget.columns)
-                          DataCell(
-                            _capped(c, c.cell(context, row)),
-                            onTap: widget.onRowTap == null
-                                ? null
-                                : () => widget.onRowTap!(context, row),
-                          ),
-                        if (widget.rowActions != null)
-                          DataCell(Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: widget.rowActions!(context, row),
-                          )),
-                      ],
-                    ),
-                ],
+    final table = DataTable(
+      // Material's 56px gaps alone cost ~300px on a seven-column table, enough to push the last
+      // columns off-screen at 1366px (D-19, D-20).
+      columnSpacing: 24,
+      showCheckboxColumn: _selectable,
+      sortColumnIndex: (sortIndex != null && sortIndex >= 0) ? sortIndex : null,
+      sortAscending: ascending,
+      columns: [
+        for (final c in widget.columns)
+          DataColumn(
+            label: _capped(c, Text(c.label, style: const TextStyle(fontWeight: FontWeight.w600))),
+            numeric: c.numeric,
+            onSort: c.sortKey == null
+                ? null
+                : (index, asc) => widget.onQueryChanged(
+                    widget.query.withSort('${c.sortKey},${asc ? 'asc' : 'desc'}')),
+          ),
+      ],
+      rows: [
+        for (final row in rows)
+          DataRow(
+            selected: _isSelected(row),
+            onSelectChanged: _selectable ? (on) => _toggleRow(rows, row, on == true) : null,
+            cells: [
+              for (final c in widget.columns)
+                DataCell(
+                  _capped(c, c.cell(context, row)),
+                  onTap: widget.onRowTap == null ? null : () => widget.onRowTap!(context, row),
+                ),
+            ],
+          ),
+      ],
+    );
+
+    // Sized to the space the columns actually have — beside the navigation rail and the row
+    // actions, not the whole window. When they need more room, a scrollbar that is always visible
+    // says so.
+    return Scrollbar(
+      controller: _hScroll,
+      thumbVisibility: true,
+      notificationPredicate: (n) => n.depth == 1,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.vertical,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  controller: _hScroll,
+                  scrollDirection: Axis.horizontal,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                    child: table,
+                  ),
+                ),
               ),
             ),
-          ),
+            if (widget.rowActions != null) _rowActionsTable(rows),
+          ],
         ),
       ),
     );
   }
+
+  /// The row actions, pinned beside the scrolling columns rather than after the last of them.
+  /// With long names and crore amounts an invoice row is wider than the ~1285px a 1366px screen
+  /// has beside the sidebar, and the actions at its end — Send email among them — were off-screen
+  /// until the table was scrolled sideways. A one-column table of their own lines up row for row
+  /// with the main one, since DataTable gives every heading and data row the same fixed height.
+  Widget _rowActionsTable(List<T> rows) => DataTable(
+        horizontalMargin: 12,
+        showCheckboxColumn: false,
+        columns: const [DataColumn(label: SizedBox.shrink())],
+        rows: [
+          for (final row in rows)
+            DataRow(
+              // Tinted along with the rest of its row.
+              selected: _isSelected(row),
+              cells: [
+                DataCell(IconButtonTheme(
+                  // 32px buttons instead of 40 (Material's IconButton ignores the theme's compact
+                  // density), with their tooltips. Touch screens still pad the tap target to 48.
+                  data: IconButtonThemeData(
+                    style: IconButton.styleFrom(visualDensity: VisualDensity.compact)
+                        .merge(IconButtonTheme.of(context).style),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: widget.rowActions!(context, row),
+                  ),
+                )),
+              ],
+            ),
+        ],
+      );
 
   Widget _capped(TableColumnSpec<T> c, Widget child) => c.maxWidth == null
       ? child
@@ -361,7 +443,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
       itemBuilder: (context, i) {
         if (header != null && i == 0) return header;
         final row = rows[i - lead];
-        final id = widget.idOf(row);
         return Card(
           margin: EdgeInsets.zero,
           child: InkWell(
@@ -373,15 +454,8 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
                 children: [
                   if (_selectable)
                     Checkbox(
-                      value: _selected.contains(id),
-                      onChanged: (on) => setState(() {
-                        _selectAllMatching = false;
-                        if (on == true) {
-                          _selected.add(id);
-                        } else {
-                          _selected.remove(id);
-                        }
-                      }),
+                      value: _isSelected(row),
+                      onChanged: (on) => _toggleRow(rows, row, on == true),
                     ),
                   Expanded(
                     child: widget.mobileCard != null
@@ -443,7 +517,7 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
 
     setState(() => _busy = true);
     try {
-      final res = await ref.read(dioProvider).post('${widget.path}/bulk', data: {
+      final res = await ref.read(dioProvider).post(spec.endpoint ?? '${widget.path}/bulk', data: {
         'action': spec.action,
         if (!_selectAllMatching) 'ids': _selected.toList(),
         if (_selectAllMatching) 'selectAllMatchingFilter': true,
@@ -452,7 +526,7 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         if (params != null) 'params': params,
       });
       if (mounted) {
-        _showBulkResult((res.data as Map).cast<String, dynamic>());
+        _showBulkResult((res.data as Map).cast<String, dynamic>(), spec);
         _refresh();
         widget.onBulkDone?.call();
       }
@@ -524,22 +598,24 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
 
   /// Shows exactly which rows succeeded, failed and were skipped — nothing is dropped
   /// silently (AC-D5, AC-D6).
-  void _showBulkResult(Map<String, dynamic> result) {
+  void _showBulkResult(Map<String, dynamic> result, BulkActionSpec spec) {
     final succeeded = ((result['succeeded'] as List?) ?? const []).length;
     final failed = ((result['failed'] as List?) ?? const []).cast<Map<String, dynamic>>();
     final skipped = ((result['skipped'] as List?) ?? const []).cast<Map<String, dynamic>>();
     final truncated = result['truncated'] as bool? ?? false;
 
     if (failed.isEmpty && skipped.isEmpty && !truncated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$succeeded record${succeeded == 1 ? '' : 's'} updated')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(spec.successMessage?.call(succeeded) ??
+              '$succeeded record${succeeded == 1 ? '' : 's'} updated')));
       return;
     }
 
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text('${result['action']} result'),
+        // The label the user chose from the toolbar, not the wire code ("SEND_EMAIL").
+        title: Text('${spec.label} result'),
         content: SizedBox(
           width: 460,
           child: SingleChildScrollView(
@@ -644,6 +720,12 @@ class SummaryTile extends StatelessWidget {
   final IconData? icon;
   final Color? accent;
 
+  /// What a tile takes on a screen with room for it.
+  static const double width = 170;
+
+  /// The gap the tiles are laid out with, in the [Wrap] every caller uses.
+  static const double gap = 12;
+
   const SummaryTile({
     super.key,
     required this.label,
@@ -652,60 +734,75 @@ class SummaryTile extends StatelessWidget {
     this.accent,
   });
 
+  /// A tile's width in a row [available] wide. Two fixed-width tiles need 352px and a phone's
+  /// list has ~350 to give, which dropped every tile onto a row of its own and buried the rows
+  /// under a screen and a half of them; below that the pair shares the row instead (UI-07).
+  static double widthFor(double available) =>
+      available.isFinite && available < width * 2 + gap ? (available - gap) / 2 : width;
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Container(
-      width: 170,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 14, color: accent ?? scheme.onSurfaceVariant),
-                const SizedBox(width: 4),
+    return LayoutBuilder(builder: (context, constraints) {
+      return Container(
+        width: widthFor(constraints.maxWidth),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 14, color: accent ?? scheme.onSurfaceVariant),
+                  const SizedBox(width: 4),
+                ],
+                Expanded(
+                  child: Text(label,
+                      style: Theme.of(context).textTheme.labelMedium,
+                      overflow: TextOverflow.ellipsis),
+                ),
               ],
-              Expanded(
-                child: Text(label,
-                    style: Theme.of(context).textTheme.labelMedium,
-                    overflow: TextOverflow.ellipsis),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(value,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleLarge
-                  ?.copyWith(color: accent, fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
+            ),
+            const SizedBox(height: 6),
+            Text(value,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleLarge
+                    ?.copyWith(color: accent, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      );
+    });
   }
 }
 
 class _FilterBar extends StatelessWidget {
   final TableSchema? schema;
   final TableQuery query;
+  final List<QuickFilterSpec> quickFilters;
   final List<TableFilter> lockedFilters;
   final ValueChanged<TableQuery> onQueryChanged;
 
   const _FilterBar({
     required this.schema,
     required this.query,
+    required this.quickFilters,
     required this.lockedFilters,
     required this.onQueryChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Only what this user's schema says the server can filter by is offered (D.4).
+    final quick = schema == null
+        ? const <QuickFilterSpec>[]
+        : quickFilters.where((q) => schema!.column(q.filter.field)?.filterable ?? false).toList();
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       child: Wrap(
@@ -723,6 +820,14 @@ class _FilterBar extends StatelessWidget {
                     if (f != null) onQueryChanged(query.addFilter(f));
                   },
           ),
+          for (final q in quick)
+            FilterChip(
+              avatar: q.icon == null ? null : Icon(q.icon, size: 18),
+              label: Text(q.label),
+              selected: query.filters.contains(q.filter),
+              onSelected: (on) => onQueryChanged(
+                  on ? query.addFilter(q.filter) : query.removeFilter(q.filter)),
+            ),
           // A scope the server pins on is shown as locked rather than silently absent (AC-A6).
           for (final locked in lockedFilters)
             Tooltip(
@@ -732,7 +837,8 @@ class _FilterBar extends StatelessWidget {
                 label: Text(_lockedLabel(locked)),
               ),
             ),
-          for (final f in query.filters)
+          // A filter that has a chip of its own above is not repeated here.
+          for (final f in query.filters.where((f) => !quick.any((q) => q.filter == f)))
             InputChip(
               label: Text(describeFilter(f, schema)),
               onPressed: schema == null
@@ -833,13 +939,19 @@ class _SelectionToolbar extends StatelessWidget {
 }
 
 class _PaginationBar extends StatelessWidget {
-  final PagedResult<Map<String, dynamic>> page;
+  /// Null while the request is in flight or has failed: there is no page to describe or to move
+  /// through then, only a size to choose.
+  final PagedResult<Map<String, dynamic>>? page;
+
+  /// The size the current view asked for, which may be one the server refuses.
+  final int size;
   final List<int> pageSizes;
   final ValueChanged<int> onPage;
   final ValueChanged<int> onSize;
 
   const _PaginationBar({
     required this.page,
+    required this.size,
     required this.pageSizes,
     required this.onPage,
     required this.onSize,
@@ -850,6 +962,8 @@ class _PaginationBar extends StatelessWidget {
     // On a phone the pager keeps only what the list cannot show by itself — which page this is,
     // and how to move — so the rows get that height back (D-61).
     final compact = MediaQuery.sizeOf(context).width < 760;
+    final page = this.page;
+    if (compact && page == null) return const SizedBox.shrink();
     return Material(
       elevation: 2,
       child: Padding(
@@ -867,7 +981,7 @@ class _PaginationBar extends StatelessWidget {
                   const Text('Rows'),
                   const SizedBox(width: 6),
                   DropdownButton<int>(
-                    value: pageSizes.contains(page.size) ? page.size : pageSizes.first,
+                    value: pageSizes.contains(size) ? size : pageSizes.first,
                     underline: const SizedBox.shrink(),
                     items: pageSizes
                         .map((s) => DropdownMenuItem(value: s, child: Text('$s')))
@@ -876,43 +990,45 @@ class _PaginationBar extends StatelessWidget {
                   ),
                 ],
               ),
-            if (!compact)
+            if (!compact && page != null)
               Text('${page.firstRowNumber}–${page.lastRowNumber} of ${page.totalElements}'),
-            // Past the last page there is no current page to name (D-69).
-            Text(page.totalPages > 0 && page.page >= page.totalPages
-                ? '${page.totalPages} pages'
-                : 'Page ${page.page + 1} of ${page.totalPages}'),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'First page',
-                  icon: const Icon(Icons.first_page),
-                  onPressed: page.page == 0 ? null : () => onPage(0),
-                ),
-                IconButton(
-                  tooltip: 'Previous page',
-                  icon: const Icon(Icons.chevron_left),
-                  // From a page past the end, "previous" means the last real page.
-                  onPressed: page.page == 0
-                      ? null
-                      : () => onPage(page.page - 1 < page.totalPages ? page.page - 1 : page.totalPages - 1),
-                ),
-                IconButton(
-                  tooltip: 'Next page',
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed:
-                      page.page + 1 >= page.totalPages ? null : () => onPage(page.page + 1),
-                ),
-                IconButton(
-                  tooltip: 'Last page',
-                  icon: const Icon(Icons.last_page),
-                  onPressed: page.page + 1 >= page.totalPages
-                      ? null
-                      : () => onPage(page.totalPages - 1),
-                ),
-              ],
-            ),
+            if (page != null) ...[
+              // Past the last page there is no current page to name (D-69).
+              Text(page.totalPages > 0 && page.page >= page.totalPages
+                  ? '${page.totalPages} pages'
+                  : 'Page ${page.page + 1} of ${page.totalPages}'),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'First page',
+                    icon: const Icon(Icons.first_page),
+                    onPressed: page.page == 0 ? null : () => onPage(0),
+                  ),
+                  IconButton(
+                    tooltip: 'Previous page',
+                    icon: const Icon(Icons.chevron_left),
+                    // From a page past the end, "previous" means the last real page.
+                    onPressed: page.page == 0
+                        ? null
+                        : () => onPage(page.page - 1 < page.totalPages ? page.page - 1 : page.totalPages - 1),
+                  ),
+                  IconButton(
+                    tooltip: 'Next page',
+                    icon: const Icon(Icons.chevron_right),
+                    onPressed:
+                        page.page + 1 >= page.totalPages ? null : () => onPage(page.page + 1),
+                  ),
+                  IconButton(
+                    tooltip: 'Last page',
+                    icon: const Icon(Icons.last_page),
+                    onPressed: page.page + 1 >= page.totalPages
+                        ? null
+                        : () => onPage(page.totalPages - 1),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

@@ -12,6 +12,8 @@ import '../../shared/models/payment.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
+import '../email/email_actions.dart';
+import '../poc/poc_name_cell.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_screen.dart' show pickPocParams;
@@ -35,11 +37,14 @@ class PaymentsScreen extends ConsumerWidget {
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
+    final canSendEmail = ref.watch(canSendEmailProvider);
+    final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.payment);
 
     return Scaffold(
       body: DataTableScaffold<PaymentRecord>(
         entity: 'payments',
         actions: [
+          if (sendEmail != null) sendEmail,
           if (canManage)
             FilledButton.icon(
               icon: const Icon(Icons.add),
@@ -93,6 +98,7 @@ class PaymentsScreen extends ConsumerWidget {
               icon: Icons.person_search_outlined,
               buildParams: (context) => pickPocParams(context, PocType.COLLECTION),
             ),
+          if (canSendEmail) sendEmailBulkAction(EmailEntityType.payment),
         ],
         columns: [
           TableColumnSpec(
@@ -110,10 +116,17 @@ class PaymentsScreen extends ConsumerWidget {
               ],
             ),
           ),
+          // Capped like every other free-text column: a 120-character customer name must not
+          // widen the table until the columns after it are off screen (UI-01, D-20).
           TableColumnSpec(
-              label: 'Customer',
-              sortKey: 'customerName',
-              cell: (context, p) => Text(p.customerName)),
+            label: 'Customer',
+            sortKey: 'customerName',
+            maxWidth: 240,
+            cell: (context, p) => Tooltip(
+              message: p.customerName,
+              child: Text(p.customerName, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
+          ),
           TableColumnSpec(
             label: 'Amount',
             sortKey: 'amount',
@@ -141,7 +154,8 @@ class PaymentsScreen extends ConsumerWidget {
             TableColumnSpec(
               label: 'Collection POC',
               sortKey: 'collectionPocName',
-              cell: (context, p) => Text(p.collectionPoc?.display ?? '—'),
+              maxWidth: 180,
+              cell: (context, p) => PocNameCell(user: p.collectionPoc),
             ),
         ],
         rowActions: (context, p) => [
@@ -150,6 +164,8 @@ class PaymentsScreen extends ConsumerWidget {
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/payments/${p.id}'),
           ),
+          sendEmailRowAction(context,
+              type: EmailEntityType.payment, entityId: p.id, entityLabel: 'Payment #${p.id}'),
         ],
       ),
     );

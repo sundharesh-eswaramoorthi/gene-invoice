@@ -1,0 +1,92 @@
+{
+  "headline": "The three features ship-ready: 343 cases, 337 passed, and not one high-severity defect in due dates, ageing or documents. The single high-severity defect found is a migration-path gap in the email feature that predates this work and breaks any upgrade of an existing database.",
+  "executiveSummary": "A targeted regression on invoice due dates, ageing by days past due, and document attachments (docs/requirements/invoice-due-dates-and-documents.md), plus the blast radius around them. 343 cases across six areas on a fresh, isolated environment (backend 8083, web 8084, empty Postgres database geneinvoice_rt). 337 passed, 6 failed: 4 medium, 2 low, 0 high.\n\nThe features themselves are in good shape. Every boundary in the new ageing calculation is exact, the money arithmetic carries no floating-point drift, and the security surface of document upload — the largest new attack surface in the app — held under deliberate attack: content-type sniffing rejects a script payload disguised as a PDF, path traversal is fully contained, storage keys are server-generated, and downloads carry headers that neutralise anything that does get stored. Authorization was probed by direct request against document ids rather than through the UI, and no bypass was found in 35 permission cases.\n\nThe one high-severity defect was found before testing began, while deploying current code onto the user's own database. The emails table there is still on the pre-refactor schema, ddl-auto: update cannot migrate it, and every email endpoint returns 500. A fresh database is unaffected — which is exactly why 679 green backend tests never caught it, since they all run against create-drop schemas. It is not caused by the due-date or document work.\n\nOf the five remaining defects, two are a wrong status code on one hostile input, two are errors in the implementation doc's role matrix where the code is right and the document is wrong, and one is an acceptance criterion the implementation chose not to honour. None blocks release of the three features.",
+  "defects": [
+    {
+      "id": "D-01",
+      "title": "Deploying current code onto an existing database leaves the emails schema unmigrated, and every email endpoint returns 500",
+      "severity": "high",
+      "area": "",
+      "kind": "API / migration",
+      "sourceCases": ["found during deployment, before test execution"],
+      "repro": "Take a database created by an older build, deploy the current jar against it with ddl-auto: update, then call GET /api/emails or GET /api/inbox as admin.",
+      "expected": "Both return 200 — either ddl-auto brings the table up to the current entity, or a schema upgrade migrates it the way InvoiceSchemaUpgrade migrates invoices.",
+      "actual": "Both return 500. PSQLException: column e1_0.attempts does not exist. The emails table still has the pre-refactor columns (customer_id, invoice_id, sent_at, delivery_status) and none of entity_type, entity_id, entity_label, occurred_at, status, attempts. Startup logs 17 failed DDL statements and three indexes that were never created, all at WARN, while the app reports itself started.",
+      "rootCause": "EmailSchemaUpgrade.java:42 only widens an enum check constraint and adds no columns; ddl-auto: update cannot add NOT NULL columns to a populated table. The email entity was refactored from per-record foreign keys to polymorphic entity_type/entity_id without a data migration.",
+      "fix": "Give email the treatment InvoiceSchemaUpgrade already demonstrates: add nullable, backfill from the old columns, enforce NOT NULL, create the indexes. Separately, make DDL failure loud — a feature silently losing every query against a table while the app reports itself healthy is what let this sit unnoticed.",
+      "notCausedBy": "the due-date or document work"
+    },
+    {
+      "id": "D-02",
+      "title": "A null byte in an uploaded filename returns 500 instead of a validation error, and the answer depends on where the byte sits",
+      "severity": "medium",
+      "area": "c",
+      "kind": "API",
+      "sourceCases": ["C-38", "C-43"],
+      "repro": "POST /api/documents with a filename containing a raw null byte. 'shell\\0.pdf' and 'report\\0.pdf' return 500; '\\0boot.pdf' and '\\0' return 201 with a sanitised name.",
+      "expected": "The app's standard 400 Validation Failed with a fieldErrors entry, as every other refused upload returns.",
+      "actual": "HTTP 500 'Unexpected error' when the byte is mid-name or before the extension; 201 when it leads. Same class of input, different answer by byte position.",
+      "rootCause": "Tomcat's multipart parser throws InvalidFileNameException wrapped in MultipartException before Spring binds the request, so DocumentRules.cleanFilename never runs. DocumentUploadAdvice handles only MaxUploadSizeExceededException, so GlobalExceptionHandler's catch-all answers 500.",
+      "fix": "Map MultipartException in DocumentUploadAdvice to the same 400 validation shape, and assert both byte placements in a test.",
+      "securityImpact": "None found. Nothing escapes the storage root, no path is written, no stack trace leaks, and the server keeps serving immediately afterwards. Wrong status code, not a bypass."
+    },
+    {
+      "id": "D-03",
+      "title": "The implementation doc's document role matrix misstates both what the POC roles can manage and how far they can reach",
+      "severity": "medium",
+      "area": "e",
+      "kind": "documentation",
+      "sourceCases": ["E-33", "E-34"],
+      "repro": "Compare docs/implementation/invoice-due-dates-and-documents.md line 266 against the live behaviour of each POC role.",
+      "expected": "The documented matrix matches what the code enforces.",
+      "actual": "Two errors on one line. First, it implies all three POC roles manage documents on every record kind; each manages only the kind whose manage privilege it holds (SALES_POC invoices, CUSTOMER_SUCCESS_POC customers, COLLECTION_POC payments). Second, it says POC document access is bounded by the POC book; only SALES_POC is. CUSTOMER_SUCCESS_POC and COLLECTION_POC carry SCOPE_OVERRIDE and downloaded INTERNAL documents on records they hold no seat on.",
+      "rootCause": "DataSeeder.java:138 and :153 grant SCOPE_OVERRIDE to two of the three POC roles. That is pre-existing, intended role design, consistent with those roles reporting ageing Coverage ALL rather than BOOK.",
+      "fix": "Replace the single POC row with one row per role, and state which roles carry SCOPE_OVERRIDE. The verified matrix is in data/role-matrix-observed.md. Separately worth deciding: whether those two roles should read INTERNAL documents outside their book at all — the behaviour is intended today, but the doc error was hiding the question.",
+      "securityImpact": "No bypass. The code is right; the document states the opposite of the real security posture, which is how a role gets granted to the wrong person on the strength of the doc."
+    },
+    {
+      "id": "D-04",
+      "title": "The implementation doc carries no role x capability matrix for Features A and B",
+      "severity": "low",
+      "area": "e",
+      "kind": "documentation",
+      "sourceCases": ["E-35"],
+      "repro": "Read docs/implementation/invoice-due-dates-and-documents.md looking for who may set payment terms, override a due date, filter by overdue, or what ageing coverage each role gets.",
+      "expected": "PRD section 8 requires a role x capability matrix covering all seven roles for both features.",
+      "actual": "The only matrix (lines 261-267) covers document view/manage. Nothing states the Feature A or B capabilities.",
+      "fix": "Add the rows. They were built empirically and verified live during this run: data/role-matrix-observed.md."
+    },
+    {
+      "id": "D-05",
+      "title": "A user without DOCUMENT_MANAGE is given no explanation for the missing Upload button",
+      "severity": "low",
+      "area": "d",
+      "kind": "UI",
+      "sourceCases": ["D-18"],
+      "repro": "Log in with a role holding DOCUMENT_VIEW but not DOCUMENT_MANAGE and open any record's Documents tab.",
+      "expected": "AC-C20: upload disables itself with an explanation.",
+      "actual": "The Upload button is simply absent — no disabled control, and no wording anywhere on the tab says why. Confirmed again on the rebuilt bundle.",
+      "rootCause": "frontend/lib/features/documents/documents_tab.dart:172. This is a genuine tension between two acceptance criteria: AC-C22 says do not show buttons that will 403, AC-C20 says disable with an explanation. The implementation chose C22.",
+      "fix": "Either add a line where the button would be, or amend the implementation doc to record the deliberate choice of C22 over C20 so the two criteria stop contradicting each other."
+    }
+  ],
+  "notReproduced": [
+    "D-06 / case D-35 — a refused upload reading 'File Files of this kind cannot be attached'. Traced to a stale web bundle: :8084 was built at 00:10 and api_client.dart was edited at 00:12, mid-run. Re-checked against a rebuild (main.dart.js 3,832,125 bytes, up from 3,828,422) and it now reads as the server's own sentence. Re-scored PASS. Not a defect."
+  ],
+  "gaps": [
+    "No independent verifier pass. The 15-16 Sep run had every failure reproduced by a second agent before it was counted; this targeted run did not, though each tester reproduced its own failures (area C three times) before reporting.",
+    "The InvoiceSchemaUpgrade backfill was reviewed by reading the source, not exercised against a populated database — the test database was empty, so it filled 0 rows. Its real behaviour was observed once, incidentally, on the user's own deployment during redeployment: 1,015 invoices backfilled to Net 30, then due_date set NOT NULL, with no change to status or paid_amount.",
+    "UI coverage was rebuilt mid-run. Thirteen frontend files changed while testing was in progress, so areas B, D and F tested a bundle built at 00:10. After the rebuild only the invoice detail and Documents surfaces were re-exercised; the dashboard, customer, payment and promise screens were not re-tested against the newer bundle.",
+    "Overdue reminder notifications (OverdueReminderSweepTest exists in the backend suite) were not exercised end to end. They were outside this run's areas, and PRD open question 3 had deferred them.",
+    "AC-C14 (the scanner hook), AC-C15 and AC-C17 (H2 demo with no setup) were not covered by any area's cases.",
+    "Content sniffing is magic-bytes only, so a %PDF- polyglot whose body is HTML and script is accepted. AC-C13's download headers neutralise it and those verified clean, but the residual risk is undocumented."
+  ],
+  "recommendations": [
+    "Fix D-01 before any deployment that upgrades an existing database. Everything else here can ship. Write the email backfill the way InvoiceSchemaUpgrade is written, and make failed DDL loud rather than a WARN nobody reads.",
+    "Adopt Flyway. Four hand-written *SchemaUpgrade classes now exist (customer, email, invoice, poc), one of them incomplete, and nothing verifies that a given database has had them all applied. D-01 is what that costs.",
+    "Add CI. 679 backend tests, 254 Flutter tests, flutter analyze and this suite all pass, and nothing enforces any of it. The repository still has no .github/workflows.",
+    "Correct the implementation doc's role matrix (D-03, D-04) from data/role-matrix-observed.md, then decide separately whether CUSTOMER_SUCCESS_POC and COLLECTION_POC should reach INTERNAL documents outside their book.",
+    "Resolve the AC-C20 / AC-C22 contradiction in the PRD itself (D-05), so the next implementer is not asked to satisfy both.",
+    "Two product decisions surfaced by testing rather than by defect: a customer login can upload documents (the implementation doc records this as a deliberate departure from AC-C12), and PUT /api/customers/{id} silently clears a customer's payment terms when the field is omitted. Both behave correctly as built; both are worth a conscious yes."
+  ]
+}

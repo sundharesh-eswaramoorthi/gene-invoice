@@ -83,7 +83,7 @@ Future<void> _pump(
       outstandingByAgeProvider.overrideWith((ref) async => OutstandingByAge(
             coverage: coverage,
             buckets: const [
-              AgeBucket(label: '0–30 days', fromDays: 0, toDays: 30, amount: 1200, count: 2),
+              AgeBucket(label: 'Not yet due', fromDays: 0, toDays: 0, amount: 1200, count: 2),
               AgeBucket(label: 'Over 90 days', fromDays: 91, toDays: null, amount: 800, count: 1),
             ],
           )),
@@ -121,7 +121,7 @@ void main() {
     for (final title in [
       'Billed and collected by month',
       'Invoices by status',
-      'Outstanding by age',
+      'Outstanding by days overdue',
       'Promises by status',
       'Top customers by outstanding',
       'Top paying customers',
@@ -129,6 +129,9 @@ void main() {
     ]) {
       expect(find.text(title), findsOneWidget, reason: title);
     }
+    // The ageing card names its measure, so nobody reads it as days since the invoice (AC-B5).
+    expect(find.text('Days overdue'), findsOneWidget);
+    expect(find.text('Days since the invoice date'), findsNothing);
     expect(find.text('Collection POC'), findsOneWidget);
     expect(find.text('Cleo Collections'), findsOneWidget);
     expect(find.text('in 3 days'), findsOneWidget);
@@ -183,6 +186,29 @@ void main() {
     expect(find.text('Promises by status'), findsNothing);
     expect(find.text('Upcoming promises'), findsNothing);
     expect(find.text('Open promises'), findsNothing);
+  });
+
+  testWidgets('quick actions follow privileges too: no buttons that could only answer 403',
+      (tester) async {
+    // A role an admin reshaped down to notifications alone. The sidebar hides Invoices and
+    // Payments for them, and the dashboard must not offer them either (DASH-02, AC-C22).
+    await _pump(tester, _user('NOTIFIER', {Privileges.notificationView}));
+
+    expect(find.text('All invoices'), findsNothing);
+    expect(find.text('All payments'), findsNothing);
+    expect(find.text('Record payment'), findsNothing);
+    expect(find.byType(OutlinedButton), findsNothing);
+    // The welcome still reads as a page, not as a gap where the buttons were.
+    expect(find.textContaining('Welcome'), findsOneWidget);
+  });
+
+  testWidgets('a user who may see invoices but not payments keeps the invoices button',
+      (tester) async {
+    await _pump(tester, _user('SALES_POC', {Privileges.invoiceView}));
+
+    expect(find.text('All invoices'), findsOneWidget);
+    expect(find.text('All payments'), findsNothing);
+    expect(find.text('Record payment'), findsNothing);
   });
 
   testWidgets('a ranking row opens the customer only for users who may see customers',

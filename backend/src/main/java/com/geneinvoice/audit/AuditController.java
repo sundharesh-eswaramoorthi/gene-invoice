@@ -2,10 +2,15 @@ package com.geneinvoice.audit;
 
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.NotFoundException;
+import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.customer.CustomerService;
+import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.invoice.InvoiceService;
+import com.geneinvoice.payment.PaymentRepository;
 import com.geneinvoice.payment.PaymentService;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.promise.PaymentPromiseRepository;
 import com.geneinvoice.promise.PaymentPromiseService;
 import com.geneinvoice.user.User;
 import com.geneinvoice.user.UserRepository;
@@ -20,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 @RestController
@@ -48,6 +54,10 @@ public class AuditController {
     private final PaymentService paymentService;
     private final CustomerService customerService;
     private final PaymentPromiseService promiseService;
+    private final InvoiceRepository invoiceRepository;
+    private final PaymentRepository paymentRepository;
+    private final CustomerRepository customerRepository;
+    private final PaymentPromiseRepository promiseRepository;
     private final UserRepository userRepository;
     private final CurrentUser currentUser;
 
@@ -112,11 +122,31 @@ public class AuditController {
             throw new AccessDeniedException("Not allowed");
         }
         switch (entityType) {
-            case "INVOICE" -> invoiceService.get(entityId);
-            case "PAYMENT" -> paymentService.get(entityId);
-            case "CUSTOMER" -> customerService.get(entityId);
-            case "PROMISE" -> promiseService.get(entityId);
+            case "INVOICE" -> readOrGone(entityId, () -> invoiceService.get(entityId),
+                    invoiceRepository::existsById);
+            case "PAYMENT" -> readOrGone(entityId, () -> paymentService.get(entityId),
+                    paymentRepository::existsById);
+            case "CUSTOMER" -> readOrGone(entityId, () -> customerService.get(entityId),
+                    customerRepository::existsById);
+            case "PROMISE" -> readOrGone(entityId, () -> promiseService.get(entityId),
+                    promiseRepository::existsById);
             default -> { }
+        }
+    }
+
+    /**
+     * The record's own read decides, exactly as it does everywhere else — but a record that has
+     * been deleted cannot answer, and its history is the only place the deletion is now recorded
+     * (CP-04). So a "not found" is tested against the table itself: a row that is still there was
+     * refused because it is outside the caller's book or not their customer's, and stays refused;
+     * one that is really gone leaves the caller's view privilege, already checked above, to decide.
+     * A customer login is refused either way — with no record there is nothing to say it is theirs.
+     */
+    private void readOrGone(Long entityId, Runnable readRecord, Predicate<Long> stillExists) {
+        try {
+            readRecord.run();
+        } catch (NotFoundException gone) {
+            if (currentUser.isCustomer() || stillExists.test(entityId)) throw gone;
         }
     }
 }

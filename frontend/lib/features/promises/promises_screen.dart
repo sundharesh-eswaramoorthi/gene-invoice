@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
@@ -11,7 +10,9 @@ import '../../core/table/table_providers.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
 import '../auth/auth_controller.dart';
+import '../email/email_actions.dart';
 import '../poc/poc_providers.dart';
+import '../poc/poc_name_cell.dart';
 import '../poc/poc_picker.dart';
 import 'promise_form_dialog.dart';
 import 'promise_providers.dart';
@@ -28,6 +29,8 @@ class PromisesScreen extends ConsumerWidget {
     final canOverride = user?.has(Privileges.promiseOverride) ?? false;
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
+    final canSendEmail = ref.watch(canSendEmailProvider);
+    final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.promise);
 
     return Scaffold(
       body: DataTableScaffold<PaymentPromise>(
@@ -39,7 +42,8 @@ class PromisesScreen extends ConsumerWidget {
         idOf: (p) => p.id,
         canExport: canExport,
         emptyMessage: 'No promises match this filter',
-        onRowTap: (context, p) => context.go('/customers/${p.customerId}?tab=promises'),
+        onRowTap: (context, p) => context.go('/promises/${p.id}'),
+        actions: [if (sendEmail != null) sendEmail],
         tiles: (context, s) => Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -88,12 +92,19 @@ class PromisesScreen extends ConsumerWidget {
               icon: Icons.person_search_outlined,
               buildParams: (context) => pickPocParams(context, PocType.COLLECTION),
             ),
+          if (canSendEmail) sendEmailBulkAction(EmailEntityType.promise),
         ],
         columns: [
+          // Capped like every other free-text column: a 120-character customer name must not
+          // widen the table until the columns after it are off screen (UI-01, D-20).
           TableColumnSpec(
             label: 'Customer',
             sortKey: 'customerName',
-            cell: (context, p) => Text(p.customerName),
+            maxWidth: 240,
+            cell: (context, p) => Tooltip(
+              message: p.customerName,
+              child: Text(p.customerName, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
           ),
           TableColumnSpec(
             label: 'Amount',
@@ -128,7 +139,8 @@ class PromisesScreen extends ConsumerWidget {
             TableColumnSpec(
               label: 'Collection POC',
               sortKey: 'collectionPocName',
-              cell: (context, p) => Text(p.collectionPoc?.display ?? '—'),
+              maxWidth: 180,
+              cell: (context, p) => PocNameCell(user: p.collectionPoc),
             ),
         ],
         rowActions: (context, p) => [
@@ -137,6 +149,8 @@ class PromisesScreen extends ConsumerWidget {
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/customers/${p.customerId}?tab=promises'),
           ),
+          sendEmailRowAction(context,
+              type: EmailEntityType.promise, entityId: p.id, entityLabel: 'Promise #${p.id}'),
           if (canOverride && p.isLive)
             IconButton(
               tooltip: 'Override status',
@@ -187,47 +201,4 @@ Future<Map<String, dynamic>?> pickPocParams(BuildContext context, PocType type) 
   );
   if (confirmed != true || picked == null) return null;
   return {'userId': picked!.id};
-}
-
-/// A "promise broken" notification links to /promises/{id}. The promise itself lives on its
-/// customer's detail screen, so this resolves the customer and lands the user on the right
-/// screen and tab (AC-C1, AC-B10).
-class PromiseRedirectScreen extends ConsumerWidget {
-  final int id;
-  const PromiseRedirectScreen({super.key, required this.id});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(promiseDetailProvider(id));
-    return async.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.search_off, size: 44, color: Theme.of(context).colorScheme.outline),
-              const SizedBox(height: 12),
-              Text('That promise is not available: ${apiErrorMessage(e)}',
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              FilledButton(
-                onPressed: () => context.go('/promises'),
-                child: const Text('All promises'),
-              ),
-            ],
-          ),
-        ),
-      ),
-      data: (promise) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (context.mounted) {
-            context.go('/customers/${promise.customerId}?tab=promises');
-          }
-        });
-        return const Center(child: CircularProgressIndicator());
-      },
-    );
-  }
 }

@@ -1,0 +1,1580 @@
+{
+  "generatedAt": "2026-09-20T18:49:11.374Z",
+  "world": {
+    "custA": 23,
+    "custT": 24,
+    "custB": 25,
+    "invA": 64,
+    "invOverdue": 65,
+    "invB": 66,
+    "payA": 8,
+    "payB": 9,
+    "docs": {
+      "custA_internal": 29,
+      "custA_shared": 30,
+      "invA_internal": 31,
+      "invA_shared": 32,
+      "payA_internal": 33,
+      "custB_internal": 34,
+      "invB_internal": 35,
+      "payB_internal": 36
+    },
+    "users": {
+      "ADMIN": "e-mua671tre660",
+      "CASHIER": "e-mua671wnbcbd",
+      "VIEWER": "e-mua671z1c1fe",
+      "SALES_POC": "e-mua6721x7f5e",
+      "CUSTOMER_SUCCESS_POC": "e-mua6724d2b62",
+      "COLLECTION_POC": "e-mua6726tba1b",
+      "SALES_POC_B": "e-mua672911ea8",
+      "COLLECTION_POC_B": "e-mua672ch690a",
+      "EXPORT_ONLY": "e-mua672fdc2ce",
+      "CUSTOMER": "e-mua672hf0857"
+    }
+  },
+  "rolePrivileges": {
+    "ADMIN": [
+      "AUDIT_VIEW",
+      "CUSTOMER_MANAGE",
+      "CUSTOMER_VIEW",
+      "DISPUTE_CREATE",
+      "DISPUTE_MANAGE",
+      "DISPUTE_VIEW",
+      "DOCUMENT_MANAGE",
+      "DOCUMENT_VIEW",
+      "EMAIL_SEND",
+      "EMAIL_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_ASSIGNABLE_SALES",
+      "POC_ASSIGNABLE_SUCCESS",
+      "POC_VIEW",
+      "PRODUCT_MANAGE",
+      "PRODUCT_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "ROLE_MANAGE",
+      "ROLE_VIEW",
+      "SCOPE_OVERRIDE",
+      "USER_MANAGE",
+      "USER_VIEW"
+    ],
+    "CASHIER": [
+      "CUSTOMER_MANAGE",
+      "CUSTOMER_VIEW",
+      "DOCUMENT_MANAGE",
+      "DOCUMENT_VIEW",
+      "EMAIL_SEND",
+      "EMAIL_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "C-DOCSONLY-MUA64BYF9B2C": [
+      "DOCUMENT_MANAGE",
+      "DOCUMENT_VIEW"
+    ],
+    "C-INVVIEW-MUA64CAJD6DF": [
+      "DOCUMENT_MANAGE",
+      "DOCUMENT_VIEW",
+      "INVOICE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "C-NODOC-MUA64C2CF917": [
+      "CUSTOMER_MANAGE",
+      "CUSTOMER_VIEW",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "C-NOINV-MUA64C6BB909": [
+      "CUSTOMER_MANAGE",
+      "CUSTOMER_VIEW",
+      "DOCUMENT_MANAGE",
+      "DOCUMENT_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "COLLECTION_POC": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "DOCUMENT_MANAGE",
+      "DOCUMENT_VIEW",
+      "EMAIL_SEND",
+      "EMAIL_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_MANAGE",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_COLLECTION",
+      "POC_VIEW",
+      "PROMISE_MANAGE",
+      "PROMISE_OVERRIDE",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "CUSTOMER": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_CREATE",
+      "DISPUTE_VIEW",
+      "DOCUMENT_MANAGE",
+      "DOCUMENT_VIEW",
+      "EMAIL_SEND",
+      "EMAIL_VIEW",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "PROMISE_VIEW"
+    ],
+    "CUSTOMER_SUCCESS_POC": [
+      "AUDIT_VIEW",
+      "CUSTOMER_MANAGE",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "DOCUMENT_MANAGE",
+      "DOCUMENT_VIEW",
+      "EMAIL_SEND",
+      "EMAIL_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_SUCCESS",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ],
+    "D-NODOCMANAGE-MUA629XJ947E": [],
+    "E-EXPORT-ONLY-mua63qiz714d": [
+      "EXPORT_DATA"
+    ],
+    "E-EXPORT-ONLY-mua6452732a9": [
+      "EXPORT_DATA"
+    ],
+    "E-EXPORT-ONLY-mua672ewcde3": [
+      "EXPORT_DATA"
+    ],
+    "SALES_POC": [
+      "AUDIT_VIEW",
+      "CUSTOMER_VIEW",
+      "DISPUTE_VIEW",
+      "DOCUMENT_MANAGE",
+      "DOCUMENT_VIEW",
+      "EMAIL_SEND",
+      "EMAIL_VIEW",
+      "EXPORT_DATA",
+      "INVOICE_MANAGE",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_ASSIGN",
+      "POC_ASSIGNABLE_SALES",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW"
+    ],
+    "VIEWER": [
+      "CUSTOMER_VIEW",
+      "DOCUMENT_VIEW",
+      "EMAIL_VIEW",
+      "INVOICE_VIEW",
+      "NOTIFICATION_VIEW",
+      "PAYMENT_VIEW",
+      "POC_VIEW",
+      "PRODUCT_VIEW",
+      "PROMISE_VIEW",
+      "SCOPE_OVERRIDE"
+    ]
+  },
+  "probes": {
+    "ADMIN": {
+      "setPaymentTerms": {
+        "status": 200,
+        "sent": "NET_15",
+        "storedAfter": "NET_15",
+        "body": "NET_15"
+      },
+      "createInvoice": {
+        "status": 200,
+        "dueDate": "2026-11-04",
+        "paymentTerm": "NET_45",
+        "expectedDueDate": "2026-11-04",
+        "message": null
+      },
+      "overrideDueDate": {
+        "status": 200,
+        "sent": "2026-12-28",
+        "storedAfter": "2026-12-28",
+        "storedTerm": "CUSTOM",
+        "message": null
+      },
+      "ageing": {
+        "status": 200,
+        "coverage": "ALL",
+        "buckets": [
+          "Not yet due",
+          "1–30 days",
+          "31–60 days",
+          "61–90 days",
+          "Over 90 days"
+        ],
+        "total": 6026.81,
+        "message": null
+      },
+      "overdueFilter": {
+        "status": 200,
+        "totalAll": 6,
+        "custATotal": 1,
+        "seesSeededOverdue": true,
+        "allRowsOverdue": true,
+        "lockedFilters": [],
+        "message": null
+      },
+      "documents": {
+        "CUSTOMER": {
+          "upload": {
+            "status": 201,
+            "id": 37,
+            "visibility": "INTERNAL",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 3,
+            "visibilities": [
+              "INTERNAL",
+              "SHARED"
+            ],
+            "canEditFlags": [
+              true
+            ],
+            "canDeleteFlags": [
+              true
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 3
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-custA-internal.pdf\"; filename*=UTF-8''e-custA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 200,
+            "targetOwn": true,
+            "visibilityAfter": "SHARED",
+            "message": null
+          },
+          "delete": {
+            "status": 204,
+            "targetOwn": true,
+            "message": null
+          }
+        },
+        "INVOICE": {
+          "upload": {
+            "status": 201,
+            "id": 38,
+            "visibility": "INTERNAL",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 3,
+            "visibilities": [
+              "INTERNAL",
+              "SHARED"
+            ],
+            "canEditFlags": [
+              true
+            ],
+            "canDeleteFlags": [
+              true
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 3
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-invA-internal.pdf\"; filename*=UTF-8''e-invA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 200,
+            "targetOwn": true,
+            "visibilityAfter": "SHARED",
+            "message": null
+          },
+          "delete": {
+            "status": 204,
+            "targetOwn": true,
+            "message": null
+          }
+        },
+        "PAYMENT": {
+          "upload": {
+            "status": 201,
+            "id": 39,
+            "visibility": "INTERNAL",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 2,
+            "visibilities": [
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              true
+            ],
+            "canDeleteFlags": [
+              true
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 2
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-payA-internal.pdf\"; filename*=UTF-8''e-payA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 200,
+            "targetOwn": true,
+            "visibilityAfter": "SHARED",
+            "message": null
+          },
+          "delete": {
+            "status": 204,
+            "targetOwn": true,
+            "message": null
+          }
+        }
+      },
+      "export": {
+        "status": 200,
+        "header": "Invoice #,Customer,Date,Due date,Total,Paid,Balance,Status,Overdue,Sales POC\r",
+        "hasDueDate": true,
+        "hasOverdue": true,
+        "rows": 2,
+        "message": null
+      }
+    },
+    "CASHIER": {
+      "setPaymentTerms": {
+        "status": 200,
+        "sent": "NET_30",
+        "storedAfter": "NET_30",
+        "body": "NET_30"
+      },
+      "createInvoice": {
+        "status": 200,
+        "dueDate": "2026-11-04",
+        "paymentTerm": "NET_45",
+        "expectedDueDate": "2026-11-04",
+        "message": null
+      },
+      "overrideDueDate": {
+        "status": 200,
+        "sent": "2026-12-28",
+        "storedAfter": "2026-12-28",
+        "storedTerm": "CUSTOM",
+        "message": null
+      },
+      "ageing": {
+        "status": 200,
+        "coverage": "ALL",
+        "buckets": [
+          "Not yet due",
+          "1–30 days",
+          "31–60 days",
+          "61–90 days",
+          "Over 90 days"
+        ],
+        "total": 6126.81,
+        "message": null
+      },
+      "overdueFilter": {
+        "status": 200,
+        "totalAll": 6,
+        "custATotal": 1,
+        "seesSeededOverdue": true,
+        "allRowsOverdue": true,
+        "lockedFilters": [],
+        "message": null
+      },
+      "documents": {
+        "CUSTOMER": {
+          "upload": {
+            "status": 201,
+            "id": 40,
+            "visibility": "INTERNAL",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 3,
+            "visibilities": [
+              "INTERNAL",
+              "SHARED"
+            ],
+            "canEditFlags": [
+              true
+            ],
+            "canDeleteFlags": [
+              true
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 3
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-custA-internal.pdf\"; filename*=UTF-8''e-custA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 200,
+            "targetOwn": true,
+            "visibilityAfter": "SHARED",
+            "message": null
+          },
+          "delete": {
+            "status": 204,
+            "targetOwn": true,
+            "message": null
+          }
+        },
+        "INVOICE": {
+          "upload": {
+            "status": 201,
+            "id": 41,
+            "visibility": "INTERNAL",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 3,
+            "visibilities": [
+              "INTERNAL",
+              "SHARED"
+            ],
+            "canEditFlags": [
+              true
+            ],
+            "canDeleteFlags": [
+              true
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 3
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-invA-internal.pdf\"; filename*=UTF-8''e-invA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 200,
+            "targetOwn": true,
+            "visibilityAfter": "SHARED",
+            "message": null
+          },
+          "delete": {
+            "status": 204,
+            "targetOwn": true,
+            "message": null
+          }
+        },
+        "PAYMENT": {
+          "upload": {
+            "status": 201,
+            "id": 42,
+            "visibility": "INTERNAL",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 2,
+            "visibilities": [
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              true
+            ],
+            "canDeleteFlags": [
+              true
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 2
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-payA-internal.pdf\"; filename*=UTF-8''e-payA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 200,
+            "targetOwn": true,
+            "visibilityAfter": "SHARED",
+            "message": null
+          },
+          "delete": {
+            "status": 204,
+            "targetOwn": true,
+            "message": null
+          }
+        }
+      },
+      "export": {
+        "status": 200,
+        "header": "Invoice #,Customer,Date,Due date,Total,Paid,Balance,Status,Overdue,Sales POC\r",
+        "hasDueDate": true,
+        "hasOverdue": true,
+        "rows": 2,
+        "message": null
+      }
+    },
+    "VIEWER": {
+      "setPaymentTerms": {
+        "status": 403,
+        "sent": "NET_60",
+        "storedAfter": "NET_30",
+        "body": "You do not have permission for this action"
+      },
+      "createInvoice": {
+        "status": 403,
+        "dueDate": null,
+        "paymentTerm": null,
+        "expectedDueDate": "2026-11-04",
+        "message": "You do not have permission for this action"
+      },
+      "overrideDueDate": {
+        "status": 403,
+        "sent": "2026-12-28",
+        "storedAfter": "2026-11-04",
+        "storedTerm": "NET_45",
+        "message": "You do not have permission for this action"
+      },
+      "ageing": {
+        "status": 200,
+        "coverage": "ALL",
+        "buckets": [
+          "Not yet due",
+          "1–30 days",
+          "31–60 days",
+          "61–90 days",
+          "Over 90 days"
+        ],
+        "total": 6126.81,
+        "message": null
+      },
+      "overdueFilter": {
+        "status": 200,
+        "totalAll": 6,
+        "custATotal": 1,
+        "seesSeededOverdue": true,
+        "allRowsOverdue": true,
+        "lockedFilters": [],
+        "message": null
+      },
+      "documents": {
+        "CUSTOMER": {
+          "upload": {
+            "status": 403,
+            "id": null,
+            "visibility": null,
+            "message": "You do not have permission for this action"
+          },
+          "list": {
+            "status": 200,
+            "total": 2,
+            "visibilities": [
+              "SHARED",
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 2
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-custA-internal.pdf\"; filename*=UTF-8''e-custA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": false,
+          "edit": {
+            "status": 403,
+            "targetOwn": false,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": false,
+            "message": "You do not have permission for this action"
+          }
+        },
+        "INVOICE": {
+          "upload": {
+            "status": 403,
+            "id": null,
+            "visibility": null,
+            "message": "You do not have permission for this action"
+          },
+          "list": {
+            "status": 200,
+            "total": 2,
+            "visibilities": [
+              "SHARED",
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 2
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-invA-internal.pdf\"; filename*=UTF-8''e-invA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": false,
+          "edit": {
+            "status": 403,
+            "targetOwn": false,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": false,
+            "message": "You do not have permission for this action"
+          }
+        },
+        "PAYMENT": {
+          "upload": {
+            "status": 403,
+            "id": null,
+            "visibility": null,
+            "message": "You do not have permission for this action"
+          },
+          "list": {
+            "status": 200,
+            "total": 1,
+            "visibilities": [
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 1
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-payA-internal.pdf\"; filename*=UTF-8''e-payA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "editedOwn": false,
+          "edit": {
+            "status": 403,
+            "targetOwn": false,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": false,
+            "message": "You do not have permission for this action"
+          }
+        }
+      },
+      "export": {
+        "status": 403,
+        "header": "{\"timestamp\":\"2026-09-20T18:49:12.503011Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for this action\",\"path\":\"/api/invoices/export\",\"fieldErrors\":null}",
+        "hasDueDate": false,
+        "hasOverdue": false,
+        "rows": 0,
+        "message": "You do not have permission for this action"
+      }
+    },
+    "CUSTOMER": {
+      "setPaymentTerms": {
+        "status": 403,
+        "sent": "NET_90",
+        "storedAfter": "NET_30",
+        "body": "You do not have permission for this action"
+      },
+      "createInvoice": {
+        "status": 403,
+        "dueDate": null,
+        "paymentTerm": null,
+        "expectedDueDate": "2026-11-04",
+        "message": "You do not have permission for this action"
+      },
+      "overrideDueDate": {
+        "status": 403,
+        "sent": "2026-12-28",
+        "storedAfter": "2026-11-04",
+        "storedTerm": "NET_45",
+        "message": "You do not have permission for this action"
+      },
+      "ageing": {
+        "status": 200,
+        "coverage": "OWN",
+        "buckets": [
+          "Not yet due",
+          "1–30 days",
+          "31–60 days",
+          "61–90 days",
+          "Over 90 days"
+        ],
+        "total": 1090,
+        "message": null
+      },
+      "overdueFilter": {
+        "status": 200,
+        "totalAll": 1,
+        "custATotal": 1,
+        "seesSeededOverdue": true,
+        "allRowsOverdue": true,
+        "lockedFilters": [],
+        "message": null
+      },
+      "documents": {
+        "CUSTOMER": {
+          "upload": {
+            "status": 201,
+            "id": 43,
+            "visibility": "SHARED",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 2,
+            "visibilities": [
+              "SHARED"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 2
+          },
+          "downloadInternal": {
+            "status": 404,
+            "disposition": null,
+            "contentType": "application/json",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 403,
+            "targetOwn": true,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": true,
+            "message": "You do not have permission for this action"
+          }
+        },
+        "INVOICE": {
+          "upload": {
+            "status": 201,
+            "id": 44,
+            "visibility": "SHARED",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 2,
+            "visibilities": [
+              "SHARED"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 2
+          },
+          "downloadInternal": {
+            "status": 404,
+            "disposition": null,
+            "contentType": "application/json",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 403,
+            "targetOwn": true,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": true,
+            "message": "You do not have permission for this action"
+          }
+        },
+        "PAYMENT": {
+          "upload": {
+            "status": 201,
+            "id": 45,
+            "visibility": "SHARED",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 1,
+            "visibilities": [
+              "SHARED"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 1
+          },
+          "downloadInternal": {
+            "status": 404,
+            "disposition": null,
+            "contentType": "application/json",
+            "nosniff": "nosniff"
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 403,
+            "targetOwn": true,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": true,
+            "message": "You do not have permission for this action"
+          }
+        }
+      },
+      "export": {
+        "status": 403,
+        "header": "{\"timestamp\":\"2026-09-20T18:49:12.647081Z\",\"status\":403,\"error\":\"Forbidden\",\"message\":\"You do not have permission for this action\",\"path\":\"/api/invoices/export\",\"fieldErrors\":null}",
+        "hasDueDate": false,
+        "hasOverdue": false,
+        "rows": 0,
+        "message": "You do not have permission for this action"
+      }
+    },
+    "SALES_POC": {
+      "setPaymentTerms": {
+        "status": 403,
+        "sent": "NET_15",
+        "storedAfter": "NET_30",
+        "body": "You do not have permission for this action"
+      },
+      "createInvoice": {
+        "status": 200,
+        "dueDate": "2026-11-04",
+        "paymentTerm": "NET_45",
+        "expectedDueDate": "2026-11-04",
+        "message": null
+      },
+      "overrideDueDate": {
+        "status": 200,
+        "sent": "2026-12-28",
+        "storedAfter": "2026-12-28",
+        "storedTerm": "CUSTOM",
+        "message": null
+      },
+      "ageing": {
+        "status": 200,
+        "coverage": "BOOK",
+        "buckets": [
+          "Not yet due",
+          "1–30 days",
+          "31–60 days",
+          "61–90 days",
+          "Over 90 days"
+        ],
+        "total": 1190,
+        "message": null
+      },
+      "overdueFilter": {
+        "status": 200,
+        "totalAll": 1,
+        "custATotal": 1,
+        "seesSeededOverdue": true,
+        "allRowsOverdue": true,
+        "lockedFilters": [
+          "salesPocUserId:eq:59"
+        ],
+        "message": null
+      },
+      "documents": {
+        "CUSTOMER": {
+          "upload": {
+            "status": 403,
+            "id": null,
+            "visibility": null,
+            "message": "You do not have permission for this action"
+          },
+          "list": {
+            "status": 200,
+            "total": 3,
+            "visibilities": [
+              "SHARED",
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 3
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-custA-internal.pdf\"; filename*=UTF-8''e-custA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": false,
+          "edit": {
+            "status": 403,
+            "targetOwn": false,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": false,
+            "message": "You do not have permission for this action"
+          }
+        },
+        "INVOICE": {
+          "upload": {
+            "status": 201,
+            "id": 46,
+            "visibility": "INTERNAL",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 4,
+            "visibilities": [
+              "INTERNAL",
+              "SHARED"
+            ],
+            "canEditFlags": [
+              true
+            ],
+            "canDeleteFlags": [
+              true
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 4
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-invA-internal.pdf\"; filename*=UTF-8''e-invA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 200,
+            "targetOwn": true,
+            "visibilityAfter": "SHARED",
+            "message": null
+          },
+          "delete": {
+            "status": 204,
+            "targetOwn": true,
+            "message": null
+          }
+        },
+        "PAYMENT": {
+          "upload": {
+            "status": 403,
+            "id": null,
+            "visibility": null,
+            "message": "You do not have permission for this action"
+          },
+          "list": {
+            "status": 404,
+            "total": null,
+            "visibilities": [],
+            "canEditFlags": [],
+            "canDeleteFlags": [],
+            "message": "Payment not found"
+          },
+          "count": {
+            "status": 404,
+            "count": null
+          },
+          "downloadInternal": {
+            "status": 404,
+            "disposition": null,
+            "contentType": "application/json",
+            "nosniff": "nosniff"
+          },
+          "editedOwn": false,
+          "edit": {
+            "status": 403,
+            "targetOwn": false,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 404,
+            "targetOwn": false,
+            "message": "Payment not found"
+          }
+        }
+      },
+      "export": {
+        "status": 200,
+        "header": "Invoice #,Customer,Date,Due date,Total,Paid,Balance,Status,Overdue,Sales POC\r",
+        "hasDueDate": true,
+        "hasOverdue": true,
+        "rows": 2,
+        "message": null
+      }
+    },
+    "CUSTOMER_SUCCESS_POC": {
+      "setPaymentTerms": {
+        "status": 200,
+        "sent": "NET_60",
+        "storedAfter": "NET_60",
+        "body": "NET_60"
+      },
+      "createInvoice": {
+        "status": 403,
+        "dueDate": null,
+        "paymentTerm": null,
+        "expectedDueDate": "2026-11-04",
+        "message": "You do not have permission for this action"
+      },
+      "overrideDueDate": {
+        "status": 403,
+        "sent": "2026-12-28",
+        "storedAfter": "2026-11-04",
+        "storedTerm": "NET_45",
+        "message": "You do not have permission for this action"
+      },
+      "ageing": {
+        "status": 200,
+        "coverage": "ALL",
+        "buckets": [
+          "Not yet due",
+          "1–30 days",
+          "31–60 days",
+          "61–90 days",
+          "Over 90 days"
+        ],
+        "total": 6226.81,
+        "message": null
+      },
+      "overdueFilter": {
+        "status": 200,
+        "totalAll": 6,
+        "custATotal": 1,
+        "seesSeededOverdue": true,
+        "allRowsOverdue": true,
+        "lockedFilters": [],
+        "message": null
+      },
+      "documents": {
+        "CUSTOMER": {
+          "upload": {
+            "status": 201,
+            "id": 47,
+            "visibility": "INTERNAL",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 4,
+            "visibilities": [
+              "INTERNAL",
+              "SHARED"
+            ],
+            "canEditFlags": [
+              true
+            ],
+            "canDeleteFlags": [
+              true
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 4
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-custA-internal.pdf\"; filename*=UTF-8''e-custA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 200,
+            "targetOwn": true,
+            "visibilityAfter": "SHARED",
+            "message": null
+          },
+          "delete": {
+            "status": 204,
+            "targetOwn": true,
+            "message": null
+          }
+        },
+        "INVOICE": {
+          "upload": {
+            "status": 403,
+            "id": null,
+            "visibility": null,
+            "message": "You do not have permission for this action"
+          },
+          "list": {
+            "status": 200,
+            "total": 3,
+            "visibilities": [
+              "SHARED",
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 3
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-invA-internal.pdf\"; filename*=UTF-8''e-invA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": false,
+          "edit": {
+            "status": 403,
+            "targetOwn": false,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": false,
+            "message": "You do not have permission for this action"
+          }
+        },
+        "PAYMENT": {
+          "upload": {
+            "status": 403,
+            "id": null,
+            "visibility": null,
+            "message": "You do not have permission for this action"
+          },
+          "list": {
+            "status": 200,
+            "total": 2,
+            "visibilities": [
+              "SHARED",
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 2
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-payA-internal.pdf\"; filename*=UTF-8''e-payA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "editedOwn": false,
+          "edit": {
+            "status": 403,
+            "targetOwn": false,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": false,
+            "message": "You do not have permission for this action"
+          }
+        }
+      },
+      "export": {
+        "status": 200,
+        "header": "Invoice #,Customer,Date,Due date,Total,Paid,Balance,Status,Overdue,Sales POC\r",
+        "hasDueDate": true,
+        "hasOverdue": true,
+        "rows": 2,
+        "message": null
+      }
+    },
+    "COLLECTION_POC": {
+      "setPaymentTerms": {
+        "status": 403,
+        "sent": "NET_45",
+        "storedAfter": "NET_60",
+        "body": "You do not have permission for this action"
+      },
+      "createInvoice": {
+        "status": 403,
+        "dueDate": null,
+        "paymentTerm": null,
+        "expectedDueDate": "2026-11-04",
+        "message": "You do not have permission for this action"
+      },
+      "overrideDueDate": {
+        "status": 403,
+        "sent": "2026-12-28",
+        "storedAfter": "2026-11-04",
+        "storedTerm": "NET_45",
+        "message": "You do not have permission for this action"
+      },
+      "ageing": {
+        "status": 200,
+        "coverage": "ALL",
+        "buckets": [
+          "Not yet due",
+          "1–30 days",
+          "31–60 days",
+          "61–90 days",
+          "Over 90 days"
+        ],
+        "total": 6226.81,
+        "message": null
+      },
+      "overdueFilter": {
+        "status": 200,
+        "totalAll": 6,
+        "custATotal": 1,
+        "seesSeededOverdue": true,
+        "allRowsOverdue": true,
+        "lockedFilters": [],
+        "message": null
+      },
+      "documents": {
+        "CUSTOMER": {
+          "upload": {
+            "status": 403,
+            "id": null,
+            "visibility": null,
+            "message": "You do not have permission for this action"
+          },
+          "list": {
+            "status": 200,
+            "total": 3,
+            "visibilities": [
+              "SHARED",
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 3
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-custA-internal.pdf\"; filename*=UTF-8''e-custA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": false,
+          "edit": {
+            "status": 403,
+            "targetOwn": false,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": false,
+            "message": "You do not have permission for this action"
+          }
+        },
+        "INVOICE": {
+          "upload": {
+            "status": 403,
+            "id": null,
+            "visibility": null,
+            "message": "You do not have permission for this action"
+          },
+          "list": {
+            "status": 200,
+            "total": 3,
+            "visibilities": [
+              "SHARED",
+              "INTERNAL"
+            ],
+            "canEditFlags": [
+              false
+            ],
+            "canDeleteFlags": [
+              false
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 3
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-invA-internal.pdf\"; filename*=UTF-8''e-invA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "downloadShared": {
+            "status": 200
+          },
+          "editedOwn": false,
+          "edit": {
+            "status": 403,
+            "targetOwn": false,
+            "visibilityAfter": null,
+            "message": "You do not have permission for this action"
+          },
+          "delete": {
+            "status": 403,
+            "targetOwn": false,
+            "message": "You do not have permission for this action"
+          }
+        },
+        "PAYMENT": {
+          "upload": {
+            "status": 201,
+            "id": 48,
+            "visibility": "INTERNAL",
+            "message": null
+          },
+          "list": {
+            "status": 200,
+            "total": 3,
+            "visibilities": [
+              "INTERNAL",
+              "SHARED"
+            ],
+            "canEditFlags": [
+              true
+            ],
+            "canDeleteFlags": [
+              true
+            ],
+            "message": null
+          },
+          "count": {
+            "status": 200,
+            "count": 3
+          },
+          "downloadInternal": {
+            "status": 200,
+            "disposition": "attachment; filename=\"e-payA-internal.pdf\"; filename*=UTF-8''e-payA-internal.pdf",
+            "contentType": "application/octet-stream",
+            "nosniff": "nosniff"
+          },
+          "editedOwn": true,
+          "edit": {
+            "status": 200,
+            "targetOwn": true,
+            "visibilityAfter": "SHARED",
+            "message": null
+          },
+          "delete": {
+            "status": 204,
+            "targetOwn": true,
+            "message": null
+          }
+        }
+      },
+      "export": {
+        "status": 200,
+        "header": "Invoice #,Customer,Date,Due date,Total,Paid,Balance,Status,Overdue,Sales POC\r",
+        "hasDueDate": true,
+        "hasOverdue": true,
+        "rows": 2,
+        "message": null
+      }
+    }
+  },
+  "overrideTargets": {
+    "ADMIN": 67,
+    "CASHIER": 68,
+    "VIEWER": 69,
+    "CUSTOMER": 70,
+    "SALES_POC": 71,
+    "CUSTOMER_SUCCESS_POC": 72,
+    "COLLECTION_POC": 73
+  },
+  "exportOnly": {
+    "export": 403,
+    "invoiceList": 403
+  }
+}

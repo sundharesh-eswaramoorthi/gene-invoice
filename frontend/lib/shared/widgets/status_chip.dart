@@ -101,6 +101,31 @@ class InvoiceStatusChip extends StatelessWidget {
       StatusChip(label: statusLabel(status), color: invoiceStatusColor(context, status));
 }
 
+/// Says an invoice is past its due date and by how long (US-A4). Overdue is not a status — it is
+/// worked out from today's date and the balance (D3) — so it sits beside the status chip rather
+/// than replacing it, in the error colour.
+class OverdueBadge extends StatelessWidget {
+  final int daysOverdue;
+
+  /// On a list row the due date is in the next column, so the badge there says only "Overdue"
+  /// and keeps the day count in its tooltip.
+  final bool compact;
+
+  const OverdueBadge({super.key, required this.daysOverdue, this.compact = false});
+
+  static String describe(int days) =>
+      days <= 0 ? 'Overdue' : 'Overdue by $days ${days == 1 ? 'day' : 'days'}';
+
+  @override
+  Widget build(BuildContext context) {
+    final chip = StatusChip(
+      label: compact ? 'Overdue' : describe(daysOverdue),
+      color: Theme.of(context).colorScheme.error,
+    );
+    return compact ? Tooltip(message: describe(daysOverdue), child: chip) : chip;
+  }
+}
+
 class PaymentStatusChip extends StatelessWidget {
   final PaymentStatus status;
   const PaymentStatusChip({super.key, required this.status});

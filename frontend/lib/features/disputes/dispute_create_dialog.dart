@@ -7,17 +7,22 @@ import '../../core/api/api_client.dart';
 import '../../shared/models/dispute.dart';
 import '../../core/table/table_providers.dart';
 import '../audit/audit_history_panel.dart';
+import '../email/email_actions.dart';
 import 'disputes_providers.dart';
 
 /// Shows a modal dispute form for a specific invoice or payment.
 /// Returns true if a dispute was filed.
+///
+/// "Notify through email" is handled here rather than by each caller: once the form has closed,
+/// the compose form opens on [context] for the new dispute (E12). Only customer logins file
+/// disputes, so that compose form is their restricted one (E13).
 Future<bool?> showDisputeDialog({
   required BuildContext context,
   required DisputeTargetType targetType,
   required int targetId,
   required String targetLabel,
-}) {
-  return showDialog<bool>(
+}) async {
+  final filed = await showDialog<({int id, bool notify})>(
     context: context,
     builder: (_) => _DisputeCreateDialog(
       targetType: targetType,
@@ -25,6 +30,17 @@ Future<bool?> showDisputeDialog({
       targetLabel: targetLabel,
     ),
   );
+  if (filed == null) return false;
+  // The caller's context, never the closed form's, and before handing back, so a caller that
+  // moves on after filing has not yet taken that context away.
+  if (context.mounted) {
+    await notifyByEmailAfterSave(context,
+        notify: filed.notify,
+        type: EmailEntityType.dispute,
+        entityId: filed.id,
+        event: EmailEvent.created);
+  }
+  return true;
 }
 
 class _DisputeCreateDialog extends ConsumerStatefulWidget {
@@ -48,6 +64,7 @@ class _DisputeCreateDialogState extends ConsumerState<_DisputeCreateDialog> {
   final _amountCtrl = TextEditingController();
   final _methodCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
+  bool _notify = false;
   bool _saving = false;
   String? _error;
 
@@ -112,17 +129,18 @@ class _DisputeCreateDialogState extends ConsumerState<_DisputeCreateDialog> {
     try {
       final proposed = _buildProposedJson();
       final dio = ref.read(dioProvider);
-      await dio.post('/api/disputes', data: {
+      final res = await dio.post('/api/disputes', data: {
         'targetType': widget.targetType.name,
         'targetId': widget.targetId,
         'reason': _reasonCtrl.text.trim(),
         if (proposed != null) 'proposedChangeJson': proposed,
       });
+      final id = ((res.data as Map)['id'] as num).toInt();
       ref.invalidate(scopedDisputesProvider);
       ref.invalidate(tablePageProvider);
       // The invoice's or payment's History tab now shows "Dispute opened".
       ref.invalidate(auditHistoryProvider);
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) Navigator.of(context).pop((id: id, notify: _notify));
     } catch (e) {
       setState(() => _error = e is String ? e : apiErrorMessage(e));
     } finally {
@@ -186,6 +204,11 @@ class _DisputeCreateDialogState extends ConsumerState<_DisputeCreateDialog> {
                     maxLines: 2,
                   ),
                 ],
+                const SizedBox(height: 8),
+                NotifyByEmailCheckbox(
+                  value: _notify,
+                  onChanged: (v) => setState(() => _notify = v),
+                ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -198,7 +221,7 @@ class _DisputeCreateDialogState extends ConsumerState<_DisputeCreateDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(

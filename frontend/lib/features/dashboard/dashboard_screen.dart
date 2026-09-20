@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/format.dart';
 import '../../core/table/data_table_scaffold.dart';
+import '../../core/table/route_query.dart';
 import '../../shared/models/auth_models.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
@@ -76,9 +77,8 @@ class DashboardScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           children: [
             _Header(user: user, access: access),
-            const SizedBox(height: 12),
+            // The actions carry their own spacing: a user who is offered none leaves no gap.
             _QuickActions(user: user),
-            const SizedBox(height: 16),
             _KeyFigures(access: access),
             const SizedBox(height: 16),
             _CardRow(sideBySide: wide, cards: [
@@ -204,22 +204,23 @@ class _QuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canSeePromises = user?.has(Privileges.promiseView) ?? false;
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: [
-        if (user?.has(Privileges.invoiceManage) ?? false)
-          FilledButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text('New invoice'),
-            onPressed: () => context.go('/invoices/new'),
-          ),
+    // Every button is offered on the privilege the screen behind it needs, so none of them can
+    // only answer "You do not have permission" — the lists themselves ask for INVOICE_VIEW and
+    // PAYMENT_VIEW, whatever else a reshaped role holds (DASH-02, AC-C22).
+    final buttons = [
+      if (user?.has(Privileges.invoiceManage) ?? false)
+        FilledButton.icon(
+          icon: const Icon(Icons.add),
+          label: const Text('New invoice'),
+          onPressed: () => context.go('/invoices/new'),
+        ),
+      if (user?.has(Privileges.invoiceView) ?? false)
         OutlinedButton.icon(
           icon: const Icon(Icons.list),
           label: Text(user?.isCustomer ?? false ? 'My invoices' : 'All invoices'),
           onPressed: () => context.go('/invoices'),
         ),
+      if (user?.has(Privileges.paymentView) ?? false)
         OutlinedButton.icon(
           icon: const Icon(Icons.payments_outlined),
           // Staff without PAYMENT_MANAGE land on every payment in the organisation, so the
@@ -229,19 +230,24 @@ class _QuickActions extends StatelessWidget {
               : ((user?.isCustomer ?? false) ? 'My payments' : 'All payments')),
           onPressed: () => context.go('/payments'),
         ),
-        if (canSeePromises)
-          OutlinedButton.icon(
-            icon: const Icon(Icons.handshake_outlined),
-            label: const Text('Payment promises'),
-            onPressed: () => context.go('/promises'),
-          ),
-        if (user?.has(Privileges.disputeView) ?? false)
-          OutlinedButton.icon(
-            icon: const Icon(Icons.flag_outlined),
-            label: const Text('Disputes'),
-            onPressed: () => context.go('/disputes'),
-          ),
-      ],
+      if (user?.has(Privileges.promiseView) ?? false)
+        OutlinedButton.icon(
+          icon: const Icon(Icons.handshake_outlined),
+          label: const Text('Payment promises'),
+          onPressed: () => context.go('/promises'),
+        ),
+      if (user?.has(Privileges.disputeView) ?? false)
+        OutlinedButton.icon(
+          icon: const Icon(Icons.flag_outlined),
+          label: const Text('Disputes'),
+          onPressed: () => context.go('/disputes'),
+        ),
+    ];
+    // A user with none of them gets the welcome on its own, not a blank band where the row was.
+    if (buttons.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 12, 0, 16),
+      child: Wrap(spacing: 12, runSpacing: 12, children: buttons),
     );
   }
 }
@@ -357,8 +363,9 @@ class _TrendCard extends ConsumerWidget {
 class _InvoiceStatusCard extends ConsumerWidget {
   const _InvoiceStatusCard();
 
+  // Written the way every list writes its own URL, so one reader understands both (TBL-03).
   static String _link(InvoiceStatus s) =>
-      Uri(path: '/invoices', queryParameters: {'f': 'status:eq:${s.name}'}).toString();
+      RouteQuery.location('/invoices', {'f': 'status:eq:${s.name}'});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -394,8 +401,10 @@ class _AgingCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final aging = ref.watch(outstandingByAgeProvider);
     return DashboardCard(
-      title: 'Outstanding by age',
-      subtitle: 'Days since the invoice date',
+      // Days past due, not days since the invoice date: the title and the axis both say so, so
+      // nobody reads the new numbers with the old meaning (D4, AC-B5).
+      title: 'Outstanding by days overdue',
+      subtitle: 'Days overdue',
       book: aging.valueOrNull?.coverage == Coverage.book,
       child: asyncCard(aging, (data) => AgingBars(data: data, today: todayUtc())),
     );
@@ -406,7 +415,7 @@ class _PromiseStatusCard extends ConsumerWidget {
   const _PromiseStatusCard();
 
   static String _link(PromiseStatus s) =>
-      Uri(path: '/promises', queryParameters: {'f': 'status:eq:${s.name}'}).toString();
+      RouteQuery.location('/promises', {'f': 'status:eq:${s.name}'});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -1,8 +1,10 @@
 package com.geneinvoice.payment;
 
+import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.invoice.Invoice;
+import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.invoice.InvoiceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -29,6 +31,7 @@ public class CreditLedger {
     private final PaymentRepository paymentRepository;
     private final PaymentAllocationRepository allocationRepository;
     private final CustomerRepository customerRepository;
+    private final InvoiceRepository invoiceRepository;
 
     /** One payment's credit landing on an invoice, with the invoice's position either side. */
     public record CreditMove(PaymentService.InvoicePaymentAudit before,
@@ -40,7 +43,11 @@ public class CreditLedger {
      * caller to audit.
      */
     public List<CreditMove> applyTo(Invoice invoice) {
-        Customer customer = invoice.getCustomer();
+        // Spending credit moves the customer's balance and the invoice's paid amount, so it takes
+        // the same two locks in the same order as every other money path — the customer, then the
+        // invoice — and reads both back under them (PPD-01).
+        Customer customer = lockCustomer(invoice.getCustomer().getId());
+        lockInvoice(invoice);
         BigDecimal credit = customer.getCreditBalance();
         if (credit == null || credit.signum() <= 0 || invoice.getBalance().signum() <= 0) {
             return List.of();
@@ -74,6 +81,8 @@ public class CreditLedger {
      */
     public void refund(Invoice invoice, BigDecimal amount) {
         if (amount.signum() <= 0) return;
+        Customer locked = lockCustomer(invoice.getCustomer().getId());
+        lockInvoice(invoice);
         List<PaymentAllocation> standing =
                 new ArrayList<>(allocationRepository.findByInvoiceIdWithPayment(invoice.getId()));
         standing.sort(Comparator.comparing((PaymentAllocation a) -> a.getPayment().getPaidAt())
@@ -90,9 +99,19 @@ public class CreditLedger {
             p.setCreditApplied(p.getCreditApplied().add(take));
             remaining = remaining.subtract(take);
         }
-        Customer customer = invoice.getCustomer();
-        customer.setCreditBalance(customer.getCreditBalance().add(amount));
-        customerRepository.save(customer);
+        locked.setCreditBalance(locked.getCreditBalance().add(amount));
+        customerRepository.save(locked);
+    }
+
+    /** The customer, locked for the rest of the transaction: the first lock of every money path. */
+    private Customer lockCustomer(Long customerId) {
+        return customerRepository.findByIdForUpdate(customerId)
+                .orElseThrow(() -> new NotFoundException("Customer not found"));
+    }
+
+    /** The invoice, locked after its customer — the one order the whole money path takes. */
+    private void lockInvoice(Invoice invoice) {
+        if (invoice.getId() != null) invoiceRepository.findByIdForUpdate(invoice.getId());
     }
 
     /** Active payments of the customer that still have money sitting in credit, oldest first. */

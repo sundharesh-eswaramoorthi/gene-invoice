@@ -1,0 +1,30 @@
+[
+  {
+    "evidence": "",
+    "codeRef": "frontend/lib/features/documents/document_actions.dart:38",
+    "severity": "",
+    "id": "D-37",
+    "feature": "Document privileges",
+    "kind": "UI",
+    "ac": "AC-C10, AC-C22",
+    "title": "Without DOCUMENT_VIEW the Documents tab is not offered, and its link shows nothing",
+    "status": "PASS",
+    "steps": "Create role D-NODOCVIEW-MUA6YIPXC49E (no DOCUMENT_VIEW / DOCUMENT_MANAGE); sign in as d-nodocview-mua6yir58337; open the invoice, then its ?tab=documents link",
+    "expected": "No Documents tab; the direct link falls back to another tab; no refused request",
+    "actual": "tabs: History; documents panel after the deep link: not shown; failed requests: []"
+  },
+  {
+    "evidence": "",
+    "codeRef": "frontend/lib/features/documents/document_providers.dart:60",
+    "severity": "",
+    "id": "D-38",
+    "feature": "Audit",
+    "kind": "UI",
+    "ac": "AC-C4",
+    "title": "A document uploaded from the tab appears in the record's History tab",
+    "status": "PASS",
+    "steps": "Payment 1 > Documents > upload d-history-check.pdf; open the History tab",
+    "expected": "The upload is in the record's history, naming the document",
+    "actual": "History shows: 3 Documents | Document Uploaded 21 Sep 2026, 12:41 AM • by admin | Document Uploaded 21 Sep 2026, 12:39 AM • by admin | Document Uploaded 21 Sep 2026, 12:15 AM • by admin (the entry records the action, the time and the actor; it does not name the file)"
+  }
+]

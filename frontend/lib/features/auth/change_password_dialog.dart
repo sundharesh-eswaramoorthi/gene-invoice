@@ -44,10 +44,19 @@ class _ChangePasswordDialogState extends ConsumerState<_ChangePasswordDialog> {
     });
     try {
       final dio = ref.read(dioProvider);
-      await dio.post('/api/auth/change-password', data: {
+      final res = await dio.post('/api/auth/change-password', data: {
         'currentPassword': _currentCtrl.text,
         'newPassword': _newCtrl.text,
       });
+      // The password this session signed in with is gone, and so is the token minted against it
+      // (AUTH-04). The server hands this session — the one that just proved the old password — a
+      // token of the new generation; storing it is what keeps the user working instead of being
+      // thrown to the sign-in screen on their next tap.
+      final data = res.data;
+      final token = data is Map ? data['token'] : null;
+      if (token is String && token.isNotEmpty) {
+        await ref.read(tokenStorageProvider).save(token);
+      }
       if (!mounted) return;
       setState(() => _success = 'Password changed successfully.');
       _currentCtrl.clear();

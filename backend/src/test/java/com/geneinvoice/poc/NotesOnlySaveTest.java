@@ -62,14 +62,19 @@ class NotesOnlySaveTest extends IntegrationTestBase {
                 new BigDecimal("40.00"), "Cash", null, null, collector.getId(), null));
     }
 
-    /** May edit invoices and payments, but not assign POCs. */
+    /**
+     * May edit invoices and payments, but not assign POCs. SCOPE_OVERRIDE because a clerk holds no
+     * POC seat of any kind: without it their book is empty and every record is a 404 before the
+     * POC rule this test is about is ever reached (AUTH-01).
+     */
     private User clerk() {
         Role role = roleRepository.findByName("NOTES_CLERK").orElseGet(() -> roleRepository.save(
                 Role.builder()
                         .name("NOTES_CLERK")
                         .description("Edits records but may not assign POCs")
                         .privileges(Stream.of(Privileges.INVOICE_VIEW, Privileges.INVOICE_MANAGE,
-                                        Privileges.PAYMENT_VIEW, Privileges.PAYMENT_MANAGE)
+                                        Privileges.PAYMENT_VIEW, Privileges.PAYMENT_MANAGE,
+                                        Privileges.SCOPE_OVERRIDE)
                                 .map(n -> privilegeRepository.findByName(n).orElseThrow())
                                 .collect(Collectors.toCollection(HashSet::new)))
                         .build()));

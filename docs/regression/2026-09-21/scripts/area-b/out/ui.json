@@ -1,0 +1,74 @@
+{
+  "cases": [
+    {
+      "id": "B-39",
+      "feature": "Chart wording",
+      "kind": "UI",
+      "ac": "AC-B5",
+      "title": "The ageing card is titled by days OVERDUE, and its axis says so too",
+      "status": "PASS",
+      "severity": "",
+      "steps": "Sign in at http://localhost:8084 as the Sales POC holding the boundary invoices; read the dashboard",
+      "expected": "card title \"Outstanding by days overdue\" with the axis/subtitle \"Days overdue\"",
+      "actual": "title=\"Outstanding by days overdue\", subtitle=\"Days overdue\"",
+      "evidence": "/Users/srinivasans/Git/DooD_Test/sundhartest/geneinvt1/docs/regression/2026-09-21/report/shots/B-39-dashboard-ageing.png",
+      "codeRef": "frontend/lib/features/dashboard/dashboard_screen.dart:398"
+    },
+    {
+      "id": "B-40",
+      "feature": "Chart wording",
+      "kind": "UI",
+      "ac": "AC-B5",
+      "title": "Bucket labels are the five days-past-due bands, with no \"days since invoice\" wording left on the dashboard",
+      "status": "PASS",
+      "severity": "",
+      "steps": "Read every labelled node on the dashboard (scrolled top to bottom)",
+      "expected": "Not yet due / 1–30 days / 31–60 days / 61–90 days / Over 90 days present; no \"days since invoice\" and no \"0–30 days\" label anywhere",
+      "actual": "on screen: Not yet due, 1–30 days, 31–60 days, 61–90 days, Over 90 days; nothing matching the old wording among 68 distinct labels",
+      "evidence": "/Users/srinivasans/Git/DooD_Test/sundhartest/geneinvt1/docs/regression/2026-09-21/report/shots/B-39-dashboard-ageing.png",
+      "codeRef": ""
+    },
+    {
+      "id": "B-41",
+      "feature": "Scope and coverage",
+      "kind": "UI",
+      "ac": "AC-B4",
+      "title": "Coverage BOOK is shown on the card, so a POC knows the chart is their book and not the company",
+      "status": "PASS",
+      "severity": "",
+      "steps": "Same dashboard, signed in as a Sales POC (coverage BOOK from the API)",
+      "expected": "a \"Your book\" badge on the ageing card",
+      "actual": "badge present: Your book",
+      "evidence": "/Users/srinivasans/Git/DooD_Test/sundhartest/geneinvt1/docs/regression/2026-09-21/report/shots/B-39-dashboard-ageing.png",
+      "codeRef": ""
+    },
+    {
+      "id": "B-42",
+      "feature": "Bucket deep link",
+      "kind": "UI",
+      "ac": "AC-B6",
+      "title": "Clicking the \"31–60 days\" bar opens the invoice list filtered to that bucket",
+      "status": "PASS",
+      "severity": "",
+      "steps": "Click the 31–60 days bar on the ageing card; read the resulting URL and list",
+      "expected": "navigation to /invoices carrying a dueDate range filter plus the open-status filter, showing the 2 invoices behind the bar",
+      "actual": "url=#/invoices?f=status:in:UNPAID,PARTIALLY_PAID&f=dueDate:between:2026-07-22,2026-08-20; invoice rows on screen=2",
+      "evidence": "/Users/srinivasans/Git/DooD_Test/sundhartest/geneinvt1/docs/regression/2026-09-21/report/shots/B-42-bucket-deeplink.png",
+      "codeRef": "frontend/lib/features/dashboard/dashboard_charts.dart:585 (linkFor)"
+    },
+    {
+      "id": "B-43",
+      "feature": "Dashboard health",
+      "kind": "UI",
+      "ac": "AC-B5",
+      "title": "Loading the dashboard and following a bucket link raises no API error and no page exception",
+      "status": "PASS",
+      "severity": "",
+      "steps": "Collect every response >= 400 and every page error for the session above",
+      "expected": "no 4xx/5xx from the API, no uncaught JS error",
+      "actual": "apiErrors=[] pageErrors=[]",
+      "evidence": "",
+      "codeRef": ""
+    }
+  ]
+}

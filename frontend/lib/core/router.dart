@@ -9,16 +9,23 @@ import '../features/customers/customers_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
 import '../features/disputes/dispute_detail_screen.dart';
 import '../features/disputes/disputes_screen.dart';
+import '../features/email/gmail_connection_screen.dart';
+import '../features/email/inbox_screen.dart';
 import '../features/invoices/invoice_detail_screen.dart';
 import '../features/invoices/invoice_form_screen.dart';
 import '../features/invoices/invoices_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/payments/payment_detail_screen.dart';
 import '../features/payments/payments_screen.dart';
+import '../features/products/product_detail_screen.dart';
 import '../features/products/products_screen.dart';
+import '../features/promises/promise_detail_screen.dart';
 import '../features/promises/promises_screen.dart';
+import '../features/users/role_detail_screen.dart';
 import '../features/users/roles_screen.dart';
+import '../features/users/user_detail_screen.dart';
 import '../features/users/users_screen.dart';
+import '../shared/models/privileges.dart';
 import '../shared/widgets/app_shell.dart';
 import '../shared/widgets/detail_scaffold.dart';
 import 'table/route_query.dart';
@@ -36,6 +43,18 @@ final routerProvider = Provider<GoRouter>((ref) {
   Future<bool> mayLeave(BuildContext context, GoRouterState state) async =>
       ref.read(authControllerProvider).user == null ||
       await ref.read(unsavedChangesProvider).mayLeave();
+
+  /// A screen a user may not open is one the URL cannot reach either. Holding none of
+  /// [privileges], a hand-edited or stale link lands on the dashboard rather than on a list that
+  /// offers "Add filter" and "Send email" above a 403, with a Retry that can only fail the same
+  /// way (UI-10, AC-C22). Each list route is guarded by the very privileges its sidebar entry
+  /// asks for, so the nav and the router can never disagree about who may open a screen.
+  GoRouterRedirect needs(List<String> privileges) => (context, state) {
+        final user = ref.read(authControllerProvider).user;
+        // Signed out, the redirect above sends them to the login screen instead.
+        if (user == null) return null;
+        return privileges.isEmpty || user.hasAny(privileges) ? null : '/';
+      };
 
   return GoRouter(
     initialLocation: '/',
@@ -66,11 +85,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state, child) => AppShell(child: child),
         routes: [
           GoRoute(path: '/', builder: (c, s) => const DashboardScreen()),
+          GoRoute(
+            path: '/inbox',
+            redirect: needs(navPrivilegesFor('/inbox')),
+            builder: (c, s) => InboxScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('inbox'), defaultSort: 'occurredAt,desc'),
+            ),
+          ),
+          // The signed-in user's own Gmail, from the account menu (mail-service.md §6).
+          GoRoute(path: '/me/gmail', builder: (c, s) => const GmailConnectionScreen()),
 
           // List pages open unfiltered for every role; a scope the server enforces comes back
           // with the page and is shown as a locked chip.
           GoRoute(
             path: '/customers',
+            redirect: needs(navPrivilegesFor('/customers')),
             builder: (c, s) => CustomersScreen(
               query: RouteQuery.read(s, defaultSize: sizeFor('customers'), defaultSort: 'name,asc'),
             ),
@@ -94,14 +123,28 @@ final routerProvider = Provider<GoRouter>((ref) {
 
           GoRoute(
             path: '/products',
+            redirect: needs(navPrivilegesFor('/products')),
             builder: (c, s) => ProductsScreen(
               query: RouteQuery.read(s, defaultSize: sizeFor('products'), defaultSort: 'name,asc'),
             ),
+          ),
+          GoRoute(
+            path: '/products/:id',
+            onExit: mayLeave,
+            builder: (c, s) => pageForId(s,
+                noun: 'product',
+                backTo: '/products',
+                build: (id) => ProductDetailScreen(
+                      key: ValueKey('product-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
           ),
 
           GoRoute(path: '/invoices/new', builder: (c, s) => const InvoiceFormScreen()),
           GoRoute(
             path: '/invoices',
+            redirect: needs(navPrivilegesFor('/invoices')),
             builder: (c, s) => InvoicesScreen(
               query: RouteQuery.read(s, defaultSize: sizeFor('invoices'), defaultSort: 'invoiceDate,desc'),
             ),
@@ -121,6 +164,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
           GoRoute(
             path: '/payments',
+            redirect: needs(navPrivilegesFor('/payments')),
             builder: (c, s) => PaymentsScreen(
               query: RouteQuery.read(s, defaultSize: sizeFor('payments'), defaultSort: 'paidAt,desc'),
             ),
@@ -140,21 +184,28 @@ final routerProvider = Provider<GoRouter>((ref) {
 
           GoRoute(
             path: '/promises',
+            redirect: needs(navPrivilegesFor('/promises')),
             builder: (c, s) => PromisesScreen(
               query: RouteQuery.read(s, defaultSize: sizeFor('promises'), defaultSort: 'promisedDate,desc'),
             ),
           ),
-          // A promise notification deep-links here; the promise lives on its customer's screen.
+          // A promise notification or an email about a promise deep-links here (E15).
           GoRoute(
             path: '/promises/:id',
+            onExit: mayLeave,
             builder: (c, s) => pageForId(s,
                 noun: 'promise',
                 backTo: '/promises',
-                build: (id) => PromiseRedirectScreen(key: ValueKey('promise-$id'), id: id)),
+                build: (id) => PromiseDetailScreen(
+                      key: ValueKey('promise-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
           ),
 
           GoRoute(
             path: '/disputes',
+            redirect: needs(navPrivilegesFor('/disputes')),
             builder: (c, s) => DisputesScreen(
               query: RouteQuery.read(s, defaultSize: sizeFor('disputes'), defaultSort: 'createdAt,desc'),
             ),
@@ -164,26 +215,58 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (c, s) => pageForId(s,
                 noun: 'dispute',
                 backTo: '/disputes',
-                build: (id) => DisputeDetailScreen(key: ValueKey('dispute-$id'), id: id)),
+                build: (id) => DisputeDetailScreen(
+                      key: ValueKey('dispute-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
           ),
 
+          // Not a sidebar entry — the bell leads here — but gated all the same.
           GoRoute(
             path: '/notifications',
+            redirect: needs(const [Privileges.notificationView]),
             builder: (c, s) => NotificationsScreen(
               query: RouteQuery.read(s, defaultSize: sizeFor('notifications'), defaultSort: 'createdAt,desc'),
             ),
           ),
           GoRoute(
             path: '/users',
+            redirect: needs(navPrivilegesFor('/users')),
             builder: (c, s) => UsersScreen(
               query: RouteQuery.read(s, defaultSize: sizeFor('users'), defaultSort: 'username,asc'),
             ),
           ),
           GoRoute(
+            path: '/users/:id',
+            onExit: mayLeave,
+            builder: (c, s) => pageForId(s,
+                noun: 'user',
+                backTo: '/users',
+                build: (id) => UserDetailScreen(
+                      key: ValueKey('user-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
+          ),
+          GoRoute(
             path: '/roles',
+            redirect: needs(navPrivilegesFor('/roles')),
             builder: (c, s) => RolesScreen(
               query: RouteQuery.read(s, defaultSize: sizeFor('roles'), defaultSort: 'name,asc'),
             ),
+          ),
+          GoRoute(
+            path: '/roles/:id',
+            onExit: mayLeave,
+            builder: (c, s) => pageForId(s,
+                noun: 'role',
+                backTo: '/roles',
+                build: (id) => RoleDetailScreen(
+                      key: ValueKey('role-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
           ),
         ],
       ),

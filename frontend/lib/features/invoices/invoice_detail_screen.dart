@@ -10,6 +10,7 @@ import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
 import '../../shared/models/invoice.dart';
+import '../../shared/models/payment_term.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
 import '../../shared/widgets/status_chip.dart';
@@ -17,6 +18,8 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
 import '../disputes/disputes_tab.dart';
+import '../documents/document_actions.dart';
+import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
@@ -35,6 +38,10 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
   final _notes = TextEditingController();
   PocUser? _salesPoc;
   int? _savedSalesPocId;
+  PaymentTerm? _term;
+  DateTime? _dueDate;
+  PaymentTerm? _savedTerm;
+  DateTime? _savedDueDate;
   bool _loadedInto = false;
   bool _dirty = false;
   bool _saving = false;
@@ -60,6 +67,48 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     _notes.text = inv.notes ?? '';
     _salesPoc = inv.salesPoc;
     _savedSalesPocId = inv.salesPoc?.id;
+    _term = inv.paymentTerm;
+    _dueDate = inv.dueDate;
+    _savedTerm = inv.paymentTerm;
+    _savedDueDate = inv.dueDate;
+  }
+
+  /// The day the current terms were counted from, worked back from the due date the server
+  /// stored. Read that way rather than from the invoice timestamp, so a recomputed date is the
+  /// one the save will come back with. Custom terms and an invoice with no due date leave
+  /// nothing to work back from, and then it is the invoice's UTC day — the day the server counts
+  /// from (§2.1) — never this browser's reading of the instant.
+  DateTime _termsCountedFrom(InvoiceDetail inv) =>
+      (inv.dueDate == null ? null : inv.paymentTerm?.basisOf(inv.dueDate!)) ??
+      utcDay(inv.invoiceDate)!;
+
+  /// Named terms recompute the date; Custom keeps whatever is showing (§2.2, US-A3).
+  void _termChanged(PaymentTerm? term, InvoiceDetail inv) {
+    if (term == null) return;
+    setState(() {
+      _term = term;
+      final due = term.due(_termsCountedFrom(inv));
+      if (due != null) _dueDate = due;
+      _dirty = true;
+    });
+  }
+
+  Future<void> _pickDueDate(InvoiceDetail inv) async {
+    final basis = _termsCountedFrom(inv);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueDate ?? basis,
+      // Earlier than the invoice date is a 400 from the server, so it cannot be picked (AC-A5).
+      firstDate: DateTime(basis.year, basis.month, basis.day),
+      lastDate: DateTime(basis.year + 5, basis.month, basis.day),
+    );
+    if (picked == null) return;
+    // A date chosen by hand is an override, whatever the terms were (US-A3).
+    setState(() {
+      _dueDate = DateTime(picked.year, picked.month, picked.day);
+      _term = PaymentTerm.CUSTOM;
+      _dirty = true;
+    });
   }
 
   Future<bool> _confirmDiscard() async {
@@ -91,13 +140,22 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     });
     try {
       final pocChanged = _salesPoc != null && _salesPoc!.id != _savedSalesPocId;
+      final termsChanged = _term != _savedTerm || _dueDate != _savedDueDate;
       await ref.read(dioProvider).patch('/api/invoices/${widget.id}', data: {
         'notes': _notes.text.trim(),
         // Sent only when changed: an unchanged POC may since have been deactivated, or this user
         // may not assign POCs, and neither should block a notes edit (AC-A5).
         if (pocChanged) 'salesPocUserId': _salesPoc!.id,
+        // One or the other, never both: a named term is the rule the server recomputes the date
+        // from, a date of its own is the override it records as Custom (§2.2).
+        if (termsChanged && _term == PaymentTerm.CUSTOM && _dueDate != null)
+          'dueDate': formatDate(_dueDate),
+        if (termsChanged && _term != null && _term != PaymentTerm.CUSTOM)
+          'paymentTerm': _term!.name,
       });
       _savedSalesPocId = _salesPoc?.id;
+      _savedTerm = _term;
+      _savedDueDate = _dueDate;
       // Top section, tabs and the list the user came from all pick up the new values (AC-C5).
       ref.invalidate(invoiceDetailProvider(widget.id));
       ref.invalidate(tablePageProvider);
@@ -136,6 +194,12 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       ),
       data: (inv) {
         _seed(inv);
+        final sendEmail = sendEmailHeaderButton(context, ref,
+            type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
+        final documentsTab = documentsDetailTab(ref,
+            type: DocumentEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
+        final emailTab = emailDetailTab(ref,
+            type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
         return PopScope(
           canPop: !_dirty,
           // Unsaved edits are asked about once, by goGuarded or else by the route's onExit.
@@ -144,11 +208,20 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
           },
           child: DetailScaffold(
             title: inv.invoiceNumber,
-            subtitle: '${inv.customerName} • ${formatDate(inv.invoiceDate)}',
+            subtitle: [
+              inv.customerName,
+              // The UTC day, because the due date beside it was counted from that day: read in
+              // the browser's zone the pair would not add up to the stated terms (§2.1).
+              formatUtcDate(inv.invoiceDate),
+              if (inv.dueDate != null) 'due ${formatDate(inv.dueDate)}',
+            ].join(' • '),
             onBack: () => goGuarded(context, '/invoices'),
             titleTrailing: [
               if (canSeePoc && inv.pocMissing) const PocMissingBadge(),
               InvoiceStatusChip(status: inv.status),
+              // Not a status of its own: it is true of an unpaid invoice whose date has passed,
+              // and says by how long (US-A4).
+              if (inv.overdue) OverdueBadge(daysOverdue: inv.daysOverdue),
               if (canSeeDisputes && user!.canRaiseDispute)
                 TextButton.icon(
                   icon: const Icon(Icons.flag_outlined, size: 18),
@@ -160,6 +233,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                     targetLabel: inv.invoiceNumber,
                   ),
                 ),
+              if (sendEmail != null) sendEmail,
             ],
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) =>
@@ -185,7 +259,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                   builder: (context) => PromisesTab(
                     customerId: inv.customerId,
                     customerName: inv.customerName,
-                    invoiceId: inv.id,
+                    invoice: inv,
                   ),
                 ),
               if (canViewAudit)
@@ -199,6 +273,8 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                         entityType: 'INVOICE', entityId: inv.id, includeRelated: true),
                   ),
                 ),
+              if (documentsTab != null) documentsTab,
+              if (emailTab != null) emailTab,
             ],
           ),
         );
@@ -246,6 +322,45 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                   }),
                 ),
               ),
+            // Where the due date came from — "Custom" when it was typed (US-A3). Anyone who may
+            // change the invoice may move the deadline the customer renegotiated, and every
+            // move is written to the History tab (AC-A8).
+            DetailGridItem(
+              label: 'Payment terms',
+              child: canEdit
+                  ? DropdownButtonHideUnderline(
+                      child: DropdownButton<PaymentTerm>(
+                        isExpanded: true,
+                        isDense: true,
+                        value: _term,
+                        hint: const Text('From the customer'),
+                        items: [
+                          for (final t in PaymentTerm.values)
+                            DropdownMenuItem(value: t, child: Text(t.label)),
+                        ],
+                        onChanged: (t) => _termChanged(t, inv),
+                      ),
+                    )
+                  : ReadOnlyValue(inv.termsLabel),
+            ),
+            DetailGridItem(
+              label: 'Due date',
+              child: canEdit
+                  ? InkWell(
+                      onTap: () => _pickDueDate(inv),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Row(
+                          children: [
+                            Text(formatDate(_dueDate)),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.calendar_today, size: 16),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ReadOnlyValue(formatDate(inv.dueDate)),
+            ),
             DetailGridItem(
               label: 'Notes',
               span: 2,

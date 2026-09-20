@@ -11,19 +11,34 @@ import '../../shared/models/promise.dart';
 import '../../shared/widgets/search_picker_field.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../customers/customers_screen.dart';
+import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_providers.dart';
 
+/// Resolves true once a payment was recorded. When the cashier ticked "Notify through email", the
+/// compose form opens from [context] after the dialog has closed, and this resolves when it does.
 Future<bool?> showRecordPaymentDialog({
   required BuildContext context,
   Customer? customer,
-}) {
-  return showDialog<bool>(
+}) async {
+  final saved = await showDialog<_RecordedPayment>(
     context: context,
     builder: (_) => _RecordPaymentDialog(initialCustomer: customer),
   );
+  if (saved == null) return false;
+  if (context.mounted) {
+    await notifyByEmailAfterSave(context,
+        notify: saved.notify,
+        type: EmailEntityType.payment,
+        entityId: saved.id,
+        event: EmailEvent.created);
+  }
+  return true;
 }
+
+/// What the dialog closes with once it has saved; the email, if wanted, is the caller's to open.
+typedef _RecordedPayment = ({int id, bool notify});
 
 class _RecordPaymentDialog extends ConsumerStatefulWidget {
   final Customer? initialCustomer;
@@ -47,6 +62,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
   bool _pocChosen = false;
   bool _saving = false;
   bool _submitted = false;
+  bool _notify = false;
   String? _error;
 
   @override
@@ -75,6 +91,13 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     });
   }
 
+  /// Drops the form's complaint as soon as the field it named has changed, the way the customer
+  /// page drops the server's (D-52): a message that asks for something already done reads as a
+  /// refusal to save (UI-04).
+  void _clearError() {
+    if (_error != null) setState(() => _error = null);
+  }
+
   Future<void> _submit() async {
     setState(() {
       _submitted = true;
@@ -95,7 +118,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     }
     setState(() => _saving = true);
     try {
-      await ref.read(dioProvider).post('/api/payments', data: {
+      final res = await ref.read(dioProvider).post('/api/payments', data: {
         'customerId': _customer!.id,
         'amount': amount,
         'method': _methodCtrl.text.trim(),
@@ -104,7 +127,10 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
         if (_selectedInvoices.isNotEmpty) 'invoiceIds': _selectedInvoices.toList(),
         if (_selectedPromises.isNotEmpty) 'promiseIds': _selectedPromises.toList(),
       });
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) {
+        Navigator.of(context)
+            .pop<_RecordedPayment>((id: (res.data as Map)['id'] as int, notify: _notify));
+      }
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -143,6 +169,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                   _selectedInvoices.clear();
                   _selectedPromises.clear();
                   _pocResolvedFor = null;
+                  _error = null;
                 }),
               ),
               const SizedBox(height: 12),
@@ -157,6 +184,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                   onChanged: (u) => setState(() {
                     _collectionPoc = u;
                     _pocChosen = u != null;
+                    _error = null;
                   }),
                 ),
               const SizedBox(height: 12),
@@ -167,6 +195,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                 controller: _amountCtrl,
                 decoration: const InputDecoration(labelText: 'Amount *'),
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                onChanged: (_) => _clearError(),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -180,6 +209,10 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                 inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.paymentNotes)],
                 decoration: const InputDecoration(labelText: 'Notes'),
               ),
+              NotifyByEmailCheckbox(
+                value: _notify,
+                onChanged: (v) => setState(() => _notify = v),
+              ),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -192,7 +225,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+            onPressed: _saving ? null : () => Navigator.of(context).pop(),
             child: const Text('Cancel')),
         FilledButton(
           onPressed: _saving ? null : _submit,

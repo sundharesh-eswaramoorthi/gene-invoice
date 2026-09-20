@@ -13,11 +13,16 @@ class DetailTab {
   final String slug;
   final WidgetBuilder builder;
 
+  /// How many rows the tab holds, shown on its icon, so the page says there is something there
+  /// before the tab is opened (documents, AC-C1). Null shows no badge; 0 shows the tab plainly.
+  final int? badgeCount;
+
   const DetailTab({
     required this.slug,
     required this.label,
     required this.icon,
     required this.builder,
+    this.badgeCount,
   });
 }
 
@@ -125,7 +130,7 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
       isScrollable: true,
       tabAlignment: TabAlignment.start,
       tabs: [
-        for (final t in widget.tabs) Tab(icon: Icon(t.icon, size: 18), text: t.label),
+        for (final t in widget.tabs) Tab(icon: _TabIcon(tab: t), text: t.label),
       ],
     );
 
@@ -158,6 +163,9 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
 
     return LayoutBuilder(
       builder: (context, constraints) => Column(
+        // Stretched, so a top pane narrower than the page starts at its left edge under the title
+        // instead of being centred in it — a pending dispute's facts sat in the middle of the page.
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           header,
           // The top pane is as tall as its content, not a fixed half of the page, so an ordinary
@@ -244,6 +252,21 @@ class _Header extends StatelessWidget {
         );
       }),
     );
+  }
+}
+
+/// A tab's icon, with its count on it when it has one. An empty tab keeps the plain icon: a "0"
+/// badge is noise where the tab itself already says there is nothing.
+class _TabIcon extends StatelessWidget {
+  final DetailTab tab;
+  const _TabIcon({required this.tab});
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Icon(tab.icon, size: 18);
+    final count = tab.badgeCount;
+    if (count == null || count <= 0) return icon;
+    return Badge.count(count: count, child: icon);
   }
 }
 

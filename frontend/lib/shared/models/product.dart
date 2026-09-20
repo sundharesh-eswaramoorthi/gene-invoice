@@ -5,12 +5,16 @@ class Product {
   final double price;
   final bool active;
 
+  /// Null until the server sends it; the details page then leaves the date out.
+  final DateTime? createdAt;
+
   const Product({
     required this.id,
     required this.name,
     this.description,
     required this.price,
     required this.active,
+    this.createdAt,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
@@ -19,5 +23,7 @@ class Product {
         description: json['description'] as String?,
         price: (json['price'] as num).toDouble(),
         active: json['active'] as bool? ?? true,
+        createdAt:
+            json['createdAt'] == null ? null : DateTime.parse(json['createdAt'] as String),
       );
 }

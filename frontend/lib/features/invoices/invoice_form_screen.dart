@@ -2,18 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
 import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/customer.dart';
+import '../../shared/models/invoice.dart';
+import '../../shared/models/payment_term.dart';
 import '../../shared/models/product.dart';
 import '../../shared/widgets/search_picker_field.dart';
 import '../customers/customers_screen.dart';
+import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../products/products_screen.dart';
+
+/// The terms line reads "Net 30 — due 20 Oct 2026" (US-A2), where a date in words says more than
+/// the table format does.
+final DateFormat _dueDateInWords = DateFormat('d MMM yyyy');
 
 class _LineDraft {
   Product? product;
@@ -41,7 +49,19 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   bool _pocPreselected = false;
   bool _saving = false;
   bool _submitted = false;
+  bool _notify = false;
   String? _error;
+
+  /// Filled from the preview the moment a customer is picked (US-A2), and by hand after that.
+  PaymentTerm? _term;
+  String? _termLabel;
+  DateTime? _dueDate;
+
+  /// The invoice date the server worked the preview out from, which a change of terms recomputes
+  /// against. Until a preview arrives there is none, and the terms field waits for a customer.
+  DateTime? _invoiceDate;
+  bool _previewing = false;
+  String? _previewError;
 
   @override
   void dispose() {
@@ -72,6 +92,84 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   bool get _linesValid =>
       _lines.isNotEmpty && _lines.every((l) => l.product != null && l.quantity > 0);
 
+  void _customerPicked(Customer? customer) {
+    setState(() => _customer = customer);
+    if (customer != null) _previewDueDate(customer);
+  }
+
+  /// The due date the customer's terms give, the moment they are picked (US-A2). It comes from
+  /// the server, which stamps the invoice date, rather than from this browser's clock.
+  Future<void> _previewDueDate(Customer customer) async {
+    setState(() {
+      _previewing = true;
+      _previewError = null;
+      _term = null;
+      _termLabel = null;
+      _dueDate = null;
+      _invoiceDate = null;
+    });
+    try {
+      final res = await ref.read(dioProvider).get('/api/invoices/due-date-preview',
+          queryParameters: {'customerId': customer.id});
+      // A slow answer for a customer already replaced must not overwrite the current one.
+      if (!mounted || _customer?.id != customer.id) return;
+      final preview = DueDatePreview.fromJson((res.data as Map).cast<String, dynamic>());
+      setState(() {
+        _term = preview.paymentTerm;
+        _termLabel = preview.paymentTermLabel;
+        _dueDate = preview.dueDate;
+        _invoiceDate = preview.invoiceDate;
+      });
+    } catch (e) {
+      // The invoice can still be saved: the server applies the customer's terms itself.
+      if (mounted && _customer?.id == customer.id) {
+        setState(() => _previewError = apiErrorMessage(e));
+      }
+    } finally {
+      if (mounted) setState(() => _previewing = false);
+    }
+  }
+
+  void _termChanged(PaymentTerm? term) {
+    if (term == null) return;
+    setState(() {
+      _term = term;
+      _termLabel = term.label;
+      // Custom keeps the date that is showing; every other term recomputes it (§2.2).
+      final due = _invoiceDate == null ? null : term.due(_invoiceDate!);
+      if (due != null) _dueDate = due;
+    });
+  }
+
+  Future<void> _pickDueDate() async {
+    final basis = _invoiceDate ?? DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueDate ?? basis,
+      // Earlier than the invoice date is a 400 from the server, so it cannot be picked (AC-A5).
+      firstDate: DateTime(basis.year, basis.month, basis.day),
+      lastDate: DateTime(basis.year + 5, basis.month, basis.day),
+    );
+    if (picked == null) return;
+    // A date chosen by hand makes the terms Custom, whatever they were (§2.2, US-A3).
+    setState(() {
+      _dueDate = DateTime(picked.year, picked.month, picked.day);
+      _term = PaymentTerm.CUSTOM;
+      _termLabel = PaymentTerm.CUSTOM.label;
+    });
+  }
+
+  /// A far-future due date is legitimate — some contracts really are Net 365 — so beyond the
+  /// horizon the form asks rather than refuses (AC-A5). Counted from today when the preview
+  /// could not say which day the server would stamp: a date three years out is worth asking
+  /// about whether or not that call came back (the picker counts from the same day).
+  bool get _beyondHorizon {
+    if (_dueDate == null) return false;
+    final today = DateTime.now();
+    final basis = _invoiceDate ?? DateTime(today.year, today.month, today.day);
+    return _dueDate!.difference(basis).inDays > FieldLimits.dueDateHorizonDays;
+  }
+
   Future<void> _submit() async {
     setState(() {
       _submitted = true;
@@ -84,10 +182,15 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     setState(() => _saving = true);
     try {
       final dio = ref.read(dioProvider);
-      await dio.post('/api/invoices', data: {
+      final res = await dio.post('/api/invoices', data: {
         'customerId': _customer!.id,
         'notes': _notesCtrl.text.trim(),
         'salesPocUserId': _salesPoc!.id,
+        // A date typed by hand goes up as the date; terms go up as terms, for the server to
+        // apply to the invoice date it stamps (§2.2).
+        if (_term == PaymentTerm.CUSTOM && _dueDate != null)
+          'dueDate': DateFormat('yyyy-MM-dd').format(_dueDate!),
+        if (_term != null && _term != PaymentTerm.CUSTOM) 'paymentTerm': _term!.name,
         'items': _lines
             .map((l) => {
                   'productId': l.product!.id,
@@ -98,11 +201,22 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
       });
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);
+      var compose = EmailComposeOutcome.closed;
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Invoice created')));
-        context.go('/invoices');
+        // Saved, so the spinner stops; the email is offered before leaving, because leaving first
+        // would unmount the context the compose form opens from.
+        setState(() => _saving = false);
+        compose = await notifyByEmailAfterSave(context,
+            notify: _notify,
+            type: EmailEntityType.invoice,
+            entityId: (res.data as Map)['id'] as int,
+            event: EmailEvent.created);
       }
+      // The compose form's Connect is already taking the app to the Gmail page; this screen is
+      // still here until the next frame, and going to the list now would win over it.
+      if (mounted && compose != EmailComposeOutcome.leftForGmail) context.go('/invoices');
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -138,8 +252,10 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                 subtitleOf: (c) => c.email,
                 search: (q) => searchCustomers(ref.read(dioProvider), q),
                 errorText: _submitted && _customer == null ? 'Pick a customer' : null,
-                onChanged: (c) => setState(() => _customer = c),
+                onChanged: _customerPicked,
               ),
+              const SizedBox(height: 12),
+              _termsAndDueDate(),
               const SizedBox(height: 12),
               // Mandatory: the backend rejects an invoice without one too (AC-A2).
               if (canSeePoc)
@@ -193,6 +309,10 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                 ],
               ),
+              NotifyByEmailCheckbox(
+                value: _notify,
+                onChanged: (v) => setState(() => _notify = v),
+              ),
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -224,6 +344,91 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Payment terms and the due date they give, side by side, with the terms named underneath so
+  /// nobody has to do the arithmetic to trust the date (US-A2).
+  Widget _termsAndDueDate() {
+    final theme = Theme.of(context);
+    final narrow = MediaQuery.sizeOf(context).width < 600;
+    final picked = _customer != null;
+
+    final String dueText;
+    if (_previewing) {
+      dueText = 'Working out the due date…';
+    } else if (_dueDate == null) {
+      dueText = picked ? 'Pick a date' : 'Pick a customer first';
+    } else {
+      dueText = formatDate(_dueDate);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Stacked on a phone, where two fields in a row cut their labels (D-60).
+        Flex(
+          direction: narrow ? Axis.vertical : Axis.horizontal,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: InputDecorator(
+                decoration: const InputDecoration(labelText: 'Payment terms'),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<PaymentTerm>(
+                    isExpanded: true,
+                    isDense: true,
+                    value: _term,
+                    hint: const Text('From the customer'),
+                    items: [
+                      for (final t in PaymentTerm.values)
+                        DropdownMenuItem(value: t, child: Text(t.label)),
+                    ],
+                    onChanged: picked ? _termChanged : null,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12, height: 12),
+            Flexible(
+              child: InkWell(
+                onTap: picked ? _pickDueDate : null,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Due date',
+                    suffixIcon: Icon(Icons.calendar_today, size: 18),
+                  ),
+                  child: Text(dueText),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (_dueDate != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              '${_termLabel ?? _term?.label ?? ''} — due ${_dueDateInWords.format(_dueDate!)}',
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        if (_beyondHorizon)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('That is more than a year away — is it right?',
+                style: TextStyle(color: theme.colorScheme.tertiary)),
+          ),
+        if (_previewError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              'Could not work out the due date: $_previewError. '
+              'Saving will use the customer\'s terms.',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+            ),
+          ),
+      ],
     );
   }
 }

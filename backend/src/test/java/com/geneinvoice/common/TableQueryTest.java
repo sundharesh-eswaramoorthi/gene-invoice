@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +37,7 @@ class TableQueryTest extends IntegrationTestBase {
     @Autowired InvoiceService invoiceService;
     @Autowired PaymentService paymentService;
     @Autowired PocService pocService;
+    @Autowired com.geneinvoice.privilege.PrivilegeRepository privilegeRepository;
 
     User admin;
     User sales;
@@ -173,8 +175,9 @@ class TableQueryTest extends IntegrationTestBase {
         for (JsonNode c : schema.get("columns")) {
             names.add(c.get("name").asText());
         }
+        // Due date reads beside the invoice date, and Overdue beside the status it qualifies.
         assertThat(names).startsWith("id", "invoiceNumber", "customerId", "customerName",
-                "invoiceDate", "total", "paidAmount", "balance", "status");
+                "invoiceDate", "dueDate", "total", "paidAmount", "balance", "status", "overdue");
     }
 
     @Test
@@ -184,8 +187,10 @@ class TableQueryTest extends IntegrationTestBase {
         for (JsonNode c : schema.get("columns")) {
             if (c.get("sortable").asBoolean()) sortable.add(c.get("name").asText());
         }
-        assertThat(sortable).contains("invoiceNumber", "invoiceDate", "total", "paidAmount",
-                "balance", "status", "customerName");
+        assertThat(sortable).contains("invoiceNumber", "invoiceDate", "dueDate", "total",
+                "paidAmount", "balance", "status", "customerName");
+        // Overdue is worked out from the clock, so there is nothing to sort on: due date is it.
+        assertThat(sortable).doesNotContain("overdue");
         assertThat(schema.get("pageSizes").toString()).isEqualTo("[10,20,50]");
     }
 
@@ -458,6 +463,177 @@ class TableQueryTest extends IntegrationTestBase {
         assertThat(tiles.get("count").asLong()).isEqualTo(1);
         assertThat(tiles.get("voidedCount").asLong()).isEqualTo(1);
         assertThat(tiles.get("totalCollected").asDouble()).isZero();
+    }
+
+    // ---- TBL-01 / TBL-02: a value the database cannot hold is a 400, not a 500 ----
+
+    /**
+     * A NUL inside a filter value used to reach Postgres and come back as "Unexpected error" on
+     * the list and on its summary at once, so the page showed a failed request and no tiles, with
+     * a Retry that did it again. It is named for what it is, like every other unusable value.
+     */
+    @Test
+    void aNullCharacterInAFilterValueIsRefusedByName() throws Exception {
+        invoice(acme, "10.00", 1, sales);
+
+        // A column each list really has, so the 400 is about the value and not the column.
+        Map<String, String> listsAndColumns = Map.of(
+                "/api/customers", "name",
+                "/api/invoices", "notes",
+                "/api/products", "name",
+                "/api/payments", "notes",
+                "/api/promises", "notes",
+                "/api/notifications", "title",
+                "/api/inbox", "subject");
+        for (Map.Entry<String, String> list : listsAndColumns.entrySet()) {
+            mockMvc.perform(get(list.getKey()).with(as(admin)).param("size", "10")
+                            .param("filter", list.getValue() + ":contains:a\u0000b"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message",
+                            org.hamcrest.Matchers.containsString("null character")));
+        }
+        // The companion summary request fails the same way, rather than leaving the page with a
+        // broken list and "Summary unavailable: Unexpected error" where the tiles should be.
+        mockMvc.perform(get("/api/customers/summary").with(as(admin))
+                        .param("filter", "name:contains:a\u0000b"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message",
+                        org.hamcrest.Matchers.containsString("null character")))
+                .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("name")));
+        // And the export, which parses the same filters out of a body.
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/api/invoices/export").with(as(admin))
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("selectAllMatchingFilter", true,
+                                "filters", List.of("notes:contains:a\u0000b")))))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** A trailing one is refused too, rather than trimmed away into a different question. */
+    @Test
+    void aTrailingNullCharacterIsRefusedRatherThanQuietlyTrimmed() throws Exception {
+        invoice(acme, "10.00", 1, sales);
+
+        mockMvc.perform(get("/api/invoices").with(as(admin)).param("size", "10")
+                        .param("filter", "status:eq:UNPAID\u0000"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/invoices").with(as(admin)).param("size", "10")
+                        .param("filter", "status:eq:UNPAID"))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * A number with an exponent past what the database can hold used to bind as zero, so "total
+     * greater than 10 to the 200000" matched nearly every invoice and "less than" matched none —
+     * wrong rows, with nothing to say so. Tiny exponents were a 500. Both are refused by name.
+     */
+    @Test
+    void aNumberTooLargeOrTooPreciseToCompareIsRefused() throws Exception {
+        invoice(acme, "10.00", 1, sales);
+
+        for (String value : List.of("1E+131072", "1E+200000", "1E-131071", "1E-40",
+                "1000000000000000000000")) {
+            mockMvc.perform(get("/api/invoices").with(as(admin)).param("size", "10")
+                            .param("filter", "total:gt:" + value))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message",
+                            org.hamcrest.Matchers.containsString("total")));
+        }
+    }
+
+    /** And an ordinary money filter still answers, in both directions. */
+    @Test
+    void anOrdinaryMoneyFilterStillCompares() throws Exception {
+        invoice(acme, "10.00", 1, sales);
+        invoice(acme, "500.00", 1, sales);
+
+        assertThat(getJson(get("/api/invoices").with(as(admin))
+                .param("filter", "total:gt:100")).get("totalElements").asLong()).isEqualTo(1);
+        assertThat(getJson(get("/api/invoices").with(as(admin))
+                .param("filter", "total:lt:1000000000000")).get("totalElements").asLong()).isEqualTo(2);
+    }
+
+    // ---- AUTH-01: not being that kind of POC is an empty book, not every row ----
+
+    /**
+     * A Sales POC is nobody's Collection POC, so their payments and promises books are empty —
+     * not the company's. The lists used to come back complete, with no locked chip, including the
+     * payments of customers their own Customers list hides.
+     */
+    @Test
+    void aSalesPocSeesNoPaymentsOrPromisesAndIsToldWhy() throws Exception {
+        Invoice mine = invoice(acme, "100.00", 1, sales);
+        Invoice theirs = invoice(globex, "100.00", 1, otherSales);
+        paymentService.record(new PaymentDtos.CreatePaymentRequest(acme.getId(),
+                new BigDecimal("10.00"), "Cash", null, List.of(mine.getId()), collections.getId(), null));
+        paymentService.record(new PaymentDtos.CreatePaymentRequest(globex.getId(),
+                new BigDecimal("10.00"), "Cash", null, List.of(theirs.getId()), collections.getId(), null));
+
+        JsonNode payments = getJson(get("/api/payments").with(as(sales)).param("size", "50"));
+        assertThat(payments.get("totalElements").asLong()).isZero();
+        assertThat(payments.get("lockedFilters")).isNotEmpty();
+
+        JsonNode promises = getJson(get("/api/promises").with(as(sales)).param("size", "50"));
+        assertThat(promises.get("totalElements").asLong()).isZero();
+        assertThat(promises.get("lockedFilters")).isNotEmpty();
+
+        // Their own invoices list is narrowed, not emptied: they are a Sales POC.
+        JsonNode invoices = getJson(get("/api/invoices").with(as(sales)).param("size", "50"));
+        assertThat(invoices.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(invoices.get("lockedFilters")).isNotEmpty();
+
+        // And an admin still sees everything.
+        assertThat(getJson(get("/api/payments").with(as(admin)).param("size", "50"))
+                .get("totalElements").asLong()).isEqualTo(2);
+    }
+
+    /** The same the other way round: a collections-only role without SCOPE_OVERRIDE sees no
+     *  invoices rather than all of them. */
+    @Test
+    void aCollectionOnlyRoleWithoutScopeOverrideSeesNoInvoices() throws Exception {
+        invoice(acme, "100.00", 1, sales);
+        User bookLimited = user("cleo.collect", bookLimitedCollectionRole());
+
+        JsonNode invoices = getJson(get("/api/invoices").with(as(bookLimited)).param("size", "50"));
+        assertThat(invoices.get("totalElements").asLong()).isZero();
+        assertThat(invoices.get("lockedFilters")).isNotEmpty();
+    }
+
+    /** A role that is no kind of POC at all, and cannot look past its own book either, has an
+     *  empty book everywhere rather than the run of the company. */
+    @Test
+    void aRoleThatIsNoKindOfPocSeesNothingRatherThanEverything() throws Exception {
+        invoice(acme, "100.00", 1, sales);
+        User clerk = user("nora.nobody", noPocRole());
+
+        assertThat(getJson(get("/api/invoices").with(as(clerk)).param("size", "50"))
+                .get("totalElements").asLong()).isZero();
+        assertThat(getJson(get("/api/customers").with(as(clerk)).param("size", "50"))
+                .get("totalElements").asLong()).isZero();
+    }
+
+    private String bookLimitedCollectionRole() {
+        return customRole("COLLECTION_BOOK_ONLY", List.of(
+                com.geneinvoice.privilege.Privileges.INVOICE_VIEW,
+                com.geneinvoice.privilege.Privileges.PAYMENT_VIEW,
+                com.geneinvoice.privilege.Privileges.CUSTOMER_VIEW,
+                com.geneinvoice.privilege.Privileges.POC_ASSIGNABLE_COLLECTION));
+    }
+
+    private String noPocRole() {
+        return customRole("NO_POC_AT_ALL", List.of(
+                com.geneinvoice.privilege.Privileges.INVOICE_VIEW,
+                com.geneinvoice.privilege.Privileges.CUSTOMER_VIEW));
+    }
+
+    private String customRole(String name, List<String> privileges) {
+        roleRepository.findByName(name).orElseGet(() -> roleRepository.save(
+                com.geneinvoice.role.Role.builder().name(name).description(name)
+                        .privileges(privileges.stream()
+                                .map(p -> privilegeRepository.findByName(p).orElseThrow())
+                                .collect(java.util.stream.Collectors.toCollection(HashSet::new)))
+                        .build()));
+        return name;
     }
 
     @Test

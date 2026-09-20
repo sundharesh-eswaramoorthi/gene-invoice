@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,12 +59,12 @@ bool _isExpiredSession(DioException e) {
 
 String apiErrorMessage(Object error) {
   if (error is DioException) {
-    final data = error.response?.data;
+    final data = _decoded(error.response?.data);
     if (data is Map) {
       // "One or more fields are invalid" gives the user nothing to act on; name each field.
       final fields = data['fieldErrors'];
       if (fields is Map && fields.isNotEmpty) {
-        return fields.entries.map((e) => '${_fieldLabel('${e.key}')} ${e.value}').join('\n');
+        return fields.entries.map((e) => _fieldMessage('${e.key}', '${e.value}')).join('\n');
       }
       if (data['message'] is String) return data['message'] as String;
     }
@@ -70,6 +72,35 @@ String apiErrorMessage(Object error) {
     return 'Network error';
   }
   return error.toString();
+}
+
+/// An error body as the app's `ApiError` shape. A request that asked for bytes — a download —
+/// gets its error body in bytes too, because Dio's transformer does what the request asked for
+/// whatever came back; decoded here rather than at each call site, so every such request reports
+/// the server's own sentence.
+Object? _decoded(Object? data) {
+  if (data is! List<int>) return data;
+  try {
+    return jsonDecode(utf8.decode(data));
+  } catch (_) {
+    // Not the app's JSON: whatever it is, it is not a message to show anyone.
+    return null;
+  }
+}
+
+/// One `fieldErrors` entry as a sentence.
+///
+/// Bean Validation hands back a fragment that only reads as English with its field in front
+/// ("notes" + "must be at most 500 characters"). The app's own refusals are whole sentences
+/// already — "Files of this kind cannot be attached (…)", "The file is larger than 10 MB" — and
+/// gluing the field on gave "File Files of this kind cannot be attached (…)", so the server's
+/// wording and the client's own check on the identical condition did not read the same (AC-C9,
+/// UI-03). A message that starts with a lower-case letter is a fragment and is named; anything
+/// else is shown exactly as the server wrote it.
+String _fieldMessage(String field, String message) {
+  final first = message.isEmpty ? '' : message[0];
+  final isFragment = first.toUpperCase() != first && first.toLowerCase() == first;
+  return isFragment ? '${_fieldLabel(field)} $message' : message;
 }
 
 /// A request field's name as a label: "collectionPocUserId" → "Collection poc user id",

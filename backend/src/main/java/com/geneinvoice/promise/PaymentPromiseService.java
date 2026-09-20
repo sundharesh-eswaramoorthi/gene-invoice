@@ -3,6 +3,7 @@ package com.geneinvoice.promise;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Money;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.query.Aggregates;
 import com.geneinvoice.common.query.PageResponse;
@@ -12,6 +13,7 @@ import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.invoice.Invoice;
+import com.geneinvoice.invoice.InvoiceDates;
 import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.invoice.InvoiceStatus;
 import com.geneinvoice.notification.NotificationService;
@@ -24,6 +26,7 @@ import com.geneinvoice.poc.PocService;
 import com.geneinvoice.poc.PocType;
 import com.geneinvoice.poc.ScopeResolver;
 import com.geneinvoice.user.User;
+import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -69,6 +72,7 @@ public class PaymentPromiseService {
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final CurrentUser currentUser;
+    private final UserRepository userRepository;
 
     // ---- lifecycle -------------------------------------------------------------
 
@@ -124,6 +128,12 @@ public class PaymentPromiseService {
         // deactivated can still be edited (AC-A5).
         Long previousPocId = promise.getCollectionPoc() == null ? null : promise.getCollectionPoc().getId();
         if (req.collectionPocUserId() != null && !req.collectionPocUserId().equals(previousPocId)) {
+            // Moving a promise's Collection POC is the same act as moving a payment's, and needs
+            // the same privilege: without this, POC_ASSIGN guarded one list and not the other
+            // (PPD-05).
+            if (!currentUser.canAssignPoc(userRepository)) {
+                throw new BadRequestException("You may not change the Collection POC");
+            }
             User poc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION);
             promise.setCollectionPoc(poc);
             pocService.notifyAssignee(poc, PocType.COLLECTION,
@@ -293,7 +303,7 @@ public class PaymentPromiseService {
      * the payment is still recorded against the fulfilled amount.
      */
     private PromiseStatus targetStatus(PaymentPromise promise, Fulfilment fulfilment) {
-        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate today = InvoiceDates.today();
         boolean datePassed = today.isAfter(promise.getPromisedDate());
         boolean invoiceScoped = !promise.getInvoices().isEmpty();
         List<Invoice> live = liveInvoices(promise);
@@ -309,10 +319,14 @@ public class PaymentPromiseService {
             // On the promised day itself a general promise is measured against what the account
             // still owes, not only against the money linked to it (AC-B7).
             boolean dateReached = !today.isBefore(promise.getPromisedDate());
-            boolean complete = invoiceScoped
-                    ? invoicesSettled
-                    : fulfilment.total().compareTo(promise.getAmount()) >= 0
-                            || (dateReached && owedUnderPromise(promise).signum() <= 0);
+            // The promised money having arrived keeps the promise whatever it was scoped to: a
+            // promise of part of a large invoice, paid in full and on time, is kept the moment
+            // the money lands, not only once the date has gone by — the test the date-has-gone
+            // branch below already applies to the same facts (PPD-02).
+            boolean complete = fulfilment.total().compareTo(promise.getAmount()) >= 0
+                    || (invoiceScoped
+                            ? invoicesSettled
+                            : dateReached && owedUnderPromise(promise).signum() <= 0);
             if (complete) return PromiseStatus.KEPT;
             return fulfilment.total().signum() > 0 ? PromiseStatus.PARTIALLY_KEPT : PromiseStatus.OPEN;
         }
@@ -566,7 +580,7 @@ public class PaymentPromiseService {
      */
     @Transactional
     public int sweepOverdue() {
-        List<PaymentPromise> overdue = promiseRepository.findOverdueOpen(LocalDate.now(ZoneOffset.UTC));
+        List<PaymentPromise> overdue = promiseRepository.findOverdueOpen(InvoiceDates.today());
         int changed = 0;
         for (PaymentPromise promise : overdue) {
             if (evaluate(promise)) {
@@ -585,8 +599,10 @@ public class PaymentPromiseService {
         PaymentPromise promise = promiseRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Payment promise not found"));
         Long callerCustomer = currentUser.customerIdOrNull();
+        // Another customer's promise answers exactly as a missing one does, which is what the
+        // book check below already does for a POC outside their book (AUTH-08).
         if (callerCustomer != null && !callerCustomer.equals(promise.getCustomer().getId())) {
-            throw new AccessDeniedException("Not allowed");
+            throw new NotFoundException("Payment promise not found");
         }
         // A POC limited to their own book cannot reach another's promise by id either (AC-A6).
         if (!queryExecutor.inScope(PaymentPromise.class, TableSchemas.PROMISES, id,
@@ -740,8 +756,10 @@ public class PaymentPromiseService {
                 promise.getCollectionPoc().getId(),
                 NOTIF_BROKEN,
                 "Promise broken — " + promise.getCustomer().getName(),
+                // The figure reads as it does on the promise page, the list and the CSV, rather
+                // than as a bare number the reader has to recognise as money (PPD-06).
                 promise.getCustomer().getName() + " promised "
-                        + promise.getAmount().toPlainString() + " by " + promise.getPromisedDate()
+                        + Money.format(promise.getAmount()) + " by " + promise.getPromisedDate()
                         + " and it has not been paid.",
                 "/promises/" + promise.getId());
         promise.setBrokenNotifiedAt(Instant.now());

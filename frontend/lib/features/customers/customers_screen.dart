@@ -10,11 +10,15 @@ import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/customer.dart';
+import '../../shared/models/payment_term.dart';
 import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
+import '../email/email_actions.dart';
+import '../poc/poc_name_cell.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
+import 'payment_term_field.dart';
 
 /// Customers whose name contains [search], first page by name, for the customer pickers on the
 /// invoice form and the Record payment dialog.
@@ -49,11 +53,14 @@ class CustomersScreen extends ConsumerWidget {
     final canPromise = user?.has(Privileges.promiseManage) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
+    final canSendEmail = ref.watch(canSendEmailProvider);
+    final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.customer);
 
     return Scaffold(
       body: DataTableScaffold<Customer>(
         entity: 'customers',
         actions: [
+          if (sendEmail != null) sendEmail,
           if (canManage)
             FilledButton.icon(
               icon: const Icon(Icons.add),
@@ -104,11 +111,18 @@ class CustomersScreen extends ConsumerWidget {
               icon: Icons.person_add_alt,
               buildParams: _pickCustomerPocParams,
             ),
+          if (canSendEmail) sendEmailBulkAction(EmailEntityType.customer),
         ],
         columns: [
+          // Name and Email carry free text the customer chose — a name may be 120 characters
+          // (FieldLimits.FULL_NAME) — so both are capped and ellipsised, with the whole value on
+          // hover. Uncapped, one long name widened its column to the text and pushed Phone,
+          // Email, the figures and the POC columns off a 1366px screen (UI-01, D-20), as the
+          // Products, Disputes, Inbox and Notifications lists already guard against.
           TableColumnSpec(
             label: 'Name',
             sortKey: 'name',
+            maxWidth: 320,
             // Wrap, not Row: on a phone card the badge belongs under the name rather than
             // under the Open icon (D-51).
             cell: (context, c) => Wrap(
@@ -116,7 +130,13 @@ class CustomersScreen extends ConsumerWidget {
               runSpacing: 4,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Tooltip(
+                  message: c.name,
+                  child: Text(c.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                ),
                 if (canSeePoc && c.pocMissing) const PocMissingBadge(),
               ],
             ),
@@ -124,7 +144,14 @@ class CustomersScreen extends ConsumerWidget {
           TableColumnSpec(
               label: 'Phone', sortKey: 'phone', cell: (context, c) => Text(c.phone ?? '—')),
           TableColumnSpec(
-              label: 'Email', sortKey: 'email', cell: (context, c) => Text(c.email ?? '—')),
+            label: 'Email',
+            sortKey: 'email',
+            maxWidth: 320,
+            cell: (context, c) => Tooltip(
+              message: c.email ?? '',
+              child: Text(c.email ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+          ),
           TableColumnSpec(
             label: 'Outstanding',
             sortKey: 'outstanding',
@@ -141,15 +168,22 @@ class CustomersScreen extends ConsumerWidget {
             numeric: true,
             cell: (context, c) => Text(formatMoney(c.creditBalance)),
           ),
+          // A deactivated holder keeps the seat but never receives anything: email and the
+          // defaults on new records go to the next active holder instead, so naming them here
+          // without saying so would name somebody the app would not write to. Marked as the POC
+          // editor and the detail screen mark them, and capped like the other name columns
+          // (CP-07, UI-08).
           if (canSeePoc)
             TableColumnSpec(
               label: 'Success POC',
-              cell: (context, c) => Text(c.primarySuccessPoc?.user.display ?? '—'),
+              maxWidth: 180,
+              cell: (context, c) => PocNameCell(user: c.primarySuccessPoc?.user),
             ),
           if (canSeePoc)
             TableColumnSpec(
               label: 'Collection POC',
-              cell: (context, c) => Text(c.primaryCollectionPoc?.user.display ?? '—'),
+              maxWidth: 180,
+              cell: (context, c) => PocNameCell(user: c.primaryCollectionPoc?.user),
             ),
         ],
         rowActions: (context, c) => [
@@ -158,6 +192,8 @@ class CustomersScreen extends ConsumerWidget {
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/customers/${c.id}'),
           ),
+          sendEmailRowAction(context,
+              type: EmailEntityType.customer, entityId: c.id, entityLabel: c.name),
           if (canPromise && c.outstanding > 0)
             IconButton(
               tooltip: 'Raise promise',
@@ -174,14 +210,20 @@ class CustomersScreen extends ConsumerWidget {
   }
 
   Future<void> _openCreateForm(BuildContext context, WidgetRef ref) async {
-    final saved = await showDialog<bool>(
+    final saved = await showDialog<CustomerSaved>(
       context: context,
       builder: (_) => const CustomerFormDialog(),
     );
-    if (saved == true) {
-      ref.invalidate(tablePageProvider);
-      ref.invalidate(tableSummaryProvider);
-    }
+    if (saved == null) return;
+    ref.invalidate(tablePageProvider);
+    ref.invalidate(tableSummaryProvider);
+    // The list's own context: the form's went with it when it closed.
+    if (!context.mounted) return;
+    await notifyByEmailAfterSave(context,
+        notify: saved.notify,
+        type: EmailEntityType.customer,
+        entityId: saved.id,
+        event: EmailEvent.created);
   }
 }
 
@@ -244,6 +286,10 @@ Future<Map<String, dynamic>?> _pickCustomerPocParams(BuildContext context) async
   return {'userId': picked!.id, 'pocType': type.name, 'primary': '$primary'};
 }
 
+/// What [CustomerFormDialog] closes with once it has saved: the customer, and whether to write an
+/// email about it. Cancel closes it with nothing.
+typedef CustomerSaved = ({int id, bool notify});
+
 /// Create / edit form for the customer's own contact fields.
 class CustomerFormDialog extends ConsumerStatefulWidget {
   final Customer? existing;
@@ -261,7 +307,11 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
   late final TextEditingController _address;
   final _username = TextEditingController();
   final _password = TextEditingController();
+
+  /// Null means the system default, which is what a customer starts on (D1).
+  PaymentTerm? _term;
   bool _saving = false;
+  bool _notify = false;
   String? _error;
 
   bool get _isCreate => widget.existing == null;
@@ -269,6 +319,7 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
   @override
   void initState() {
     super.initState();
+    _term = widget.existing?.paymentTerm;
     _name = TextEditingController(text: widget.existing?.name ?? '');
     _phone = TextEditingController(text: widget.existing?.phone ?? '');
     _email = TextEditingController(text: widget.existing?.email ?? '');
@@ -294,25 +345,32 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
     });
     try {
       final dio = ref.read(dioProvider);
+      final int id;
       if (_isCreate) {
-        await dio.post('/api/customers', data: {
+        final res = await dio.post('/api/customers', data: {
           'name': _name.text.trim(),
-          'phone': _phone.text.trim(),
-          'email': _email.text.trim(),
-          'address': _address.text.trim(),
+          // A box left empty means the customer has no phone or address, not that it has an
+          // empty one: the list then reads "—" rather than an empty cell (CP-15).
+          'phone': optionalText(_phone.text),
+          'email': optionalText(_email.text),
+          'address': optionalText(_address.text),
+          'paymentTerm': _term?.name,
           'username': _username.text.trim(),
           'password': _password.text,
         });
+        id = (res.data as Map)['id'] as int;
       } else {
+        id = widget.existing!.id;
         await dio.put('/api/customers/${widget.existing!.id}', data: {
           'name': _name.text.trim(),
-          'phone': _phone.text.trim(),
-          'email': _email.text.trim(),
-          'address': _address.text.trim(),
+          'phone': optionalText(_phone.text),
+          'email': optionalText(_email.text),
+          'address': optionalText(_address.text),
+          'paymentTerm': _term?.name,
           if (_password.text.isNotEmpty) 'password': _password.text,
         });
       }
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) Navigator.of(context).pop<CustomerSaved>((id: id, notify: _notify));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -335,6 +393,9 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
                 TextFormField(
                   controller: _name,
                   decoration: const InputDecoration(labelText: 'Name'),
+                  // Once the field has been touched its complaint goes as soon as it no longer
+                  // applies, rather than waiting for the next Save (CP-09).
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                 ),
                 const SizedBox(height: 8),
@@ -348,6 +409,14 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
                     controller: _address,
                     decoration: const InputDecoration(labelText: 'Address'),
                     maxLines: 2),
+                const SizedBox(height: 8),
+                // What this customer's invoices fall due on, so nobody has to remember the
+                // arrangement when raising one (US-A1).
+                PaymentTermField(
+                  label: 'Payment terms',
+                  value: _term,
+                  onChanged: (t) => setState(() => _term = t),
+                ),
                 const Divider(height: 24),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -363,6 +432,7 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
                   TextFormField(
                     controller: _username,
                     decoration: const InputDecoration(labelText: 'Username'),
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                   ),
                   const SizedBox(height: 8),
@@ -378,9 +448,15 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
                   decoration:
                       InputDecoration(labelText: _isCreate ? 'Password' : 'New password'),
                   obscureText: true,
+                  autovalidateMode: AutovalidateMode.onUserInteraction,
                   validator:
                       _isCreate ? (v) => (v == null || v.isEmpty) ? 'Required' : null : null,
                 ),
+                if (_isCreate)
+                  NotifyByEmailCheckbox(
+                    value: _notify,
+                    onChanged: (v) => setState(() => _notify = v),
+                  ),
                 if (_error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -394,7 +470,7 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+            onPressed: _saving ? null : () => Navigator.of(context).pop(),
             child: const Text('Cancel')),
         FilledButton(
           onPressed: _saving ? null : _submit,

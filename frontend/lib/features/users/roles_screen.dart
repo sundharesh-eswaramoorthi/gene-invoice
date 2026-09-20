@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
@@ -11,6 +12,7 @@ import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
 import '../auth/auth_controller.dart';
+import '../email/email_actions.dart';
 import 'users_screen.dart';
 
 final allPrivilegesProvider = FutureProvider.autoDispose<List<String>>((ref) async {
@@ -19,6 +21,34 @@ final allPrivilegesProvider = FutureProvider.autoDispose<List<String>>((ref) asy
   return (res.data as List).map((e) => (e as Map<String, dynamic>)['name'] as String).toList()
     ..sort();
 });
+
+final roleDetailProvider = FutureProvider.autoDispose.family<AppRole, int>((ref, id) async {
+  final dio = ref.watch(dioProvider);
+  final res = await dio.get('/api/roles/$id');
+  return AppRole.fromJson(res.data as Map<String, dynamic>);
+});
+
+/// Opens the role form, for a new role or [existing], from the list or the details page. Once it
+/// saves, whatever shows the role is refreshed, and a new role the admin asked to notify about
+/// gets the compose dialog — opened on [context], since the form's own is gone.
+Future<void> openRoleForm(BuildContext context, WidgetRef ref, {AppRole? existing}) async {
+  final saved = await showDialog<({int id, bool notify})>(
+    context: context,
+    builder: (_) => RoleFormDialog(existing: existing),
+  );
+  if (saved == null) return;
+  ref.invalidate(rolesProvider);
+  ref.invalidate(tablePageProvider);
+  ref.invalidate(roleDetailProvider(saved.id));
+  // A user's page names their role, so a rename must reach it too.
+  ref.invalidate(userDetailProvider);
+  if (!context.mounted) return;
+  await notifyByEmailAfterSave(context,
+      notify: saved.notify,
+      type: EmailEntityType.role,
+      entityId: saved.id,
+      event: EmailEvent.created);
+}
 
 class RolesScreen extends ConsumerWidget {
   final TableQuery query;
@@ -29,16 +59,19 @@ class RolesScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.roleManage) ?? false;
     final canExport = user?.has(Privileges.exportData) ?? false;
+    final canSendEmail = ref.watch(canSendEmailProvider);
+    final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.role);
 
     return Scaffold(
       body: DataTableScaffold<AppRole>(
         entity: 'roles',
         actions: [
+          if (sendEmail != null) sendEmail,
           if (canManage)
             FilledButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('New role'),
-              onPressed: () => _openForm(context, ref, null),
+              onPressed: () => openRoleForm(context, ref),
             ),
         ],
         path: '/api/roles',
@@ -48,7 +81,10 @@ class RolesScreen extends ConsumerWidget {
         idOf: (r) => r.id,
         canExport: canExport,
         emptyMessage: 'No roles match this filter',
-        onRowTap: canManage ? (context, r) => _openForm(context, ref, r) : null,
+        onRowTap: (context, r) => context.go('/roles/${r.id}'),
+        bulkActions: [
+          if (canSendEmail) sendEmailBulkAction(EmailEntityType.role),
+        ],
         columns: [
           TableColumnSpec(
             label: 'Name',
@@ -64,43 +100,42 @@ class RolesScreen extends ConsumerWidget {
             numeric: true,
           ),
         ],
-        rowActions: canManage
+        // Someone who may neither edit nor send email gets no empty action column.
+        rowActions: canManage || canSendEmail
             ? (context, r) => [
-                  IconButton(
-                    tooltip: 'Edit',
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    onPressed: () => _openForm(context, ref, r),
-                  ),
+                  if (canManage)
+                    IconButton(
+                      tooltip: 'Edit',
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      onPressed: () => openRoleForm(context, ref, existing: r),
+                    ),
+                  sendEmailRowAction(context,
+                      type: EmailEntityType.role,
+                      entityId: r.id,
+                      entityLabel: 'Role ${r.name}'),
                 ]
             : null,
       ),
     );
   }
-
-  Future<void> _openForm(BuildContext context, WidgetRef ref, AppRole? existing) async {
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (_) => _RoleForm(existing: existing),
-    );
-    if (saved == true) {
-      ref.invalidate(rolesProvider);
-      ref.invalidate(tablePageProvider);
-    }
-  }
 }
 
-class _RoleForm extends ConsumerStatefulWidget {
+/// Create / edit form for a role and its privileges. Pops the saved role's id, and whether to
+/// write an email about it, so the caller can follow up once this dialog is gone; open it with
+/// [openRoleForm].
+class RoleFormDialog extends ConsumerStatefulWidget {
   final AppRole? existing;
-  const _RoleForm({this.existing});
+  const RoleFormDialog({super.key, this.existing});
   @override
-  ConsumerState<_RoleForm> createState() => _RoleFormState();
+  ConsumerState<RoleFormDialog> createState() => _RoleFormDialogState();
 }
 
-class _RoleFormState extends ConsumerState<_RoleForm> {
+class _RoleFormDialogState extends ConsumerState<RoleFormDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
   late final TextEditingController _description;
   late Set<String> _selected;
+  bool _notify = false;
   bool _saving = false;
   String? _error;
 
@@ -128,12 +163,15 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
         'description': _description.text.trim(),
         'privileges': _selected.toList(),
       };
+      final int id;
       if (widget.existing == null) {
-        await dio.post('/api/roles', data: body);
+        final res = await dio.post('/api/roles', data: body);
+        id = ((res.data as Map)['id'] as num).toInt();
       } else {
-        await dio.put('/api/roles/${widget.existing!.id}', data: body);
+        id = widget.existing!.id;
+        await dio.put('/api/roles/$id', data: body);
       }
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) Navigator.of(context).pop((id: id, notify: _notify));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -200,6 +238,12 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
                   ),
                 ),
               ),
+              // Kept in view below the privilege list, however long that list scrolls.
+              if (widget.existing == null)
+                NotifyByEmailCheckbox(
+                  value: _notify,
+                  onChanged: (v) => setState(() => _notify = v),
+                ),
               // Outside the scrolling privilege list, so an error shows by Save, not below it.
               if (_error != null)
                 Padding(
@@ -211,7 +255,7 @@ class _RoleFormState extends ConsumerState<_RoleForm> {
         ),
       ),
       actions: [
-        TextButton(onPressed: _saving ? null : () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+        TextButton(onPressed: _saving ? null : () => Navigator.of(context).pop(), child: const Text('Cancel')),
         FilledButton(
           onPressed: _saving ? null : _submit,
           child: _saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save'),

@@ -42,6 +42,16 @@ public class User {
     @Column(name = "customer_id")
     private Long customerId;
 
+    /**
+     * When this account's password last changed. Tokens minted before it are refused, so changing
+     * a password ends the sessions somebody else may have taken — the one thing a person can do
+     * about a stolen session, which used to leave the thief a working token for the rest of its
+     * 24 hours (AUTH-04). Null on an account whose password has not changed since the column was
+     * added, and a null lets every token through, so the upgrade signs nobody out.
+     */
+    @Column(name = "credentials_changed_at")
+    private Instant credentialsChangedAt;
+
     @Column(updatable = false)
     private Instant createdAt;
 

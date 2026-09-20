@@ -12,6 +12,8 @@ import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
+import '../email/email_actions.dart';
+import '../poc/poc_name_cell.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
@@ -36,11 +38,14 @@ class InvoicesScreen extends ConsumerWidget {
     final canPromise = user?.has(Privileges.promiseManage) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
+    final canSendEmail = ref.watch(canSendEmailProvider);
+    final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.invoice);
 
     return Scaffold(
       body: DataTableScaffold<InvoiceSummary>(
         entity: 'invoices',
         actions: [
+          if (sendEmail != null) sendEmail,
           if (canManage)
             FilledButton.icon(
               icon: const Icon(Icons.add),
@@ -68,6 +73,14 @@ class InvoicesScreen extends ConsumerWidget {
               icon: Icons.account_balance_wallet_outlined,
               accent: Theme.of(context).colorScheme.error,
             ),
+            // Over the whole filtered set, like every other tile (AC-A7).
+            SummaryTile(
+              label: 'Overdue',
+              value: formatMoneyCompact(s['overdueAmount']),
+              icon: Icons.schedule_outlined,
+              accent: Theme.of(context).colorScheme.error,
+            ),
+            SummaryTile(label: 'Overdue invoices', value: '${s['overdueCount'] ?? 0}'),
             SummaryTile(label: 'Unpaid', value: '${s['unpaidCount'] ?? 0}'),
             SummaryTile(label: 'Partially paid', value: '${s['partiallyPaidCount'] ?? 0}'),
             if (canSeePoc)
@@ -78,6 +91,15 @@ class InvoicesScreen extends ConsumerWidget {
               ),
           ],
         ),
+        // The filter a collections day starts from, one tap away (US-A5). The server works out
+        // what is overdue, so the chip only asks for it.
+        quickFilters: const [
+          QuickFilterSpec(
+            label: 'Overdue only',
+            icon: Icons.schedule_outlined,
+            filter: TableFilter('overdue', 'eq', ['true']),
+          ),
+        ],
         bulkActions: [
           if (canManage)
             const BulkActionSpec(
@@ -94,33 +116,57 @@ class InvoicesScreen extends ConsumerWidget {
               icon: Icons.person_search_outlined,
               buildParams: (context) => pickPocParams(context, PocType.SALES),
             ),
+          if (canSendEmail) sendEmailBulkAction(EmailEntityType.invoice),
         ],
         columns: [
           TableColumnSpec(
             label: 'Invoice #',
             sortKey: 'invoiceNumber',
-            cell: (context, inv) => Row(
-              mainAxisSize: MainAxisSize.min,
+            cell: (context, inv) => Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(inv.invoiceNumber,
                     style: const TextStyle(fontWeight: FontWeight.w600)),
                 if (canSeePoc && inv.pocMissing)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 6),
-                    child: PocMissingBadge(label: 'POC missing'),
-                  ),
+                  const PocMissingBadge(label: 'POC missing'),
               ],
             ),
           ),
+          // A customer's name is theirs to choose and may run to 120 characters; capped so one
+          // of them cannot push the rest of the columns off the screen (UI-01, D-20).
           TableColumnSpec(
             label: 'Customer',
             sortKey: 'customerName',
-            cell: (context, inv) => Text(inv.customerName),
+            maxWidth: 240,
+            cell: (context, inv) => Tooltip(
+              message: inv.customerName,
+              child: Text(inv.customerName, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
           ),
           TableColumnSpec(
             label: 'Date',
             sortKey: 'invoiceDate',
-            cell: (context, inv) => Text(formatDate(inv.invoiceDate)),
+            // The UTC day: the Due date beside it was counted from that day, so reading the
+            // instant in the browser's zone would put the two a day out of step (§2.1).
+            cell: (context, inv) => Text(formatUtcDate(inv.invoiceDate)),
+          ),
+          TableColumnSpec(
+            label: 'Due date',
+            sortKey: 'dueDate',
+            // A Wrap rather than a Row: on a phone the date and the badge together are wider
+            // than the card's cell, and the badge is the half that would be clipped (US-A4).
+            cell: (context, inv) => Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(formatDate(inv.dueDate)),
+                if (inv.overdue)
+                  OverdueBadge(daysOverdue: inv.daysOverdue, compact: true),
+              ],
+            ),
           ),
           TableColumnSpec(
             label: 'Total',
@@ -151,11 +197,15 @@ class InvoicesScreen extends ConsumerWidget {
             sortKey: 'status',
             cell: (context, inv) => InvoiceStatusChip(status: inv.status),
           ),
+          // A person's name is as long as a customer's; capped and ellipsised like the
+          // Customer column beside it, rather than cut mid-letter against the row actions
+          // (UI-08).
           if (canSeePoc)
             TableColumnSpec(
               label: 'Sales POC',
               sortKey: 'salesPocName',
-              cell: (context, inv) => Text(inv.salesPoc?.display ?? '—'),
+              maxWidth: 180,
+              cell: (context, inv) => PocNameCell(user: inv.salesPoc),
             ),
         ],
         rowActions: (context, inv) => [
@@ -164,6 +214,8 @@ class InvoicesScreen extends ConsumerWidget {
             icon: const Icon(Icons.open_in_new, size: 18),
             onPressed: () => context.go('/invoices/${inv.id}'),
           ),
+          sendEmailRowAction(context,
+              type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber),
           // A cancelled invoice owes nothing, whatever balance it last showed, and the backend
           // refuses a promise on it (D-49).
           if (canPromise && inv.balance > 0 && inv.status != InvoiceStatus.CANCELLED)
@@ -174,7 +226,7 @@ class InvoicesScreen extends ConsumerWidget {
                 context: context,
                 customerId: inv.customerId,
                 customerName: inv.customerName,
-                preselectedInvoiceIds: [inv.id],
+                preselectedInvoices: [inv],
               ),
             ),
           if (canManage && inv.status == InvoiceStatus.UNPAID)

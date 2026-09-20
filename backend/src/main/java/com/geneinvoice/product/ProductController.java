@@ -6,6 +6,7 @@ import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.Money;
 import com.geneinvoice.common.NotFoundException;
+import com.geneinvoice.common.Strings;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.BulkExecutor;
 import com.geneinvoice.common.bulk.Csv;
@@ -30,6 +31,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -45,9 +47,11 @@ public class ProductController {
     private final AuditService auditService;
     private final CurrentUser currentUser;
 
-    public record ProductDto(Long id, String name, String description, BigDecimal price, boolean active) {
+    public record ProductDto(Long id, String name, String description, BigDecimal price, boolean active,
+                             Instant createdAt) {
         public static ProductDto from(Product p) {
-            return new ProductDto(p.getId(), p.getName(), p.getDescription(), p.getPrice(), p.isActive());
+            return new ProductDto(p.getId(), p.getName(), p.getDescription(), p.getPrice(), p.isActive(),
+                    p.getCreatedAt());
         }
     }
 
@@ -83,7 +87,10 @@ public class ProductController {
     @PreAuthorize("hasAuthority('" + Privileges.PRODUCT_MANAGE + "')")
     public ProductDto create(@Valid @RequestBody ProductUpsert in) {
         Product p = Product.builder()
-                .name(in.name()).description(in.description()).price(in.price())
+                // Trimmed, and a description box left empty is stored as nothing rather than as
+                // an empty string, so the list shows its "—" placeholder (CP-15).
+                .name(Strings.trim(in.name())).description(Strings.blankToNull(in.description()))
+                .price(in.price())
                 .active(in.active() == null || in.active())
                 .build();
         Product saved = repository.save(p);
@@ -97,8 +104,8 @@ public class ProductController {
     public ProductDto update(@PathVariable Long id, @Valid @RequestBody ProductUpsert in) {
         Product p = repository.findById(id).orElseThrow(() -> new NotFoundException("Product not found"));
         Object before = ProductDto.from(p);
-        p.setName(in.name());
-        p.setDescription(in.description());
+        p.setName(Strings.trim(in.name()));
+        p.setDescription(Strings.blankToNull(in.description()));
         p.setPrice(in.price());
         if (in.active() != null) p.setActive(in.active());
         Product saved = repository.save(p);
@@ -107,10 +114,16 @@ public class ProductController {
         return ProductDto.from(saved);
     }
 
+    /** Removing a product leaves a trail like every other write on it (CP-04). */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.PRODUCT_MANAGE + "')")
     public void delete(@PathVariable Long id) {
+        Product p = repository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Product not found"));
+        Object before = ProductDto.from(p);
         repository.deleteById(id);
+        auditService.record("PRODUCT", id, "PRODUCT_DELETED", before, null,
+                currentUser.require().getId(), null, "Product deleted");
     }
 
     // ---- bulk & export ---------------------------------------------------------

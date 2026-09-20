@@ -6,6 +6,12 @@ class AppUser {
   final bool active;
   final String? role;
 
+  /// Set for a customer login: the customer account it signs in to.
+  final int? customerId;
+
+  /// Null until the server sends it; the details page then leaves the date out.
+  final DateTime? createdAt;
+
   const AppUser({
     required this.id,
     required this.username,
@@ -13,6 +19,8 @@ class AppUser {
     this.fullName,
     required this.active,
     this.role,
+    this.customerId,
+    this.createdAt,
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) => AppUser(
@@ -22,6 +30,9 @@ class AppUser {
         fullName: json['fullName'] as String?,
         active: json['active'] as bool? ?? true,
         role: json['role'] as String?,
+        customerId: (json['customerId'] as num?)?.toInt(),
+        createdAt:
+            json['createdAt'] == null ? null : DateTime.parse(json['createdAt'] as String),
       );
 }
 

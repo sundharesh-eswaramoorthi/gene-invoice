@@ -9,39 +9,63 @@ import '../../core/format.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/promise.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../email/email_actions.dart';
 import '../poc/poc_providers.dart';
 import '../poc/poc_picker.dart';
+import 'promise_providers.dart';
 
 /// Raises or edits a payment promise, pre-scoped to a customer and optionally to
-/// specific invoices (US-B1, US-B2, US-C4).
+/// specific invoices (US-B1, US-B2, US-C4). Resolves true once the promise is saved.
+///
+/// [preselectedInvoices] are the invoices the screen it was opened from is about. They are the
+/// whole invoice, not just its id, so the checklist can always show one — a fully-paid or
+/// cancelled invoice is not in the outstanding list the checklist is otherwise built from, and
+/// linking it invisibly scoped the promise to an invoice the user never saw (UI-02).
+///
+/// "Notify through email" is handled here rather than by each caller: once the form has closed,
+/// the compose form opens on [context] for the saved promise (E12).
 Future<bool?> showPromiseDialog({
   required BuildContext context,
   required int customerId,
   String? customerName,
-  List<int> preselectedInvoiceIds = const [],
+  List<InvoiceSummary> preselectedInvoices = const [],
   PaymentPromise? existing,
-}) {
-  return showDialog<bool>(
+}) async {
+  final saved = await showDialog<_SavedPromise>(
     context: context,
     builder: (_) => _PromiseFormDialog(
       customerId: customerId,
       customerName: customerName,
-      preselectedInvoiceIds: preselectedInvoiceIds,
+      preselectedInvoices: preselectedInvoices,
       existing: existing,
     ),
   );
+  if (saved == null) return false;
+  // The caller's context, never the closed form's, and before handing back, so a caller that
+  // moves on after a save has not yet taken that context away.
+  if (context.mounted) {
+    await notifyByEmailAfterSave(context,
+        notify: saved.notify,
+        type: EmailEntityType.promise,
+        entityId: saved.id,
+        event: existing == null ? EmailEvent.created : EmailEvent.updated);
+  }
+  return true;
 }
+
+/// What the form hands back on a save: the promise, and whether to write an email about it.
+typedef _SavedPromise = ({int id, bool notify});
 
 class _PromiseFormDialog extends ConsumerStatefulWidget {
   final int customerId;
   final String? customerName;
-  final List<int> preselectedInvoiceIds;
+  final List<InvoiceSummary> preselectedInvoices;
   final PaymentPromise? existing;
 
   const _PromiseFormDialog({
     required this.customerId,
     this.customerName,
-    this.preselectedInvoiceIds = const [],
+    this.preselectedInvoices = const [],
     this.existing,
   });
 
@@ -57,6 +81,7 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
   final Set<int> _invoiceIds = {};
   bool _saving = false;
   bool _pocResolved = false;
+  bool _notify = false;
   String? _error;
 
   bool get _isEdit => widget.existing != null;
@@ -74,7 +99,7 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
       _invoiceIds.addAll(e.invoices.map((i) => i.id));
     } else {
       _date = DateTime.now().add(const Duration(days: 7));
-      _invoiceIds.addAll(widget.preselectedInvoiceIds);
+      _invoiceIds.addAll(widget.preselectedInvoices.map((i) => i.id));
     }
   }
 
@@ -99,16 +124,18 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
     }
   }
 
-  /// Every outstanding invoice, plus — when editing — any linked one that has since been paid off
-  /// or cancelled, so it stays visible and can be unticked.
+  /// Every outstanding invoice, plus every invoice this promise is already scoped to that the
+  /// outstanding list does not carry: one the screen preselected, or — when editing — a linked
+  /// one that has since been paid off or cancelled. Each stays visible and can be unticked, and
+  /// counts towards the shortfall hint; nothing is ever submitted that has no checkbox (UI-02).
   List<_InvoiceOption> _options(List<InvoiceSummary> outstanding) {
-    final options = [
-      for (final i in outstanding)
-        _InvoiceOption(i.id, i.invoiceNumber, i.status, statusLabel(i.status), i.balance, live: true),
-    ];
+    final options = [for (final i in outstanding) _InvoiceOption.of(i)];
     final shown = {for (final o in options) o.id};
+    for (final preselected in widget.preselectedInvoices) {
+      if (shown.add(preselected.id)) options.add(_InvoiceOption.of(preselected));
+    }
     for (final linked in widget.existing?.invoices ?? const <PromiseInvoiceRef>[]) {
-      if (shown.contains(linked.id)) continue;
+      if (!shown.add(linked.id)) continue;
       final status = InvoiceStatus.values.asNameMap()[linked.status];
       options.add(_InvoiceOption(linked.id, linked.invoiceNumber, status,
           status == null ? linked.status : statusLabel(status), linked.balance,
@@ -141,12 +168,15 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
         'notes': _notes.text.trim(),
         'invoiceIds': _invoiceIds.toList(),
       };
-      if (_isEdit) {
-        await dio.put('/api/promises/${widget.existing!.id}', data: body);
-      } else {
-        await dio.post('/api/promises', data: body);
-      }
-      if (mounted) Navigator.of(context).pop(true);
+      final res = _isEdit
+          ? await dio.put('/api/promises/${widget.existing!.id}', data: body)
+          : await dio.post('/api/promises', data: body);
+      final id = _isEdit ? widget.existing!.id : ((res.data as Map)['id'] as num).toInt();
+      // The promise lists and page behind show the change while an email about it is written;
+      // the caller hears of the save only once that compose form has closed.
+      ref.invalidate(scopedPromisesProvider);
+      ref.invalidate(promiseDetailProvider(id));
+      if (mounted) Navigator.of(context).pop((id: id, notify: _notify));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -226,16 +256,27 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                 style: TextStyle(fontSize: 12),
               ),
               const SizedBox(height: 4),
-              invoicesAsync.when(
-                loading: () => const LinearProgressIndicator(),
-                error: (e, _) => Text('Could not load invoices: ${apiErrorMessage(e)}'),
-                data: (outstanding) {
-                  final options = _options(outstanding);
+              // The checklist is built from whatever is known, not only from a fetch that
+              // succeeded: an invoice the promise is already scoped to has its line even while
+              // the outstanding list is still loading or could not be fetched at all. Otherwise
+              // that invoice would again be submitted with no checkbox to see or untick — the
+              // whole of UI-02, on the path where the request fails.
+              if (invoicesAsync.isLoading) const LinearProgressIndicator(),
+              if (invoicesAsync.hasError)
+                Text('Could not load invoices: ${apiErrorMessage(invoicesAsync.error!)}'),
+              Builder(
+                builder: (context) {
+                  final options = _options(invoicesAsync.valueOrNull ?? const []);
                   if (options.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('No outstanding invoices — this will be a general promise.'),
-                    );
+                    // Nothing to tick, said only once the list is in: while it is loading or
+                    // after it failed, the line above already says where things stand.
+                    return invoicesAsync.hasValue
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child:
+                                Text('No outstanding invoices — this will be a general promise.'),
+                          )
+                        : const SizedBox.shrink();
                   }
                   return ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 180),
@@ -275,9 +316,9 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
               ),
               // A shortfall or excess against the covered invoices is shown, never blocked (AC-B2).
               // A cancelled invoice owes nothing, so it counts towards neither.
-              invoicesAsync.maybeWhen(
-                data: (outstanding) {
-                  final live = _options(outstanding)
+              Builder(
+                builder: (context) {
+                  final live = _options(invoicesAsync.valueOrNull ?? const [])
                       .where((o) => o.live && _invoiceIds.contains(o.id))
                       .toList();
                   if (live.isEmpty || promisedAmount <= 0) return const SizedBox.shrink();
@@ -294,7 +335,6 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                     ),
                   );
                 },
-                orElse: () => const SizedBox.shrink(),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -302,6 +342,11 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                 maxLines: 2,
                 inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.promiseNotes)],
                 decoration: const InputDecoration(labelText: 'Notes'),
+              ),
+              const SizedBox(height: 8),
+              NotifyByEmailCheckbox(
+                value: _notify,
+                onChanged: (v) => setState(() => _notify = v),
               ),
               if (_error != null)
                 Padding(
@@ -315,7 +360,7 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
       ),
       actions: [
         TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(false),
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
         FilledButton(
@@ -345,6 +390,15 @@ class _InvoiceOption {
 
   const _InvoiceOption(this.id, this.invoiceNumber, this.status, this.statusText, this.balance,
       {required this.live});
+
+  factory _InvoiceOption.of(InvoiceSummary i) => _InvoiceOption(
+        i.id,
+        i.invoiceNumber,
+        i.status,
+        statusLabel(i.status),
+        i.balance,
+        live: i.status != InvoiceStatus.CANCELLED,
+      );
 }
 
 final _outstandingInvoicesProvider =

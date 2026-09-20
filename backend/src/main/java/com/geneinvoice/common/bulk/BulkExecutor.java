@@ -1,6 +1,8 @@
 package com.geneinvoice.common.bulk;
 
+import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.query.TableQueryExecutor;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -38,8 +40,28 @@ public class BulkExecutor {
         void apply(Long id);
     }
 
+    /**
+     * Wraps an operation whose refusals are eligibility rules — "already cancelled", "has
+     * payments, refund first" — so they are reported as skipped rather than failed, the way
+     * {@link IneligibleException} already is. The single-record endpoints keep their 400: it is
+     * only the bulk dialog, which renders failures as errors, that was calling four perfectly
+     * normal rows a failure (TBL-05).
+     */
+    public static RecordOperation eligibility(RecordOperation op) {
+        return id -> {
+            try {
+                op.apply(id);
+            } catch (BadRequestException e) {
+                throw new IneligibleException(e.getMessage());
+            }
+        };
+    }
+
     /** One reason for every id the caller cannot reach, so the response never reveals which exist. */
     public static final String NOT_REACHABLE = "Not found, or outside your scope or the current filter";
+
+    /** Why a row was left alone when a concurrent writer got to it first (TBL-07). */
+    public static final String CHANGED_WHILE_RUNNING = "This record changed while the action was running";
 
     /**
      * Runs a bulk action over the ids the request asked for. An id outside {@code permitted} —
@@ -65,6 +87,13 @@ public class BulkExecutor {
                 succeeded.add(id);
             } catch (IneligibleException e) {
                 skipped.add(new BulkDtos.BulkOutcome(id, e.getMessage()));
+            } catch (ConcurrencyFailureException e) {
+                // Another writer reached this row first and this transaction lost on commit.
+                // Nothing of it was written, and the row is simply one this run did not act on,
+                // so it belongs with the other rows that did not qualify rather than in the
+                // errors — and never in succeeded, which is what it used to be reported as when
+                // two bulk runs overlapped (TBL-07).
+                skipped.add(new BulkDtos.BulkOutcome(id, CHANGED_WHILE_RUNNING));
             } catch (RuntimeException e) {
                 failed.add(new BulkDtos.BulkOutcome(id, rootMessage(e)));
             }

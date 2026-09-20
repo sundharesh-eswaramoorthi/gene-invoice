@@ -1,5 +1,6 @@
 package com.geneinvoice.dashboard;
 
+import com.geneinvoice.invoice.InvoiceDates;
 import com.geneinvoice.privilege.Privileges;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -9,7 +10,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
-import java.time.ZoneOffset;
 
 /**
  * Read-only figures for the dashboard. Each endpoint needs the privilege of the list it summarises,
@@ -53,7 +53,9 @@ public class DashboardController {
         return service.topPaying(months, limit, today());
     }
 
+    /** The one definition of today the app has, so the ageing chart and the invoice list's
+     * overdue filter can never disagree about which invoices are late. */
     private static LocalDate today() {
-        return LocalDate.now(ZoneOffset.UTC);
+        return InvoiceDates.today();
     }
 }

@@ -167,8 +167,15 @@ public class DisputeService {
                 d.getCreatedAt(), d.getUpdatedAt());
     }
 
+    /**
+     * The dispute, locked until the transaction ends, and still pending as of that lock. Both
+     * halves matter: a double-clicked Approve used to let two requests past an unlocked status
+     * read and then race inside the money they both moved, so one of them came back "Unexpected
+     * error" after an action that had in fact succeeded. Now the second one waits, sees the
+     * status the first one wrote, and is told the plain truth instead (PPD-03).
+     */
     private Dispute mustBePending(Long disputeId) {
-        Dispute d = disputeRepository.findById(disputeId)
+        Dispute d = disputeRepository.findByIdForUpdate(disputeId)
                 .orElseThrow(() -> new NotFoundException("Dispute not found"));
         if (d.getStatus() != DisputeStatus.PENDING) {
             throw new BadRequestException("Dispute already resolved");

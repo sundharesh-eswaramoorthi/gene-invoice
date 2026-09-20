@@ -3,6 +3,7 @@ package com.geneinvoice.role;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
+import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.Csv;
 import com.geneinvoice.common.query.FilterParams;
@@ -10,6 +11,7 @@ import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.email.connection.GmailDisconnects;
 import com.geneinvoice.privilege.Privilege;
 import com.geneinvoice.privilege.PrivilegeRepository;
 import com.geneinvoice.privilege.Privileges;
@@ -30,6 +32,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/roles")
@@ -40,6 +43,8 @@ public class RoleController {
     private final PrivilegeRepository privilegeRepository;
     private final UserRepository userRepository;
     private final TableQueryExecutor queryExecutor;
+    private final GmailDisconnects gmailDisconnects;
+    private final CurrentUser currentUser;
 
     public record RoleDto(Long id, String name, String description, List<String> privileges) {
         static RoleDto from(Role r) {
@@ -122,10 +127,52 @@ public class RoleController {
         if (!name.equalsIgnoreCase(r.getName()) && roleRepository.existsByNameIgnoreCaseAndIdNot(name, id)) {
             throw new BadRequestException("Role name already exists");
         }
+        Set<Privilege> wanted = resolvePrivileges(in.privileges());
+        requireAdministrationSurvives(id, r, wanted);
+        boolean sentEmail = sendsEmail(r);
         r.setName(name);
         r.setDescription(in.description());
-        r.setPrivileges(resolvePrivileges(in.privileges()));
-        return RoleDto.from(roleRepository.save(r));
+        r.setPrivileges(wanted);
+        Role saved = roleRepository.save(r);
+        if (sentEmail && !sendsEmail(saved)) {
+            // Its holders may no longer send email, so their Gmail connections go (mail-service.md §5.6).
+            gmailDisconnects.request(userRepository.findInternalIdsByRoleId(id));
+        }
+        return RoleDto.from(saved);
+    }
+
+    private static boolean sendsEmail(Role r) {
+        return r.getPrivileges().stream().anyMatch(p -> Privileges.EMAIL_SEND.equals(p.getName()));
+    }
+
+    /**
+     * The role editor is the third way to end user and role administration, beside deactivating
+     * and deleting the account itself (AUTH-03). Taking USER_MANAGE or ROLE_MANAGE off one's own
+     * role locks the editor out the moment it is saved — the very request that would put them
+     * back is refused — and taking USER_MANAGE off the last role that carries it leaves the whole
+     * deployment with nobody able to administer users. Neither is recoverable from inside the app.
+     */
+    private void requireAdministrationSurvives(Long roleId, Role role, Set<Privilege> wanted) {
+        Set<String> after = wanted.stream().map(Privilege::getName).collect(Collectors.toSet());
+        Set<String> before = role.getPrivileges().stream().map(Privilege::getName)
+                .collect(Collectors.toSet());
+        var me = currentUser.require();
+        boolean ownRole = me.getCustomerId() == null && me.getRole() != null
+                && roleId.equals(me.getRole().getId());
+        for (String administration : List.of(Privileges.USER_MANAGE, Privileges.ROLE_MANAGE)) {
+            if (!before.contains(administration) || after.contains(administration)) continue;
+            if (ownRole) {
+                throw new BadRequestException(
+                        "You cannot remove your own ability to manage users and roles");
+            }
+        }
+        // Nobody on another role is left to administer users: the same last-administrator rule
+        // the user editor applies, asked of everyone this role would strip at once.
+        if (before.contains(Privileges.USER_MANAGE) && !after.contains(Privileges.USER_MANAGE)
+                && userRepository.countActiveHolders(Privileges.USER_MANAGE, null, roleId) == 0) {
+            throw new BadRequestException("This is the last role that can manage users;"
+                    + " give another role that ability first");
+        }
     }
 
     /** A role still held by users cannot go: their accounts would be left without privileges. */

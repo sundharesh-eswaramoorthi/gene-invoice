@@ -3,6 +3,39 @@ spring:
     name: gene-invoice
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  jpa:
+    # OpenEntityManagerInViewConfig registers it instead, for every endpoint except email's, whose
+    # mail service calls must not hold a pooled connection.
+    open-in-view: false
+    properties:
+      hibernate:
+        hbm2ddl:
+          # A schema `ddl-auto: update` could not apply stops startup instead of being a warning.
+          #
+          # `update` cannot add a NOT NULL column to a table that already has rows, and it never
+          # changes a column that exists. It logs each failure at WARN and carries on, so the app
+          # reported itself started and then answered 500 on every request against the table it
+          # had failed to migrate — for as long as nobody looked at the log (D-01, regression
+          # 2026-09-21). Failing here names the table and column instead, while somebody is
+          # watching, and before any user meets it.
+          #
+          # Set SCHEMA_HALT_ON_ERROR=false to start anyway: for a database whose drift is known
+          # and being dealt with, where the rest of the app is still wanted.
+          halt_on_error: ${SCHEMA_HALT_ON_ERROR:true}
+  task:
+    scheduling:
+      pool:
+        # The email sweeper and the promise sweeper each get a thread, so a slow mail service call
+        # (up to 40 s) never holds up the other.
+        size: 3
+  servlet:
+    multipart:
+      # The same setting as app.documents.max-size-bytes below, not a copy of today's value of
+      # it: the container's ceiling and the app's own check have to fire on the same upload, or
+      # a deployment that raises one is told a limit that is not the one that stopped it (AC-C9).
+      max-file-size: ${DOCUMENT_MAX_BYTES:10485760}
+      max-request-size: ${DOCUMENT_MAX_REQUEST_BYTES:12582912}   # the file, plus room for the rest of the form
+      file-size-threshold: 1MB
 
 server:
   port: 8080
@@ -11,6 +44,27 @@ app:
   jwt:
     secret: ${JWT_SECRET:change-me-please-this-must-be-at-least-32-bytes-long-secret-key}
     expiration-ms: 86400000
+  invoice:
+    default-payment-term: ${INVOICE_DEFAULT_TERM:NET_30}  # a customer with no terms, and the backfill
+    due-date-horizon-days: ${INVOICE_DUE_DATE_HORIZON_DAYS:365}  # the form warns past this; the API accepts it
+  documents:
+    storage: ${DOCUMENT_STORAGE:local}                # local | none
+    max-size-bytes: ${DOCUMENT_MAX_BYTES:10485760}    # 10 MB; the multipart limits above read the same variable
+    allowed-types: application/pdf,image/png,image/jpeg,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    local:
+      root: ${DOCUMENT_ROOT:./data/documents}         # made at startup when it is not there
+  mail:
+    transport: ${MAIL_TRANSPORT:none}                 # none | mail-service
+    dispatch:
+      async: true
+      sweep-interval-ms: 60000
+    service:
+      url: ${MAIL_SERVICE_URL:http://localhost:8091}
+      api-key: ${MAIL_SERVICE_API_KEY:}               # required with transport mail-service
+      webhook-secret: ${MAIL_SERVICE_WEBHOOK_SECRET:} # required with transport mail-service
+      connect-timeout-ms: 5000
+      read-timeout-ms: 40000                          # connecting calls Google
+      webhook-max-bytes: 33554432                     # largest webhook body read; 32 MiB
 
 ---
 spring:

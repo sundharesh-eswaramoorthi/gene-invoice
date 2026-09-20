@@ -1,0 +1,46 @@
+{
+  "cases": [
+    {
+      "id": "B-44",
+      "feature": "Reconciliation",
+      "kind": "API",
+      "ac": "AC-B3",
+      "title": "The four overdue buckets name exactly the invoices the list's own overdue filter names",
+      "status": "PASS",
+      "severity": "",
+      "steps": "GET /api/dashboard/outstanding-by-age, GET /api/invoices/summary and GET /api/invoices?filter=overdue:eq:true as the boundary-set Sales POC",
+      "expected": "sum of the 1–30 / 31–60 / 61–90 / Over 90 buckets = tiles.overdueAmount = 5.08 over 7 invoices, and the overdue-only list returns those same 7 rows (the two due today/tomorrow excluded)",
+      "actual": "buckets: 5.08 / 7; tiles.overdueAmount=5.08 overdueCount=7; overdue-only list totalElements=7",
+      "evidence": "overdue rows: INV-20260920-0106, INV-20260920-0107, INV-20260920-0108, INV-20260920-0109, INV-20260920-0110, INV-20260920-0111, INV-20260920-0112",
+      "codeRef": "backend/src/main/java/com/geneinvoice/common/query/TableSchemas.java:86 (invoiceOverdue) vs DashboardService.java:326 (overdueBy)"
+    },
+    {
+      "id": "B-45",
+      "feature": "Bucket deep link",
+      "kind": "API",
+      "ac": "AC-B6",
+      "title": "A bucket window fetches the part-paid invoice behind it, and not the fully-paid or cancelled ones it excluded",
+      "status": "PASS",
+      "severity": "",
+      "steps": "GET /api/invoices?size=50&filter=status:in:UNPAID,PARTIALLY_PAID&filter=dueDate:between:2026-07-22,2026-08-20 as the Sales POC whose book holds one part-paid (12000.00 left), one fully-paid and one cancelled invoice all due 2026-07-22..2026-08-20",
+      "expected": "1 row(s) totalling 12000, the part-paid invoice among them",
+      "actual": "1 row(s) totalling 12000.00 — INV-20260920-0116:PARTIALLY_PAID:12000",
+      "evidence": "",
+      "codeRef": "backend/src/main/java/com/geneinvoice/dashboard/DashboardService.java:348 (open)"
+    },
+    {
+      "id": "B-46",
+      "feature": "Derived overdue",
+      "kind": "API",
+      "ac": "AC-B8",
+      "title": "daysOverdue is exact at every boundary: 0 / 0 / 1 / 30 / 31 / 60 / 61 / 90 / 91",
+      "status": "PASS",
+      "severity": "",
+      "steps": "GET each of the nine boundary invoices by id and read overdue / daysOverdue",
+      "expected": "due today+1 and today → overdue=false, daysOverdue=0; the rest overdue=true with daysOverdue equal to the days since the due date",
+      "actual": "due+1 (2026-09-21) → overdue=false, daysOverdue=0; due+0 (2026-09-20) → overdue=false, daysOverdue=0; due-1 (2026-09-19) → overdue=true, daysOverdue=1; due-30 (2026-08-21) → overdue=true, daysOverdue=30; due-31 (2026-08-20) → overdue=true, daysOverdue=31; due-60 (2026-07-22) → overdue=true, daysOverdue=60; due-61 (2026-07-21) → overdue=true, daysOverdue=61; due-90 (2026-06-22) → overdue=true, daysOverdue=90; due-91 (2026-06-21) → overdue=true, daysOverdue=91",
+      "evidence": "",
+      "codeRef": "backend/src/main/java/com/geneinvoice/invoice/Invoice.java:124 (daysOverdue)"
+    }
+  ]
+}

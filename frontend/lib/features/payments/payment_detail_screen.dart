@@ -17,6 +17,8 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
 import '../disputes/disputes_tab.dart';
+import '../documents/document_actions.dart';
+import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
@@ -135,6 +137,13 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
       ),
       data: (payment) {
         _seed(payment);
+        final label = 'Payment #${payment.id}';
+        final sendEmail = sendEmailHeaderButton(context, ref,
+            type: EmailEntityType.payment, entityId: payment.id, entityLabel: label);
+        final documentsTab = documentsDetailTab(ref,
+            type: DocumentEntityType.payment, entityId: payment.id, entityLabel: label);
+        final emailTab = emailDetailTab(ref,
+            type: EmailEntityType.payment, entityId: payment.id, entityLabel: label);
         return PopScope(
           canPop: !_dirty,
           // Unsaved edits are asked about once, by goGuarded or else by the route's onExit.
@@ -161,6 +170,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                     targetLabel: 'Payment #${payment.id}',
                   ),
                 ),
+              if (sendEmail != null) sendEmail,
             ],
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) => context.go('/payments/${widget.id}?tab=$slug'),
@@ -200,6 +210,8 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                         entityType: 'PAYMENT', entityId: payment.id, includeRelated: true),
                   ),
                 ),
+              if (documentsTab != null) documentsTab,
+              if (emailTab != null) emailTab,
             ],
           ),
         );
