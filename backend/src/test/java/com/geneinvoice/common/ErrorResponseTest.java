@@ -19,10 +19,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * A mistake in the request is a 4xx with a message the caller can act on, never a 500 that leaks
- * class names or parser text (AC-D9).
- */
 class ErrorResponseTest extends IntegrationTestBase {
 
     private static final ResultMatcher NO_INTERNALS = result -> assertThat(

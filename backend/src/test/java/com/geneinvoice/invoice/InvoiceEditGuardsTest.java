@@ -28,11 +28,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * What an invoice will and will not accept as an edit: which invoices can be cancelled (DASH-05),
- * which can be edited at all (INV-3), what a due date may be set to (INV-4), and what happens to a
- * save composed against a version somebody else has already moved past (UI-09).
- */
 class InvoiceEditGuardsTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
@@ -61,13 +56,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
                 List.of(new InvoiceDtos.LineInput(p.getId(), 1, new BigDecimal(unitPrice)))));
     }
 
-    // ---- DASH-05: an invoice that took no money can be cancelled ------------------
-
-    /**
-     * An invoice with nothing on it is born FULLY_PAID, and refusing on the status alone left it
-     * stuck in the dashboard's "Fully paid" slice for ever — under a message telling the user to
-     * refund payments it never had (DASH-05).
-     */
     @Test
     void aZeroTotalInvoiceCanBeCancelled() throws Exception {
         Invoice free = invoice(freebie, "0.00");
@@ -79,7 +67,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
     }
 
-    /** An invoice that really did take money is still refused, with the message that fits. */
     @Test
     void anInvoiceHoldingAPaymentStillCannotBeCancelled() throws Exception {
         Invoice paid = invoice(widget, "100.00");
@@ -92,13 +79,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
                         "Cannot cancel an invoice with payments; refund first"));
     }
 
-    // ---- INV-3: a cancelled invoice is a dead record ------------------------------
-
-    /**
-     * Its lines are already refused ("Cannot edit a cancelled invoice"); its terms and its
-     * collections deadline were not, so a dead record's terms could be rewritten and an
-     * INVOICE_DUE_DATE_CHANGED entry left behind to say so (INV-3).
-     */
     @Test
     void aCancelledInvoicesDueDateCannotBeChanged() throws Exception {
         Invoice inv = invoice(widget, "100.00");
@@ -119,13 +99,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
                 .isEqualTo(entriesBefore);
     }
 
-    // ---- INV-4: a due date the database cannot hold -------------------------------
-
-    /**
-     * {@code +999999999-12-31} is a date Jackson parses happily and Postgres will not store. Left
-     * to the database it came back as 409 "This change conflicts with existing data", which names
-     * neither the field nor the rule (INV-4).
-     */
     @Test
     void aDueDateBeyondTheSupportedRangeIsAFieldError() throws Exception {
         mockMvc.perform(post("/api/invoices").with(as(admin))
@@ -140,7 +113,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
         assertThat(invoiceRepository.count()).as("nothing was created").isZero();
     }
 
-    /** The stated boundary itself is accepted, so the rule the message quotes is the real one. */
     @Test
     void theLastSupportedDueDateIsStillAccepted() {
         Invoice inv = invoiceService.create(new InvoiceDtos.CreateInvoiceRequest(
@@ -151,25 +123,16 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
         assertThat(inv.getDueDate()).isEqualTo(InvoiceService.LATEST_DUE_DATE);
     }
 
-    // ---- UI-09: a save composed against a version somebody has moved past ---------
-
-    /**
-     * Two people on the same invoice: the one who saves second used to win silently, discarding
-     * what the first had saved without either of them being told. Sending back the version the
-     * editor had in front of them turns that into a 409 they can act on (UI-09).
-     */
     @Test
     void aSaveAgainstAStaleVersionIsRefusedWithAConflict() throws Exception {
         Invoice inv = invoice(widget, "100.00");
         long stale = readVersion(inv.getId());
 
-        // The first save goes through and moves the version on.
         mockMvc.perform(patch("/api/invoices/" + inv.getId()).with(as(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("notes", "saved by the first editor", "version", stale))))
                 .andExpect(status().isOk());
 
-        // The second was composed before that and is refused rather than applied over the top.
         mockMvc.perform(patch("/api/invoices/" + inv.getId()).with(as(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("notes", "saved by the second editor", "version", stale))))
@@ -182,7 +145,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
                 .isEqualTo("saved by the first editor");
     }
 
-    /** The version the reader is handed is the one a save must quote, and it moves on every edit. */
     @Test
     void theDetailResponseCarriesAVersionThatMovesWithEachSave() throws Exception {
         Invoice inv = invoice(widget, "100.00");
@@ -197,7 +159,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
         assertThat(readVersion(inv.getId())).isEqualTo(first + 1);
     }
 
-    /** A caller that quotes no version keeps the old behaviour: there is nothing to check. */
     @Test
     void aSaveThatQuotesNoVersionIsNotRefused() throws Exception {
         Invoice inv = invoice(widget, "100.00");
@@ -208,18 +169,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
                 .andExpect(status().isOk());
     }
 
-    // ---- INV-1: the due-date trail is a chain, not four moves from one date -------
-
-    /**
-     * Each due-date edit records the value the previous one left, so the History tab reads as a
-     * chain. Both edits used to take their before-snapshot from a read outside any lock, so two at
-     * once recorded the same starting date and the newest entry could name a date the invoice did
-     * not hold (INV-1).
-     *
-     * <p>The race is made deterministic: the first edit's transaction is held open while the
-     * second starts inside that window, which is exactly where the second used to read the date
-     * the first was about to change.
-     */
     @Test
     void simultaneousDueDateChangesEachRecordWhatTheLastOneLeft() throws Exception {
         Invoice inv = invoice(widget, "100.00");
@@ -237,7 +186,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
                 transactions.executeWithoutResult(status -> {
                     invoiceService.update(inv.getId(), new InvoiceDtos.UpdateInvoiceRequest(
                             null, null, first, PaymentTerm.CUSTOM));
-                    // Written, not yet committed: where the second edit used to read the date.
                     firstIsInFlight.countDown();
                     sleep(400);
                 });
@@ -295,7 +243,6 @@ class InvoiceEditGuardsTest extends IntegrationTestBase {
         }
     }
 
-    /** The version as a reader of the detail endpoint is given it. */
     private long readVersion(Long id) throws Exception {
         String body = mockMvc.perform(get("/api/invoices/" + id).with(as(admin)))
                 .andExpect(status().isOk())

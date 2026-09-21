@@ -73,7 +73,6 @@ class InvoicesScreen extends ConsumerWidget {
               icon: Icons.account_balance_wallet_outlined,
               accent: Theme.of(context).colorScheme.error,
             ),
-            // Over the whole filtered set, like every other tile (AC-A7).
             SummaryTile(
               label: 'Overdue',
               value: formatMoneyCompact(s['overdueAmount']),
@@ -91,8 +90,6 @@ class InvoicesScreen extends ConsumerWidget {
               ),
           ],
         ),
-        // The filter a collections day starts from, one tap away (US-A5). The server works out
-        // what is overdue, so the chip only asks for it.
         quickFilters: const [
           QuickFilterSpec(
             label: 'Overdue only',
@@ -108,7 +105,6 @@ class InvoicesScreen extends ConsumerWidget {
               icon: Icons.block,
               destructive: true,
             ),
-          // Bulk changes need INVOICE_MANAGE as well as the right to assign POCs.
           if (canManage && canAssignPoc)
             BulkActionSpec(
               action: 'REASSIGN_SALES_POC',
@@ -134,8 +130,6 @@ class InvoicesScreen extends ConsumerWidget {
               ],
             ),
           ),
-          // A customer's name is theirs to choose and may run to 120 characters; capped so one
-          // of them cannot push the rest of the columns off the screen (UI-01, D-20).
           TableColumnSpec(
             label: 'Customer',
             sortKey: 'customerName',
@@ -148,15 +142,11 @@ class InvoicesScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Date',
             sortKey: 'invoiceDate',
-            // The UTC day: the Due date beside it was counted from that day, so reading the
-            // instant in the browser's zone would put the two a day out of step (§2.1).
             cell: (context, inv) => Text(formatUtcDate(inv.invoiceDate)),
           ),
           TableColumnSpec(
             label: 'Due date',
             sortKey: 'dueDate',
-            // A Wrap rather than a Row: on a phone the date and the badge together are wider
-            // than the card's cell, and the badge is the half that would be clipped (US-A4).
             cell: (context, inv) => Wrap(
               spacing: 6,
               runSpacing: 2,

@@ -59,12 +59,9 @@ public class PaymentService {
         // figures over the other's, which loses one payment's money outright (PPD-01).
         Customer customer = lockCustomer(req.customerId());
 
-        // Mandatory on create, enforced here rather than only in the form (AC-A2).
         User collectionPoc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION);
 
         List<Long> chosen = req.invoiceIds() == null ? List.of() : req.invoiceIds();
-        // The invoices of promises the cashier ticked are paid first, so the payment counts towards
-        // those promises (US-B3); a ticked promise the chosen invoices cannot serve is refused.
         Set<Long> payFirst = promiseService.invoicesToPayFirst(req.promiseIds(), customer.getId(),
                 Set.copyOf(chosen));
         List<Invoice> targets;
@@ -111,7 +108,6 @@ public class PaymentService {
         return saved;
     }
 
-    /** Inline edit from the detail screen: notes and the Collection POC. */
     @Transactional
     public Payment update(Long id, PaymentDtos.UpdatePaymentRequest req) {
         Payment p = paymentRepository.findById(id)
@@ -120,8 +116,6 @@ public class PaymentService {
         Object before = PaymentDtos.PaymentDto.from(p);
 
         if (req.notes() != null) p.setNotes(req.notes());
-        // Only an actual change of POC is checked, so a notes edit still saves when the POC has
-        // since been deactivated or the editor may not assign POCs (AC-A5).
         Long previousId = p.getCollectionPoc() == null ? null : p.getCollectionPoc().getId();
         if (req.collectionPocUserId() != null && !req.collectionPocUserId().equals(previousId)) {
             if (!currentUser.canAssignPoc(userRepository)) {
@@ -143,18 +137,12 @@ public class PaymentService {
         return update(id, new PaymentDtos.UpdatePaymentRequest(null, userId));
     }
 
-    /** One invoice's paid position before or after a payment was applied to it or taken off it. */
     public record InvoicePaymentAudit(Long paymentId, BigDecimal amount, BigDecimal paidAmount,
                                       BigDecimal balance, InvoiceStatus status) {}
 
-    /** How much of a payment landed on one invoice, and where that invoice stood beforehand. */
     private record Movement(Invoice invoice, BigDecimal amount,
                             BigDecimal paidBefore, InvoiceStatus statusBefore) {}
 
-    /**
-     * Writes one audit row per invoice a payment moved, on the invoice itself, so an invoice's
-     * History shows every payment that landed on it or was taken back off it.
-     */
     private void auditMovements(Payment payment, List<Movement> moves, String action) {
         Long actor = currentUser.idOrNull();
         for (Movement m : moves) {
@@ -170,27 +158,16 @@ public class PaymentService {
 
     private static final Comparator<Invoice> OLDEST_FIRST = Comparator.comparing(Invoice::getInvoiceDate);
 
-    /**
-     * The first lock of every money path: the customer whose credit balance and invoices are
-     * about to move. Taking it before anything else, and before any invoice of theirs, gives the
-     * whole path one lock order, so two requests on one customer queue and never deadlock.
-     */
     private Customer lockCustomer(Long customerId) {
         return customerRepository.findByIdForUpdate(customerId)
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
     }
 
-    /** The invoices about to be written, locked by ascending id — the second half of that order. */
     private void lockInvoices(List<Invoice> invoices) {
         List<Long> ids = invoices.stream().map(Invoice::getId).filter(java.util.Objects::nonNull).toList();
         if (!ids.isEmpty()) invoiceRepository.findAllByIdForUpdate(ids);
     }
 
-    /**
-     * Apply `amount` to the outstanding invoices in the order given (the caller's order: oldest
-     * first, or a ticked promise's invoices first); leftover goes to credit. Returns what landed
-     * on each invoice, for the caller to audit once the payment has an id.
-     */
     private List<Movement> applyTo(Payment payment, List<Invoice> targets, BigDecimal amount) {
         // Every row this is about to change is held under the write lock first, in the one order
         // the whole money path uses: the customer, then the invoices by ascending id (PPD-01).
@@ -225,10 +202,6 @@ public class PaymentService {
         return moves;
     }
 
-    /**
-     * Reverse a payment: undo each allocation, remove credit applied, mark VOIDED.
-     * Returns the now-voided payment.
-     */
     @Transactional
     public Payment voidPayment(Long paymentId) {
         Payment p = paymentRepository.findById(paymentId)
@@ -240,17 +213,10 @@ public class PaymentService {
         reverseAllocations(p);
         p.setStatus(PaymentStatus.VOIDED);
         Payment saved = paymentRepository.save(p);
-        // A voided payment can no longer keep a promise (AC-B6).
         promiseService.reevaluateForCustomer(p.getCustomer().getId());
         return saved;
     }
 
-    /**
-     * Reverse allocations only (does NOT mark status). Used both for void and for re-recording.
-     * {@link CreditLedger} keeps the allocations and the credit applied current as money moves
-     * through credit, so this takes back exactly what the payment put in. The floor at zero only
-     * matters for credit older than the ledger.
-     */
     private void reverseAllocations(Payment p) {
         // Taking money back off an invoice is the same read-modify-write as putting it on, and
         // needs the same locks, in the same order (PPD-01).
@@ -263,8 +229,6 @@ public class PaymentService {
             if (inv.getPaidAmount().signum() < 0) inv.setPaidAmount(BigDecimal.ZERO);
             InvoiceService.recomputeStatus(inv);
             invoiceRepository.save(inv);
-            // Audited now, while the invoice shows the reversal alone; a re-application that
-            // follows (an amount change) is audited on its own.
             auditMovements(p, List.of(reversed), "PAYMENT_REVERSED");
         }
         p.getAllocations().clear();
@@ -277,10 +241,6 @@ public class PaymentService {
         p.setCreditApplied(BigDecimal.ZERO);
     }
 
-    /**
-     * Change a payment's amount: reverse current allocations, then re-apply the new amount to the
-     * customer's outstanding invoices oldest-first.
-     */
     @Transactional
     public Payment updateAmount(Long paymentId, BigDecimal newAmount, String method, String notes) {
         Payment p = paymentRepository.findById(paymentId)
@@ -309,7 +269,6 @@ public class PaymentService {
         return saved;
     }
 
-    /** A customer login reads only its own payments; a POC limited to their book, only theirs. */
     @Transactional(readOnly = true)
     public Payment get(Long id) {
         Payment p = paymentRepository.findById(id)
@@ -337,8 +296,6 @@ public class PaymentService {
                 ? paymentRepository.findAll()
                 : paymentRepository.findByCustomerIdOrderByPaidAtDesc(customerId);
     }
-
-    // ---- list, tiles ------------------------------------------------------------
 
     @Transactional(readOnly = true)
     public PageResponse<PaymentDtos.PaymentDto> page(TableQuery query) {

@@ -28,10 +28,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * A customer login never sees staff identity (AC-A8) — and a user id is identity: who created or
- * overrode a promise is often the Collection POC, and who resolved a dispute is staff.
- */
 class StaffIdentityPrivacyTest extends IntegrationTestBase {
 
     @Autowired PaymentPromiseService promiseService;

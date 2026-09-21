@@ -11,11 +11,6 @@ import java.util.Optional;
 
 public interface DisputeRepository extends JpaRepository<Dispute, Long> {
 
-    /**
-     * The dispute, locked until the transaction ends, for the resolve path: two approvals of one
-     * dispute settle in turn, so the second reads the status the first wrote rather than both
-     * passing the same pending check and racing on the money (PPD-03).
-     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from Dispute d where d.id = :id")
     Optional<Dispute> findByIdForUpdate(@Param("id") Long id);

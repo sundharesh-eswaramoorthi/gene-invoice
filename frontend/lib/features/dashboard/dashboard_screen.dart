@@ -16,19 +16,14 @@ import 'dashboard_charts.dart';
 import 'dashboard_providers.dart';
 import 'dashboard_tables.dart';
 
-/// Which cards a user gets. It goes by privileges rather than role names, because an admin can
-/// reshape any role. The server enforces the same rules and scopes every figure, so this only
-/// decides what is worth drawing.
 class DashboardAccess {
   final bool invoices;
   final bool payments;
   final bool promises;
   final bool isCustomer;
 
-  /// May open a customer from a ranking row.
   final bool customers;
 
-  /// May see who the Collection POC is (AC-A8).
   final bool pocs;
 
   const DashboardAccess({
@@ -52,11 +47,8 @@ class DashboardAccess {
     );
   }
 
-  /// Rankings compare customers with each other, which is for staff only; the server refuses a
-  /// customer login too.
   bool get rankings => !isCustomer;
 
-  /// A customer pays; staff collect.
   String get collectedLabel => isCustomer ? 'Paid' : 'Collected';
 }
 
@@ -77,7 +69,6 @@ class DashboardScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           children: [
             _Header(user: user, access: access),
-            // The actions carry their own spacing: a user who is offered none leaves no gap.
             _QuickActions(user: user),
             _KeyFigures(access: access),
             const SizedBox(height: 16),
@@ -101,8 +92,6 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-/// Cards side by side when there is room, stacked otherwise. A card the user may not see is simply
-/// left out, and the rest take its space.
 class _CardRow extends StatelessWidget {
   final bool sideBySide;
   final List<(int, Widget)> cards;
@@ -204,9 +193,6 @@ class _QuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Every button is offered on the privilege the screen behind it needs, so none of them can
-    // only answer "You do not have permission" — the lists themselves ask for INVOICE_VIEW and
-    // PAYMENT_VIEW, whatever else a reshaped role holds (DASH-02, AC-C22).
     final buttons = [
       if (user?.has(Privileges.invoiceManage) ?? false)
         FilledButton.icon(
@@ -243,7 +229,6 @@ class _QuickActions extends StatelessWidget {
           onPressed: () => context.go('/disputes'),
         ),
     ];
-    // A user with none of them gets the welcome on its own, not a blank band where the row was.
     if (buttons.isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 12, 0, 16),
@@ -369,7 +354,6 @@ class _InvoiceStatusCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The summary carries no coverage of its own; it runs under the same scope as billed.
     final book = ref.watch(billedByMonthProvider).valueOrNull?.coverage == Coverage.book;
     return DashboardCard(
       title: 'Invoices by status',
@@ -381,8 +365,6 @@ class _InvoiceStatusCard extends ConsumerWidget {
               color: invoiceStatusColor(context, status),
               link: _link(status),
             );
-        // Orange and green are hard to tell apart for some readers, so another status sits
-        // between them whenever it has any invoices; the legend names every slice regardless.
         return StatusDonut(noun: 'invoices', slices: [
           slice(InvoiceStatus.FULLY_PAID, 'fullyPaidCount'),
           slice(InvoiceStatus.UNPAID, 'unpaidCount'),
@@ -401,8 +383,6 @@ class _AgingCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final aging = ref.watch(outstandingByAgeProvider);
     return DashboardCard(
-      // Days past due, not days since the invoice date: the title and the axis both say so, so
-      // nobody reads the new numbers with the old meaning (D4, AC-B5).
       title: 'Outstanding by days overdue',
       subtitle: 'Days overdue',
       book: aging.valueOrNull?.coverage == Coverage.book,
@@ -422,7 +402,6 @@ class _PromiseStatusCard extends ConsumerWidget {
     return DashboardCard(
       title: 'Promises by status',
       subtitle: 'Cancelled promises are left out',
-      // The summary runs under the same scope as the promises list.
       book: ref.watch(upcomingPromisesProvider).valueOrNull?.book ?? false,
       child: asyncCard(ref.watch(promiseSummaryProvider), (s) {
         DonutSlice slice(PromiseStatus status, String key) => DonutSlice(
@@ -431,9 +410,6 @@ class _PromiseStatusCard extends ConsumerWidget {
               color: promiseStatusColor(context, status),
               link: _link(status),
             );
-        // Kept (green) sits opposite Partially kept (orange), the pair that is hardest to tell
-        // apart, so they touch only when Open and Broken are both empty; the legend names every
-        // slice regardless.
         return StatusDonut(noun: 'promises', slices: [
           slice(PromiseStatus.OPEN, 'openCount'),
           slice(PromiseStatus.PARTIALLY_KEPT, 'partiallyKeptCount'),

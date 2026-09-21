@@ -31,10 +31,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * The dashboard's figures follow the scope of the list each one summarises: everything for staff
- * who may see everything, the book for a POC limited to it, and a customer login's own account.
- */
 class DashboardTest extends IntegrationTestBase {
 
     static final LocalDate TODAY = LocalDate.of(2026, 9, 16);
@@ -69,7 +65,6 @@ class DashboardTest extends IntegrationTestBase {
                 rep.getId(), List.of(new InvoiceDtos.LineInput(widget.getId(), 1, new BigDecimal(amount)))));
     }
 
-    /** An invoice with a due date of its own, which is what the ageing chart measures. */
     private Invoice invoice(Customer c, User rep, String amount, Instant date, LocalDate due) {
         return invoiceService.create(new InvoiceDtos.CreateInvoiceRequest(c.getId(), date, due,
                 null, null, rep.getId(),
@@ -88,7 +83,6 @@ class DashboardTest extends IntegrationTestBase {
         return objectMapper.readTree(body);
     }
 
-    /** The current month's point of a series. */
     private static JsonNode thisMonth(JsonNode series) {
         JsonNode months = series.get("months");
         JsonNode last = months.get(months.size() - 1);
@@ -119,11 +113,6 @@ class DashboardTest extends IntegrationTestBase {
                 .containsExactly(0L, 1L, 1L);
     }
 
-    /**
-     * The measure is days past the due date, not days since the invoice date (D4). An invoice
-     * raised 45 days ago on 60-day terms is not late at all, though the old chart aged it into
-     * "31–60 days" beside invoices that really were overdue.
-     */
     @Test
     void outstandingIsBucketedByDaysPastTheDueDate() {
         Instant raised = at(TODAY.minusDays(120), 9);
@@ -168,10 +157,6 @@ class DashboardTest extends IntegrationTestBase {
         assertThat(dashboardService.topOutstanding(1).customers()).hasSize(1);
     }
 
-    /**
-     * A Sales POC sees their own invoices but every payment. Their payment figures count only what
-     * landed on their invoices, so billed and collected cover the same invoices.
-     */
     @Test
     void aBookLimitedSalesPocCountsOnlyMoneyPaidAgainstTheirOwnInvoices() throws Exception {
         Instant month = YearMonth.now(ZoneOffset.UTC).atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
@@ -179,7 +164,6 @@ class DashboardTest extends IntegrationTestBase {
         invoice(acme, sales, "100.00", month.plusSeconds(120));
         invoice(acme, otherSales, "100.00", month.plusSeconds(180));
         invoice(globex, otherSales, "300.00", month.plusSeconds(240));
-        // Oldest first: 100 + 100 on Sam's invoices, the last 50 on Sid's.
         pay(acme, "250.00", null);
         pay(globex, "300.00", null);
 
@@ -191,7 +175,6 @@ class DashboardTest extends IntegrationTestBase {
         JsonNode samCollected = read("/api/dashboard/collected-by-month", sales);
         assertThat(samCollected.get("coverage").asText()).isEqualTo("BOOK");
         assertThat(thisMonth(samCollected).get("amount").decimalValue()).isEqualByComparingTo("200.00");
-        // One payment, even though it was split across two of Sam's invoices.
         assertThat(thisMonth(samCollected).get("count").asLong()).isEqualTo(1);
 
         JsonNode sidCollected = read("/api/dashboard/collected-by-month", otherSales);

@@ -25,9 +25,7 @@ public class DisputeDtos {
     public record DisputeDto(
             Long id, Long customerId, String customerName, Long openedByUserId,
             DisputeTargetType targetType, Long targetId, String targetSummary,
-            /** The invoice number, or "#id" for a payment; null once the record is gone. */
             String targetNumber,
-            /** The invoice total or payment amount. */
             BigDecimal targetAmount,
             String reason, String proposedChangeJson,
             DisputeStatus status, String adminNotes,

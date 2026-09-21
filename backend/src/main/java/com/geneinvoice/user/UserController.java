@@ -163,8 +163,6 @@ public class UserController {
         Object before = UserDto.from(u);
         boolean couldSendEmail = GmailDisconnects.mayConnect(u);
         if (in.email() != null) {
-            // Blank clears the email. Uniqueness is checked only on a change, so an account can
-            // always be re-saved as it is.
             String email = Emails.normalize(in.email());
             if (email != null && !email.equalsIgnoreCase(u.getEmail())
                     && userRepository.existsByEmailIgnoreCaseAndIdNot(email, id)) {
@@ -189,16 +187,10 @@ public class UserController {
         User saved = userRepository.save(u);
         auditService.record("USER", id, "USER_UPDATED", before, UserDto.from(saved),
                 currentUser.require().getId(), null, null);
-        // Deactivated, or moved to a role without EMAIL_SEND: their Gmail connection goes (mail-service.md §5.6).
         if (couldSendEmail && !GmailDisconnects.mayConnect(saved)) gmailDisconnects.request(List.of(id));
         return UserDto.from(saved);
     }
 
-    /**
-     * Deleting a user who owns POC assignments would orphan those records, so such a user is
-     * deactivated instead: history stays readable and they drop out of the dropdowns (AC-A5).
-     * Either way their Gmail connection at the mail service goes (mail-service.md §5.6).
-     */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.USER_MANAGE + "')")
     public Map<String, Object> delete(@PathVariable Long id) {
@@ -230,19 +222,10 @@ public class UserController {
         // The account is gone; the fact that somebody removed it is not (CP-04).
         auditService.record("USER", id, "USER_DELETED", before, null,
                 currentUser.require().getId(), null, "User deleted");
-        // Whatever their role said lately: a connection made before a change of role is still theirs.
         if (internal) gmailDisconnects.request(List.of(id));
         return Map.of("deleted", true, "deactivated", false, "pocReferences", 0);
     }
 
-    /**
-     * Refuses a change that would leave nobody able to administer users. USER_MANAGE is the
-     * privilege this very endpoint sits behind, so once the last active holder of it is
-     * deactivated, moved to another role or deleted, nothing in the app can give it back and
-     * recovery needs a direct write to the database (AUTH-03).
-     *
-     * @param excludedUserId the account the change is about, counted as if it were already gone
-     */
     private void requireAdministratorsRemain(Long excludedUserId) {
         if (userRepository.countActiveHolders(Privileges.USER_MANAGE, excludedUserId, null) == 0) {
             throw new BadRequestException("This is the last active account that can manage users;"
@@ -256,8 +239,6 @@ public class UserController {
                 + promiseRepository.countByCollectionPocId(userId)
                 + customerPocRepository.countByUserId(userId);
     }
-
-    // ---- bulk & export ---------------------------------------------------------
 
     public static final List<String> BULK_ACTIONS = List.of("ACTIVATE", "DEACTIVATE");
 
@@ -291,7 +272,6 @@ public class UserController {
             auditService.record("USER", id, activate ? "USER_ACTIVATED" : "USER_DEACTIVATED",
                     before, UserDto.from(saved), actor, null, "Bulk action");
             if (couldSendEmail && !GmailDisconnects.mayConnect(saved)) {
-                // Marked with the deactivation, so both stand or fall together; removed once all are done.
                 gmailDisconnects.mark(List.of(id));
                 leftEmail.add(id);
             }

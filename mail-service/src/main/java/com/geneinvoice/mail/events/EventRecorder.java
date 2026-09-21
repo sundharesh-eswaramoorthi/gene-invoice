@@ -8,10 +8,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 
-/**
- * Writes an event into the outbox. Only inside the transaction of the change it reports, so the two
- * are saved together or not at all; the {@link WebhookDispatcher} delivers it afterwards.
- */
 @Component
 public class EventRecorder {
 

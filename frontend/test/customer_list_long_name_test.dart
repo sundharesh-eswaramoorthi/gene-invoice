@@ -23,7 +23,7 @@ import 'support/roboto.dart';
 // real shell, its sidebar contracted as it starts, desktop density, text in Roboto.
 
 const _longName = 'NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN'
-    'NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN'; // 120, as the API allows
+    'NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN';
 
 const _admin = CurrentUser(
   id: 1,
@@ -104,7 +104,6 @@ Future<void> _pump(WidgetTester tester, List<Map<String, dynamic>> rows) async {
   await tester.pumpAndSettle();
 }
 
-/// The columns the customers list is there for, beyond the name.
 const _otherColumns = ['Phone', 'Email', 'Outstanding', 'Credit', 'Success POC', 'Collection POC'];
 
 void main() {
@@ -119,19 +118,16 @@ void main() {
     ]);
     expect(tester.takeException(), isNull);
 
-    // The name itself is cut to the column, not laid out at its full length.
     final name = tester.getRect(find.text(_longName));
     expect(name.width, lessThanOrEqualTo(320), reason: 'name cell is $name');
     final text = tester.widget<Text>(find.text(_longName));
     expect(text.overflow, TextOverflow.ellipsis);
 
-    // So every other column is still on screen, beside the 80px contracted rail.
     for (final label in _otherColumns) {
       final header = tester.getRect(find.text(label));
       expect(header.right, lessThanOrEqualTo(1366), reason: '$label header at $header');
       expect(header.left, greaterThanOrEqualTo(80), reason: '$label header at $header');
     }
-    // Whoever needs the whole name can read it without leaving the list.
     expect(
         tester.widgetList<Tooltip>(find.byType(Tooltip)).where((t) => t.message == _longName),
         isNotEmpty);
@@ -152,8 +148,6 @@ void main() {
     ]);
     final with120 = rightEdgeOfCollectionPoc(tester);
 
-    // The Name column grows to its cap and stops; it used to grow to the text, which ran the
-    // table out to x≈2138 on a 1366 screen.
     expect(with120 - without, lessThanOrEqualTo(320));
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 }

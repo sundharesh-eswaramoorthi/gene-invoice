@@ -20,10 +20,6 @@ import 'package:go_router/go_router.dart';
 
 import 'support/fake_backend.dart';
 
-// Payment terms and due dates as the invoice and customer screens carry them (§2.4): the form's
-// terms line, the Overdue badge, the list's Due date column, "Overdue only" and the two tiles,
-// and a customer's terms with how much of what they owe is late.
-
 CurrentUser _user(Set<String> privileges) => CurrentUser(
       id: 3,
       username: 'jane',
@@ -47,8 +43,6 @@ Map<String, dynamic> _column(String name, String type,
       'operators': operators,
     };
 
-/// The invoices schema as §2.3 describes it: a sortable, filterable `dueDate` and the computed
-/// `overdue` flag, which is filterable but never sorted by.
 Map<String, dynamic> _invoiceSchema({bool withOverdue = true}) => {
       'entity': 'invoices',
       'columns': [
@@ -92,7 +86,6 @@ Future<void> _pump(
 
 void main() {
   group('the invoice form', () {
-    // Net 30 on an invoice the server would date 20 September 2026.
     FakeBackend backend({Map<String, Object?>? preview}) => FakeBackend({
           'GET /api/pocs/my-scope': (_) =>
               {'userId': 3, 'sales': true, 'success': false, 'collection': false},
@@ -123,7 +116,6 @@ void main() {
           '/invoices': (_) => const Text('invoices page'),
         });
 
-    /// Picks the first option offered by the [field]th picker — the customer, then the product.
     Future<void> pick(WidgetTester tester, int field, String label) async {
       await tester.tap(find.text('Select…').at(field));
       await tester.pumpAndSettle();
@@ -159,7 +151,6 @@ void main() {
       await tester.tap(find.text('Net 60').last);
       await tester.pumpAndSettle();
 
-      // 20 September plus 60 days, worked out from the date the server's preview came back with.
       expect(find.text('Net 60 — due 19 Nov 2026'), findsOneWidget);
       expect(find.text('2026-11-19'), findsOneWidget);
 
@@ -167,7 +158,6 @@ void main() {
       await tester.tap(find.text('Create invoice'));
       await tester.pumpAndSettle();
 
-      // Terms go up as terms, for the server to apply to the date it stamps (§2.2).
       expect(posted(api), containsPair('paymentTerm', 'NET_60'));
       expect(posted(api).containsKey('dueDate'), isFalse);
     });
@@ -204,7 +194,6 @@ void main() {
 
       await tester.tap(find.text('2026-10-20'));
       await tester.pumpAndSettle();
-      // Through the year picker, so the date is two years out whatever the locale writes.
       await tester.tap(find.text('October 2026'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('2028'));
@@ -240,14 +229,11 @@ void main() {
       await tester.tap(find.text('Create invoice'));
       await tester.pumpAndSettle();
 
-      // Neither field is sent, so the server applies the customer's own terms.
       expect(posted(api).containsKey('dueDate'), isFalse);
       expect(posted(api).containsKey('paymentTerm'), isFalse);
       expect(find.text('invoices page'), findsOneWidget);
     });
 
-    /// The warning does not depend on the call that failed: with no invoice date to count from,
-    /// a date years out is still worth asking about, counted from today (AC-A5).
     testWidgets('a date years out is still queried after the preview failed', (tester) async {
       final api = FakeBackend({
         ...backend().routes,
@@ -260,7 +246,6 @@ void main() {
 
       await tester.tap(find.text('Pick a date'));
       await tester.pumpAndSettle();
-      // Through the year grid, so this reads the same whenever it runs.
       await tester.tap(find.descendant(
           of: find.byType(DatePickerDialog), matching: find.byIcon(Icons.arrow_drop_down)));
       await tester.pumpAndSettle();
@@ -306,7 +291,6 @@ void main() {
     testWidgets('an overdue invoice says so, and by how long (US-A4)', (tester) async {
       await pumpDetail(tester, overdue: true);
 
-      // The due date sits beside the invoice date in the subtitle.
       expect(find.text('Acme Ltd • 2026-08-20 • due 2026-09-19'), findsOneWidget);
       expect(find.text('Overdue by 12 days'), findsOneWidget);
       // In the error colour, beside the status rather than instead of it (D3).
@@ -315,7 +299,6 @@ void main() {
       expect(badge.color,
           Theme.of(tester.element(find.byType(StatusChip).first)).colorScheme.error);
       expect(find.text('Unpaid'), findsOneWidget);
-      // The terms the date came from are on the page too, so the date can be explained.
       expect(find.text('Payment terms'), findsOneWidget);
       expect(find.text('Net 30'), findsOneWidget);
     });
@@ -327,8 +310,6 @@ void main() {
       expect(find.textContaining('Overdue'), findsNothing);
     });
 
-    /// US-A3 on an invoice already raised: whoever may change it may move the deadline the
-    /// customer renegotiated, and the backend writes each move to the History tab (AC-A8).
     Future<FakeBackend> pumpEditable(WidgetTester tester) async {
       final api = FakeBackend({
         'GET /api/invoices/42': (_) => invoice(overdue: false),
@@ -352,7 +333,6 @@ void main() {
       await tester.tap(find.text('Net 45').last);
       await tester.pumpAndSettle();
 
-      // Counted from the day the stored terms were counted from: 20 August plus 45 days.
       expect(find.text('2026-10-04'), findsOneWidget);
       expect(find.text('Unsaved changes'), findsOneWidget);
 
@@ -468,8 +448,6 @@ void main() {
       expect(find.text('Due date'), findsOneWidget);
       expect(find.text('2026-09-19'), findsOneWidget);
       expect(find.text('2026-10-15'), findsOneWidget);
-      // One row is late, and only it is badged; the day count is in the badge's tooltip, since
-      // the due date is in the same cell already.
       expect(find.byTooltip('Overdue by 12 days'), findsOneWidget);
     });
 
@@ -493,7 +471,6 @@ void main() {
       await tester.tap(find.text('Overdue only'));
       await tester.pumpAndSettle();
       expect(filtersSent(api), ['overdue:eq:true']);
-      // The chip is the filter, so it is not repeated as an ordinary one beside itself.
       expect(find.text('Overdue only'), findsOneWidget);
       expect(find.textContaining('is true'), findsNothing);
 
@@ -502,8 +479,6 @@ void main() {
       expect(filtersSent(api), isEmpty);
     });
 
-    /// At phone width the list is a card per row, and a cell is only as wide as the card: the
-    /// date and the badge have to fall onto two lines rather than the badge being cut off.
     testWidgets('a phone fits the Overdue badge beside the due date (US-A4)', (tester) async {
       await _pump(tester,
           backend: backend(),
@@ -514,10 +489,8 @@ void main() {
                 query: TableQuery.fromRoute(s.uri.queryParametersAll,
                     defaultSize: 20, defaultSort: 'invoiceDate,desc')),
           },
-          // A phone's width, and tall enough that every row is painted rather than scrolled to.
           size: const Size(390, 1600));
 
-      // An overflow paints its stripes and is reported as an error; nothing is clipped.
       expect(tester.takeException(), isNull);
       expect(find.text('2026-09-19'), findsOneWidget);
       expect(find.byTooltip('Overdue by 12 days'), findsOneWidget);
@@ -532,14 +505,7 @@ void main() {
     });
   });
 
-  /// The server stamps the invoice date as an instant but counts the terms from its **UTC** day
-  /// (`InvoiceDates.dayOf`, `ZoneOffset.UTC`), and stores the due date as a plain calendar day.
-  /// Read in the browser's own zone the invoice date crosses midnight — IST shows an instant
-  /// stamped at 23:30 UTC as the next day, New York shows one stamped at 00:30 UTC as the
-  /// previous one — and the two dates on screen stop being the ends of the stated terms.
   group('an invoice stamped either side of midnight UTC', () {
-    /// 23:30 UTC on the 20th, which is already the 21st in every zone ahead of UTC; Net 30 from
-    /// the day the server counted, the 20th, is the 20th of October.
     Map<String, dynamic> lateEvening({
       String? paymentTerm = 'NET_30',
       String? paymentTermLabel = 'Net 30',
@@ -564,12 +530,9 @@ void main() {
         };
 
     test('a day is read where the server counted it, not where the browser sits', () {
-      // The two crossings: one fails in a zone ahead of UTC, the other in a zone behind it.
       expect(formatUtcDate('2026-09-20T23:30:00Z'), '2026-09-20');
       expect(formatUtcDate('2026-09-21T00:30:00Z'), '2026-09-21');
-      // An offset is only another spelling of the same instant.
       expect(formatUtcDate('2026-09-21T05:00:00+05:30'), '2026-09-20');
-      // A due date arrives as a plain calendar day and names its own day outright.
       expect(formatUtcDate('2026-08-20'), '2026-08-20');
       expect(formatUtcDate(null), '—');
     });
@@ -585,7 +548,6 @@ void main() {
           location: '/invoices/42',
           pages: {'/invoices/:id': (_) => const InvoiceDetailScreen(id: 42)});
 
-      // Exactly 30 days apart, beside a "Net 30" that has to explain them.
       expect(find.text('Acme Ltd • 2026-09-20 • due 2026-10-20'), findsOneWidget);
       expect(find.text('Net 30'), findsOneWidget);
     });
@@ -600,7 +562,6 @@ void main() {
                     ...lateEvening(dueDate: '2026-10-21'),
                     'id': 43,
                     'invoiceNumber': 'INV-0043',
-                    // Half an hour later: the next UTC day, and the previous one in New York.
                     'invoiceDate': '2026-09-21T00:30:00Z',
                   },
                 ]),
@@ -622,7 +583,6 @@ void main() {
                     defaultSize: 20, defaultSort: 'invoiceDate,desc')),
           });
 
-      // Each row's Date is the day its own Due date was counted from, 30 days on.
       expect(find.text('2026-09-20'), findsOneWidget);
       expect(find.text('2026-10-20'), findsOneWidget);
       expect(find.text('2026-09-21'), findsOneWidget);
@@ -631,8 +591,6 @@ void main() {
 
     testWidgets('new terms are counted from the UTC day when there is no term to undo',
         (tester) async {
-      // Custom terms leave nothing to work the counted-from day back out of the due date, so the
-      // invoice date itself is the basis — and it has to be the day the server would count from.
       await _pump(tester,
           backend: FakeBackend({
             'GET /api/invoices/42': (_) => lateEvening(
@@ -650,7 +608,6 @@ void main() {
       await tester.tap(find.text('Net 30').last);
       await tester.pumpAndSettle();
 
-      // 20 September plus 30 days, the date the server will send back after the save.
       expect(find.text('2026-10-20'), findsOneWidget);
     });
   });

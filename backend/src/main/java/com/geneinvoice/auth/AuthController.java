@@ -88,9 +88,6 @@ public class AuthController {
         // the sort while the old token kept full access for the rest of its life (AUTH-04).
         u.setCredentialsChangedAt(Instant.now());
         User saved = userRepository.save(u);
-        // Including the one in the caller's own hand: this session just proved the current
-        // password, so it is handed a token of the new generation rather than being signed out
-        // mid-change. Everyone else's token is now stale, which is the point.
         return Map.of("status", "ok",
                 "token", jwtService.generateToken(saved.getUsername(), jwtService.claimsFor(saved)));
     }

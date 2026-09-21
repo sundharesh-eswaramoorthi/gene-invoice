@@ -24,23 +24,17 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-/**
- * Turns stored emails into what the caller may see. A customer login sees staff only as the role
- * they hold here, or as the team, never by name or address (E13, AC-A8).
- */
 @Component
 @RequiredArgsConstructor
 public class EmailViews {
 
     private static final int SNIPPET_MAX = 160;
-    /** What a customer is told of a failure; the provider's own words can quote a staff address. */
     static final String NOT_DELIVERED = "Could not be delivered";
 
     private final EmailRecipientRepository recipientRepository;
     private final UserRepository userRepository;
     private final CurrentUser currentUser;
 
-    /** The caller, as masking and retry need them. */
     public record Viewer(Long userId, Long customerId, boolean canSend) {
         boolean isCustomer() {
             return customerId != null;
@@ -54,7 +48,6 @@ public class EmailViews {
 
     // ---- which emails a customer sees (E13) ---------------------------------------------
 
-    /** Emails the customer took part in: sent by one of its people, or addressed to one of them. */
     static PredicateFactory customerTookPart(Long customerId) {
         return (root, q, cb) -> {
             Subquery<Long> sq = q.subquery(Long.class);
@@ -71,9 +64,6 @@ public class EmailViews {
                 || recipients.stream().anyMatch(r -> customerId.equals(r.getCustomerId()));
     }
 
-    // ---- emails ------------------------------------------------------------------
-
-    /** Renders a page of emails in a fixed number of queries rather than a few per email. */
     public List<EmailDtos.EmailDto> toDtos(List<Email> emails, Viewer viewer, boolean canSeeRecord) {
         if (emails.isEmpty()) return List.of();
         Map<Long, List<EmailRecipient>> recipients = recipientRepository
@@ -113,16 +103,8 @@ public class EmailViews {
                 e.getOccurredAt(), outcome.sentAt(), canRetry, canSeeRecord, readByMe);
     }
 
-    /** The email's status, error and sent time as the viewer is told them. */
     private record Outcome(EmailStatus status, String error, Instant sentAt) {}
 
-    /**
-     * Staff see the email as all its copies are. A customer sees it as the copies they may see are —
-     * those of everyone but staff, whose copies are masked (E13): the roll-up over every copy would
-     * say "Partly sent" or "Could not be delivered" when only a staff member's copy failed, and so
-     * tell them how staff's copies fared. With no such copy (a customer login's email to a role, or
-     * one with nobody to send to) the email's own status stands, which then says nothing of staff.
-     */
     private static Outcome outcome(Email e, List<EmailRecipient> recipients, Viewer viewer) {
         if (viewer.isCustomer()) {
             List<EmailRecipient> theirs = recipients.stream()
@@ -148,12 +130,6 @@ public class EmailViews {
         return e.getDeliveredFrom();
     }
 
-    /**
-     * What a customer is told of a failure. The app's own reasons say nothing about anyone, and a
-     * sender's missing Gmail connection is theirs to know when the sender is one of their own people;
-     * anything else — the provider's words, which can quote a staff address, or a count of copies,
-     * which would count the staff — is "Could not be delivered".
-     */
     private static String shownError(String error, Email e, Viewer viewer) {
         if (error == null || !viewer.isCustomer()
                 || error.equals(EmailDispatcher.NOT_CONFIGURED) || error.equals(EmailDispatcher.NO_ADDRESS)
@@ -165,7 +141,6 @@ public class EmailViews {
         return NOT_DELIVERED;
     }
 
-    /** How the mail service says a sender has no working Gmail ("Jane Doe has not connected Gmail"). */
     private static final String NOT_CONNECTED_SUFFIX = " has not connected Gmail";
     private static final String RENEW_SUFFIX = "'s Gmail connection needs to be renewed";
 
@@ -178,7 +153,6 @@ public class EmailViews {
     private EmailDtos.SentBy sentBy(Email e, Map<Long, User> senders, Viewer viewer) {
         if (e.getSentByUserId() == null) return null;
         User u = senders.get(e.getSentByUserId());
-        // Someone no longer on file is treated as staff: a customer never learns more by a deletion.
         boolean staff = u == null || u.getCustomerId() == null;
         if (viewer.isCustomer() && staff) return new EmailDtos.SentBy(null, EmailText.TEAM);
         String name = u != null ? EmailText.nameOf(u)
@@ -194,11 +168,6 @@ public class EmailViews {
                 .toList());
     }
 
-    /**
-     * How an outbound email reached one To recipient: their copy, and whether they read it in the
-     * app. Null when neither is known — received mail, no copy (no address, or sent before the mail
-     * service) and not read in the app.
-     */
     private static EmailDtos.RecipientDelivery delivery(Email e, EmailRecipient r, Viewer viewer) {
         if (e.getDirection() != EmailDirection.OUTBOUND || r.getField() != RecipientField.TO) return null;
         Instant readInApp = r.getUserId() != null && r.isRead() ? r.getReadAt() : null;
@@ -221,8 +190,6 @@ public class EmailViews {
         return new RoleRef(e.getFromRole(), e.getFromRoleLevel());
     }
 
-    // ---- preview -------------------------------------------------------------------
-
     Participant sender(EmailTargets.Person person, RoleRef role, Viewer viewer, EmailEntityType type) {
         List<Source> sources = List.of(role != null ? roleSource(role, type)
                 : new Source("USER", null, null, null));
@@ -234,12 +201,6 @@ public class EmailViews {
                 entry.internal(), entry.sources().stream().map(s -> source(s, type)).toList(), viewer)).toList());
     }
 
-    // ---- inbox ---------------------------------------------------------------------
-
-    /**
-     * The rows must have their email fetched with them. A customer's rows show each email as the
-     * copies they may see are ({@link #outcome}), so their recipients are read too, in one query.
-     */
     public List<EmailDtos.InboxItemDto> toInboxItems(List<EmailRecipient> rows, Viewer viewer) {
         Map<Long, List<EmailRecipient>> recipients = !viewer.isCustomer() || rows.isEmpty() ? Map.of()
                 : recipientRepository.findByEmailIdInOrderByIdAsc(
@@ -270,22 +231,14 @@ public class EmailViews {
         return EmailText.start(flat, SNIPPET_MAX);
     }
 
-    // ---- masking ---------------------------------------------------------------------
-
     private static Participant shown(String name, String address, Long userId, boolean internal,
                                      List<Source> sources, Viewer viewer) {
         return shown(name, address, userId, internal, sources, viewer, null);
     }
 
-    /**
-     * A person as the viewer may see them. To a customer, staff are the role they hold on this email
-     * or else the team — no name, address, id, or how their copy fared.
-     */
     private static Participant shown(String name, String address, Long userId, boolean internal,
                                      List<Source> sources, Viewer viewer, EmailDtos.RecipientDelivery delivery) {
         if (viewer.isCustomer() && internal) {
-            // A role source the stored token could not be read as has no label; such a person is
-            // the team, as one added by name is.
             String label = sources.stream().filter(s -> "ROLE".equals(s.type())).map(Source::label)
                     .filter(Objects::nonNull).findFirst().orElse(EmailText.TEAM);
             return new Participant(label, null, null, true, true, sources, null);
@@ -293,13 +246,6 @@ public class EmailViews {
         return new Participant(name, address, userId, internal, false, sources, delivery);
     }
 
-    /**
-     * Masked people shown alike are one entry, in the place of the first, with every way any of them
-     * was added. A role reaches every holder (L2), so without this a customer would see "Collection
-     * POC (customer)" once per holder and could count the staff behind a role, which the compose context keeps
-     * from them (AC-A8); staff added by name would likewise repeat as the team. Only masked entries
-     * merge, so nobody else's list changes.
-     */
     private static List<Participant> merged(List<Participant> people) {
         List<Participant> shown = new ArrayList<>();
         Map<String, Integer> maskedAt = new HashMap<>();

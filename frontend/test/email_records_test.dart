@@ -17,9 +17,6 @@ import 'package:gene_invoice/shared/models/customer.dart';
 import 'package:gene_invoice/shared/models/privileges.dart';
 import 'package:go_router/go_router.dart';
 
-// The email feature as the customer, invoice and payment screens carry it: the list and details
-// actions, and the notify box on each create form opening the compose for the new record.
-
 CurrentUser _user(Set<String> privileges, {int? customerId}) => CurrentUser(
       id: 3,
       username: 'jane',
@@ -29,8 +26,6 @@ CurrentUser _user(Set<String> privileges, {int? customerId}) => CurrentUser(
       customerId: customerId,
     );
 
-/// A fake backend: each "METHOD /path" answers with what its handler returns, anything else is a
-/// 404, and every request is kept so a test can read what was asked.
 class _Backend {
   final Map<String, Object? Function(RequestOptions)> routes;
   final List<RequestOptions> requests = [];
@@ -65,8 +60,6 @@ Map<String, dynamic> _page(List<Map<String, dynamic>> rows) => {
 
 const _acme = {'id': 5, 'name': 'Acme Ltd', 'email': 'ap@acme.com', 'creditBalance': 0};
 
-/// The compose form's routes, for a record of [type] that the server suggests writing to the
-/// customer about. [selfGmail] is the writer's own Gmail connection, when the server names it.
 Map<String, Object? Function(RequestOptions)> _composeRoutes(String type, String label,
         {String? selfGmail}) =>
     {
@@ -131,18 +124,14 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-/// Lets the compose form's debounced preview go out and come back.
 Future<void> _settleCompose(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
   await tester.pumpAndSettle();
 }
 
-/// A button of kind [T] labelled [label]; `.icon` buttons are private subclasses, which a plain
-/// type finder misses.
 Finder _button<T>(String label) =>
     find.ancestor(of: find.text(label), matching: find.byWidgetPredicate((w) => w is T));
 
-/// Closes the compose form without sending.
 Future<void> _cancelCompose(WidgetTester tester) async {
   await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('Cancel')));
   await tester.pumpAndSettle();
@@ -153,7 +142,6 @@ Map<String, dynamic>? _composeQuery(_Backend backend) {
   return asked.isEmpty ? null : asked.last.queryParameters;
 }
 
-/// What the compose form asks for a record just created, the local UTC offset included.
 Map<String, dynamic> _createdQuery(String type, int id) => {
       'entityType': type,
       'entityId': id,
@@ -188,7 +176,6 @@ void main() {
 
       expect(_button<OutlinedButton>('Send email'), findsOneWidget);
       expect(find.byTooltip('Send email'), findsOneWidget);
-      // Sending is the only thing this user can do with a selection, and it is enough for one.
       await tester.tap(find.byType(Checkbox).last);
       await tester.pumpAndSettle();
       expect(_button<TextButton>('Send email'), findsOneWidget);
@@ -226,7 +213,6 @@ void main() {
       expect(api.sent('POST /api/customers'), hasLength(1));
       expect(_composeQuery(api), _createdQuery('CUSTOMER', 17));
       expect(find.text('About Customer Globex'), findsOneWidget);
-      // The list behind already shows the new customer.
       expect(api.sent('GET /api/customers').length, greaterThan(listed));
 
       await _cancelCompose(tester);
@@ -412,7 +398,6 @@ void main() {
       await _settleCompose(tester);
       expect(find.text('Connect your Gmail to send email'), findsOneWidget);
 
-      // The suggestion filled the form, so leaving asks first.
       await tester.tap(find.widgetWithText(TextButton, 'Connect'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Leave'));
@@ -441,8 +426,6 @@ void main() {
           ..._composeRoutes('PAYMENT', 'Payment #77'),
         });
 
-    /// Opens Record payment for Acme from a plain page, and hands back what the call resolved to
-    /// (null while it has not).
     Future<bool? Function()> open(WidgetTester tester, _Backend api, Set<String> privileges) async {
       bool? result;
       await _pump(tester,
@@ -478,7 +461,6 @@ void main() {
       expect(find.text('Record payment'), findsNothing);
       expect(_composeQuery(api), _createdQuery('PAYMENT', 77));
       expect(find.text('About Payment #77'), findsOneWidget);
-      // The caller hears back once the compose has closed, so it refreshes after that.
       expect(result(), isNull);
 
       await _cancelCompose(tester);

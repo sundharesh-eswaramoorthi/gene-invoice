@@ -32,12 +32,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-/**
- * The mail service over REST (mail-service.md §4.3): sends go through its queue, and each user's
- * Gmail connection lives there. On the JDK client, which never repeats a POST by itself — though a
- * repeated hand-off would be harmless, as the service keys every copy by its {@code externalId}.
- * Request bodies are never logged: a connect carries the user's secrets.
- */
 @Component
 @ConditionalOnProperty(name = "app.mail.transport", havingValue = "mail-service")
 public class MailServiceClient implements MailTransport, MailConnections {
@@ -69,8 +63,6 @@ public class MailServiceClient implements MailTransport, MailConnections {
         }
     }
 
-    // ---- sending ---------------------------------------------------------------------
-
     @Override
     public boolean isConfigured() {
         return true;
@@ -100,12 +92,9 @@ public class MailServiceClient implements MailTransport, MailConnections {
             SubmitResponse response = json.readValue(answer.body(), SubmitResponse.class);
             return response == null || response.copies() == null ? List.of() : response.copies();
         } catch (JsonProcessingException e) {
-            // The service has the copies; handing them over again is harmless.
             throw new MailSendException("Unexpected answer from the mail service: " + e.getOriginalMessage(), true, e);
         }
     }
-
-    // ---- connections -------------------------------------------------------------------
 
     @Override
     public ConnectionState connect(long userId, String name, String clientId, String clientSecret,
@@ -156,10 +145,6 @@ public class MailServiceClient implements MailTransport, MailConnections {
         }
     }
 
-    /**
-     * Google refused (400) or could not be reached (502): the service's words, as they are. Anything
-     * else means the service itself is not answering as it should, which the user cannot fix.
-     */
     private MailConnectException failure(Answer answer) {
         if (answer.status() == 400 || answer.status() == 502) {
             return new MailConnectException(answer.status(), message(answer));
@@ -177,8 +162,6 @@ public class MailServiceClient implements MailTransport, MailConnections {
         }
     }
 
-    // ---- HTTP ----------------------------------------------------------------------
-
     private Answer call(String method, String path, Object body) throws IOException, InterruptedException {
         HttpRequest.Builder request = HttpRequest.newBuilder(URI.create(baseUrl + path))
                 .timeout(readTimeout)
@@ -195,16 +178,11 @@ public class MailServiceClient implements MailTransport, MailConnections {
         return new Answer(response.statusCode(), response.body());
     }
 
-    /** The service's own message; the status when it gave none. */
     private String message(Answer answer) {
         String said = serviceMessage(answer);
         return said == null ? "HTTP " + answer.status() : said;
     }
 
-    /**
-     * The service's {@code message}, which already joins the messages of its {@code fieldErrors}
-     * (mail-service.md §4.3); the field errors alone when it has no message.
-     */
     private String serviceMessage(Answer answer) {
         if (answer.body() == null || answer.body().isBlank()) return null;
         try {
@@ -216,12 +194,10 @@ public class MailServiceClient implements MailTransport, MailConnections {
                 return fields.values().stream().distinct().collect(Collectors.joining("; "));
             }
         } catch (JsonProcessingException | IllegalArgumentException e) {
-            // Not the service's error shape; the status says enough.
         }
         return null;
     }
 
-    /** The JDK's own words for a network failure, or plain words when it has none. */
     static String detail(IOException e) {
         if (e instanceof HttpConnectTimeoutException) return "the connection timed out";
         if (e instanceof HttpTimeoutException) return "the request timed out";

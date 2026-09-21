@@ -14,21 +14,12 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Finds people and customers the way email needs them: by search text, by the customer they log in
- * for, and by address. Addresses are compared ignoring case, as mail servers do.
- */
 @Component
 public class EmailDirectory {
 
     @PersistenceContext
     private EntityManager em;
 
-    /**
-     * Active internal users whose username, full name or email contains the text, by name. The text is
-     * matched literally: its {@code %} and {@code _} are escaped, as the table framework's "contains"
-     * does, or a search for "%" would list everyone.
-     */
     @Transactional(readOnly = true)
     public List<User> searchPeople(String text, int limit) {
         boolean all = text == null || text.isBlank();
@@ -42,12 +33,10 @@ public class EmailDirectory {
         return query.setMaxResults(limit).getResultList();
     }
 
-    /** The escape character itself first, then the wildcards, each preceded by it. */
     private static String escapeLike(String text) {
         return text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
-    /** A customer may have more than one login; every active one counts as the customer's address. */
     @Transactional(readOnly = true)
     public List<User> activeLoginsOf(Long customerId) {
         return em.createQuery("select u from User u where u.customerId = :customerId and u.active = true"
@@ -56,7 +45,6 @@ public class EmailDirectory {
                 .getResultList();
     }
 
-    /** The account an address belongs to; an active one first, should two differ only in case. */
     @Transactional(readOnly = true)
     public Optional<User> userByAddress(String address) {
         if (address == null || address.isBlank()) return Optional.empty();
@@ -67,11 +55,6 @@ public class EmailDirectory {
                 .getResultList().stream().findFirst();
     }
 
-    /**
-     * The user who connected this Gmail address to send from (mail-service.md M2), which need not be
-     * their email in Users. A {@code local+tag@} alias is the same mailbox. When more than one user
-     * connected it, a working connection first, then the latest; users no longer on file are nobody.
-     */
     @Transactional(readOnly = true)
     public Optional<User> userByGmail(String address) {
         if (address == null || address.isBlank()) return Optional.empty();
@@ -84,7 +67,6 @@ public class EmailDirectory {
                 .getResultList().stream().findFirst();
     }
 
-    /** Lower case, without the {@code +tag} of {@code local+tag@domain}, which delivers to the same mailbox. */
     static String withoutTag(String address) {
         String lower = address.trim().toLowerCase(Locale.ROOT);
         int at = lower.lastIndexOf('@');
@@ -94,10 +76,6 @@ public class EmailDirectory {
         return (plus < 0 ? local : local.substring(0, plus)) + lower.substring(at);
     }
 
-    /**
-     * The customer an address belongs to, as the customer's own email or one of its logins'. Empty
-     * when it belongs to none, or to several — then nobody can say which one wrote.
-     */
     @Transactional(readOnly = true)
     public Optional<Customer> customerByAddress(String address) {
         if (address == null || address.isBlank()) return Optional.empty();

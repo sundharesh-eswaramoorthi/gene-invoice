@@ -18,17 +18,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/**
- * The default storage: a directory on the machine the backend runs on, so the app works on a
- * laptop with no cloud account (AC-C17). The root is {@code app.documents.local.root}; it is made
- * if it is not there, and startup stops naming {@code DOCUMENT_ROOT} when it cannot be made, is
- * not a directory, or cannot be written to (AC-C15) — the way missing mail settings already stop
- * startup.
- *
- * <p>Every key is resolved against the root and checked to still be inside it. Keys are generated
- * by {@link DocumentService} and nothing from an uploader reaches one, so the check is a backstop
- * — but a backstop that is there rather than assumed (§4.4).
- */
 @Component
 @ConditionalOnProperty(name = "app.documents.storage", havingValue = DocumentProperties.LOCAL,
         matchIfMissing = true)
@@ -65,11 +54,6 @@ public class LocalDocumentStorage implements DocumentStorage, InitializingBean {
         return true;
     }
 
-    /**
-     * Writes to a temp file beside the target, then moves it into place, so the key holds either
-     * the whole file or nothing at all. The size is counted again here: the caller has already
-     * refused an over-large upload, and this is storage's own floor under that.
-     */
     @Override
     public StoredFile put(InputStream in, String key, String contentType, long maxBytes) {
         Path target = resolve(key);
@@ -120,12 +104,10 @@ public class LocalDocumentStorage implements DocumentStorage, InitializingBean {
         try {
             Files.deleteIfExists(resolve(key));
         } catch (IOException e) {
-            // Nothing the caller can do about it: the row is already gone or was never written.
             log.warn("Could not remove the bytes of document {}: {}", key, e.getMessage());
         }
     }
 
-    /** The absolute path of a key, which must lie inside the root — a check, not a hope (§4.4). */
     private Path resolve(String key) {
         Path resolved = root.resolve(key).normalize();
         if (!resolved.startsWith(root)) {
@@ -134,7 +116,6 @@ public class LocalDocumentStorage implements DocumentStorage, InitializingBean {
         return resolved;
     }
 
-    /** Atomically where the filesystem can; a plain replace where it cannot. */
     private static void move(Path temp, Path target) throws IOException {
         try {
             Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE);

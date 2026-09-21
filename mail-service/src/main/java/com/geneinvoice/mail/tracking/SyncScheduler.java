@@ -10,10 +10,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
 
-/**
- * Reads every connected mailbox, one after another, every {@code mail.sync.interval-ms} while
- * {@code mail.sync.enabled}. A mailbox whose sync someone asked for by hand is skipped this time.
- */
 @Component
 @Slf4j
 public class SyncScheduler {

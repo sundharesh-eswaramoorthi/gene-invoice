@@ -25,15 +25,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Approving a dispute twice tells the second approver what happened (PPD-03).
- *
- * <p>A double-clicked Approve, or a browser retrying a slow response, used to send two approvals
- * that both read the dispute as pending and then raced inside the money they were both moving. The
- * loser came back "Unexpected error" — a 500 after an action that had, in fact, succeeded. The
- * status is now read under the dispute's own row lock, so the second approval waits, sees the
- * first one's answer and is told the plain truth instead.
- */
 class DisputeApprovalRaceTest extends IntegrationTestBase {
 
     @Autowired DisputeService disputeService;
@@ -87,7 +78,6 @@ class DisputeApprovalRaceTest extends IntegrationTestBase {
                 .isNotNull()
                 .hasMessageContaining("Dispute already resolved");
 
-        // And the change was applied exactly once.
         assertThat(disputeRepository.findById(dispute.getId()).orElseThrow().getStatus())
                 .isEqualTo(DisputeStatus.APPROVED);
         assertThat(paymentRepository.findById(payment.getId()).orElseThrow().getAmount())
@@ -107,7 +97,6 @@ class DisputeApprovalRaceTest extends IntegrationTestBase {
                 .isEqualTo(DisputeStatus.APPROVED);
     }
 
-    /** A sequential second approval has always said this; the race must answer the same way. */
     @Test
     void aSecondApprovalOnItsOwnSaysTheSameThing() {
         disputeService.approve(dispute.getId(), new DisputeDtos.ResolveDisputeRequest("ok", null));
@@ -118,10 +107,6 @@ class DisputeApprovalRaceTest extends IntegrationTestBase {
                 .hasMessageContaining("Dispute already resolved");
     }
 
-    /**
-     * Runs {@code first} in a transaction held open for {@link #HOLD_MS} and {@code second} in its
-     * own, started inside that window. Returns whatever the second one threw.
-     */
     private AtomicReference<Throwable> race(Runnable first, Runnable second) throws Exception {
         TransactionTemplate transactions = new TransactionTemplate(transactionManager);
         CountDownLatch firstIsInFlight = new CountDownLatch(1);

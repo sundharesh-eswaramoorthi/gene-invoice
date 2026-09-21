@@ -27,10 +27,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * A Sales POC without SCOPE_OVERRIDE works their own book (AC-A6). The book bounds every read and
- * write by id, not just the list: another rep's record is not found, exactly as in the list.
- */
 class BookScopeByIdTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
@@ -78,11 +74,6 @@ class BookScopeByIdTest extends IntegrationTestBase {
         mockMvc.perform(get("/api/invoices/" + theirs.getId()).with(as(admin))).andExpect(status().isOk());
     }
 
-    /**
-     * A sales rep is nobody's Collection POC, so no payment is in their book — and the reads that
-     * hang off a payment follow it. All of these used to answer in full, in the same session in
-     * which the customer behind them was a 404 (AUTH-01).
-     */
     @Test
     void aPaymentOutsideTheBookAndWhatHangsOffItAreAllOutOfReach() throws Exception {
         actAs(admin);
@@ -96,22 +87,14 @@ class BookScopeByIdTest extends IntegrationTestBase {
                         .param("entityType", "PAYMENT")
                         .param("entityId", theirPayment.getId().toString()))
                 .andExpect(status().isNotFound());
-        // AC-C11: a POC cannot reach documents on a record outside their book. Documents mirror
-        // the record, so this follows from the same scope.
         mockMvc.perform(get("/api/documents").with(as(sales))
                         .param("entityType", "PAYMENT")
                         .param("entityId", theirPayment.getId().toString()))
                 .andExpect(status().isNotFound());
-        // And an admin still reaches all of it.
         mockMvc.perform(get("/api/payments/" + theirPayment.getId()).with(as(admin)))
                 .andExpect(status().isOk());
     }
 
-    /**
-     * The credit balance hangs off the customer, so it is gated where the customer is. It used to
-     * answer with the customer's name and credit to anyone holding PAYMENT_VIEW, who could then
-     * walk the id space — in the same session in which GET /api/customers/{id} was a 404 (AUTH-02).
-     */
     @Test
     void aCustomersCreditIsOutOfReachWhereverTheCustomerIs() throws Exception {
         mockMvc.perform(get("/api/customers/" + globex.getId()).with(as(sales)))
@@ -120,7 +103,6 @@ class BookScopeByIdTest extends IntegrationTestBase {
         mockMvc.perform(get("/api/payments/credits/" + globex.getId()).with(as(sales)))
                 .andExpect(status().isNotFound());
 
-        // Their own customer's credit is theirs to see, and an admin sees everyone's.
         mockMvc.perform(get("/api/payments/credits/" + acme.getId()).with(as(sales)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.customerName").value("Acme Ltd"));

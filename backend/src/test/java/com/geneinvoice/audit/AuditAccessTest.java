@@ -16,10 +16,6 @@ import java.util.List;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * A record's history is readable exactly where the record is: AUDIT_VIEW alone is not enough, the
- * caller needs the record's own view privilege, and a POC's book bounds it like the record.
- */
 class AuditAccessTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
@@ -49,7 +45,6 @@ class AuditAccessTest extends IntegrationTestBase {
 
     @Test
     void historyNeedsTheRecordsOwnViewPrivilege() throws Exception {
-        // Both roles hold AUDIT_VIEW; neither may list users, and a Collection POC may not list products.
         mockMvc.perform(get(history("USER", admin.getId())).with(as(sales))).andExpect(status().isForbidden());
         mockMvc.perform(get(history("PRODUCT", widget.getId())).with(as(collections))).andExpect(status().isForbidden());
 

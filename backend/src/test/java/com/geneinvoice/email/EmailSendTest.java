@@ -29,14 +29,11 @@ import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Sending one email: who it reaches, how they got there, and who may send what (§5, §6). */
 class EmailSendTest extends EmailTestBase {
 
     @Autowired PaymentService paymentService;
     @Autowired PaymentPromiseService promiseService;
     @Autowired DisputeService disputeService;
-
-    // ---- recipients --------------------------------------------------------------
 
     @Test
     void aPersonARoleAndTheCustomerAreStoredWithHowEachWasAdded() throws Exception {
@@ -181,14 +178,11 @@ class EmailSendTest extends EmailTestBase {
                 .containsExactly("cara.collections@test.local", "cora.collections@test.local");
         assertThat(getOk("/api/inbox/unread-count", cora).get("count").asLong()).isEqualTo(1);
 
-        // With the customer on it too, every copy still names only the one it goes to, so no
-        // customer's copy shows a holder (the old E13 Bcc rule is not needed).
         send(admin, email("INVOICE", inv.getId(), List.of(toCustomer(), toRole("COLLECTION_POC"))));
         Submission withCustomer = mailTransport.submissions().get(1);
         assertThat(withCustomer.copies()).extracting(CopyRequest::address).containsExactly(
                 "ap@acme.test", "acme.login@test.local", "cara.collections@test.local", "cora.collections@test.local");
 
-        // An inactive holder holds nothing.
         assertThat(emailRecipientRepository.findAll()).extracting(EmailRecipient::getUserId)
                 .doesNotContain(cody.getId());
     }
@@ -221,8 +215,6 @@ class EmailSendTest extends EmailTestBase {
         assertThat(fromPrimary.at("/from/userId").asLong()).isEqualTo(collections.getId());
         assertThat(fromPrimary.get("fromRole").asText()).isEqualTo("COLLECTION_POC");
 
-        // With the primary gone the next active holder sends — whom new records default to as well —
-        // while To still reaches every active holder.
         reactivate(cody);
         deactivate(collections);
         assertThat(pocService.defaultAssignee(acme.getId(), PocType.COLLECTION)).get()
@@ -258,8 +250,6 @@ class EmailSendTest extends EmailTestBase {
         assertThat(emailRepository.count()).isEqualTo(1);
     }
 
-    // ---- the two levels (L2, L3) -----------------------------------------------------
-
     @Test
     void aRecordsOwnPocStillReachesOnlyThatPerson() throws Exception {
         Invoice samsInvoice = invoice(acme, sales);
@@ -272,13 +262,11 @@ class EmailSendTest extends EmailTestBase {
         PromiseDtos.PromiseDto promise = promiseService.create(new PromiseDtos.CreatePromiseRequest(
                 acme.getId(), new BigDecimal("500.00"), LocalDate.of(2026, 10, 1), cole.getId(), null, null));
 
-        // Not every Sales POC on the customer's invoices: this invoice's.
         JsonNode aboutInvoice = send(admin, email("INVOICE", samsInvoice.getId(),
                 List.of(toRole("SALES_POC", "RECORD"))));
         assertThat(recipientsOf(aboutInvoice.get("id").asLong())).extracting(EmailRecipient::getUserId)
                 .containsExactly(sales.getId());
 
-        // The payment's and the promise's own Collection POC, not the customer's seats.
         JsonNode aboutPayment = send(admin, email("PAYMENT", payment.getId(),
                 List.of(toRole("COLLECTION_POC", "RECORD")), "from", toRole("COLLECTION_POC", "RECORD")));
         assertThat(recipientsOf(aboutPayment.get("id").asLong())).extracting(EmailRecipient::getUserId)
@@ -325,7 +313,6 @@ class EmailSendTest extends EmailTestBase {
         assertThat(recipientsOf(aboutPromise.get("id").asLong())).extracting(EmailRecipient::getUserId)
                 .containsExactly(collections.getId(), cora.getId(), cole.getId());
 
-        // A customer's own record has the book but no POC field of its own, so record level is refused.
         JsonNode aboutCustomer = send(admin, email("CUSTOMER", acme.getId(),
                 List.of(toRole("COLLECTION_POC", "CUSTOMER"))));
         assertThat(recipientsOf(aboutCustomer.get("id").asLong())).extracting(EmailRecipient::getUserId)
@@ -337,7 +324,6 @@ class EmailSendTest extends EmailTestBase {
 
     @Test
     void someoneAtBothLevelsIsOneRecipientThatKeepsBothWaysIn() throws Exception {
-        // The customer's Collection seat holder is this payment's own Collection POC as well.
         seat(acme, PocType.COLLECTION, collections);
         actAs(admin);
         var payment = paymentService.record(new PaymentDtos.CreatePaymentRequest(acme.getId(),
@@ -362,7 +348,6 @@ class EmailSendTest extends EmailTestBase {
 
         assertThat(send(admin, email("INVOICE", inv.getId(), List.of(toCustomer()),
                 "from", toRole("SALES_POC", "RECORD"))).at("/from/userId").asLong()).isEqualTo(sales.getId());
-        // At customer level the primary sends, and once they are gone the next active holder does.
         assertThat(send(admin, email("INVOICE", inv.getId(), List.of(toCustomer()),
                 "from", toRole("COLLECTION_POC", "CUSTOMER"))).at("/from/userId").asLong())
                 .isEqualTo(collections.getId());
@@ -379,8 +364,6 @@ class EmailSendTest extends EmailTestBase {
         Invoice inv = invoice(acme, sales);
         seat(acme, PocType.COLLECTION, collections);
 
-        // The Collection POC is a seat the customer holds, so a level-less token is that seat; the
-        // Sales POC is not, so a level-less one is the invoice's own field (L7, CP-01).
         JsonNode levelless = send(admin, email("INVOICE", inv.getId(),
                 List.of(toRole("SALES_POC"), toRole("COLLECTION_POC"))));
         assertThat(recipientsOf(levelless.get("id").asLong())).extracting(EmailRecipient::getUserId)
@@ -390,7 +373,6 @@ class EmailSendTest extends EmailTestBase {
         assertThat(send(admin, email("INVOICE", inv.getId(), List.of(toCustomer()), "from", toRole("SALES_POC")))
                 .at("/from/userId").asLong()).isEqualTo(sales.getId());
 
-        // Anything else is a 400, whatever else the token says.
         postJson("/api/emails", admin, email("INVOICE", inv.getId(),
                         List.of(Map.of("type", "ROLE", "role", "SALES_POC", "level", "INVOICE"))))
                 .andExpect(status().isBadRequest())
@@ -407,7 +389,6 @@ class EmailSendTest extends EmailTestBase {
                 .direction(EmailDirection.OUTBOUND)
                 .status(EmailStatus.SENT)
                 .subject("Before levels")
-                // A sender role and an unresolved role, both written without one.
                 .fromUserId(sales.getId())
                 .fromRole(EmailRole.SALES_POC)
                 .fromName("SAM.SALES")
@@ -423,10 +404,8 @@ class EmailSendTest extends EmailTestBase {
                 .name("SAM.SALES")
                 .address("sam.sales@test.local")
                 .internal(true)
-                // What it meant then: the invoice's own Sales POC, not a seat in the customer's book.
                 .sources("ROLE:SALES_POC")
                 .build());
-        // The customer was on it too, so they can open it and see how the staff recipient reads.
         emailRecipientRepository.save(EmailRecipient.builder()
                 .email(old)
                 .field(RecipientField.TO)
@@ -470,8 +449,6 @@ class EmailSendTest extends EmailTestBase {
                 DisputeTargetType.PAYMENT, payment.getId(), "Not ours", null));
         actAs(admin);
 
-        // An invoice target names a Sales POC and no Collection POC, so record level answers for one
-        // of the two and the customer's seats for the rest.
         JsonNode invoiceDispute = send(admin, email("DISPUTE", onInvoice.getId(),
                 List.of(toRole("SALES_POC", "RECORD"), toRole("COLLECTION_POC", "RECORD"),
                         toRole("COLLECTION_POC", "CUSTOMER"), toRole("CUSTOMER_SUCCESS_POC", "CUSTOMER"))));
@@ -482,15 +459,12 @@ class EmailSendTest extends EmailTestBase {
             assertThat(u.get("label").asText()).isEqualTo("Collection POC (this dispute)");
         });
 
-        // A payment target is the other way round.
         JsonNode paymentDispute = send(admin, email("DISPUTE", onPayment.getId(),
                 List.of(toRole("COLLECTION_POC", "RECORD"), toRole("SALES_POC", "RECORD"), toCustomer())));
         assertThat(recipientsOf(paymentDispute.get("id").asLong())).extracting(EmailRecipient::getUserId)
                 .containsExactly(cole.getId(), null, acmeLogin.getId());
         assertThat(paymentDispute.at("/unresolved/0/token").asText()).isEqualTo("ROLE:RECORD:SALES_POC");
     }
-
-    // ---- sender ------------------------------------------------------------------
 
     @Test
     void aSenderRoleSendsAsWhoeverHoldsIt() throws Exception {
@@ -532,8 +506,6 @@ class EmailSendTest extends EmailTestBase {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("acme.login is not an active internal user"));
     }
-
-    // ---- content and validation ------------------------------------------------------
 
     @Test
     void theSubjectIsRequiredAndTheBodyIsOptional() throws Exception {
@@ -608,7 +580,6 @@ class EmailSendTest extends EmailTestBase {
     void aRoleIsRefusedOnAUserWhoIsNotACustomerLogin() throws Exception {
         seat(acme, PocType.COLLECTION, collections);
 
-        // No seat applies to someone who belongs to no customer, so the role is not offered on them at all.
         for (String path : List.of("/api/emails", "/api/emails/preview")) {
             postJson(path, admin, email("USER", sales.getId(), List.of(toRole("COLLECTION_POC"))))
                     .andExpect(status().isBadRequest())
@@ -617,20 +588,16 @@ class EmailSendTest extends EmailTestBase {
                             "from", toRole("CUSTOMER_SUCCESS_POC")))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.message").value("Customer Success POC (customer) is not a role on users"));
-            // A user's record stores no POC of its own, so there is no record level to ask for either.
             postJson(path, admin, email("USER", acmeLogin.getId(), List.of(toRole("COLLECTION_POC", "RECORD"))))
                     .andExpect(status().isBadRequest())
                     .andExpect(jsonPath("$.message").value("Collection POC (this user) is not a role on users"));
         }
         assertThat(emailRepository.count()).isZero();
 
-        // A customer login's customer has seats.
         JsonNode sent = send(admin, email("USER", acmeLogin.getId(), List.of(toRole("COLLECTION_POC"))));
         assertThat(recipientsOf(sent.get("id").asLong())).extracting(EmailRecipient::getUserId)
                 .containsExactly(collections.getId());
     }
-
-    // ---- privileges ------------------------------------------------------------------
 
     @Test
     void sendingNeedsEmailSend() throws Exception {

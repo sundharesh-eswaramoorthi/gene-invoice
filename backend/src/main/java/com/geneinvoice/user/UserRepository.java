@@ -25,22 +25,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmailIgnoreCaseAndIdNot(String email, Long id);
     long countByRoleId(Long roleId);
 
-    /** The internal users (not customer logins) who hold the role. */
     @Query("select u.id from User u where u.role.id = :roleId and u.customerId is null order by u.id")
     List<Long> findInternalIdsByRoleId(@Param("roleId") Long roleId);
 
-    /** Blank emails stored before they were normalised to null; the column is unique, so '' collides. */
     @Modifying
     @Query("update User u set u.email = null where trim(u.email) = ''")
     int clearBlankEmails();
     Optional<User> findByCustomerId(Long customerId);
     List<User> findByRoleName(String roleName);
 
-    /**
-     * Users offerable in a POC dropdown: active, not customer-scoped, and holding a role that
-     * carries the assignability privilege for that POC kind. Paged so the query stays cheap on a
-     * large user table (AC-A3).
-     */
     @Query("""
             select distinct u from User u
               join u.role r
@@ -66,11 +59,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
             """)
     boolean hasPrivilege(@Param("userId") Long userId, @Param("privilege") String privilege);
 
-    /**
-     * How many active internal accounts would still hold the privilege if one user, or everyone on
-     * one role, were taken out of the reckoning — the question behind "this is the last account
-     * that can administer users" (AUTH-03). Pass null to exclude nobody.
-     */
     @Query("""
             select count(distinct u.id) from User u
               join u.role r

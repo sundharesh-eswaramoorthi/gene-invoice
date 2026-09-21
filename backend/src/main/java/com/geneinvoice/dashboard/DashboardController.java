@@ -11,10 +11,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 
-/**
- * Read-only figures for the dashboard. Each endpoint needs the privilege of the list it summarises,
- * and customer logins get no customer rankings.
- */
 @RestController
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
@@ -53,8 +49,6 @@ public class DashboardController {
         return service.topPaying(months, limit, today());
     }
 
-    /** The one definition of today the app has, so the ageing chart and the invoice list's
-     * overdue filter can never disagree about which invoices are late. */
     private static LocalDate today() {
         return InvoiceDates.today();
     }

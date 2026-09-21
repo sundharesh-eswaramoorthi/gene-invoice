@@ -62,18 +62,10 @@ import static com.geneinvoice.email.EmailRole.COLLECTION_POC;
 import static com.geneinvoice.email.EmailRole.CUSTOMER_SUCCESS_POC;
 import static com.geneinvoice.email.EmailRole.SALES_POC;
 
-/**
- * Everything the email feature knows about the records an email can be about, kept in one place
- * (§4): the privilege that lets a caller see each kind, how one is loaded under the caller's
- * customer restriction and POC book, what it is called and where it opens, which customer it
- * belongs to, who holds each role on it at each level, how a bulk selection of it is resolved, and
- * what an email about a new or changed one might say.
- */
 @Component
 @RequiredArgsConstructor
 public class EmailTargets {
 
-    /** The privilege that lets a caller see each kind of record, and so write or read email about it. */
     private static final Map<EmailEntityType, String> VIEW_PRIVILEGE = Map.of(
             CUSTOMER, Privileges.CUSTOMER_VIEW,
             INVOICE, Privileges.INVOICE_VIEW,
@@ -84,19 +76,10 @@ public class EmailTargets {
             USER, Privileges.USER_VIEW,
             ROLE, Privileges.ROLE_VIEW);
 
-    /** Of those, the kinds a customer login may ever use — and only their own rows. */
     private static final Set<EmailEntityType> CUSTOMER_READABLE = EnumSet.of(CUSTOMER, INVOICE, PAYMENT, PROMISE, DISPUTE);
 
-    /** Kinds that never belong to a customer, so "customer emails" cannot apply to them. */
     private static final Set<EmailEntityType> WITHOUT_CUSTOMER = EnumSet.of(PRODUCT, ROLE);
 
-    /**
-     * The seats a customer can actually hold, in the order the compose form shows them, which is
-     * what the customer level answers for (L2). The Sales POC is not one of them: it is assigned per invoice, and
-     * {@code PocService.add} refuses a customer-level SALES seat outright, so offering the role
-     * here only ever produced a recipient nobody holds — a dead entry in the compose form, a
-     * sender the form then refuses to send from, and a bulk send that skipped every row (CP-01).
-     */
     private static final List<EmailRole> CUSTOMER_BOOK = List.of(CUSTOMER_SUCCESS_POC, COLLECTION_POC);
 
     /**
@@ -153,7 +136,6 @@ public class EmailTargets {
     private final EmailDirectory directory;
     private final CurrentUser currentUser;
 
-    /** Someone an email can come from or go to, as they were when it was sent. */
     public record Person(Long userId, String name, String address, Long customerId, boolean internal) {
         static Person of(User u) {
             return new Person(u.getId(), EmailText.nameOf(u), Emails.normalize(u.getEmail()),
@@ -161,11 +143,6 @@ public class EmailTargets {
         }
     }
 
-    /**
-     * A record as an email about it needs it. Role holders and the customer's addresses are looked up
-     * when this is built, which is when the email is sent (E4). {@code holders} has an entry only for
-     * a (role, level) someone active holds, and never an empty list.
-     */
     public record Target(EmailEntityType type, Long id, String label, Long customerId,
                          Map<RoleRef, List<Person>> holders, List<Person> customerEmails) {
 
@@ -173,10 +150,6 @@ public class EmailTargets {
             return EmailTargets.link(type, id);
         }
 
-        /**
-         * Everyone the role reaches in To at that level: every active seat holder at customer level,
-         * the one person the record stores at record level (L2, L3). Empty when nobody holds it.
-         */
         public List<Person> holders(RoleRef role) {
             return holders.getOrDefault(role, List.of());
         }
@@ -187,7 +160,6 @@ public class EmailTargets {
         }
     }
 
-    /** What happened to the record, for a suggested email. */
     public enum Event {
         CREATED, UPDATED;
 
@@ -199,8 +171,6 @@ public class EmailTargets {
             throw new BadRequestException("event must be one of " + Arrays.toString(values()));
         }
     }
-
-    // ---- facts about each kind -------------------------------------------------------
 
     public static String link(EmailEntityType type, Long id) {
         String base = switch (type) {
@@ -216,30 +186,15 @@ public class EmailTargets {
         return base + "/" + id;
     }
 
-    /**
-     * The (role, level) pairs offered on a kind of record, as a list or bulk compose offers them
-     * before any record is known: its record-level roles are the union of what its records can
-     * store (L3).
-     */
     public List<RoleRef> rolesOffered(EmailEntityType type) {
         return ROLES_OFFERED.get(type);
     }
 
-    /**
-     * The pairs offered on this record. A user who is not a customer login belongs to no customer, so
-     * no seat applies and nobody could ever hold the role; the kind still offers them, since a list of
-     * users may hold customer logins (§4).
-     */
     public List<RoleRef> rolesOffered(Target target) {
         if (target.type() == USER && target.customerId() == null) return List.of();
         return rolesOffered(target.type());
     }
 
-    /**
-     * The level a role token without one means (L7): the customer's book where the kind has it
-     * there, else the record's own field. It is read against the kind, so a role a record cannot
-     * have is still refused by its own name — "Sales POC (customer) is not a role on users".
-     */
     public static RoleLevel defaultLevel(EmailEntityType type, EmailRole role) {
         return CUSTOMER_ROLES.get(type).contains(role) ? RoleLevel.CUSTOMER : RoleLevel.RECORD;
     }
@@ -248,12 +203,6 @@ public class EmailTargets {
         return !WITHOUT_CUSTOMER.contains(type);
     }
 
-    // ---- access and loading ------------------------------------------------------------
-
-    /**
-     * The caller may use this kind of record at all: they hold its view privilege, and a customer
-     * login only the kinds a customer can read.
-     */
     public void requireTypeAccess(EmailEntityType type) {
         if (!currentUser.has(VIEW_PRIVILEGE.get(type))) {
             throw new AccessDeniedException("Not allowed");
@@ -263,17 +212,12 @@ public class EmailTargets {
         }
     }
 
-    /**
-     * The caller can see the record: the kind is open to them, and the record's own read by id
-     * accepts them, which applies the customer restriction and the POC's book (403 / 404 as it throws).
-     */
     @Transactional(readOnly = true)
     public void requireVisible(EmailEntityType type, Long id) {
         requireTypeAccess(type);
         loadScoped(type, id);
     }
 
-    /** The record, checked as {@link #requireVisible}, with its role holders and customer addresses as of now. */
     @Transactional(readOnly = true)
     public Target load(EmailEntityType type, Long id) {
         requireTypeAccess(type);
@@ -300,7 +244,6 @@ public class EmailTargets {
             case PAYMENT -> paymentService.get(id);
             case PROMISE -> promiseService.get(id);
             case DISPUTE -> disputeService.get(id);
-            // No customer restriction or book applies to these; the view privilege is the whole rule.
             case PRODUCT -> productRepository.findById(id)
                     .orElseThrow(() -> new NotFoundException("Product not found"));
             case USER -> userRepository.findById(id)
@@ -340,7 +283,6 @@ public class EmailTargets {
                 yield target(type, p.getId(), "Product " + p.getName(), null, Map.of());
             }
             case USER -> {
-                // Only a customer login belongs to a customer, and only then do its seats apply.
                 User u = (User) entity;
                 yield target(type, u.getId(), "User " + u.getUsername(), u.getCustomerId(), Map.of());
             }
@@ -351,11 +293,6 @@ public class EmailTargets {
         };
     }
 
-    /**
-     * A dispute has no POC of its own; its record level is its target's (L3): an invoice target's
-     * Sales POC, a payment target's Collection POC. The other is offered all the same, with nobody
-     * holding it (L4), which is what leaving it out of this map means.
-     */
     private Map<EmailRole, Optional<User>> disputeOwnFields(Dispute d) {
         return d.getTargetType() == DisputeTargetType.INVOICE
                 ? Map.of(SALES_POC, invoiceRepository.findById(d.getTargetId()).map(Invoice::getSalesPoc))
@@ -368,14 +305,6 @@ public class EmailTargets {
                 holders(type, customerId, ownFields), customerEmails(customerId));
     }
 
-    /**
-     * Who holds each (role, level) offered on the record: at customer level everyone active in that
-     * seat on the customer — the primary first, so the first holder is also who new records default
-     * to (L2) — and at record level the one person the record's own POC field names (L3). Inactive
-     * people hold nothing: a record whose own POC is inactive leaves the role unresolved rather than
-     * silently reassigned. The customer's book answers for all three seats, so it is read once per
-     * record rather than once per role.
-     */
     private Map<RoleRef, List<Person>> holders(EmailEntityType type, Long customerId,
                                                Map<EmailRole, Optional<User>> ownFields) {
         Map<RoleRef, List<Person>> holders = new LinkedHashMap<>();
@@ -396,10 +325,6 @@ public class EmailTargets {
         return holders;
     }
 
-    /**
-     * The customer's own email and the email of each active login (which usually repeats it; the
-     * recipient list merges the two). People without an address are left out.
-     */
     private List<Person> customerEmails(Long customerId) {
         if (customerId == null) return List.of();
         List<Person> emails = new ArrayList<>();
@@ -414,13 +339,6 @@ public class EmailTargets {
         return emails;
     }
 
-    // ---- bulk selection ---------------------------------------------------------------
-
-    /**
-     * Explicit ids, or every id matching the list's filter, re-resolved exactly as that list's own
-     * bulk endpoint does — the list's schema as the caller may use it, plus the caller's scope — so a
-     * bulk email can never reach a row the list would not show (AC-D6, AC-D10).
-     */
     public List<Long> bulkIds(EmailEntityType type, BulkDtos.BulkRequest req) {
         List<Long> permitted = switch (type) {
             case CUSTOMER -> permittedIds(Customer.class, TableSchemas.CUSTOMERS, req,
@@ -452,14 +370,6 @@ public class EmailTargets {
         return queryExecutor.ids(entity, schema, query, scope, TableQueryExecutor.BULK_ID_LIMIT);
     }
 
-    // ---- suggestions -----------------------------------------------------------------
-
-    /**
-     * A suggested email for a record that was just created or changed (§6 Suggestions), or empty
-     * when there is nothing to suggest for that event. The target must come from {@link #load}, which
-     * has already checked the caller can see it. A customer login is never offered a USER token. Dates
-     * are the day in {@code zone}, the reader's.
-     */
     @Transactional(readOnly = true)
     public Optional<EmailDtos.Suggestion> suggest(Target target, Event event, ZoneId zone) {
         Object entity = loadUnscoped(target.type(), target.id())
@@ -516,7 +426,6 @@ public class EmailTargets {
             case PROMISE -> {
                 PaymentPromise p = (PaymentPromise) entity;
                 String terms = EmailText.money(p.getAmount()) + " by " + EmailText.date(p.getPromisedDate());
-                // The customer's collections seats and the promise's own Collection POC (§3).
                 List<EmailToken> to = List.of(customer, EmailToken.role(RoleRef.customer(COLLECTION_POC)),
                         EmailToken.role(RoleRef.record(COLLECTION_POC)));
                 yield event == Event.CREATED
@@ -571,7 +480,6 @@ public class EmailTargets {
                         .map(i -> "Invoice " + i.getInvoiceNumber()).orElse("Invoice #" + d.getTargetId())
                 : "Payment #" + d.getTargetId();
         if (event == Event.CREATED) {
-            // The customer's people, and the one the target itself names (§3).
             List<EmailToken> to = new ArrayList<>(List.of(
                     EmailToken.role(RoleRef.customer(CUSTOMER_SUCCESS_POC)),
                     EmailToken.role(RoleRef.customer(COLLECTION_POC))));

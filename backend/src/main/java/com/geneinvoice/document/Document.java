@@ -7,17 +7,6 @@ import org.hibernate.annotations.ColumnDefault;
 
 import java.time.Instant;
 
-/**
- * One uploaded file attached to one record (§4.1). The record and the people are referenced by id
- * only, as an email is, so deleting or deactivating either never breaks the trail; the label and
- * the uploader's name are snapshots taken when the file was uploaded.
- *
- * <p>The bytes live in {@link DocumentStorage} under {@link #storageKey}, never in the database
- * (AC-C16), and {@link #filename} is what the uploader called the file — for display only, never a
- * path (AC-C8). {@link #contentType} is what the bytes turned out to be, not what the client
- * claimed. Deleting is soft (AC-C3): the row stays for the audit trail with who deleted it and
- * when, the download becomes a 404, and the bytes are retained (answer 8 of §1).
- */
 @Entity
 @Table(name = "documents", indexes = {
         @Index(name = "idx_document_entity", columnList = "entity_type,entity_id,deleted,uploaded_at"),
@@ -34,7 +23,6 @@ public class Document {
     public static final int LABEL_MAX = 200;
     public static final int NAME_MAX = 200;
     public static final int CONTENT_TYPE_MAX = 120;
-    /** SHA-256 as hex. */
     public static final int CHECKSUM_MAX = 64;
     public static final int STORAGE_KEY_MAX = 300;
 
@@ -52,7 +40,6 @@ public class Document {
     @Column(name = "entity_label", nullable = false, length = LABEL_MAX)
     private String entityLabel;
 
-    /** The record's customer, so a scope check and the delete cascade need no join. */
     @Column(name = "customer_id")
     private Long customerId;
 
@@ -65,11 +52,9 @@ public class Document {
     @Column(name = "size_bytes", nullable = false)
     private long sizeBytes;
 
-    /** SHA-256 hex, computed while the bytes were being written. */
     @Column(nullable = false, length = CHECKSUM_MAX)
     private String checksum;
 
-    /** Server-generated (§4.4); nothing the uploader sent ever reaches it. */
     @Column(name = "storage_key", nullable = false, length = STORAGE_KEY_MAX)
     private String storageKey;
 
@@ -90,7 +75,6 @@ public class Document {
     @Column(name = "uploaded_at", nullable = false)
     private Instant uploadedAt;
 
-    /** The default fills existing rows when the column is added to a populated table. */
     @Column(nullable = false)
     @ColumnDefault("false")
     private boolean deleted;
@@ -104,7 +88,6 @@ public class Document {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    /** Also stamped by the cascade's bulk update, which bypasses {@link #onUpdate}. */
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 

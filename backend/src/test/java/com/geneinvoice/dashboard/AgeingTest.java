@@ -31,17 +31,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Feature B: the ageing chart measures days past the due date, not days since the invoice date
- * (D4). Every bucket edge is here at its exact day, the five of them add up to what the rest of
- * the dashboard calls outstanding (AC-B3), and each one's dates fetch exactly its own rows from
- * the invoice list (AC-B6).
- */
 class AgeingTest extends IntegrationTestBase {
 
     static final LocalDate TODAY = InvoiceDates.today();
 
-    /** The invoice list filter behind every bucket: what is still owed (AC-B2). */
     static final String OPEN_ONLY = "status:in:UNPAID,PARTIALLY_PAID";
 
     @Autowired InvoiceService invoiceService;
@@ -65,7 +58,6 @@ class AgeingTest extends IntegrationTestBase {
         actAs(admin);
     }
 
-    /** Raised well before any due date a test asks for, so only the due date is in play. */
     private Invoice dueOn(LocalDate due, String amount) {
         Instant raised = TODAY.minusDays(400).atStartOfDay(ZoneOffset.UTC).toInstant();
         return invoiceService.create(new InvoiceDtos.CreateInvoiceRequest(acme.getId(), raised, due,
@@ -82,12 +74,10 @@ class AgeingTest extends IntegrationTestBase {
         return dashboardService.outstandingByAge(TODAY).buckets();
     }
 
-    // ---- AC-B1, AC-B5, AC-B8: the labels and every edge -----------------------------
-
     @Test
     void theBucketsAreLabelledByLatenessAndAnInvoiceDueTodayIsNotYetLate() {
         dueOn(TODAY.plusDays(7), "10.00");
-        dueOn(TODAY, "20.00");             // due today: not yet due (AC-A9)
+        dueOn(TODAY, "20.00");
         dueOn(TODAY.minusDays(1), "30.00");
         dueOn(TODAY.minusDays(30), "40.00");
         dueOn(TODAY.minusDays(31), "50.00");
@@ -116,7 +106,6 @@ class AgeingTest extends IntegrationTestBase {
                 .containsExactly(0, 30, 60, 90, null);
     }
 
-    /** AC-B2: the balance, never the total, and cancelled or settled invoices do not appear. */
     @Test
     void onlyWhatIsStillOwedIsCounted() {
         Invoice partly = dueOn(TODAY.minusDays(10), "200.00");
@@ -132,8 +121,6 @@ class AgeingTest extends IntegrationTestBase {
         assertThat(buckets.get(1).count()).isEqualTo(1);
         assertThat(total(buckets)).isEqualByComparingTo("150.00");
     }
-
-    // ---- AC-B3: the buckets reconcile with outstanding --------------------------------
 
     @Test
     void theBucketsAddUpToWhatTheDashboardCallsOutstanding() throws Exception {
@@ -153,7 +140,6 @@ class AgeingTest extends IntegrationTestBase {
         assertThat(tiles.get("outstanding").decimalValue()).isEqualByComparingTo(fromBuckets);
     }
 
-    /** The reconciliation has to hold when nothing is late at all. */
     @Test
     void theBucketsStillAddUpWhenEveryInvoiceIsNotYetDue() throws Exception {
         dueOn(TODAY, "100.00");
@@ -169,12 +155,6 @@ class AgeingTest extends IntegrationTestBase {
                 .isEqualByComparingTo("350.00");
     }
 
-    /**
-     * The one invoice that can have no due date at all is one the upgrade could not reach (§2.5),
-     * and it still owes money. It belongs with what is not yet due — a row in no bucket would
-     * take its balance off a chart that has to add up to outstanding (AC-B3), and out of both
-     * halves of the overdue filter, since SQL knows nothing of a null.
-     */
     @Test
     void anInvoiceWithNoDueDateAtAllIsStillCountedAndStillListed() throws Exception {
         dueOn(TODAY.minusDays(10), "200.00");
@@ -192,7 +172,6 @@ class AgeingTest extends IntegrationTestBase {
                 assertThat(getJson("/api/invoices/summary", admin).get("outstanding").decimalValue())
                         .isEqualByComparingTo("700.00");
 
-                // And the two halves of the overdue filter still make up the whole list.
                 long late = getJson("/api/invoices?filter=overdue:eq:true", admin)
                         .get("totalElements").asLong();
                 long inTime = getJson("/api/invoices?filter=overdue:eq:false", admin)
@@ -201,7 +180,6 @@ class AgeingTest extends IntegrationTestBase {
                 assertThat(late + inTime)
                         .isEqualTo(getJson("/api/invoices", admin).get("totalElements").asLong());
             } finally {
-                // The other tests get a table every invoice can be written to, as before.
                 st.execute("update invoices set due_date = date '" + undated.getDueDate()
                         + "' where id = " + undated.getId());
                 st.execute("alter table invoices alter column due_date date not null");
@@ -218,8 +196,6 @@ class AgeingTest extends IntegrationTestBase {
             assertThat(b.count()).isZero();
         });
     }
-
-    // ---- AC-B6: clicking a bucket lands on its own rows --------------------------------
 
     @Test
     void eachBucketsDatesFetchExactlyTheInvoicesBehindIt() throws Exception {
@@ -247,7 +223,6 @@ class AgeingTest extends IntegrationTestBase {
         }
     }
 
-    /** AC-B4: the chart keeps the scope and coverage of the list it summarises. */
     @Test
     void aCustomerLoginSeesOnlyItsOwnAgeingAndSaysSo() throws Exception {
         Customer globex = customer("Globex Corp");
@@ -283,9 +258,6 @@ class AgeingTest extends IntegrationTestBase {
         assertThat(buckets.get(4).get("dueDateTo").asText()).isEqualTo(TODAY.minusDays(91).toString());
     }
 
-    // ---- helpers ------------------------------------------------------------------------
-
-    /** A bucket's bounds as the invoice list's filter chips, which is what the chart links to. */
     private static String deepLink(DashboardDtos.AgeBucket bucket) {
         List<String> chips = new ArrayList<>(List.of("filter=" + OPEN_ONLY));
         if (bucket.dueDateFrom() != null && bucket.dueDateTo() != null) {
@@ -303,7 +275,6 @@ class AgeingTest extends IntegrationTestBase {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
-    /** Read as UTF-8: the bucket labels carry an en dash, and MockMvc's response does not say so. */
     private JsonNode getJson(String path, User caller) throws Exception {
         return objectMapper.readTree(mockMvc.perform(get(path).with(as(caller)))
                 .andExpect(status().isOk()).andReturn().getResponse()

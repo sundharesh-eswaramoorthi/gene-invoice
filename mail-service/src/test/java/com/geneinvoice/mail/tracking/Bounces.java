@@ -1,6 +1,5 @@
 package com.geneinvoice.mail.tracking;
 
-/** Delivery-status notices as mail servers write them. */
 final class Bounces {
 
     private Bounces() {}
@@ -9,11 +8,6 @@ final class Bounces {
         return String.join("\r\n", lines);
     }
 
-    /**
-     * Gmail's own "Delivery Status Notification (Failure)": a {@code multipart/report} holding the
-     * human-readable part (text, HTML and an icon), the {@code message/delivery-status} part and the
-     * original message.
-     */
     static String gmailFailure(String failedAddress, String originalMessageId) {
         return crlf(
                 "Return-Path: <>",
@@ -94,12 +88,10 @@ final class Bounces {
                 "");
     }
 
-    /** The error Gmail's notice above gives the copy. */
     static final String GMAIL_FAILURE_ERROR = "5.1.1 550-5.1.1 The email account that you tried to reach does not"
             + " exist. Please try 550-5.1.1 double-checking the recipient's email address for typos or 550 5.1.1"
             + " unnecessary spaces. https://support.google.com/mail/?p=NoSuchUser";
 
-    /** Gmail still trying: "Delivery Status Notification (Delay)". */
     static String gmailDelay(String address, String originalMessageId) {
         return crlf(
                 "From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>",
@@ -135,7 +127,6 @@ final class Bounces {
                 "");
     }
 
-    /** A plain-text notice from a server that writes no report, only {@code X-Failed-Recipients}. */
     static String eximFailure(String failedAddress) {
         return crlf(
                 "From: Mail Delivery System <Mailer-Daemon@mx.acme.com>",
@@ -154,7 +145,6 @@ final class Bounces {
                 "");
     }
 
-    /** A report that uses {@code text/rfc822-headers} and names the recipient in {@code Original-Recipient} only. */
     static String headersOnlyFailure(String address, String originalMessageId) {
         return crlf(
                 "From: postmaster@mx.acme.com",
@@ -186,7 +176,6 @@ final class Bounces {
                 "");
     }
 
-    /** An ordinary reply in the thread. */
     static String reply(String from, String inReplyTo) {
         return crlf(
                 "From: Bob Smith <" + from + ">",

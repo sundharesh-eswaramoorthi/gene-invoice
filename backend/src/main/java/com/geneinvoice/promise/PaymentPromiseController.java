@@ -35,7 +35,6 @@ public class PaymentPromiseController {
     private final CurrentUser currentUser;
     private final UserRepository userRepository;
 
-    /** Customer logins cannot filter or sort on the Collection POC columns (AC-A8). */
     private TableSchema schema() {
         return TableSchemas.PROMISES.visibleTo(currentUser.isCustomer());
     }
@@ -54,10 +53,6 @@ public class PaymentPromiseController {
                 withContext(FilterParams.from(request), customerId, invoiceId, paymentId)));
     }
 
-    /**
-     * Re-evaluates every live promise under the current fulfilment rules. {@code apply=false}
-     * previews what would change; {@code apply=true} saves it, audited, without notifications.
-     */
     @PostMapping("/recompute")
     // Keyed on the privilege that already means "may take charge of promise status by hand",
     // rather than on a role name: this was the one endpoint in the app that a tailored
@@ -115,8 +110,6 @@ public class PaymentPromiseController {
     public PromiseDtos.PromiseDto clearOverride(@PathVariable Long id) {
         return service.clearOverride(id);
     }
-
-    // ---- bulk & export ---------------------------------------------------------
 
     public static final List<String> BULK_ACTIONS = List.of("CANCEL", "REASSIGN_COLLECTION_POC");
 
@@ -186,7 +179,6 @@ public class PaymentPromiseController {
         return req.ids().stream().filter(permitted::contains).toList();
     }
 
-    /** Turns the convenience query params into ordinary FilterParams.from(request) chips, so scoping still applies. */
     private List<String> withContext(List<String> chips, Long customerId, Long invoiceId, Long paymentId) {
         if (customerId == null && invoiceId == null && paymentId == null) return chips;
         List<String> merged = new ArrayList<>(chips == null ? List.of() : chips);

@@ -11,11 +11,6 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
-/**
- * Hands out invoice numbers, INV-yyyyMMdd-NNNN, sequential within a UTC day. One locked row carries
- * the day and the last number issued, so invoices created at the same moment can never be given the
- * same number — which a count of today's invoices, read without a lock, could.
- */
 @Component
 @RequiredArgsConstructor
 public class InvoiceNumbers {
@@ -26,7 +21,6 @@ public class InvoiceNumbers {
     private final InvoiceNumberSequenceRepository sequenceRepository;
     private final InvoiceRepository invoiceRepository;
 
-    /** Creates the row up front, so concurrent first invoices never race to insert it. */
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void ensureSequenceRow() {
@@ -35,11 +29,6 @@ public class InvoiceNumbers {
         }
     }
 
-    /**
-     * The next number. Runs in the caller's transaction, which holds the row until it commits. Call
-     * it before that transaction writes anything else, so concurrent creates queue here instead of
-     * deadlocking over other rows.
-     */
     @Transactional(propagation = Propagation.MANDATORY)
     public String next() {
         String day = LocalDate.now(ZoneOffset.UTC).format(DAY);
@@ -47,7 +36,6 @@ public class InvoiceNumbers {
         InvoiceNumberSequence seq = sequenceRepository.lockById(ROW)
                 .orElseGet(() -> sequenceRepository.saveAndFlush(new InvoiceNumberSequence(ROW, null, 0)));
         if (!day.equals(seq.getIssuedDay())) {
-            // First invoice of the day: carry on from any numbers already issued today.
             seq.setIssuedDay(day);
             seq.setLastNumber(invoiceRepository.countByInvoiceNumberStartingWith(prefix));
         }

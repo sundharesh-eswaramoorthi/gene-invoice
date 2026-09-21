@@ -11,12 +11,9 @@ import '../../core/format.dart';
 import '../../core/table/route_query.dart';
 import 'dashboard_providers.dart';
 
-/// Billed and collected. Checked as a pair with the data-viz palette validator: they stay apart
-/// for every kind of colour vision and clear 3:1 against the card.
 const billedColor = Color(0xFF2A78D6);
 const collectedColor = Color(0xFFEB6834);
 
-/// The one hue for bars that only show size.
 const magnitudeColor = billedColor;
 
 const tabularFigures = [FontFeature.tabularFigures()];
@@ -25,8 +22,6 @@ final DateFormat _monthShort = DateFormat('MMM');
 final DateFormat _monthLong = DateFormat('MMMM yyyy');
 final DateFormat _wireDate = DateFormat('yyyy-MM-dd');
 
-/// A titled card for one dashboard figure. [book] adds the "Your book" badge, so a POC limited to
-/// their own records never reads a card as the whole organisation's.
 class DashboardCard extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -113,7 +108,6 @@ class BookBadge extends StatelessWidget {
   }
 }
 
-/// The loading and error states every card shares, at a fixed height so the page does not jump.
 class CardLoading extends StatelessWidget {
   final double height;
   const CardLoading({super.key, this.height = 160});
@@ -160,7 +154,6 @@ Widget asyncCard<T>(AsyncValue<T> value, Widget Function(T data) data, {double h
       data: data,
     );
 
-/// Axis labels in the units people read money in here: ₹12K, ₹4.5L, ₹1.2Cr.
 String axisMoney(double v) {
   String trim(double x) => x == x.roundToDouble() ? x.toStringAsFixed(0) : x.toStringAsFixed(1);
   final a = v.abs();
@@ -170,7 +163,6 @@ String axisMoney(double v) {
   return '₹${trim(v)}';
 }
 
-/// A round gridline step that splits [peak] into about four.
 double niceStep(double peak) {
   if (peak <= 0) return 1;
   final raw = peak / 4;
@@ -204,7 +196,6 @@ class TrendSeries {
   });
 }
 
-/// Money per month as lines on one ₹ axis, with a crosshair and a tooltip per month.
 class TrendChart extends StatelessWidget {
   final List<TrendSeries> series;
   const TrendChart({super.key, required this.series});
@@ -250,7 +241,6 @@ class TrendChart extends StatelessWidget {
           child: ExcludeSemantics(
             child: Container(
               height: height,
-              // The top gridline's label is centred on the line, so it needs room above it.
               padding: const EdgeInsets.only(top: 10),
               child: LayoutBuilder(builder: (context, constraints) {
                 final perLabel = (constraints.maxWidth - 56) / months.length;
@@ -294,7 +284,6 @@ class TrendChart extends StatelessWidget {
                           if (i != value || i < 0 || i >= months.length) {
                             return const SizedBox.shrink();
                           }
-                          // Counted back from the current month, so it is always labelled.
                           if ((months.length - 1 - i) % every != 0) return const SizedBox.shrink();
                           final m = months[i].month;
                           final withYear = i == 0 || m.month == 1;
@@ -421,20 +410,14 @@ class DonutSlice {
   final int count;
   final Color color;
 
-  /// Where tapping the legend row goes: the list, filtered to this slice.
   final String? link;
 
   const DonutSlice({required this.label, required this.count, required this.color, this.link});
 }
 
-/// Part-to-whole for a handful of statuses. Every slice is named in the legend beside it with its
-/// count and share, so no one has to match colours; touching a slice highlights its row.
 class StatusDonut extends StatefulWidget {
-  /// In the order drawn, clockwise from the top. Keep slices whose colours are hard to tell apart
-  /// from sitting next to each other.
   final List<DonutSlice> slices;
 
-  /// What is being counted, in the plural, for the centre label.
   final String noun;
 
   const StatusDonut({super.key, required this.slices, required this.noun});
@@ -570,23 +553,13 @@ class _LegendRow extends StatelessWidget {
   }
 }
 
-/// Outstanding money by days past due as labelled horizontal bars, latest last. A row opens the
-/// invoices list filtered to that bucket.
 class AgingBars extends StatelessWidget {
   final OutstandingByAge data;
   final DateTime today;
 
   const AgingBars({super.key, required this.data, required this.today});
 
-  /// The open invoices in [bucket], as filter chips on the invoices list: the same rows the
-  /// bucket counted, so the list's total matches the bar (AC-B6). The window is the server's own
-  /// `dueDateFrom`/`dueDateTo` where it sent them, so the bar and the bucket cannot disagree
-  /// about which day it is; a bucket that arrives without them falls back to its days-past-due
-  /// bounds against [today]. Null when neither can be written as a range — the bar is then not
-  /// clickable rather than wrong.
   static String? linkFor(AgeBucket bucket, DateTime today) {
-    // A response that carried a window governs, even where that window makes no sense: working
-    // one out from the day counts instead would open a set of rows the bucket never counted.
     final dated = bucket.dueDateFrom == null && bucket.dueDateTo == null
         ? _windowFromDays(bucket, today)
         : _window(bucket.dueDateFrom, bucket.dueDateTo);
@@ -596,8 +569,6 @@ class AgingBars extends StatelessWidget {
     });
   }
 
-  /// The server's own bounds as one `dueDate` filter; at least one of them is there. Null for a
-  /// window that ends before it starts, which names no invoices at all.
   static String? _window(DateTime? from, DateTime? to) {
     if (from == null) return 'dueDate:lte:${_wireDate.format(to!)}';
     if (to == null) return 'dueDate:gte:${_wireDate.format(from)}';
@@ -605,12 +576,10 @@ class AgingBars extends StatelessWidget {
     return 'dueDate:between:${_wireDate.format(from)},${_wireDate.format(to)}';
   }
 
-  /// The same window worked out from how late the band is, for a server that sends only that.
   static String? _windowFromDays(AgeBucket bucket, DateTime today) {
     String dueAt(int daysOverdue) =>
         _wireDate.format(today.subtract(Duration(days: daysOverdue)));
     final fromDays = bucket.fromDays ?? 0;
-    // Not yet due: due today or later, with no far end (§3).
     if (fromDays <= 0) return 'dueDate:gte:${dueAt(0)}';
     if (bucket.toDays == null) return 'dueDate:lte:${dueAt(fromDays)}';
     if (bucket.toDays! < fromDays) return null;
@@ -632,8 +601,6 @@ class AgingBars extends StatelessWidget {
     );
   }
 
-  /// One bucket's bar. A bucket the invoice list cannot be filtered to does not pretend to be a
-  /// link (AC-B6).
   Widget _bar(
       BuildContext context, AgeBucket b, ThemeData theme, TextStyle? muted, double peak) {
     final link = linkFor(b, today);

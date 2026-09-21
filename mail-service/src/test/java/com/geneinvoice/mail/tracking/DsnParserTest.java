@@ -7,7 +7,6 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Telling a bounce from a reply, and reading what it says (§4.7 step 5). */
 class DsnParserTest {
 
     private static final String ORIGINAL = "<gm-5b0c7c1e-0000-4000-8000-000000000001@gmail.com>";
@@ -31,7 +30,6 @@ class DsnParserTest {
         assertThat(report.failedRecipients()).containsExactly("bob@acme.com");
         assertThat(report.failedAddresses()).containsExactly("bob@acme.com");
         assertThat(report.error("BOB@acme.com")).isEqualTo(Bounces.GMAIL_FAILURE_ERROR);
-        // Another address on the same notice gets the failed block all the same.
         assertThat(report.error("ravi@acme.com")).isEqualTo(Bounces.GMAIL_FAILURE_ERROR);
     }
 
@@ -63,18 +61,15 @@ class DsnParserTest {
         assertThat(report.failed()).isTrue();
         assertThat(report.originalMessageId()).isEqualTo(ORIGINAL);
         assertThat(report.failedAddresses()).containsExactly("bob@acme.com");
-        // Only an smtp; prefix is taken off.
         assertThat(report.error("bob@acme.com")).isEqualTo("5.2.2 X-Postfix; mailbox full");
     }
 
     @Test
     void aReplyIsNoReportEvenFromAnAutomaticSender() throws Exception {
         assertThat(parse(Bounces.reply("bob@acme.com", ORIGINAL))).isEmpty();
-        // The mailer daemon without X-Failed-Recipients, and X-Failed-Recipients from anyone else.
         assertThat(parse(Bounces.crlf("From: MAILER-DAEMON@mx.acme.com", "Subject: Hello", "", "Hi", ""))).isEmpty();
         assertThat(parse(Bounces.crlf("From: bob@acme.com", "X-Failed-Recipients: ravi@acme.com", "Subject: Fwd", "",
                 "Hi", ""))).isEmpty();
-        // A multipart/report of another kind.
         assertThat(parse(Bounces.crlf("From: bob@acme.com",
                 "Content-Type: multipart/report; report-type=disposition-notification; boundary=\"m\"", "",
                 "--m", "Content-Type: text/plain", "", "Read.", "--m--", ""))).isEmpty();

@@ -42,11 +42,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Boots the whole service on an in-memory database with {@code mail.queue: direct} — the test runs the
- * worker for what was queued — and with Google replaced by {@link FakeGoogle}. Every table is emptied
- * and every stand-in reset before each test, and the clock stopped at {@link #T0}.
- */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -55,7 +50,6 @@ public abstract class IntegrationTestBase {
 
     protected static final String API_KEY = "test-api-key-0123456789";
     protected static final Instant T0 = Instant.parse("2026-09-20T10:00:00Z");
-    /** One for the whole run, so every test class shares one application context. */
     protected static final FakeGoogle google = FakeGoogle.start();
 
     @DynamicPropertySource
@@ -110,8 +104,6 @@ public abstract class IntegrationTestBase {
         ReflectionTestUtils.setField(webhookDispatcher, "nextTryAt", Instant.MIN);
     }
 
-    // ---- requests ----------------------------------------------------------------------
-
     protected ResultActions call(MockHttpServletRequestBuilder request) throws Exception {
         return mockMvc.perform(request.header("X-Api-Key", API_KEY));
     }
@@ -125,9 +117,6 @@ public abstract class IntegrationTestBase {
         return objectMapper.readTree(result.andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8));
     }
 
-    // ---- connections -------------------------------------------------------------------
-
-    /** Owner {@code ownerRef}'s Gmail, connected: Google knows it by the refresh token {@code 1//refresh-<ownerRef>}. */
     protected MailConnection connect(String ownerRef, String name, String gmail) {
         google.account(gmail, refreshToken(ownerRef));
         connectionService.connect(ownerRef, new ConnectRequest(name, "client-" + ownerRef + ".apps.googleusercontent.com",
@@ -143,8 +132,6 @@ public abstract class IntegrationTestBase {
         return connectionRepository.findByOwnerRef(ownerRef).orElseThrow();
     }
 
-    // ---- copies ------------------------------------------------------------------------
-
     protected static SubmitRequest submission(String senderRef, String senderName, String groupRef, boolean retry,
                                               SubmitRequest.Copy... copies) {
         return new SubmitRequest(new SubmitRequest.Sender(senderRef, senderName), "Invoice INV-0042",
@@ -155,12 +142,10 @@ public abstract class IntegrationTestBase {
         return new SubmitRequest.Copy(externalId, new SubmitRequest.Recipient(name, address));
     }
 
-    /** Hands copies over as the backend does; those that can go are put on the queue. */
     protected List<CopyState> submit(SubmitRequest request) {
         return messageService.submit(request);
     }
 
-    /** Runs the worker for everything put on the queue, as the listener would. */
     protected void work() {
         queue.take().forEach(worker::process);
     }
@@ -168,8 +153,6 @@ public abstract class IntegrationTestBase {
     protected MailMessage message(String externalId) {
         return messageRepository.findByExternalId(externalId).orElseThrow();
     }
-
-    // ---- events ------------------------------------------------------------------------
 
     protected List<MailEvent> events(String type) {
         return eventRepository.findByTypeOrderByIdAsc(type);
@@ -183,7 +166,6 @@ public abstract class IntegrationTestBase {
         }
     }
 
-    /** The {@code message.status} events of one copy, as {@code status@seq}. */
     protected List<String> statusTrail(String externalId) {
         return events("message.status").stream()
                 .filter(e -> externalId.equals(e.getExternalId()))

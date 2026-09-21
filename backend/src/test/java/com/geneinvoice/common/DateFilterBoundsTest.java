@@ -18,10 +18,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
-/**
- * A bare date on a timestamp column covers that whole day and nothing of the next: an invoice
- * stamped at midnight belongs to the day it starts, however the database rounds sub-microseconds.
- */
 class DateFilterBoundsTest extends IntegrationTestBase {
 
     static final LocalDate TODAY = LocalDate.now(ZoneOffset.UTC);

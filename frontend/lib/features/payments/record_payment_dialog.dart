@@ -16,8 +16,6 @@ import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_providers.dart';
 
-/// Resolves true once a payment was recorded. When the cashier ticked "Notify through email", the
-/// compose form opens from [context] after the dialog has closed, and this resolves when it does.
 Future<bool?> showRecordPaymentDialog({
   required BuildContext context,
   Customer? customer,
@@ -37,7 +35,6 @@ Future<bool?> showRecordPaymentDialog({
   return true;
 }
 
-/// What the dialog closes with once it has saved; the email, if wanted, is the caller's to open.
 typedef _RecordedPayment = ({int id, bool notify});
 
 class _RecordPaymentDialog extends ConsumerStatefulWidget {
@@ -58,7 +55,6 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
   PocUser? _collectionPoc;
   int? _pocResolvedFor;
 
-  /// True once the cashier picks a POC themselves; the customer's default then never replaces it.
   bool _pocChosen = false;
   bool _saving = false;
   bool _submitted = false;
@@ -79,8 +75,6 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     super.dispose();
   }
 
-  /// Pre-fills with the customer's primary Collection POC, still editable (AC-A4/US-A4). A POC the
-  /// cashier already picked is kept, and a deactivated seat holder is never the default.
   void _resolveDefaultPoc(int customerId, List<CustomerPoc> pocs) {
     if (_pocResolvedFor == customerId) return;
     _pocResolvedFor = customerId;
@@ -283,7 +277,6 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     );
   }
 
-  /// The customer's open promises, so the cashier can attach this payment to one (US-B3).
   Widget _openPromises(int customerId) {
     final async = ref.watch(openPromisesForCustomerProvider(customerId));
     return async.maybeWhen(

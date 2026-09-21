@@ -27,7 +27,6 @@ public class ConnectionController {
         this.sync = sync;
     }
 
-    /** Connect, or replace the connection: checked with Google before anything is stored. */
     @PutMapping("/{ownerRef}")
     public ConnectionDto connect(@PathVariable String ownerRef, @RequestBody ConnectRequest request) {
         return connections.connect(ownerRef, request);
@@ -49,7 +48,6 @@ public class ConnectionController {
         connections.disconnect(ownerRef);
     }
 
-    /** Reads the mailbox now rather than at the next scheduled run. */
     @PostMapping("/{ownerRef}/sync")
     public SyncResult sync(@PathVariable String ownerRef) {
         return sync.syncNow(ownerRef);

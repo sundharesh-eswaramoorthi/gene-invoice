@@ -21,17 +21,6 @@ import java.util.stream.Collectors;
 
 import static com.geneinvoice.privilege.Privileges.*;
 
-/**
- * Idempotent seeding of privileges, roles and the bootstrap accounts.
- *
- * <p>The four built-in roles are kept in step with the code on every boot, so a new privilege
- * added here reaches them on upgrade. The three POC roles are created once and then left alone —
- * an admin who tailors them keeps their edits across restarts (AC-A1). The one exception is a
- * privilege that did not exist before: in the boot that first creates it, each POC role whose
- * default set includes it is granted it once, and later edits stand (E14). {@code DOCUMENT_MANAGE}
- * on the CUSTOMER role is seeded that way too, so customer uploads can be turned off for good
- * (§4.5).
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -64,8 +53,6 @@ public class DataSeeder implements CommandLineRunner {
 
         Role admin = upsertRole("ADMIN", "Full system access", all);
 
-        // CASHIER keeps everything it could do before, plus the POC and promise reads that the
-        // billing screens now need.
         Role cashier = upsertRole("CASHIER", "Day-to-day billing operations", pickByNames(
                 CUSTOMER_VIEW, CUSTOMER_MANAGE,
                 PRODUCT_VIEW,
@@ -88,7 +75,6 @@ public class DataSeeder implements CommandLineRunner {
                 EMAIL_VIEW,
                 DOCUMENT_VIEW
         ));
-        // A customer account never receives POC_VIEW: POC identity is invisible to them (AC-A8).
         Set<Privilege> customerPrivileges = pickByNames(
                 CUSTOMER_VIEW,
                 INVOICE_VIEW,
@@ -99,16 +85,11 @@ public class DataSeeder implements CommandLineRunner {
                 PROMISE_VIEW,
                 // Customer logins take part in email, from themselves only (E13).
                 EMAIL_VIEW, EMAIL_SEND,
-                // And see what is shared with them on their own records (§4.5).
                 DOCUMENT_VIEW
         );
-        // Letting an untrusted outside account attach files is a capability an operator may want
-        // back: DOCUMENT_MANAGE is granted to CUSTOMER on the boot that creates the privilege and
-        // never forced on it again, so revoking it on the roles screen survives a restart (§4.5).
         customerPrivileges.addAll(keptOrNew("CUSTOMER", createdNow, pickByNames(DOCUMENT_MANAGE)));
         upsertRole("CUSTOMER", "Customer self-service", customerPrivileges);
 
-        // A Sales POC deliberately lacks SCOPE_OVERRIDE: their book filter is shown locked.
         createRoleIfAbsent(ROLE_SALES_POC, "Salesperson who owns invoices", createdNow, pickByNames(
                 CUSTOMER_VIEW,
                 PRODUCT_VIEW,
@@ -183,7 +164,6 @@ public class DataSeeder implements CommandLineRunner {
         }
     }
 
-    /** Built-in role: kept in step with the code on every boot. */
     private Role upsertRole(String name, String description, Set<Privilege> privs) {
         Role role = roleRepository.findByName(name).orElseGet(() ->
                 Role.builder().name(name).description(description).privileges(new HashSet<>()).build());
@@ -192,11 +172,6 @@ public class DataSeeder implements CommandLineRunner {
         return roleRepository.save(role);
     }
 
-    /**
-     * POC role: created once, then never reset, so admin customisations survive an upgrade. A
-     * privilege from its default set that this boot created did not exist for an admin to have
-     * withheld, so the existing role gets it now — and only now.
-     */
     private Role createRoleIfAbsent(String name, String description, Set<String> privilegesCreatedNow,
                                     Set<Privilege> privs) {
         Role existing = roleRepository.findByName(name).orElse(null);
@@ -216,12 +191,6 @@ public class DataSeeder implements CommandLineRunner {
         return roleRepository.save(existing);
     }
 
-    /**
-     * The privileges of {@code privs} a built-in role should still hold: the ones this boot
-     * created, which nobody can have withheld yet, and the ones the role already has. A privilege
-     * an administrator has taken away is not in either, so the next restart leaves it taken away —
-     * the same rule {@link #createRoleIfAbsent} applies to a whole POC role.
-     */
     private Set<Privilege> keptOrNew(String roleName, Set<String> privilegesCreatedNow,
                                      Set<Privilege> privs) {
         Set<Privilege> held = roleRepository.findByName(roleName)

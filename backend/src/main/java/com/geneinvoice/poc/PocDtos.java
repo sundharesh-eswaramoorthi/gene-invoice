@@ -7,7 +7,6 @@ import java.time.Instant;
 
 public class PocDtos {
 
-    /** A user as offered in an assignment dropdown, or as recorded on a record. */
     public record PocUserDto(Long id, String username, String fullName, String email,
                              String role, boolean active) {
         public static PocUserDto from(User u) {

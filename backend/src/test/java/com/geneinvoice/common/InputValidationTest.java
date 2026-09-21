@@ -35,11 +35,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Values the database would refuse, or silently round, are refused up front with a field error:
- * overlong text, amounts finer than a cent, and dispute changes that would produce a ₹0 or
- * negative invoice.
- */
 class InputValidationTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
@@ -75,8 +70,6 @@ class InputValidationTest extends IntegrationTestBase {
         return mockMvc.perform(req.with(as(admin)).contentType(MediaType.APPLICATION_JSON).content(json(body)));
     }
 
-    // ---- D-29: overlong text ----------------------------------------------------
-
     @Test
     void overlongTextIsAFieldErrorNotAFailedInsert() throws Exception {
         send(patch("/api/invoices/" + invoice.getId()), Map.of("notes", "x".repeat(501)))
@@ -108,11 +101,8 @@ class InputValidationTest extends IntegrationTestBase {
                 .filter(n -> n.getLink() != null && n.getLink().endsWith("/" + id))
                 .findFirst().orElseThrow();
         assertThat(toAdmin.getMessage()).hasSize(Notification.MESSAGE_MAX).endsWith("…");
-        // D-53: the link must be a route the app actually has.
         assertThat(toAdmin.getLink()).isEqualTo("/disputes/" + id);
     }
-
-    // ---- D-47, D-48: things that are not there ----------------------------------
 
     @Test
     void aProductTakenOutOfTheCatalogueCannotGoOnANewInvoice() throws Exception {
@@ -144,8 +134,6 @@ class InputValidationTest extends IntegrationTestBase {
                 .isEqualByComparingTo("0");
     }
 
-    // ---- D-30: amounts finer than a cent ----------------------------------------
-
     @Test
     void paymentAmountsMustBeWholeCents() throws Exception {
         for (String amount : List.of("0.001", "10.555")) {
@@ -168,8 +156,6 @@ class InputValidationTest extends IntegrationTestBase {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.amount").value("must have at most 2 decimal places"));
     }
-
-    // ---- D-32 (and the dispute side of D-13/D-30): approved changes are read strictly --
 
     private Dispute openDispute(DisputeTargetType type, Long targetId) {
         actAs(customerLogin);
@@ -204,7 +190,6 @@ class InputValidationTest extends IntegrationTestBase {
         assertThat(disputeRepository.findById(d.getId()).orElseThrow().getStatus()).isEqualTo(DisputeStatus.PENDING);
         assertThat(invoiceRepository.findById(invoice.getId()).orElseThrow().getTotal()).isEqualByComparingTo("100.00");
 
-        // A free line is still allowed: a unit price of zero with a real quantity.
         approve(d, "{\"action\":\"replace_items\",\"items\":[{\"productId\":" + widget.getId()
                 + ",\"quantity\":1,\"unitPrice\":0}]}")
                 .andExpect(status().isOk());

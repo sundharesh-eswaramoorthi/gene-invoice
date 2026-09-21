@@ -88,7 +88,7 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
       if (action == 'approve') {
         final text = _appliedCtrl.text.trim();
         if (text.isNotEmpty) {
-          jsonDecode(text); // validate
+          jsonDecode(text);
           applied = text;
         }
       }
@@ -100,8 +100,6 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
       ref.invalidate(disputeDetailProvider(widget.dispute.id));
       ref.invalidate(scopedDisputesProvider);
       ref.invalidate(tablePageProvider);
-      // The email is written here, with the decision still on screen; leaving for the list would
-      // take this context with it.
       var compose = EmailComposeOutcome.closed;
       if (mounted) {
         compose = await notifyByEmailAfterSave(context,
@@ -110,8 +108,6 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
             entityId: widget.dispute.id,
             event: EmailEvent.updated);
       }
-      // The compose form's Connect is already taking the app to the Gmail page; going to the
-      // list now would win over it.
       if (mounted && compose != EmailComposeOutcome.leftForGmail) context.go('/disputes');
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
@@ -144,17 +140,11 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
       onTabChanged: (slug) => context.go('/disputes/${d.id}?tab=$slug'),
       top: _top(d, canResolve: canResolve),
       tabs: [
-        // The resolve form is the dispute's edit form. In the top pane, which takes at most about
-        // half the page, it left Approve below the fold on a laptop screen; as the first tab it
-        // opens by default while there is a decision to make, with the page's height to use.
         if (canResolve)
           DetailTab(
             slug: 'resolve',
             label: 'Resolve',
             icon: Icons.gavel_outlined,
-            // The page has no Scaffold, so the notify checkbox's ink needs a Material of its own:
-            // the nearest one is the shell's, under the page transition, which paints over it
-            // while the page leaves after a decision.
             builder: (context) => Material(
               type: MaterialType.transparency,
               child: SingleChildScrollView(
@@ -163,7 +153,6 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
               ),
             ),
           ),
-        // The disputed record's history, which had a column of its own before the page had tabs.
         if (canViewAudit)
           DetailTab(
             slug: 'history',
@@ -184,8 +173,6 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
     return pretty.isEmpty ? '(none — customer only described the problem)' : pretty;
   }
 
-  /// The dispute's facts. The proposed change moves to the Resolve tab while that tab is shown,
-  /// beside the applied change that starts as a copy of it.
   Widget _top(Dispute d, {required bool canResolve}) {
     final theme = Theme.of(context);
     return Padding(
@@ -219,7 +206,6 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
     );
   }
 
-  /// Approve or deny a pending dispute, for an admin.
   Widget _resolvePanel(Dispute d) {
     final theme = Theme.of(context);
     return Column(

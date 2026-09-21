@@ -5,8 +5,6 @@ import '../../core/api/api_client.dart';
 import '../../core/table/route_query.dart';
 import '../../shared/models/promise.dart';
 
-/// Whose records a dashboard card covers, as the server worked it out. Only [book] is labelled on
-/// screen: a POC limited to their own book should not mistake it for the whole organisation.
 enum Coverage { all, book, own }
 
 Coverage _coverage(Object? wire) => switch (wire) {
@@ -20,7 +18,6 @@ double _money(Object? v) => (v as num? ?? 0).toDouble();
 Map<String, dynamic> _map(Object? data) => (data as Map).cast<String, dynamic>();
 
 class MonthPoint {
-  /// The first day of the month.
   final DateTime month;
   final double amount;
   final int count;
@@ -37,7 +34,6 @@ class MonthPoint {
 class MonthlySeries {
   final Coverage coverage;
 
-  /// Oldest first, one per month, empty months as zero.
   final List<MonthPoint> months;
 
   const MonthlySeries({required this.coverage, required this.months});
@@ -59,17 +55,12 @@ class MonthlySeries {
 class AgeBucket {
   final String label;
 
-  /// Null on the first band, which has no lower end: those invoices are not late at all.
   final int? fromDays;
 
-  /// Null on the last, open-ended bucket.
   final int? toDays;
   final double amount;
   final int count;
 
-  /// The band's own due-date window, as the server worked it out (§3). The invoice list's
-  /// `dueDate` filter takes these two straight off, so a bar opens exactly the rows it counted
-  /// rather than the rows this browser's clock would pick (AC-B6). Null where the band is open.
   final DateTime? dueDateFrom;
   final DateTime? dueDateTo;
 
@@ -94,9 +85,6 @@ class AgeBucket {
       );
 }
 
-/// A bare `yyyy-MM-dd` from the server as the UTC day it names, the way every date on the wire
-/// is read here. Null for anything that is not one, so a bar is left without a link rather than
-/// sent to a wrong one.
 DateTime? _day(Object? value) =>
     value == null ? null : DateTime.tryParse('${value}T00:00:00Z');
 
@@ -115,8 +103,6 @@ class OutstandingByAge {
       );
 }
 
-/// One row of a customer ranking: what they owe or paid, how many invoices or payments that is,
-/// and the oldest open invoice or the latest payment.
 class RankedCustomer {
   final int customerId;
   final String customerName;
@@ -163,10 +149,8 @@ class CustomerRanking {
       _fromJson(json, 'collected', 'payments', 'lastPaidAt');
 }
 
-/// How many months, ending with this one, the billed/collected figures and "top paying" cover.
 final dashboardMonthsProvider = StateProvider<int>((ref) => 12);
 
-/// Today in UTC, the calendar every date filter and dashboard figure uses.
 DateTime todayUtc() {
   final now = DateTime.now().toUtc();
   return DateTime.utc(now.year, now.month, now.day);
@@ -206,7 +190,6 @@ final topPayingProvider = FutureProvider.autoDispose<CustomerRanking>((ref) asyn
   return CustomerRanking.payingFromJson(_map(res.data));
 });
 
-/// The same filter-aware aggregate the Invoices tiles use, so the two can never disagree (AC-E6).
 final invoiceSummaryProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
   final res = await ref.watch(dioProvider).get('/api/invoices/summary');
   return _map(res.data);
@@ -217,14 +200,12 @@ final promiseSummaryProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
   return _map(res.data);
 });
 
-/// The next promises falling due, soonest first, and whether they are limited to the caller's book.
 class UpcomingPromises {
   final List<PaymentPromise> promises;
   final bool book;
 
   const UpcomingPromises({required this.promises, required this.book});
 
-  /// The same view on the promises list.
   static String listLink(DateTime today) => RouteQuery.location('/promises', {
         'sort': 'promisedDate,asc',
         'f': _upcomingFilters(today),
@@ -248,12 +229,10 @@ final upcomingPromisesProvider = FutureProvider.autoDispose<UpcomingPromises>((r
         .cast<Map<String, dynamic>>()
         .map(PaymentPromise.fromJson)
         .toList(),
-    // A POC held to their own book gets it as a locked filter (AC-A6).
     book: ((data['lockedFilters'] as List?) ?? const []).isNotEmpty,
   );
 });
 
-/// Every provider the dashboard reads, for pull-to-refresh.
 void refreshDashboard(WidgetRef ref) {
   ref.invalidate(billedByMonthProvider);
   ref.invalidate(collectedByMonthProvider);

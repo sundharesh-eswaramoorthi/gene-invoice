@@ -28,7 +28,6 @@ class GmailApiExceptionTest {
         assertThat(unreachable.isTransientFailure()).isTrue();
         assertThat(unreachable.isOutcomeUnknown()).isFalse();
 
-        // The JDK's own explanation is kept when it gave one.
         GmailApiException refused = GmailApiException.of("Gmail",
                 new ResourceAccessException("I/O error", new ConnectException("Connection refused")));
         assertThat(refused.getMessage()).isEqualTo("Could not reach Gmail: Connection refused");

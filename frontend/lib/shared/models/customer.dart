@@ -11,16 +11,13 @@ class Customer {
   final String? username;
   final double outstanding;
 
-  /// How much of [outstanding] is past its due date (AC-A6).
   final double overdueAmount;
 
   /// The terms this customer's new invoices default to. Null means the system default (D1).
   final PaymentTerm? paymentTerm;
 
-  /// The server's name for [paymentTerm].
   final String? paymentTermLabel;
 
-  /// Null for a self-service customer, who never receives POC identity (AC-A8).
   final List<CustomerPoc>? successPocs;
   final List<CustomerPoc>? collectionPocs;
   final bool pocMissing;
@@ -54,7 +51,6 @@ class Customer {
         : '$systemDefaultTerms ($paymentTermLabel)';
   }
 
-  /// The dropdown entry, and the label, for a customer left on the system default.
   static const systemDefaultTerms = 'System default';
 
   CustomerPoc? get primarySuccessPoc => _primary(successPocs);

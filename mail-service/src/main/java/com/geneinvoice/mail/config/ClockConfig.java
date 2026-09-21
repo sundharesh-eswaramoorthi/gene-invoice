@@ -5,7 +5,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
 
-/** The one clock every time is taken from, so a test can move it instead of waiting. */
 @Configuration
 public class ClockConfig {
 

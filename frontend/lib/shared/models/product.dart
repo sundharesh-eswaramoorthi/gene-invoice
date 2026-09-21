@@ -5,7 +5,6 @@ class Product {
   final double price;
   final bool active;
 
-  /// Null until the server sends it; the details page then leaves the date out.
   final DateTime? createdAt;
 
   const Product({

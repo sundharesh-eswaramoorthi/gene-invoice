@@ -4,16 +4,10 @@ import 'package:gene_invoice/features/dashboard/dashboard_charts.dart';
 import 'package:gene_invoice/features/dashboard/dashboard_providers.dart';
 import 'package:go_router/go_router.dart';
 
-// The ageing chart after Feature B: it measures days past due, so its buckets are the server's
-// new ones and each opens the invoice list at exactly the invoices behind it (AC-B5, AC-B6).
-
 final _today = DateTime.utc(2026, 9, 20);
 
 DateTime _d(int year, int month, int day) => DateTime.utc(year, month, day);
 
-/// The buckets §3 defines, exactly as the backend sends them for [_today]: the bounds say how
-/// late the band is, and the two dates are the window the invoice list filters by. Either end is
-/// null where the band is open.
 final _buckets = [
   AgeBucket(
       label: 'Not yet due',
@@ -55,8 +49,6 @@ final _buckets = [
       dueDateTo: _d(2026, 6, 21)),
 ];
 
-/// The same five bands from a server that sends only the day counts, which is all the deep link
-/// needs to fall back on.
 const _datelessBuckets = [
   AgeBucket(label: 'Not yet due', fromDays: null, toDays: 0, amount: 5000, count: 4),
   AgeBucket(label: '1–30 days', fromDays: 1, toDays: 30, amount: 3000, count: 3),
@@ -65,13 +57,11 @@ const _datelessBuckets = [
   AgeBucket(label: 'Over 90 days', fromDays: 91, toDays: null, amount: 800, count: 1),
 ];
 
-/// The filters a bucket's link carries, or null when it carries no link at all.
 List<String>? _filters(AgeBucket bucket, {DateTime? today}) {
   final link = AgingBars.linkFor(bucket, today ?? _today);
   return link == null ? null : Uri.parse(link).queryParametersAll['f'];
 }
 
-/// The chart, with somewhere for a bucket to lead. [landed] collects the filters it arrives with.
 Future<void> _pumpBars(WidgetTester tester, List<AgeBucket> buckets,
     void Function(List<String>) landed) async {
   final router = GoRouter(routes: [
@@ -96,7 +86,6 @@ Future<void> _pumpBars(WidgetTester tester, List<AgeBucket> buckets,
   await tester.pumpAndSettle();
 }
 
-/// Where tapping [label] left the app, as its filter chips, or null when it went nowhere.
 Future<List<String>?> _tap(WidgetTester tester, String label,
     {List<AgeBucket>? buckets}) async {
   List<String>? landed;
@@ -113,7 +102,6 @@ void main() {
     for (final b in _buckets) {
       expect(find.text(b.label), findsOneWidget, reason: b.label);
     }
-    // Nothing is left saying "days since the invoice date" (AC-B5).
     expect(find.text('0–30 days'), findsNothing);
   });
 
@@ -142,7 +130,6 @@ void main() {
     expect(_filters(_buckets[2])!.last, 'dueDate:between:2026-07-22,2026-08-20');
     expect(_filters(_buckets[3])!.last, 'dueDate:between:2026-06-22,2026-07-21');
 
-    // Read newest first, each bucket's window starts the day after the next one's ends.
     List<DateTime> window(AgeBucket b) => _filters(b)!
         .last
         .split(':')
@@ -158,8 +145,6 @@ void main() {
   });
 
   test('the window is the server\'s own, not this browser\'s idea of today (AC-B6)', () {
-    // A clock a day out here would move every bound by a day and the bar would open a set of
-    // rows the bucket never counted. The server sent the dates, so they stand.
     final skewed = _today.subtract(const Duration(days: 1));
     for (final b in _buckets) {
       expect(_filters(b, today: skewed), _filters(b),
@@ -168,7 +153,6 @@ void main() {
   });
 
   test('a bucket that arrives with no dates falls back to its days past due', () {
-    // The same five links, worked out against today rather than read off the response.
     for (var i = 0; i < _buckets.length; i++) {
       expect(_filters(_datelessBuckets[i])!.last, _filters(_buckets[i])!.last,
           reason: _buckets[i].label);
@@ -187,7 +171,6 @@ void main() {
     });
 
     expect(bucket.label, 'Not yet due');
-    // Open at the lower end, and not quietly read as "nought days late".
     expect(bucket.fromDays, isNull);
     expect(bucket.toDays, 0);
     expect(bucket.amount, 1200.5);

@@ -28,7 +28,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** A worker sending copies (§4.5), asserted on what the stand-in for Gmail receives and on each copy's row. */
 class SendWorkerTest extends IntegrationTestBase {
 
     private static final String SEND = FakeGoogle.api("/messages/send");
@@ -54,7 +53,6 @@ class SendWorkerTest extends IntegrationTestBase {
                 List.of(copy("gi-91-501", "Bob Smith", "bob@acme.com"))));
     }
 
-    /** The message Gmail was asked to send, decoded the way Gmail would. */
     private static MimeMessage sentMessage(Exchange request) throws Exception {
         String raw = request.json().get("raw").asText();
         assertThat(raw).doesNotContain("+", "/", "=");
@@ -160,7 +158,6 @@ class SendWorkerTest extends IntegrationTestBase {
         assertThat(first.isDeliveryUncertain()).isFalse();
         assertThat(queue.retries()).containsExactly(new RecordingSendQueue.Retry(id, Duration.ofMinutes(1)));
 
-        // Early: the claim waits for the retry's time.
         worker.process(id);
         assertThat(google.requests("POST", SEND)).hasSize(1);
 
@@ -218,7 +215,6 @@ class SendWorkerTest extends IntegrationTestBase {
         assertThat(uncertain.isDeliveryUncertain()).isTrue();
         assertThat(uncertain.getError()).startsWith("Gmail did not answer: ");
 
-        // It did go out: the next attempt finds it and sends nothing.
         google.on("GET", SEARCH, 200, "{\"messages\":[{\"id\":\"gm-0\",\"threadId\":\"th-0\"}],\"resultSizeEstimate\":1}");
         clock.advance(Duration.ofMinutes(1));
         worker.process(copy.getId());
@@ -317,7 +313,6 @@ class SendWorkerTest extends IntegrationTestBase {
         submit(submission("7", "Jane Doe", "91", false,
                 copy("gi-91-501", "Bob", "bob@acme.com"), copy("gi-91-502", "Ravi", "ravi@acme.com")));
         google.on("POST", "/token", 400, FakeGoogle.tokenError("invalid_grant", "Token has been expired or revoked."));
-        // The token from connecting has run out.
         clock.advance(Duration.ofHours(1));
 
         work();
@@ -332,7 +327,6 @@ class SendWorkerTest extends IntegrationTestBase {
             assertThat(copy.getError()).isEqualTo("Jane Doe's Gmail connection needs to be renewed");
         }
         assertThat(google.requests("POST", SEND)).isEmpty();
-        // The backend hears of the change once.
         assertThat(events("connection.status")).extracting(e -> payload(e).get("status").asText())
                 .containsExactly("CONNECTED", "NEEDS_RECONNECT");
         assertThat(payload(events("connection.status").get(1)).get("statusReason").asText())
@@ -411,7 +405,6 @@ class SendWorkerTest extends IntegrationTestBase {
     @Test
     void aFailureReportedAfterTheSweeperGaveUpChangesNothing() {
         google.on("POST", SEND, exchange -> {
-            // The worker took longer than ten minutes; the sweeper has marked it interrupted meanwhile.
             clock.advance(Duration.ofMinutes(11));
             sweeper.sweep();
             return new Reply(503, FakeGoogle.gmailError(503, "Backend Error"));

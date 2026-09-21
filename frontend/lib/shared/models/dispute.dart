@@ -7,8 +7,6 @@ String disputeTargetLabel(DisputeTargetType t) => switch (t) {
       DisputeTargetType.PAYMENT => 'Payment',
     };
 
-/// "Invoice INV-20260915-0003 — ₹4,51,234.50" or "Payment #158 — ₹1,000.00". Falls back to the
-/// server's plain summary when the record is gone and has no number.
 String disputeTargetText(Dispute d) {
   final number = d.targetNumber;
   if (number == null) return d.targetSummary ?? '${disputeTargetLabel(d.targetType)} #${d.targetId}';

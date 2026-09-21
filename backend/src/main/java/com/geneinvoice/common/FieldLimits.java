@@ -1,17 +1,11 @@
 package com.geneinvoice.common;
 
-/**
- * Maximum lengths of the text columns, for request validation. Each mirrors the length on its
- * entity's {@code @Column}, so an overlong value is a 400 naming the field rather than a failed
- * insert.
- */
 public final class FieldLimits {
 
     private FieldLimits() {}
 
     public static final int USERNAME = 80;
     public static final int EMAIL = 120;
-    /** Also caps a customer's name, which becomes the full name of its login. */
     public static final int FULL_NAME = 120;
     public static final int ROLE_NAME = 80;
     public static final int ROLE_DESCRIPTION = 255;
@@ -23,16 +17,12 @@ public final class FieldLimits {
     public static final int PAYMENT_NOTES = 300;
     public static final int PAYMENT_METHOD = 40;
     public static final int PROMISE_NOTES = 1000;
-    /** Override and cancellation reasons, which also land in the audit trail's reason column. */
     public static final int REASON = 500;
     public static final int DISPUTE_TEXT = 2000;
     public static final int EMAIL_SUBJECT = 500;
-    /** Plain text; a received body longer than this is cut to fit rather than refused. */
     public static final int EMAIL_BODY = 20000;
-    /** What the uploader called the file, kept for display only and never used as a path (AC-C8). */
     public static final int DOCUMENT_FILENAME = 260;
     public static final int DOCUMENT_DESCRIPTION = 500;
-    /** A Gmail connection's three values, as the mail service takes them (mail-service.md §4.3). */
     public static final int GMAIL_CLIENT_ID = 300;
     public static final int GMAIL_CLIENT_SECRET = 300;
     public static final int GMAIL_REFRESH_TOKEN = 2000;

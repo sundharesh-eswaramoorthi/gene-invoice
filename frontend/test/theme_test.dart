@@ -3,8 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gene_invoice/core/theme.dart';
 
 void main() {
-  // An infinite minimum width made a filled button inside a Row fail layout: nothing was painted
-  // while its hit area spanned the row, so a click on empty space approved a dispute.
   testWidgets('a filled button beside other widgets in a Row gets a finite size', (tester) async {
     await tester.pumpWidget(MaterialApp(
       theme: AppTheme.light(),

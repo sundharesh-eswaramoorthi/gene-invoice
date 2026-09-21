@@ -5,8 +5,6 @@ import '../../core/api/api_client.dart';
 import 'poc_picker.dart';
 import 'poc_providers.dart';
 
-/// Add, remove and re-designate the primary POC of one kind on a customer. Every change
-/// takes effect without a page reload and never leaves a dangling primary (AC-A4).
 class CustomerPocEditor extends ConsumerStatefulWidget {
   final int customerId;
   final PocType type;
@@ -95,8 +93,6 @@ class _CustomerPocEditorState extends ConsumerState<CustomerPocEditor> {
   Future<void> _remove(CustomerPoc poc) async {
     final ok = await showDialog<bool>(
       context: context,
-      // Pop through the dialog's own context: the dialog sits on the root navigator, while
-      // this widget's context resolves to the shell navigator and would pop the page instead.
       builder: (dialogContext) => AlertDialog(
         title: Text('Remove ${poc.user.display}?'),
         content: Text(poc.primary

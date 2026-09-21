@@ -24,11 +24,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * What the app stores when a form is submitted with stray spaces or an empty box (CP-12, CP-15),
- * what a DELETE of something that is not there answers (CP-10), and what the customers export
- * carries (CP-07, CP-14).
- */
 class CustomerFieldHygieneTest extends IntegrationTestBase {
 
     @Autowired PocService pocService;
@@ -40,8 +35,6 @@ class CustomerFieldHygieneTest extends IntegrationTestBase {
         admin = userRepository.findByUsername("admin").orElseThrow();
         actAs(admin);
     }
-
-    // ---- CP-12: a username is stored as the customer is told it --------------------
 
     /**
      * The customer is given "tri_sp" and the row held "  tri_sp  ", so the only string that
@@ -61,7 +54,6 @@ class CustomerFieldHygieneTest extends IntegrationTestBase {
         assertThat(userRepository.findByUsername("  tri_sp  ")).isEmpty();
     }
 
-    /** The same on a staff account, which is created through its own endpoint. */
     @Test
     void aStaffUsernameIsTrimmedOnTheWayIn() throws Exception {
         Long roleId = roleRepository.findByName(DataSeeder.ROLE_SALES_POC).orElseThrow().getId();
@@ -74,8 +66,6 @@ class CustomerFieldHygieneTest extends IntegrationTestBase {
 
         assertThat(userRepository.findByUsername("spacey")).isPresent();
     }
-
-    // ---- CP-15: trimmed text, and an empty box means "not given" -------------------
 
     @Test
     void aProductsNameIsTrimmedAndAnEmptyDescriptionIsStoredAsNothing() throws Exception {
@@ -143,8 +133,6 @@ class CustomerFieldHygieneTest extends IntegrationTestBase {
         assertThat(stored.getAddress()).isNull();
     }
 
-    // ---- CP-10: deleting something that is not there ------------------------------
-
     /**
      * A DELETE of a missing id answered 200 with an empty body while a GET of the same id
      * answered 404, so a caller could not tell a real delete from a no-op (CP-10).
@@ -161,14 +149,6 @@ class CustomerFieldHygieneTest extends IntegrationTestBase {
                 .andExpect(status().isNotFound());
     }
 
-    // ---- CP-07, CP-14: what the customers export carries --------------------------
-
-    /**
-     * The export is what a collections user takes away, so it carries the fields the screens treat
-     * as first-class — the terms and the overdue figure — and its money columns are written the
-     * same way throughout (CP-14). A deactivated seat holder is marked as the screens mark them,
-     * rather than named as though they were still the person to contact (CP-07).
-     */
     @Test
     void theExportCarriesTermsOverdueScaledMoneyAndMarksInactivePocs() throws Exception {
         Customer c = customer("Export Co");
@@ -186,11 +166,9 @@ class CustomerFieldHygieneTest extends IntegrationTestBase {
         assertThat(lines.get(0)).isEqualTo("Id,Name,Phone,Email,Payment terms,Credit balance,"
                 + "Outstanding,Overdue,Customer Success POCs,Collection POCs");
         String row = lines.get(1);
-        // A customer with no invoices owes 0.00, not a bare 0, like every other money column.
         assertThat(row).contains(",0.00,0.00,0.00,");
         assertThat(row).contains("sara.success (primary)");
         assertThat(row).contains("gus.gone (primary) (inactive)");
-        // The terms column names whichever applies, falling back to the configured default.
         assertThat(row.split(",")[4]).isNotEmpty();
     }
 

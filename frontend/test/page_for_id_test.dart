@@ -4,7 +4,6 @@ import 'package:gene_invoice/core/router.dart';
 import 'package:go_router/go_router.dart';
 
 void main() {
-  // int.parse on "abc" threw inside the route builder, which shows a blank grey error box.
   testWidgets('a detail URL whose id is not a number shows the not-found state', (tester) async {
     final router = GoRouter(
       initialLocation: '/invoices/abc',

@@ -18,16 +18,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Nobody can lock user and role administration out of the app (AUTH-03).
- *
- * <p>Three doors led to the same dead end: deactivating or demoting your own account, deleting it,
- * and taking USER_MANAGE off the role you hold. Each answered 200 and each left the person — or,
- * on a deployment with one administrator, everybody — unable to get the ability back, because the
- * request that would give it back is the one they can no longer make. Recovery meant writing to
- * the database by hand. The bulk endpoint already refused the caller's own id; these are the same
- * rule on the paths a single request takes, plus the one that protects the last administrator.
- */
 class SelfAdministrationTest extends IntegrationTestBase {
 
     User admin;
@@ -36,16 +26,9 @@ class SelfAdministrationTest extends IntegrationTestBase {
     @BeforeEach
     void setUp() {
         admin = userRepository.findByUsername("admin").orElseThrow();
-        // A second holder of USER_MANAGE, so the self-guards are tested on their own rather than
-        // shadowed by the last-administrator rule.
         otherAdmin = user("ada.admin", "ADMIN");
     }
 
-    /**
-     * The roles this test creates are its own. The shared reset clears users and reactivates the
-     * seeded accounts; roles are seeded once per context, so anything added here is taken away
-     * here rather than left for the next test class to trip over.
-     */
     @org.junit.jupiter.api.AfterEach
     void removeRolesThisTestMade() {
         for (String name : List.of("ONLY_ADMINS", "SPARE_ROLE")) {
@@ -64,8 +47,6 @@ class SelfAdministrationTest extends IntegrationTestBase {
     private Long viewerRoleId() {
         return role("VIEWER").getId();
     }
-
-    // ---- your own account -------------------------------------------------------
 
     @Test
     void youCannotDeactivateYourOwnAccount() throws Exception {
@@ -97,7 +78,6 @@ class SelfAdministrationTest extends IntegrationTestBase {
         assertThat(userRepository.findById(otherAdmin.getId())).isPresent();
     }
 
-    /** Everything else about one's own account is still one's own to edit. */
     @Test
     void yourOwnNameEmailAndPasswordAreStillYoursToChange() throws Exception {
         send(put("/api/users/" + otherAdmin.getId()), otherAdmin,
@@ -108,11 +88,8 @@ class SelfAdministrationTest extends IntegrationTestBase {
                 .isEqualTo("Ada A");
     }
 
-    // ---- the last administrator -------------------------------------------------
-
     @Test
     void theLastAccountThatCanManageUsersCannotBeDeactivatedOrDeleted() throws Exception {
-        // Ada is now the only active holder of USER_MANAGE, and admin asks about themselves last.
         send(put("/api/users/" + admin.getId()), otherAdmin, Map.of("active", false))
                 .andExpect(status().isOk());
 
@@ -129,8 +106,6 @@ class SelfAdministrationTest extends IntegrationTestBase {
         assertThat(survivor.isActive()).isTrue();
         assertThat(survivor.getRole().getName()).isEqualTo("ADMIN");
     }
-
-    // ---- the role editor --------------------------------------------------------
 
     @Test
     void youCannotTakeUserOrRoleManagementOffYourOwnRole() throws Exception {
@@ -152,8 +127,6 @@ class SelfAdministrationTest extends IntegrationTestBase {
 
     @Test
     void theLastRoleThatCanManageUsersCannotHaveItTakenAway() throws Exception {
-        // A separate administrator role, held by somebody else, so no self-guard applies. ADMIN
-        // itself then goes, leaving this role as the only way anyone can administer users.
         Role only = roleRepository.save(Role.builder()
                 .name("ONLY_ADMINS")
                 .description("The last role that can manage users")
@@ -175,7 +148,6 @@ class SelfAdministrationTest extends IntegrationTestBase {
                 .anyMatch(p -> Privileges.USER_MANAGE.equals(p.getName()));
     }
 
-    /** A role nobody depends on is still freely edited: the guard is narrow. */
     @Test
     void anotherRoleIsStillFreelyEdited() throws Exception {
         Role spare = roleRepository.save(Role.builder().name("SPARE_ROLE")

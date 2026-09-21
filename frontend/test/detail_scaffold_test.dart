@@ -28,9 +28,6 @@ Future<void> _pumpDetail(WidgetTester tester, Size size) async {
 }
 
 void main() {
-  // The trailing chips and buttons used to take the width the title needed, leaving it about
-  // 75px, and the invoice number broke mid-token across three lines. (The test font draws every
-  // glyph as a full square, so this checks the width the title gets, not how many lines it takes.)
   testWidgets('on a phone the title gets the full width and the chips move below it', (tester) async {
     await _pumpDetail(tester, const Size(400, 820));
 

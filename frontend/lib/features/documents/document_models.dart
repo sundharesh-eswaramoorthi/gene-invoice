@@ -12,23 +12,16 @@ enum DocumentEntityType {
   invoice,
   payment;
 
-  /// 'INVOICE', as the API spells it.
   String get wire => name.toUpperCase();
 
-  /// 'invoice', for sentences: "No documents on this invoice yet."
   String get noun => name;
 
-  /// 'Invoice', for labels.
   String get label => '${name[0].toUpperCase()}${name.substring(1)}';
 
-  /// '/invoices' — the list page; a record's page is `$routeBase/$id`.
   String get routeBase => '/${name}s';
 
-  /// '/api/invoices' — the record's own endpoint.
   String get apiPath => '/api$routeBase';
 
-  /// The parent record's own privileges. Every document endpoint asks for one of these as well
-  /// as the document privilege (§4.5), so the UI hides what would 403 (AC-C22).
   String get recordViewPrivilege => switch (this) {
         customer => Privileges.customerView,
         invoice => Privileges.invoiceView,
@@ -59,14 +52,12 @@ enum DocumentVisibility {
 
   String get label => this == INTERNAL ? 'Internal only' : 'Shared with customer';
 
-  /// The chip on a row, where the column is narrow and the label above it says what it is.
   String get shortLabel => this == INTERNAL ? 'Internal' : 'Shared';
 }
 
 DocumentVisibility parseDocumentVisibility(String? wire) =>
     DocumentVisibility.values.asNameMap()[wire] ?? DocumentVisibility.INTERNAL;
 
-/// Who uploaded a document. The user id is null for a row whose uploader has since been removed.
 class DocumentUploader {
   final int? userId;
   final String name;
@@ -79,8 +70,6 @@ class DocumentUploader {
       );
 }
 
-/// One row of `GET /api/documents` (`DocumentDto`, §4.2). What the caller may do with it is the
-/// server's answer, not this app's guess, so the row shows exactly the buttons that will work.
 class DocumentItem {
   final int id;
   final DocumentEntityType? entityType;
@@ -88,14 +77,11 @@ class DocumentItem {
   final String entityLabel;
   final String? entityLink;
 
-  /// The name the file was uploaded under, for display only — never a path (AC-C8).
   final String filename;
 
-  /// What the server detected from the file's first bytes, not what the browser claimed (§4.3).
   final String contentType;
   final int sizeBytes;
 
-  /// The server's own wording for [sizeBytes] ("1.2 MB"), so one place decides how a size reads.
   final String sizeLabel;
 
   final DocumentVisibility visibility;
@@ -148,20 +134,14 @@ class DocumentItem {
         canDelete: json['canDelete'] as bool? ?? false,
       );
 
-  /// What the size reads as: the server's wording when it sent one, this app's otherwise.
   String get size => sizeLabel.isEmpty ? formatBytes(sizeBytes) : sizeLabel;
 
-  /// 'PDF', 'PNG', 'Word', … — the kind of file, for the row's type column.
   String get kindLabel => documentKindLabel(contentType, filename);
 }
 
-/// A file chosen for upload, as the browser handed it over. The bytes are held in memory: the
-/// limit is 10 MB (§4.3), so nothing larger than that is ever carried around.
 class PickedDocument {
   final String name;
 
-  /// What the browser called it. The server decides the type from the content and ignores this
-  /// (§4.3); it only helps the form refuse an obvious mismatch before sending.
   final String? mimeType;
   final Uint8List bytes;
 
@@ -170,7 +150,6 @@ class PickedDocument {
   int get sizeBytes => bytes.length;
 }
 
-/// The bytes of a downloaded document, on their way to wherever the platform puts them.
 class DownloadedDocument {
   final String filename;
   final String contentType;
@@ -180,9 +159,6 @@ class DownloadedDocument {
       {required this.filename, required this.contentType, required this.bytes});
 }
 
-/// The types the server keeps (`app.documents.allowed-types`, §5), by the extension people know
-/// them by. The server decides from the file's first bytes; this list only spares someone an
-/// upload that was never going to be kept (AC-C20).
 const documentContentTypes = <String, String>{
   'pdf': 'application/pdf',
   'png': 'image/png',
@@ -192,15 +168,11 @@ const documentContentTypes = <String, String>{
   'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
-/// What a file input offers: the extensions and the types behind them.
 String get documentAcceptAttribute => [
       ...documentContentTypes.keys.map((e) => '.$e'),
       ...documentContentTypes.values.toSet(),
     ].join(',');
 
-/// Why [file] cannot be uploaded, in the server's own words (§4.2), or null when it may be. The
-/// server checks all of this again from the content itself; saying it here saves a 10 MB round
-/// trip that was always going to be refused (AC-C20).
 String? documentRefusal(PickedDocument? file) {
   if (file == null) return 'Choose a file';
   if (file.sizeBytes > FieldLimits.documentMaxBytes) {
@@ -209,22 +181,18 @@ String? documentRefusal(PickedDocument? file) {
   final extension = documentExtension(file.name);
   final claimed = file.mimeType ?? '';
   final known = documentContentTypes[extension];
-  // Either end may be right: a browser that names no type still has the extension, and a file
-  // renamed on the way in still has the type the browser read from it.
   if (known == null && !documentContentTypes.values.contains(claimed)) {
     return 'Files of this kind cannot be attached (PDF, PNG, JPEG, Word or Excel only)';
   }
   return null;
 }
 
-/// 'report.final.pdf' → 'pdf'; '' when there is nothing after the last dot.
 String documentExtension(String filename) {
   final dot = filename.lastIndexOf('.');
   if (dot < 0 || dot == filename.length - 1) return '';
   return filename.substring(dot + 1).toLowerCase();
 }
 
-/// The kind of file, named as people name it rather than by its media type.
 String documentKindLabel(String contentType, String filename) => switch (contentType) {
       'application/pdf' => 'PDF',
       'image/png' => 'PNG',
@@ -262,6 +230,4 @@ String formatBytes(int bytes) {
       '${units[unit]}';
 }
 
-/// [value] to one decimal, never downwards. A size divided by 1024 is exact in binary, so a size
-/// that lands on a tenth — 1.5 KB, 10 MB — stays there rather than creeping up.
 double _ceilToTenth(double value) => (value * 10).ceil() / 10;

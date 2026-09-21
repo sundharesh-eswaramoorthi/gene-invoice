@@ -6,10 +6,8 @@ class AppUser {
   final bool active;
   final String? role;
 
-  /// Set for a customer login: the customer account it signs in to.
   final int? customerId;
 
-  /// Null until the server sends it; the details page then leaves the date out.
   final DateTime? createdAt;
 
   const AppUser({

@@ -41,8 +41,6 @@ Future<bool?> showPromiseDialog({
     ),
   );
   if (saved == null) return false;
-  // The caller's context, never the closed form's, and before handing back, so a caller that
-  // moves on after a save has not yet taken that context away.
   if (context.mounted) {
     await notifyByEmailAfterSave(context,
         notify: saved.notify,
@@ -53,7 +51,6 @@ Future<bool?> showPromiseDialog({
   return true;
 }
 
-/// What the form hands back on a save: the promise, and whether to write an email about it.
 typedef _SavedPromise = ({int id, bool notify});
 
 class _PromiseFormDialog extends ConsumerStatefulWidget {
@@ -110,11 +107,9 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
     super.dispose();
   }
 
-  /// Defaults to the customer's primary Collection POC, which stays editable (AC-B8).
   void _resolveDefaultPoc(List<CustomerPoc> pocs) {
     if (_pocResolved) return;
     _pocResolved = true;
-    // A deactivated seat holder is never the default; the next active one is.
     final active = pocs.where((p) => p.pocType == PocType.COLLECTION && p.user.active);
     final seat = active.where((p) => p.primary).firstOrNull ?? active.firstOrNull;
     if (seat != null) {
@@ -172,8 +167,6 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
           ? await dio.put('/api/promises/${widget.existing!.id}', data: body)
           : await dio.post('/api/promises', data: body);
       final id = _isEdit ? widget.existing!.id : ((res.data as Map)['id'] as num).toInt();
-      // The promise lists and page behind show the change while an email about it is written;
-      // the caller hears of the save only once that compose form has closed.
       ref.invalidate(scopedPromisesProvider);
       ref.invalidate(promiseDetailProvider(id));
       if (mounted) Navigator.of(context).pop((id: id, notify: _notify));
@@ -256,11 +249,6 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                 style: TextStyle(fontSize: 12),
               ),
               const SizedBox(height: 4),
-              // The checklist is built from whatever is known, not only from a fetch that
-              // succeeded: an invoice the promise is already scoped to has its line even while
-              // the outstanding list is still loading or could not be fetched at all. Otherwise
-              // that invoice would again be submitted with no checkbox to see or untick — the
-              // whole of UI-02, on the path where the request fails.
               if (invoicesAsync.isLoading) const LinearProgressIndicator(),
               if (invoicesAsync.hasError)
                 Text('Could not load invoices: ${apiErrorMessage(invoicesAsync.error!)}'),
@@ -268,8 +256,6 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                 builder: (context) {
                   final options = _options(invoicesAsync.valueOrNull ?? const []);
                   if (options.isEmpty) {
-                    // Nothing to tick, said only once the list is in: while it is loading or
-                    // after it failed, the line above already says where things stand.
                     return invoicesAsync.hasValue
                         ? const Padding(
                             padding: EdgeInsets.symmetric(vertical: 8),
@@ -314,8 +300,6 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                   );
                 },
               ),
-              // A shortfall or excess against the covered invoices is shown, never blocked (AC-B2).
-              // A cancelled invoice owes nothing, so it counts towards neither.
               Builder(
                 builder: (context) {
                   final live = _options(invoicesAsync.valueOrNull ?? const [])
@@ -374,18 +358,14 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
   }
 }
 
-/// A row in the promise's invoice checklist.
 class _InvoiceOption {
   final int id;
   final String invoiceNumber;
 
-  /// Null only when the server sent a status this build does not know; [statusText] still shows
-  /// whatever came back, just without a colour.
   final InvoiceStatus? status;
   final String statusText;
   final double balance;
 
-  /// False for a cancelled invoice, which owes nothing any more.
   final bool live;
 
   const _InvoiceOption(this.id, this.invoiceNumber, this.status, this.statusText, this.balance,
@@ -415,7 +395,6 @@ final _outstandingInvoicesProvider =
       .toList();
 });
 
-/// Pins a status by hand when reality disagrees with the arithmetic (US-B6, AC-B9).
 Future<bool?> showOverrideDialog({
   required BuildContext context,
   required PaymentPromise promise,

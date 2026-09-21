@@ -85,7 +85,6 @@ void main() {
     await tester.tap(find.text('Delete customer'));
     await tester.pumpAndSettle();
 
-    // Which customer, and what goes with it.
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(_inDialog('Delete this customer?'), findsOneWidget);
     final warning = tester
@@ -96,7 +95,6 @@ void main() {
     expect(warning, contains('@acme'));
     expect(warning, contains('document'));
     expect(warning, contains('cannot be undone'));
-    // Nothing is sent while the question is still open.
     expect(api.sent('DELETE /api/customers/5'), isEmpty);
 
     await tester.tap(_inDialog('Delete customer'));
@@ -136,7 +134,6 @@ void main() {
 
     expect(find.textContaining('invoices or payments'), findsOneWidget);
     expect(router.routerDelegate.currentConfiguration.uri.path, '/customers/5');
-    // The record is still there to read.
     expect(find.text('Acme Ltd'), findsWidgets);
   });
 

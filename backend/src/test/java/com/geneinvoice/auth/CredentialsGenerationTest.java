@@ -17,16 +17,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Changing a password ends the sessions that were signed in with the old one (AUTH-04).
- *
- * <p>Changing a password is what a person does when they think somebody else has their session.
- * It used to do nothing about it: the token minted before the change went on working for the rest
- * of its 24 hours, and the only way to evict it was to deactivate the account — which also
- * destroys that person's Gmail connection, so it is no workaround at all. A token now carries the
- * generation of credentials it was minted against, and one from before the latest change is no
- * longer the account's.
- */
 class CredentialsGenerationTest extends IntegrationTestBase {
 
     @Autowired JwtService jwtService;
@@ -71,12 +61,6 @@ class CredentialsGenerationTest extends IntegrationTestBase {
                 .andExpect(status().isUnauthorized());
     }
 
-    /**
-     * The one session that must not be evicted is the one doing the changing: it just proved the
-     * current password. The response carries a token of the new generation, which is what the app
-     * stores — without it the user is told "Password changed successfully" and thrown to the
-     * sign-in screen on their next tap (AUTH-04, the backend/frontend half of it).
-     */
     @Test
     void theSessionThatChangedThePasswordIsHandedATokenThatWorks() throws Exception {
         String before = login("pat.person", "Start123!");
@@ -102,7 +86,6 @@ class CredentialsGenerationTest extends IntegrationTestBase {
         me(after).andExpect(status().isOk()).andExpect(jsonPath("$.username").value("pat.person"));
     }
 
-    /** An administrator resetting somebody's password evicts that person's sessions too. */
     @Test
     void anAdministratorsPasswordResetAlsoEndsTheSessionsItReplaces() throws Exception {
         String theirs = login("pat.person", "Start123!");
@@ -117,11 +100,6 @@ class CredentialsGenerationTest extends IntegrationTestBase {
         me(login("pat.person", "Reset123!")).andExpect(status().isOk());
     }
 
-    /**
-     * An account whose password has never changed keeps every token it has issued: the column is
-     * null on every row of an existing deployment, and adding it must not sign the whole company
-     * out on the next restart.
-     */
     @Test
     void anAccountThatHasNeverChangedItsPasswordKeepsItsTokens() throws Exception {
         String token = login("pat.person", "Start123!");
@@ -131,10 +109,6 @@ class CredentialsGenerationTest extends IntegrationTestBase {
         me(token).andExpect(status().isOk());
     }
 
-    /**
-     * And a token minted before the column existed — one carrying no generation at all — stops
-     * working once the password does change, which is the whole point of the change.
-     */
     @Test
     void aTokenFromBeforeTheUpgradeIsStillEvictedByAPasswordChange() throws Exception {
         String old = jwtService.generateToken(person.getUsername(), Map.of("role", "VIEWER"));

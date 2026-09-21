@@ -19,7 +19,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
-/** Writing one copy, and reading mail the way other mail programs write it. */
 class GmailMimeTest {
 
     static String crlf(String... lines) {
@@ -99,7 +98,6 @@ class GmailMimeTest {
         assertThat(read.inReplyTo()).isEqualTo("<gi-2@company.com>");
         assertThat(read.references()).containsExactly("gi-1@company.com", "gi-2@company.com");
         assertThat(read.body()).isEqualTo("No Content-Type at all.");
-        // Without Gmail's time, the Date header.
         assertThat(read.receivedAt()).isEqualTo(Instant.parse("2026-09-16T04:30:00Z"));
     }
 
@@ -119,7 +117,6 @@ class GmailMimeTest {
         assertThat(read.to()).containsExactly(new MailAddress("Zoë O'Brien", "zoe@acme.test"),
                 new MailAddress(null, "billing@company.com"));
 
-        // What the app writes stays 7-bit: encoded words, which every receiver reads.
         byte[] written = GmailMime.build(new MailAddress("Jürgen Müller", "billing@company.com"),
                 new MailAddress("Zoë", "zoe@acme.test"), "₹1,200.00 received", "Danke", "<gi-1@company.com>", Instant.EPOCH);
         assertThat(new String(written, StandardCharsets.ISO_8859_1).chars().allMatch(c -> c < 0x80)).isTrue();
@@ -135,7 +132,6 @@ class GmailMimeTest {
                 "Content-Type: text/plain; charset=UTF-8",
                 "Content-Transfer-Encoding: base64",
                 "",
-                // UTF-16 labelled as UTF-8: a NUL after every letter.
                 Base64.getEncoder().encodeToString("Paid".getBytes(StandardCharsets.UTF_16LE)),
                 ""));
 
@@ -144,15 +140,12 @@ class GmailMimeTest {
         assertThat(read.cc()).containsExactly(new MailAddress("Ravi", "ravi@acme.test"));
         assertThat(read.body()).isEqualTo("Paid");
 
-        // As HTML reads them, neither NUL nor half of a UTF-16 pair is a character.
         assertThat(GmailMime.htmlToText("<p>a&#0;b&#x0000;c&#xD800;d&#57343;e</p>"))
                 .isEqualTo("a\uFFFDb\uFFFDc\uFFFDd\uFFFDe");
     }
 
     @Test
     void htmlOfAnyShapeIsReducedInTimeInStepWithItsLength() {
-        // About 1 MB each. The regular expressions this replaced read on to the end from every '<' (or
-        // space) and took minutes on these; a request to sync waited that long too.
         List<String> shapes = List.of("<".repeat(1_000_000), "<script>".repeat(125_000), "<!--".repeat(250_000),
                 "<li".repeat(333_334), "<div class=".repeat(90_000), "&nbsp;".repeat(170_000) + "x");
         for (String html : shapes) {
@@ -166,20 +159,16 @@ class GmailMimeTest {
         String text = GmailMime.htmlToText("<p>Start</p>" + "<p>filler</p>".repeat(20_000) + "<p>End</p>");
         assertThat(text).startsWith("Start\n\nfiller").doesNotContain("End");
 
-        // A tag the cut leaves half written is not taken for text.
         String prefix = "x".repeat(GmailMime.HTML_MAX - 10);
         assertThat(GmailMime.htmlToText(prefix + "<div class=\"note\">More</div>")).isEqualTo(prefix);
 
-        // Nor half of a character outside the BMP: an emoji is two UTF-16 units, and this one straddles the cut.
         String upToTheEmoji = "x".repeat(GmailMime.HTML_MAX - 1);
         assertThat(GmailMime.htmlToText(upToTheEmoji + "\uD83D\uDE00" + "y")).isEqualTo(upToTheEmoji);
 
-        // Nor half an entity, which would otherwise be read as the text "&nb".
         String upToTheEntity = "<p>Payment sent</p>" + "x".repeat(GmailMime.HTML_MAX - 19 - 3);
         assertThat(GmailMime.htmlToText(upToTheEntity + "&nbsp;y")).isEqualTo("Payment sent\n\n" + "x".repeat(GmailMime.HTML_MAX - 22));
         String upToTheNumber = "x".repeat(GmailMime.HTML_MAX - 4);
         assertThat(GmailMime.htmlToText(upToTheNumber + "&#8377;")).isEqualTo(upToTheNumber);
-        // A plain ampersand well before the cut stays.
         String ampersand = "Smith & Sons " + "x".repeat(GmailMime.HTML_MAX);
         assertThat(GmailMime.htmlToText(ampersand)).startsWith("Smith & Sons x");
     }
@@ -206,7 +195,6 @@ class GmailMimeTest {
 
     @Test
     void htmlWrittenAsDivsPerLineKeepsItsLines() {
-        // How Gmail's own editor writes a short message.
         assertThat(GmailMime.htmlToText("<div dir=\"ltr\">Thanks,<div>we will pay on Friday.</div><div><br></div><div>Ravi</div></div>"))
                 .isEqualTo("Thanks,\nwe will pay on Friday.\n\nRavi");
     }

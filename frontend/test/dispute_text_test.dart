@@ -14,7 +14,6 @@ Dispute _dispute(Map<String, dynamic> fields) => Dispute.fromJson({
     });
 
 void main() {
-  // It used to read "INVOICE INV-… — 451234.50": a raw enum and an unformatted amount.
   test('names the disputed record with a formatted amount', () {
     expect(
       disputeTargetText(_dispute({'targetNumber': 'INV-20260915-0003', 'targetAmount': 451234.5})),

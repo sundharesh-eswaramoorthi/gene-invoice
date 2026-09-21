@@ -15,7 +15,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** The backend's webhook receiver, stood in for: records every POST and answers with the status it is told. */
 public final class FakeWebhook implements AutoCloseable {
 
     public record Delivery(String timestamp, String signature, String contentType, String body) {

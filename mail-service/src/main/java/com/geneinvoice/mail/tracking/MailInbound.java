@@ -5,10 +5,6 @@ import lombok.*;
 
 import java.time.Instant;
 
-/**
- * A message a sync has dealt with in one mailbox, and how. It keeps a message from being handled
- * twice: a run that stopped reads the same history again, and passes these over without a download.
- */
 @Entity
 @Table(name = "mail_inbound", uniqueConstraints = @UniqueConstraint(name = "uk_mail_inbound_message",
         columnNames = {"connection_id", "provider_message_id"}))
@@ -20,13 +16,9 @@ import java.time.Instant;
 public class MailInbound {
 
     public enum Kind {
-        /** Sent to the backend as a reply to a copy. */
         REPLY,
-        /** A delivery failure: the copy it names bounced. */
         BOUNCE,
-        /** A delay notice: nothing changes. */
         DELAY,
-        /** Looked at and left: a report naming no copy, or one that is neither a failure nor a delay. */
         SKIPPED
     }
 
@@ -47,7 +39,6 @@ public class MailInbound {
     @Column(nullable = false, length = 10)
     private Kind kind;
 
-    /** The copy it concerned. */
     @Column(name = "message_id")
     private Long messageId;
 

@@ -22,7 +22,6 @@ public class PocController {
     private final ScopeResolver scopeResolver;
     private final com.geneinvoice.auth.CurrentUser currentUser;
 
-    /** Searchable list of users offerable as this POC kind. Always bounded (AC-A3). */
     @GetMapping("/assignable")
     @PreAuthorize("hasAuthority('" + Privileges.POC_VIEW + "')")
     public List<PocDtos.PocUserDto> assignable(@RequestParam PocType type,
@@ -33,7 +32,6 @@ public class PocController {
                 .map(PocDtos.PocUserDto::from).toList();
     }
 
-    /** The three kinds plus whether the caller is themselves assignable, for pre-selecting forms. */
     @GetMapping("/types")
     @PreAuthorize("hasAuthority('" + Privileges.POC_VIEW + "')")
     public List<Map<String, Object>> types() {
@@ -49,10 +47,6 @@ public class PocController {
         return out;
     }
 
-    /**
-     * The caller's own default book scope: which filter the UI should pre-apply and whether they
-     * may clear it (AC-A6).
-     */
     @GetMapping("/my-scope")
     @PreAuthorize("hasAuthority('" + Privileges.POC_VIEW + "')")
     public Map<String, Object> myScope() {

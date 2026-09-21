@@ -25,23 +25,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Access tokens from each connection's refresh token (OAuth refresh-token grant), cached per
- * connection until a minute before they expire, so a slow call never goes out with one that dies on
- * the way. The cache remembers the connection's version: a reconnect changes it, and the next call
- * fetches a token for the new credentials.
- */
 @Component
 public class GoogleTokens {
 
-    /** Names the service in errors while connecting: "Google sign-in refused…", "Could not reach Google…". */
     static final String SIGN_IN = "Google sign-in";
     static final String GOOGLE = "Google";
-    /**
-     * Token-endpoint errors that only the owner can fix by connecting again: the refresh token is no
-     * good, or the OAuth client is wrong, not allowed, deleted (by hand, or by Google's clean-up of
-     * unused clients) or disabled.
-     */
     private static final Set<String> AUTH_ERRORS = Set.of("invalid_grant", "invalid_client", "unauthorized_client",
             "deleted_client", "disabled_client");
     private static final Duration EARLY_REFRESH = Duration.ofSeconds(60);
@@ -53,10 +41,8 @@ public class GoogleTokens {
     private final Clock clock;
     private final RestClient http = GmailHttp.restClient();
     private final Map<Long, Cached> cache = new ConcurrentHashMap<>();
-    /** One refresh per connection at a time; workers sending from one mailbox share the token it brings. */
     private final Map<Long, Object> refreshing = new ConcurrentHashMap<>();
 
-    /** What the token endpoint gave: {@code scope} is null when it did not say. */
     public record Grant(String accessToken, long expiresInSeconds, String scope) {}
 
     private record Cached(long version, String token, Instant refreshAt) {}
@@ -75,10 +61,6 @@ public class GoogleTokens {
         this.clock = clock;
     }
 
-    /**
-     * The refresh-token grant with these credentials. Google refusing them is a
-     * {@link GoogleAuthException}; any other failure a {@link GmailApiException}, classified as usual.
-     */
     public Grant refresh(String clientId, String clientSecret, String refreshToken) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("client_id", clientId);
@@ -103,7 +85,6 @@ public class GoogleTokens {
         return new Grant(response.accessToken(), lifetime, response.scope());
     }
 
-    /** A valid access token for the connection, fetched when there is none or it is about to expire. */
     public String accessToken(MailConnection connection) {
         long id = connection.getId();
         long version = connection.getVersion() == null ? 0 : connection.getVersion();
@@ -126,22 +107,16 @@ public class GoogleTokens {
         }
     }
 
-    /** Keeps a token just granted, e.g. while connecting, for the connection as saved. */
     public void remember(MailConnection connection, Grant grant, Instant grantedAt) {
         long version = connection.getVersion() == null ? 0 : connection.getVersion();
         Instant refreshAt = grantedAt.plusSeconds(grant.expiresInSeconds()).minus(EARLY_REFRESH);
         cache.put(connection.getId(), new Cached(version, grant.accessToken(), refreshAt));
     }
 
-    /** Forgets the connection's cached token: Google refused it (401), or the connection changed. */
     public void forget(long connectionId) {
         cache.remove(connectionId);
     }
 
-    /**
-     * The scopes the grant carries: from the token response, or else from Google's tokeninfo for the
-     * access token.
-     */
     public List<String> scopes(Grant grant) {
         String scope = grant.scope();
         if (scope == null) {
@@ -160,7 +135,6 @@ public class GoogleTokens {
         return scope == null ? List.of() : Arrays.stream(scope.trim().split("\\s+")).filter(s -> !s.isEmpty()).toList();
     }
 
-    /** Asks Google to revoke a refresh token, and every access token made from it. */
     public void revoke(String refreshToken) {
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
         form.add("token", refreshToken);
@@ -176,11 +150,6 @@ public class GoogleTokens {
         }
     }
 
-    /**
-     * Credentials Google refuses are the owner's to fix. Another refusal of the request itself is Google
-     * sign-in's (400 "Google sign-in refused the request (…)"); an outage, a rate limit or the network
-     * are Google's ("Google is unavailable (503)", "Could not reach Google").
-     */
     private static RuntimeException classified(RestClientException e) {
         if (e instanceof RestClientResponseException response) {
             int code = response.getStatusCode().value();

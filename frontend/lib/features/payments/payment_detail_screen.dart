@@ -81,7 +81,6 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
         ],
       ),
     );
-    // Discarded edits are gone: the route's onExit, which runs next, must not ask again.
     if (ok == true) _dirty = false;
     return ok == true;
   }
@@ -95,8 +94,6 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
       final pocChanged = _collectionPoc != null && _collectionPoc!.id != _savedCollectionPocId;
       await ref.read(dioProvider).patch('/api/payments/${widget.id}', data: {
         'notes': _notes.text.trim(),
-        // Sent only when changed: an unchanged POC may since have been deactivated, or this user
-        // may not assign POCs, and neither should block a notes edit (AC-A5).
         if (pocChanged) 'collectionPocUserId': _collectionPoc!.id,
       });
       _savedCollectionPocId = _collectionPoc?.id;
@@ -146,7 +143,6 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
             type: EmailEntityType.payment, entityId: payment.id, entityLabel: label);
         return PopScope(
           canPop: !_dirty,
-          // Unsaved edits are asked about once, by goGuarded or else by the route's onExit.
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) goGuarded(context, '/payments');
           },
@@ -225,8 +221,6 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     required bool canSeePoc,
     required bool canAssignPoc,
   }) {
-    // Fields in columns, Save beside the figures and the allocations as compact rows, so the top
-    // of an ordinary payment fits without scrolling. A phone stacks and scrolls the page.
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Column(
@@ -294,8 +288,6 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     );
   }
 
-  /// The figures on the left and, for someone who may edit, Save on the right of the same line —
-  /// a row of its own under the fields was a whole line of height spent on one button.
   Widget _figuresAndSave(List<Widget> figures, {required bool canEdit}) => Wrap(
         spacing: 12,
         runSpacing: 12,
@@ -323,7 +315,6 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
         ],
       );
 
-  /// The invoices this payment went to: one short row each, and a row opens its invoice.
   Widget _allocations(PaymentRecord p) {
     final theme = Theme.of(context);
     final head = theme.textTheme.labelMedium;

@@ -8,14 +8,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * {@code DOCUMENT_STORAGE=none}: there is nowhere to put bytes, so uploading says so and
- * everything else carries on (§4.4). A context of its own, on a database of its own, because the
- * storage is chosen when the context is built.
- */
 @TestPropertySource(properties = {
         "app.documents.storage=none",
-        // create-drop on the shared database would wipe the other test context's tables.
         "spring.datasource.url=jdbc:h2:mem:geneinvoice-documents-none-test;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=1000"
 })
 class DocumentStorageNoneTest extends DocumentTestBase {

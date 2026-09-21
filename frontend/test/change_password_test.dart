@@ -8,7 +8,6 @@ import 'package:gene_invoice/features/auth/change_password_dialog.dart';
 
 import 'support/fake_backend.dart';
 
-/// The token the browser is holding, in memory.
 class _MemoryTokenStorage implements TokenStorage {
   String? token;
   _MemoryTokenStorage(this.token);

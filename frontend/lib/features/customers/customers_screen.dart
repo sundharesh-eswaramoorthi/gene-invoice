@@ -20,8 +20,6 @@ import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
 import 'payment_term_field.dart';
 
-/// Customers whose name contains [search], first page by name, for the customer pickers on the
-/// invoice form and the Record payment dialog.
 Future<List<Customer>> searchCustomers(Dio dio, String search) async {
   final res = await dio.get('/api/customers', queryParameters: {
     'size': 20,
@@ -103,7 +101,6 @@ class CustomersScreen extends ConsumerWidget {
           ],
         ),
         bulkActions: [
-          // Bulk changes need CUSTOMER_MANAGE as well as the right to assign POCs.
           if (canManage && canAssignPoc)
             const BulkActionSpec(
               action: 'ADD_POC',
@@ -114,11 +111,6 @@ class CustomersScreen extends ConsumerWidget {
           if (canSendEmail) sendEmailBulkAction(EmailEntityType.customer),
         ],
         columns: [
-          // Name and Email carry free text the customer chose — a name may be 120 characters
-          // (FieldLimits.FULL_NAME) — so both are capped and ellipsised, with the whole value on
-          // hover. Uncapped, one long name widened its column to the text and pushed Phone,
-          // Email, the figures and the POC columns off a 1366px screen (UI-01, D-20), as the
-          // Products, Disputes, Inbox and Notifications lists already guard against.
           TableColumnSpec(
             label: 'Name',
             sortKey: 'name',
@@ -168,11 +160,6 @@ class CustomersScreen extends ConsumerWidget {
             numeric: true,
             cell: (context, c) => Text(formatMoney(c.creditBalance)),
           ),
-          // A deactivated holder keeps the seat but never receives anything: email and the
-          // defaults on new records go to the next active holder instead, so naming them here
-          // without saying so would name somebody the app would not write to. Marked as the POC
-          // editor and the detail screen mark them, and capped like the other name columns
-          // (CP-07, UI-08).
           if (canSeePoc)
             TableColumnSpec(
               label: 'Success POC',
@@ -217,7 +204,6 @@ class CustomersScreen extends ConsumerWidget {
     if (saved == null) return;
     ref.invalidate(tablePageProvider);
     ref.invalidate(tableSummaryProvider);
-    // The list's own context: the form's went with it when it closed.
     if (!context.mounted) return;
     await notifyByEmailAfterSave(context,
         notify: saved.notify,
@@ -286,11 +272,8 @@ Future<Map<String, dynamic>?> _pickCustomerPocParams(BuildContext context) async
   return {'userId': picked!.id, 'pocType': type.name, 'primary': '$primary'};
 }
 
-/// What [CustomerFormDialog] closes with once it has saved: the customer, and whether to write an
-/// email about it. Cancel closes it with nothing.
 typedef CustomerSaved = ({int id, bool notify});
 
-/// Create / edit form for the customer's own contact fields.
 class CustomerFormDialog extends ConsumerStatefulWidget {
   final Customer? existing;
   const CustomerFormDialog({super.key, this.existing});
@@ -410,8 +393,6 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
                     decoration: const InputDecoration(labelText: 'Address'),
                     maxLines: 2),
                 const SizedBox(height: 8),
-                // What this customer's invoices fall due on, so nobody has to remember the
-                // arrangement when raising one (US-A1).
                 PaymentTermField(
                   label: 'Payment terms',
                   value: _term,

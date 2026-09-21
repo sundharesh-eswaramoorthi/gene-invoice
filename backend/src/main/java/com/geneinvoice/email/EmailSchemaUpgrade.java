@@ -18,14 +18,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * Lets {@code emails.status} hold {@link EmailStatus#PARTIAL}. Hibernate writes an enum column's
- * values into a check constraint when it creates the table, and {@code ddl-auto: update} never
- * changes a constraint that exists, so on a database made before PARTIAL the roll-up of a partly
- * sent email would be refused. This replaces such a constraint with one listing every status. It
- * runs once the schema is up to date (it needs the entity manager factory for that) and before the
- * app takes requests; on a current database it changes nothing.
- */
 @Component
 @Slf4j
 class EmailSchemaUpgrade implements InitializingBean {
@@ -45,10 +37,6 @@ class EmailSchemaUpgrade implements InitializingBean {
         }
     }
 
-    /**
-     * Replaces the check constraints on {@code table.column} that do not list every value of the
-     * enum with one that does. Only PostgreSQL and H2 are looked at.
-     */
     static void widen(Connection connection, String table, String column, Class<? extends Enum<?>> type)
             throws SQLException {
         String product = connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
@@ -74,7 +62,6 @@ class EmailSchemaUpgrade implements InitializingBean {
         } else {
             return;
         }
-        // The enum's check: on this column, naming its first value. Stale when a value is missing.
         List<String> stale = checks.entrySet().stream()
                 .filter(c -> c.getValue().contains(columnInCheck) && c.getValue().contains("'" + values.get(0) + "'"))
                 .filter(c -> values.stream().anyMatch(v -> !c.getValue().contains("'" + v + "'")))

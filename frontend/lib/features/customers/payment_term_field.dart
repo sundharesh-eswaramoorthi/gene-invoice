@@ -10,8 +10,6 @@ class PaymentTermField extends StatelessWidget {
   final PaymentTerm? value;
   final ValueChanged<PaymentTerm?> onChanged;
 
-  /// The floating label on a form. The detail grid writes its own label above the field, so it
-  /// passes none and the field stays as short as the ones beside it.
   final String? label;
 
   const PaymentTermField(

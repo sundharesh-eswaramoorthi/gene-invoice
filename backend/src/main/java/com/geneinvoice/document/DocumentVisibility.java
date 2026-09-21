@@ -4,11 +4,6 @@ import com.geneinvoice.common.BadRequestException;
 
 import java.util.Arrays;
 
-/**
- * Who a document is for (D7). {@code INTERNAL} is the default on upload, so a document reaches a
- * self-service customer only by an explicit act — except a customer's own upload, which would
- * otherwise be invisible to the person who made it (§4.5).
- */
 public enum DocumentVisibility {
     INTERNAL,
     SHARED;

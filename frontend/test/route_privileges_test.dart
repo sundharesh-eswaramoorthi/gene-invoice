@@ -17,7 +17,6 @@ import 'support/fake_backend.dart';
 // hash used to land on a list whose header still offered "Add filter" and "Send email" above a
 // 403, with a Retry that could only fail again (UI-10).
 
-/// Signed in as [user], without the network round trip the real controller makes.
 class _SignedIn extends AuthController {
   _SignedIn(super.ref, CurrentUser user) {
     state = AuthState(user: user);
@@ -33,7 +32,6 @@ CurrentUser _user(String role, Set<String> privileges) => CurrentUser(
       customerId: null,
     );
 
-// A Sales POC: everything their day needs, and neither USER_VIEW nor ROLE_VIEW.
 final _priya = _user('SALES_POC', {
   Privileges.customerView,
   Privileges.invoiceView,
@@ -99,7 +97,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(_location(router), '/');
-    // Nothing was asked for that could only come back 403, and no list header was offered.
     expect(backend.sent('GET /api/users'), isEmpty);
     expect(find.text('Add filter'), findsNothing);
     expect(find.text('Retry'), findsNothing);

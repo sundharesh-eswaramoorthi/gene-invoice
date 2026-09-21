@@ -7,15 +7,11 @@ import 'filter_editor.dart';
 import 'table_models.dart';
 import 'table_providers.dart';
 
-/// One rendered column. [sortKey] is the backend column name; null means the column
-/// cannot be sorted and is shown as such (AC-D3).
 class TableColumnSpec<T> {
   final String label;
   final String? sortKey;
   final bool numeric;
 
-  /// Caps the column's width on the desktop table, for free text that would otherwise stretch
-  /// the column to its longest value. The cell wraps and ends in an ellipsis within it.
   final double? maxWidth;
   final Widget Function(BuildContext context, T row) cell;
 
@@ -28,22 +24,16 @@ class TableColumnSpec<T> {
   });
 }
 
-/// A bulk action offered in the selection toolbar.
 class BulkActionSpec {
   final String action;
   final String label;
   final IconData icon;
   final bool destructive;
 
-  /// Collects extra parameters. Return null to abandon the action.
   final Future<Map<String, dynamic>?> Function(BuildContext context)? buildParams;
 
-  /// Where the action is posted. Null means the table's own `{path}/bulk`; an action another
-  /// feature owns — sending email from any list — names its own endpoint.
   final String? endpoint;
 
-  /// The snackbar shown when every row succeeded. Null keeps "N records updated", which would
-  /// misdescribe an action that changes nothing on the rows themselves.
   final String Function(int succeeded)? successMessage;
 
   const BulkActionSpec({
@@ -57,9 +47,6 @@ class BulkActionSpec {
   });
 }
 
-/// A filter offered on the filter bar as a chip to switch on and off — "Overdue only" on the
-/// invoices list. It stands for exactly one [TableFilter], which the filter bar therefore does
-/// not repeat as an ordinary chip while it is on.
 class QuickFilterSpec {
   final String label;
   final IconData? icon;
@@ -68,8 +55,6 @@ class QuickFilterSpec {
   const QuickFilterSpec({required this.label, required this.filter, this.icon});
 }
 
-/// The list-page frame every table shares: filter-aware tiles, a filter bar, selection and
-/// bulk actions, a responsive body and server-side pagination.
 class DataTableScaffold<T> extends ConsumerStatefulWidget {
   final String entity;
   final String path;
@@ -88,7 +73,6 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
   final Widget Function(BuildContext context, Map<String, dynamic> summary)? tiles;
   final List<BulkActionSpec> bulkActions;
 
-  /// One-tap filters shown on the filter bar, for the ones a list is worked from every day.
   final List<QuickFilterSpec> quickFilters;
 
   /// Called after a bulk action has run, for anything outside the table that its rows feed —
@@ -96,16 +80,11 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
   final VoidCallback? onBulkDone;
   final bool canExport;
 
-  /// Lets a screen switch row selection off. It is off anyway when the caller has neither a bulk
-  /// action nor export, since a selection would lead nowhere.
   final bool selectable;
 
   final String emptyMessage;
   final Widget? header;
 
-  /// Page-level actions such as "New invoice", shown at the end of the filter bar, or below it on
-  /// a phone. They sit in the layout rather than floating over it, so they can never cover the
-  /// pagination controls.
   final List<Widget> actions;
 
   const DataTableScaffold({
@@ -142,8 +121,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
   bool _busy = false;
   final _hScroll = ScrollController();
 
-  /// Rows are selectable whenever there is something to do with a selection — a bulk action or
-  /// export — so a role that may export but not manage can still reach "Export selected".
   bool get _selectable => widget.selectable && (widget.bulkActions.isNotEmpty || widget.canExport);
 
   @override
@@ -220,7 +197,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
       lockedFilters: pageAsync.valueOrNull?.lockedFilters ?? const [],
       onQueryChanged: (q) => widget.onQueryChanged(q),
     );
-    // Page actions take a compact height that lines up with the filter chips.
     final pageActions = Theme(
       data: Theme.of(context).copyWith(
         filledButtonTheme: FilledButtonThemeData(
@@ -239,9 +215,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         // left barely one card's worth of list (D-61).
         if (widget.tiles != null && !isNarrow)
           _SummaryTiles(request: _request, builder: widget.tiles!),
-        // On a phone the actions get a line of their own. Beside the filter bar, a Row gives them
-        // all the width they ask for, and two buttons ("Send email", "New customer") would leave
-        // the filter chips a sliver; on their own line they wrap if even that is too narrow.
         if (isNarrow) ...[
           filterBar,
           if (widget.actions.isNotEmpty)
@@ -273,8 +246,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
             loading: () => const _LoadingState(),
             error: (e, _) => _ErrorState(message: apiErrorMessage(e), onRetry: _refresh),
             data: (page) {
-              // An empty page with rows behind it is a page past the end (an old link, or the
-              // last page emptied by a bulk action) — not a filter that matches nothing.
               if (page.isEmpty && page.totalElements > 0) {
                 return _PastTheEndState(
                   totalElements: page.totalElements,
@@ -323,8 +294,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     );
   }
 
-  // ---- body -------------------------------------------------------------------
-
   Widget _dataTable(List<T> rows, TableSchema? schema) {
     final sortField = widget.query.sort?.split(',').first;
     final ascending = !(widget.query.sort?.endsWith('desc') ?? false);
@@ -333,8 +302,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         : widget.columns.indexWhere((c) => c.sortKey == sortField);
 
     final table = DataTable(
-      // Material's 56px gaps alone cost ~300px on a seven-column table, enough to push the last
-      // columns off-screen at 1366px (D-19, D-20).
       columnSpacing: 24,
       showCheckboxColumn: _selectable,
       sortColumnIndex: (sortIndex != null && sortIndex >= 0) ? sortIndex : null,
@@ -366,9 +333,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
       ],
     );
 
-    // Sized to the space the columns actually have — beside the navigation rail and the row
-    // actions, not the whole window. When they need more room, a scrollbar that is always visible
-    // says so.
     return Scrollbar(
       controller: _hScroll,
       thumbVisibility: true,
@@ -397,11 +361,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     );
   }
 
-  /// The row actions, pinned beside the scrolling columns rather than after the last of them.
-  /// With long names and crore amounts an invoice row is wider than the ~1285px a 1366px screen
-  /// has beside the sidebar, and the actions at its end — Send email among them — were off-screen
-  /// until the table was scrolled sideways. A one-column table of their own lines up row for row
-  /// with the main one, since DataTable gives every heading and data row the same fixed height.
   Widget _rowActionsTable(List<T> rows) => DataTable(
         horizontalMargin: 12,
         showCheckboxColumn: false,
@@ -409,12 +368,9 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         rows: [
           for (final row in rows)
             DataRow(
-              // Tinted along with the rest of its row.
               selected: _isSelected(row),
               cells: [
                 DataCell(IconButtonTheme(
-                  // 32px buttons instead of 40 (Material's IconButton ignores the theme's compact
-                  // density), with their tooltips. Touch screens still pad the tap target to 48.
                   data: IconButtonThemeData(
                     style: IconButton.styleFrom(visualDensity: VisualDensity.compact)
                         .merge(IconButtonTheme.of(context).style),
@@ -492,8 +448,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     );
   }
 
-  // ---- bulk actions -----------------------------------------------------------
-
   Future<void> _runBulkAction(BulkActionSpec spec) async {
     Map<String, dynamic>? params;
     if (spec.buildParams != null) {
@@ -508,7 +462,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         : _selected.length;
     final confirmed = await _confirm(
       title: '${spec.label}?',
-      // The exact count is stated before the user commits (AC-D7).
       message: 'This will apply "${spec.label}" to $count record${count == 1 ? '' : 's'}.'
           '${spec.destructive ? '\n\nThis cannot be undone.' : ''}',
       destructive: spec.destructive,
@@ -596,8 +549,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     );
   }
 
-  /// Shows exactly which rows succeeded, failed and were skipped — nothing is dropped
-  /// silently (AC-D5, AC-D6).
   void _showBulkResult(Map<String, dynamic> result, BulkActionSpec spec) {
     final succeeded = ((result['succeeded'] as List?) ?? const []).length;
     final failed = ((result['failed'] as List?) ?? const []).cast<Map<String, dynamic>>();
@@ -614,7 +565,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        // The label the user chose from the toolbar, not the wire code ("SEND_EMAIL").
         title: Text('${spec.label} result'),
         content: SizedBox(
           width: 460,
@@ -684,8 +634,6 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
   }
 }
 
-// ---- pieces ---------------------------------------------------------------------
-
 class _SummaryTiles extends ConsumerWidget {
   final TableRequest request;
   final Widget Function(BuildContext, Map<String, dynamic>) builder;
@@ -697,7 +645,6 @@ class _SummaryTiles extends ConsumerWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
       child: async.when(
-        // Tiles show their own loading rather than a value that no longer matches (AC-E2).
         loading: () => const SizedBox(
           height: 84,
           child: Center(child: SizedBox(
@@ -713,17 +660,14 @@ class _SummaryTiles extends ConsumerWidget {
   }
 }
 
-/// A single summary tile.
 class SummaryTile extends StatelessWidget {
   final String label;
   final String value;
   final IconData? icon;
   final Color? accent;
 
-  /// What a tile takes on a screen with room for it.
   static const double width = 170;
 
-  /// The gap the tiles are laid out with, in the [Wrap] every caller uses.
   static const double gap = 12;
 
   const SummaryTile({
@@ -798,7 +742,6 @@ class _FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Only what this user's schema says the server can filter by is offered (D.4).
     final quick = schema == null
         ? const <QuickFilterSpec>[]
         : quickFilters.where((q) => schema!.column(q.filter.field)?.filterable ?? false).toList();
@@ -828,7 +771,6 @@ class _FilterBar extends StatelessWidget {
               onSelected: (on) => onQueryChanged(
                   on ? query.addFilter(q.filter) : query.removeFilter(q.filter)),
             ),
-          // A scope the server pins on is shown as locked rather than silently absent (AC-A6).
           for (final locked in lockedFilters)
             Tooltip(
               message: 'Your role limits this list to your own records',
@@ -837,7 +779,6 @@ class _FilterBar extends StatelessWidget {
                 label: Text(_lockedLabel(locked)),
               ),
             ),
-          // A filter that has a chip of its own above is not repeated here.
           for (final f in query.filters.where((f) => !quick.any((q) => q.filter == f)))
             InputChip(
               label: Text(describeFilter(f, schema)),
@@ -939,11 +880,8 @@ class _SelectionToolbar extends StatelessWidget {
 }
 
 class _PaginationBar extends StatelessWidget {
-  /// Null while the request is in flight or has failed: there is no page to describe or to move
-  /// through then, only a size to choose.
   final PagedResult<Map<String, dynamic>>? page;
 
-  /// The size the current view asked for, which may be one the server refuses.
   final int size;
   final List<int> pageSizes;
   final ValueChanged<int> onPage;
@@ -1008,7 +946,6 @@ class _PaginationBar extends StatelessWidget {
                   IconButton(
                     tooltip: 'Previous page',
                     icon: const Icon(Icons.chevron_left),
-                    // From a page past the end, "previous" means the last real page.
                     onPressed: page.page == 0
                         ? null
                         : () => onPage(page.page - 1 < page.totalPages ? page.page - 1 : page.totalPages - 1),

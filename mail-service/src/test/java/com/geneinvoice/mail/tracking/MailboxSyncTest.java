@@ -32,11 +32,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Reading a mailbox (§4.7) over real HTTP to a stand-in for Gmail: only threads a copy was sent from
- * are looked at; a bounce updates its copy, a reply goes to the backend, a read message in a
- * recipient's mailbox makes the copy read.
- */
 class MailboxSyncTest extends IntegrationTestBase {
 
     private static final String JANE = "jane@gmail.com";
@@ -50,7 +45,6 @@ class MailboxSyncTest extends IntegrationTestBase {
     MailConnection jane;
     MailMessage toBob;
 
-    /** Jane sent Bob a copy at T0: {@code gm-out-1} in thread {@code th-1}. */
     @BeforeEach
     void janeSentBobACopy() {
         jane = connect("7", "Jane Doe", JANE);
@@ -65,19 +59,15 @@ class MailboxSyncTest extends IntegrationTestBase {
         google.clearRequests();
     }
 
-    // ---- Gmail as the tests set it up -------------------------------------------------
-
     static Map<String, Object> added(String id, String threadId, String... labels) {
         return Map.of("message", labels.length == 0 ? Map.of("id", id, "threadId", threadId)
                 : Map.of("id", id, "threadId", threadId, "labelIds", List.of(labels)));
     }
 
-    /** A history record's labels taken off a message, which is left with {@code left}. */
     static Map<String, Object> removed(String id, String threadId, List<String> left, String... labels) {
         return Map.of("message", Map.of("id", id, "threadId", threadId, "labelIds", left), "labelIds", List.of(labels));
     }
 
-    /** One history record per change, the mailbox standing at {@code historyId}. */
     private void history(String mailbox, String historyId, Object... changes) {
         List<Map<String, Object>> records = new java.util.ArrayList<>();
         for (int i = 0; i < changes.length; i++) {
@@ -89,7 +79,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         google.onMailbox(mailbox, "GET", HISTORY, 200, FakeGoogle.json(Map.of("history", records, "historyId", historyId)));
     }
 
-    /** A message as Gmail hands it out: labels and size as metadata, the whole of it as raw. */
     private void inMailbox(String mailbox, String id, String threadId, List<String> labels, String mime, Instant receivedAt) {
         String metadata = FakeGoogle.json(Map.of("id", id, "threadId", threadId, "labelIds", labels,
                 "sizeEstimate", mime.length()));
@@ -110,8 +99,6 @@ class MailboxSyncTest extends IntegrationTestBase {
     private SyncResult syncJane() {
         return sync.sync(jane.getId());
     }
-
-    // ---- bounces -------------------------------------------------------------------------
 
     @Test
     void aBounceTurnsItsCopyBouncedAndNothingOutsideTheAppsThreadsIsRead() {
@@ -137,7 +124,6 @@ class MailboxSyncTest extends IntegrationTestBase {
             assertThat(in.getMessageId()).isEqualTo(bounced.getId());
         });
 
-        // The mailbox's own sent copy and mail in other threads are never fetched.
         assertThat(downloads()).containsExactly("bounce-1?format=metadata", "bounce-1?format=raw");
         Exchange historyCall = google.requests(JANE, "GET", HISTORY).get(0);
         assertThat(historyCall.param("startHistoryId")).isEqualTo("1000");
@@ -163,7 +149,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         assertThat(message("gi-91-1").getStatus()).isEqualTo(MessageStatus.BOUNCED);
         assertThat(message("gi-91-1").isDeliveredConfirmed()).isFalse();
 
-        // A copy its recipient's own Gmail has is delivered, whatever a notice says.
         transactions.executeWithoutResult(status -> {
             MailMessage m = messageRepository.findByExternalId("gi-91-1").orElseThrow();
             m.setStatus(MessageStatus.DELIVERED);
@@ -178,7 +163,6 @@ class MailboxSyncTest extends IntegrationTestBase {
 
     @Test
     void aNoticeWithoutTheMessageIdFindsTheCopyByTheFailedAddress() {
-        // Ravi's copy went out in the same thread, later.
         clock.advance(Duration.ofMinutes(1));
         submit(submission("7", "Jane Doe", "91", false, copy("gi-91-2", "Ravi", "ravi@acme.com")));
         work();
@@ -214,7 +198,6 @@ class MailboxSyncTest extends IntegrationTestBase {
 
     @Test
     void aBounceThatCameBeforeAnUncertainSendWasFoundInSentMailIsStillSeen() {
-        // Gmail takes the copy to Ravi, but the answer never arrives: it waits for another attempt.
         google.on("POST", FakeGoogle.api("/messages/send"), exchange -> FakeGoogle.HANG_UP);
         submit(submission("7", "Jane Doe", "91", false, copy("gi-91-2", "Ravi", "nobody@gmail.com")));
         work();
@@ -222,16 +205,12 @@ class MailboxSyncTest extends IntegrationTestBase {
         assertThat(toRavi.getStatus()).isEqualTo(MessageStatus.QUEUED);
         assertThat(toRavi.isDeliveryUncertain()).isTrue();
 
-        // The address does not exist: Gmail's notice is in the new thread within seconds, and the next
-        // run passes over it, the thread being nobody's yet as far as the service knows.
         history(JANE, "1002", added("gm-out-9", "th-9", "SENT"), added("bounce-9", "th-9", "INBOX", "UNREAD"));
         inMailbox(JANE, "bounce-9", "th-9", List.of("INBOX", "UNREAD"),
                 Bounces.gmailFailure("nobody@gmail.com", toRavi.getRfcMessageId()), T0.plusSeconds(5));
         assertThat(syncJane()).isEqualTo(new SyncResult(true, 0, 0, null));
         assertThat(connection("7").getHistoryId()).isEqualTo("1002");
 
-        // The retry finds the copy in Sent mail, records it, and then looks at its thread once. Gmail put
-        // it in an earlier conversation with the same subject, which is none of the service's business.
         google.onMailbox(JANE, "GET", MESSAGES, 200, "{\"messages\":[{\"id\":\"gm-out-9\",\"threadId\":\"th-9\"}]}");
         inMailbox(JANE, "older-9", "th-9", List.of("INBOX"), Bounces.reply("ravi@acme.com", "<older@acme.com>"), T0.minusSeconds(86400));
         google.onMailbox(JANE, "GET", FakeGoogle.api("/threads/th-9"), 200, "{\"id\":\"th-9\",\"messages\":["
@@ -252,7 +231,6 @@ class MailboxSyncTest extends IntegrationTestBase {
                 .containsExactly(org.assertj.core.groups.Tuple.tuple("bounce-9", MailInbound.Kind.BOUNCE));
         assertThat(google.requests(JANE, "GET", FakeGoogle.api("/messages/older-9"))).isEmpty();
         assertThat(events("message.received")).isEmpty();
-        // Sent once, and not taken for delivered a quarter of an hour on.
         assertThat(google.requests("POST", FakeGoogle.api("/messages/send"))).hasSize(1);
         clock.advance(Duration.ofMinutes(16));
         tracker.track();
@@ -270,7 +248,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         google.onMailbox(JANE, "GET", FakeGoogle.api("/threads/th-2"), 200, "{\"id\":\"th-2\",\"messages\":["
                 + "{\"id\":\"gm-out-2\",\"threadId\":\"th-2\",\"labelIds\":[\"SENT\"]},"
                 + "{\"id\":\"bounce-2\",\"threadId\":\"th-2\",\"labelIds\":[\"INBOX\"]}]}");
-        // A run reads the mailbox after Gmail took the copy and before the copy is recorded as sent.
         AtomicReference<SyncResult> during = new AtomicReference<>();
         google.onMailbox(JANE, "GET", FakeGoogle.api("/messages/gm-out-2"), exchange -> {
             if (during.get() == null) during.set(syncJane());
@@ -284,15 +261,12 @@ class MailboxSyncTest extends IntegrationTestBase {
         assertThat(message("gi-91-2").getStatus()).isEqualTo(MessageStatus.BOUNCED);
         assertThat(google.requests(JANE, "GET", FakeGoogle.api("/threads/th-2"))).hasSize(1);
 
-        // With no run in between, a send does not look at its thread.
         google.on("POST", FakeGoogle.api("/messages/send"), 200, "{\"id\":\"gm-out-3\",\"threadId\":\"th-3\"}");
         submit(submission("7", "Jane Doe", "93", false, copy("gi-93-1", "Bob Smith", "bob@acme.com")));
         work();
         assertThat(message("gi-93-1").getStatus()).isEqualTo(MessageStatus.SENT);
         assertThat(google.requests("GET", FakeGoogle.api("/threads/th-3"))).isEmpty();
     }
-
-    // ---- replies -------------------------------------------------------------------------
 
     @Test
     void aReplyGoesToTheBackendNamingTheNewestCopyInItsThread() {
@@ -329,7 +303,6 @@ class MailboxSyncTest extends IntegrationTestBase {
 
         assertThat(inboundRepository.findByConnectionIdOrderByIdAsc(jane.getId())).singleElement()
                 .satisfies(in -> assertThat(in.getKind()).isEqualTo(MailInbound.Kind.REPLY));
-        // A reply changes no copy.
         assertThat(message("gi-91-1").getStatus()).isEqualTo(MessageStatus.SENT);
     }
 
@@ -360,12 +333,9 @@ class MailboxSyncTest extends IntegrationTestBase {
 
         assertThat(events("message.received")).extracting(e -> payload(e).get("providerMessageId").asText())
                 .containsExactly("spam-1");
-        // Labels are read before a download, which only a message they allow gets.
         assertThat(downloads()).containsExactly("spam-1?format=metadata", "spam-1?format=raw",
                 "draft-1?format=metadata", "binned-1?format=metadata");
     }
-
-    // ---- read in the recipient's mailbox ---------------------------------------------------
 
     @Test
     void aCopyReadInTheRecipientsOwnGmailIsRead() {
@@ -388,16 +358,12 @@ class MailboxSyncTest extends IntegrationTestBase {
         assertThat(read.getStatus()).isEqualTo(MessageStatus.READ);
         assertThat(read.getReadAt()).isEqualTo(T0.plus(Duration.ofMinutes(4)));
         assertThat(statusTrail("gi-92-1")).last().isEqualTo("READ@5");
-        // Sam's mailbox was only asked for its history: nothing in it was downloaded.
         assertThat(google.requests("sam@gmail.com", "GET", FakeGoogle.api("/messages/other-1"))).isEmpty();
 
-        // Read again after being marked unread: once read, it stays read.
         clock.advance(Duration.ofMinutes(1));
         sync.sync(sam.getId());
         assertThat(message("gi-92-1").getReadAt()).isEqualTo(T0.plus(Duration.ofMinutes(4)));
     }
-
-    // ---- where a run starts and how it ends --------------------------------------------------
 
     @Test
     void historyGmailNoLongerHasFallsBackToTheLastWeek() {
@@ -418,17 +384,14 @@ class MailboxSyncTest extends IntegrationTestBase {
         assertThat(listings.get(0).param("q")).isEqualTo("newer_than:7d");
         assertThat(listings.get(0).param("includeSpamTrash")).isNull();
         assertThat(listings.get(1).param("pageToken")).isEqualTo("older");
-        // Where the mailbox stood is read before listing, so mail arriving meanwhile is not skipped.
         List<String> order = google.exchanges().stream().map(Exchange::path).toList();
         assertThat(order.lastIndexOf(FakeGoogle.api("/profile"))).isLessThan(order.indexOf(MESSAGES));
-        // Oldest first; only the app's thread.
         assertThat(downloads()).containsExactly("old-1?format=metadata", "old-1?format=raw",
                 "new-1?format=metadata", "new-1?format=raw");
     }
 
     @Test
     void withoutTheHistoryCopiesReadInTheRecipientsGmailMeanwhileAreStillRead() {
-        // Sam's own Gmail is connected; Jane sent him three copies, found there unread.
         MailConnection sam = connect("8", "Sam Sales", "sam@gmail.com");
         clock.advance(Duration.ofMinutes(1));
         submit(submission("7", "Jane Doe", "92", false, copy("gi-92-1", "Sam", "sam@gmail.com")));
@@ -453,8 +416,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         assertThat(List.of("gi-92-1", "gi-93-1", "gi-94-1")).allSatisfy(externalId ->
                 assertThat(message(externalId).getStatus()).isEqualTo(MessageStatus.DELIVERED));
 
-        // Sam's mailbox goes unread for longer than Gmail keeps its history. Meanwhile he reads the
-        // first copy, and reads and archives the second (no labels left); the third is still unread.
         google.onMailbox("sam@gmail.com", "GET", HISTORY, 404, FakeGoogle.gmailError(404, "Requested entity was not found."));
         google.historyAt("sam@gmail.com", "9000");
         google.onMailbox("sam@gmail.com", "GET", FakeGoogle.api("/messages/sam-msg-1"), 200,
@@ -470,7 +431,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         assertThat(message("gi-94-1").getStatus()).isEqualTo(MessageStatus.DELIVERED);
         assertThat(connection("8").getHistoryId()).isEqualTo("9000");
 
-        // A copy older than the week the run looks back over is not asked about.
         google.clearRequests();
         clock.advance(Duration.ofDays(8));
         sync.sync(sam.getId());
@@ -515,7 +475,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         google.onMailbox(JANE, "GET", HISTORY, 500, FakeGoogle.gmailError(500, "Backend Error"));
 
         syncJane();
-        // The same error again: nothing new to tell.
         syncJane();
         List<MailEvent> reported = events("connection.status");
         assertThat(reported).hasSize(before + 1);
@@ -541,7 +500,6 @@ class MailboxSyncTest extends IntegrationTestBase {
     void aLongErrorIsCutToFitWithoutEndingInHalfACharacter() {
         String said = "Gmail is unavailable (500): ";
         String emoji = new String(Character.toChars(0x1F600));
-        // Google's explanation runs past the column, with an emoji across its last kept unit.
         String upToTheEmoji = said + "x".repeat(MailConnection.REASON_MAX - 2 - said.length());
         google.onMailbox(JANE, "GET", HISTORY, 500,
                 FakeGoogle.gmailError(500, upToTheEmoji.substring(said.length()) + emoji + " and more"));
@@ -566,7 +524,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         assertThat(after.getLastSyncError()).isEqualTo(reason);
         assertThat(after.getHistoryId()).isEqualTo("1000");
 
-        // Not connected now: the API says so and the next run leaves it alone.
         assertThat(sync.syncNow("7")).isEqualTo(new SyncResult(false, 0, 0, "Gmail is not connected"));
     }
 
@@ -575,8 +532,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         clock.advance(Duration.ofMinutes(1));
         submit(submission("7", "Jane Doe", "91", false, copy("gi-91-2", "Ravi", "ravi@acme.com")));
         work();
-        // Jane's token expires (a Google app in Testing): the next run finds out, and her mailbox is
-        // not read until she renews it.
         google.expire(refreshToken("7"));
         clock.advance(Duration.ofHours(1));
         syncJane();
@@ -585,7 +540,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         assertThat(message("gi-91-2").getStatus()).isEqualTo(MessageStatus.DELIVERED);
         assertThat(message("gi-91-2").isDeliveredConfirmed()).isFalse();
 
-        // Meanwhile Ravi's copy bounced and Bob replied; Gmail's history has both after 1000.
         String gap = FakeGoogle.json(Map.of("historyId", "1005", "history", List.of(
                 Map.of("id", "1002", "messagesAdded", List.of(added("bounce-1", "th-1", "INBOX"))),
                 Map.of("id", "1004", "messagesAdded", List.of(added("reply-1", "th-1", "INBOX", "UNREAD"))))));
@@ -595,7 +549,6 @@ class MailboxSyncTest extends IntegrationTestBase {
         inMailbox(JANE, "reply-1", "th-1", List.of("INBOX", "UNREAD"), Bounces.reply("bob@acme.com", toBob.getRfcMessageId()),
                 T0.plus(Duration.ofMinutes(30)));
 
-        // She pastes a new refresh token for the same Gmail, whose profile now stands at 1005.
         google.account(JANE, "1//refresh-7-renewed");
         google.historyAt(JANE, "1005");
         connectionService.connect("7", new ConnectRequest("Jane Doe", "client-7.apps.googleusercontent.com", "secret-7",
@@ -628,7 +581,6 @@ class MailboxSyncTest extends IntegrationTestBase {
                 "{\"id\":\"broken-1\",\"threadId\":\"th-1\",\"labelIds\":[\"INBOX\"],\"raw\":\"not*base64url!\"}");
         inMailbox(JANE, "reply-1", "th-1", List.of("INBOX"), Bounces.reply("bob@acme.com", toBob.getRfcMessageId()), T0);
 
-        // None of them will download any better next time, so they do not stop receiving.
         assertThat(syncJane()).isEqualTo(new SyncResult(true, 2, 1, null));
 
         assertThat(events("message.received")).extracting(e -> payload(e).get("providerMessageId").asText())
@@ -642,16 +594,13 @@ class MailboxSyncTest extends IntegrationTestBase {
         history(JANE, "1002", added("first-1", "th-1", "INBOX"), added("reply-1", "th-1", "INBOX"));
         inMailbox(JANE, "reply-1", "th-1", List.of("INBOX"), Bounces.reply("bob@acme.com", toBob.getRfcMessageId()), T0);
 
-        // Gmail is down: the next run tries the same message again.
         google.onMailbox(JANE, "GET", FakeGoogle.api("/messages/first-1"), 503, FakeGoogle.gmailError(503, "Backend Error"));
         assertThat(syncJane()).isEqualTo(new SyncResult(true, 0, 0, "Gmail is unavailable (503): Backend Error"));
 
-        // Refused for the mailbox's access, which every other message would be too.
         google.onMailbox(JANE, "GET", FakeGoogle.api("/messages/first-1"), 403,
                 FakeGoogle.gmailError(403, "Insufficient Permission"));
         assertThat(syncJane().error()).isEqualTo("Gmail refused the request (403): Insufficient Permission");
 
-        // Refused as if for the message, but Gmail no longer answers for the mailbox either.
         google.onMailbox(JANE, "GET", FakeGoogle.api("/messages/first-1"), 400, FakeGoogle.gmailError(400, "Invalid message"));
         google.onMailbox(JANE, "GET", FakeGoogle.api("/profile"), 500, FakeGoogle.gmailError(500, "Backend Error"));
         assertThat(syncJane().error()).isEqualTo("Gmail refused the request (400): Invalid message");
@@ -682,7 +631,6 @@ class MailboxSyncTest extends IntegrationTestBase {
 
             long started = System.nanoTime();
             assertThat(sync.syncNow("7")).isEqualTo(new SyncResult(true, 0, 0, "A sync is already running"));
-            // It does not wait for the run under way: a request thread must not queue behind a slow mailbox.
             assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(1));
 
             release.countDown();

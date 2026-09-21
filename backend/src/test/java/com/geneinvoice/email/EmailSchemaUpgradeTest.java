@@ -16,17 +16,12 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * A database made before PARTIAL has a check constraint on {@code emails.status} that refuses it,
- * which {@code ddl-auto: update} leaves as it is; the app widens it at startup.
- */
 class EmailSchemaUpgradeTest extends IntegrationTestBase {
 
     private static final String OLD_STATUSES = "'QUEUED', 'SENDING', 'SENT', 'FAILED', 'NOT_SENT', 'RECEIVED'";
 
     @Autowired DataSource dataSource;
 
-    /** The check constraints on emails.status, name and clause. */
     private List<String[]> statusChecks(Connection c) throws SQLException {
         List<String[]> checks = new ArrayList<>();
         try (Statement st = c.createStatement(); ResultSet rows = st.executeQuery("""
@@ -51,7 +46,6 @@ class EmailSchemaUpgradeTest extends IntegrationTestBase {
     @Test
     void anOldStatusConstraintIsWidenedToEveryStatusAndACurrentOneIsLeftAlone() throws Exception {
         try (Connection c = dataSource.getConnection()) {
-            // As a database made before PARTIAL has it.
             try (Statement st = c.createStatement()) {
                 for (String[] check : statusChecks(c)) st.execute("alter table emails drop constraint \"" + check[0] + "\"");
                 st.execute("alter table emails add constraint emails_status_check check (status in (" + OLD_STATUSES + "))");
@@ -61,7 +55,6 @@ class EmailSchemaUpgradeTest extends IntegrationTestBase {
 
                 EmailSchemaUpgrade.widen(c, "emails", "status", EmailStatus.class);
             } finally {
-                // Whatever happened above, the other tests get a table that takes every status.
                 EmailSchemaUpgrade.widen(c, "emails", "status", EmailStatus.class);
             }
             assertThat(statusChecks(c)).singleElement().satisfies(check -> assertThat(check[1]).contains("'PARTIAL'"));
@@ -69,7 +62,6 @@ class EmailSchemaUpgradeTest extends IntegrationTestBase {
             savePartial();
             assertThat(emailRepository.findAll()).extracting(Email::getStatus).containsExactly(EmailStatus.PARTIAL);
 
-            // Up to date: nothing to do.
             String before = statusChecks(c).get(0)[0];
             EmailSchemaUpgrade.widen(c, "emails", "status", EmailStatus.class);
             assertThat(statusChecks(c)).singleElement().satisfies(check -> assertThat(check[0]).isEqualTo(before));

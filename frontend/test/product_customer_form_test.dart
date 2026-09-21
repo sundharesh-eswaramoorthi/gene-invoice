@@ -11,8 +11,6 @@ import 'package:gene_invoice/shared/models/privileges.dart';
 
 import 'support/fake_backend.dart';
 
-/// An administrator with nothing to do with email: the forms then show no Notify box, and the
-/// only messages on screen are the forms' own.
 CurrentUser _admin() => const CurrentUser(
       id: 1,
       username: 'admin',
@@ -27,7 +25,6 @@ FakeBackend _backend() => FakeBackend({
       'POST /api/customers': (o) => {...(o.data as Map).cast<String, dynamic>(), 'id': 42},
     });
 
-/// Opens [dialog] the way a list page's "New …" button does, on a page of its own.
 Future<void> _open(WidgetTester tester, FakeBackend backend, Widget dialog) async {
   tester.view.physicalSize = const Size(1000, 1400);
   tester.view.devicePixelRatio = 1;
@@ -66,7 +63,6 @@ void main() {
       await _open(tester, backend, const ProductFormDialog());
 
       await _save(tester);
-      // Name and Price, both empty.
       expect(find.text('Required'), findsNWidgets(2));
       expect(backend.sent('POST /api/products'), isEmpty);
 
@@ -77,7 +73,6 @@ void main() {
       await tester.enterText(find.widgetWithText(TextFormField, 'Price'), '19.95');
       await tester.pump();
       expect(find.text('Required'), findsNothing);
-      // A price that is not a price still says so, without waiting for another Save.
       await tester.enterText(find.widgetWithText(TextFormField, 'Price'), 'free');
       await tester.pump();
       expect(find.text('Invalid price'), findsOneWidget);
@@ -88,7 +83,6 @@ void main() {
       await _open(tester, backend, const CustomerFormDialog());
 
       await _save(tester);
-      // Name, Username and Password.
       expect(find.text('Required'), findsNWidgets(3));
       expect(backend.sent('POST /api/customers'), isEmpty);
 
@@ -143,7 +137,6 @@ void main() {
       expect(sent['phone'], isNull);
       expect(sent['email'], isNull);
       expect(sent['address'], isNull);
-      // What was typed still goes, without the spaces around it.
       expect(sent['username'], 'tri');
     });
   });

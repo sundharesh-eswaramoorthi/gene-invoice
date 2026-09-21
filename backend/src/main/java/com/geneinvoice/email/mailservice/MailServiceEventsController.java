@@ -20,11 +20,6 @@ import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
-/**
- * The mail service's webhook (mail-service.md §5.5). It carries no user's token — the service is
- * not a user — so it is open in the security chain and trusts only the signature over the raw body.
- * It exists only when the mail service is the transport.
- */
 @RestController
 @ConditionalOnProperty(name = "app.mail.transport", havingValue = "mail-service")
 @Slf4j
@@ -32,11 +27,6 @@ public class MailServiceEventsController {
 
     public static final String PATH = "/api/mail-service/events";
 
-    /**
-     * Bodies read at once. The service sends one batch at a time; anyone else is refused once the
-     * signature is checked, but only after their body was read, so this and the size limit bound the
-     * memory a caller without the secret can take.
-     */
     static final int READERS = 2;
     private static final long READER_WAIT_MS = 2000;
 
@@ -52,13 +42,6 @@ public class MailServiceEventsController {
         this.json = json;
     }
 
-    /**
-     * Applies the events in order, each on its own. One that cannot be applied is logged and passed
-     * over; a database that cannot be reached stops the batch with 503, and the service sends it again.
-     * The body is read only from a call that could be the service's — both headers, a recent
-     * timestamp, a declared size within {@code app.mail.service.webhook-max-bytes} — and never past
-     * that size, whatever the call says.
-     */
     @PostMapping(PATH)
     public ResponseEntity<Map<String, Object>> events(
             @RequestHeader(value = "X-Mail-Timestamp", required = false) String timestamp,
@@ -86,7 +69,6 @@ public class MailServiceEventsController {
                 return ResponseEntity.badRequest().body(Map.of("message", "The events cannot be read"));
             }
             if (body == null) return tooLarge();
-            // Trimmed as the service trims it before signing, so a stray space in either's setting does not matter.
             String secret = properties.getWebhookSecret() == null ? null : properties.getWebhookSecret().trim();
             if (!WebhookSignature.verify(secret, timestamp, signature, body)) return invalidSignature();
         } finally {
@@ -128,7 +110,6 @@ public class MailServiceEventsController {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(Map.of("message", "The events are too large"));
     }
 
-    /** The whole stream, or null when it is longer than {@code max} bytes; never more than that is held. */
     static byte[] readAtMost(InputStream in, long max) throws IOException {
         byte[] read = in.readNBytes((int) Math.min(max + 1, Integer.MAX_VALUE - 8));
         return read.length > max ? null : read;

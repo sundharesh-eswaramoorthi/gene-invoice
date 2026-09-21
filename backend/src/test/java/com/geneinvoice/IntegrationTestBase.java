@@ -38,12 +38,6 @@ import java.util.List;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 
-/**
- * Boots the real application context against an in-memory database and clears the transactional
- * tables between tests, so each test reasons about exactly the rows it created. Mail goes to
- * {@link RecordingMailTransport}, which stands in for the mail service and is reset to "not
- * configured" before each test.
- */
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -86,9 +80,6 @@ public abstract class IntegrationTestBase {
         userRepository.findAll().stream()
                 .filter(u -> !List.of("admin", "cashier").contains(u.getUsername()))
                 .forEach(userRepository::delete);
-        // The seeded accounts survive, so they start every test as the seeder left them: a test
-        // that deactivates one — user administration has rules about the last active
-        // administrator — must not leave the next test unable to assign them as a POC.
         userRepository.findAll().forEach(u -> {
             if (!u.isActive()) {
                 u.setActive(true);
@@ -96,8 +87,6 @@ public abstract class IntegrationTestBase {
             }
         });
     }
-
-    // ---- fixtures --------------------------------------------------------------
 
     protected Role role(String name) {
         return roleRepository.findByName(name)
@@ -140,9 +129,6 @@ public abstract class IntegrationTestBase {
                 .name(name).price(new BigDecimal(price)).active(true).build());
     }
 
-    // ---- authentication --------------------------------------------------------
-
-    /** Puts the given user into the security context for direct service calls. */
     protected void actAs(User u) {
         User fresh = userRepository.findById(u.getId()).orElseThrow();
         AppUserDetails principal = new AppUserDetails(fresh, AppUserDetailsService.buildAuthorities(fresh));
@@ -150,7 +136,6 @@ public abstract class IntegrationTestBase {
                 new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
     }
 
-    /** MockMvc post-processor that authenticates the request as the given user. */
     protected RequestPostProcessor as(User u) {
         User fresh = userRepository.findById(u.getId()).orElseThrow();
         AppUserDetails principal = new AppUserDetails(fresh, AppUserDetailsService.buildAuthorities(fresh));

@@ -31,45 +31,24 @@ public final class Privileges {
 
     public static final String AUDIT_VIEW = "AUDIT_VIEW";
 
-    // ---- Point-of-contact (POC) ------------------------------------------------
-    /** May see POC identity fields, columns, filters and dropdowns. */
     public static final String POC_VIEW = "POC_VIEW";
-    /** May change POC assignments on invoices, payments and customers. */
     public static final String POC_ASSIGN = "POC_ASSIGN";
-    /**
-     * Assignability markers. A user is offered in a POC dropdown when their role carries the
-     * matching marker — this keeps the existing "one role per user" model intact while letting an
-     * admin compose a role that is assignable as several POC kinds at once.
-     */
     public static final String POC_ASSIGNABLE_SALES = "POC_ASSIGNABLE_SALES";
     public static final String POC_ASSIGNABLE_SUCCESS = "POC_ASSIGNABLE_SUCCESS";
     public static final String POC_ASSIGNABLE_COLLECTION = "POC_ASSIGNABLE_COLLECTION";
 
-    /**
-     * May clear the "my records only" default scope on list pages. Without it the default POC
-     * filter is enforced server-side and rendered as a locked chip.
-     */
     public static final String SCOPE_OVERRIDE = "SCOPE_OVERRIDE";
 
-    // ---- Payment promises ------------------------------------------------------
     public static final String PROMISE_VIEW = "PROMISE_VIEW";
     public static final String PROMISE_MANAGE = "PROMISE_MANAGE";
     public static final String PROMISE_OVERRIDE = "PROMISE_OVERRIDE";
 
-    // ---- Email -----------------------------------------------------------------
-    /** May read the Email tab of records they can see, and their own Inbox. */
     public static final String EMAIL_VIEW = "EMAIL_VIEW";
-    /** May compose and send email about records they can see, one at a time or in bulk. */
     public static final String EMAIL_SEND = "EMAIL_SEND";
 
-    // ---- Documents -------------------------------------------------------------
-    /** May see and download the documents on records they can see. */
     public static final String DOCUMENT_VIEW = "DOCUMENT_VIEW";
-    /** May attach a document to a record they can change, and edit or delete one. */
     public static final String DOCUMENT_MANAGE = "DOCUMENT_MANAGE";
 
-    // ---- Tables ----------------------------------------------------------------
-    /** May export the current selection / filtered set as CSV. */
     public static final String EXPORT_DATA = "EXPORT_DATA";
 
     public static final List<String> ALL = List.of(

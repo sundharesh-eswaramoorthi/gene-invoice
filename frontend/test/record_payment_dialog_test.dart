@@ -48,7 +48,6 @@ FakeBackend _backend() => FakeBackend({
       'POST /api/payments': (_) => {'id': 77},
     });
 
-/// Opens the dialog with no customer chosen, the way the payments page's button does.
 Future<void> _open(WidgetTester tester, FakeBackend backend) async {
   tester.view.physicalSize = const Size(1000, 1600);
   tester.view.devicePixelRatio = 1;
@@ -89,7 +88,6 @@ void main() {
 
     await tester.tap(find.widgetWithText(FilledButton, 'Record'));
     await tester.pumpAndSettle();
-    // The field says it, and so does the form below it.
     expect(find.text('Pick a customer'), findsWidgets);
     expect(backend.sent('POST /api/payments'), isEmpty);
 
@@ -112,7 +110,6 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text(complaint), findsNothing);
-    // The form still works once the complaint has gone.
     await tester.tap(find.widgetWithText(FilledButton, 'Record'));
     await tester.pumpAndSettle();
     expect((backend.sent('POST /api/payments').single.data as Map)['amount'], 250);

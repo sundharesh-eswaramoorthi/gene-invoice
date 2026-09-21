@@ -20,7 +20,6 @@ public record CopyRef(long emailId, long recipientId) {
         return externalId(emailId, recipientId);
     }
 
-    /** Empty for anything that is not one of the app's keys. */
     public static Optional<CopyRef> parse(String externalId) {
         if (externalId == null) return Optional.empty();
         Matcher m = EXTERNAL_ID.matcher(externalId);

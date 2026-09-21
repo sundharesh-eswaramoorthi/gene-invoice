@@ -10,12 +10,6 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.List;
 
-/**
- * {@code mail.*}, checked as it is bound, so a missing setting stops startup naming the variable to
- * set rather than every call failing later. The secrets are rejected as global errors, which Spring
- * Boot reports without the value; a field error would print the rejected key in the startup log.
- * No {@code toString}, for the same reason.
- */
 @ConfigurationProperties(prefix = "mail")
 @Getter
 @Setter
@@ -26,9 +20,7 @@ public class MailProperties implements Validator {
     static final int MIN_SECRET_LENGTH = 16;
     static final int SECRETS_KEY_BYTES = 32;
 
-    /** The key the backend sends in {@code X-Api-Key}. */
     private String apiKey;
-    /** Base64 of the 32-byte AES key that seals each connection's client secret and refresh token. */
     private String secretsKey;
     private Queue queue = Queue.RABBIT;
     private Webhook webhook = new Webhook();
@@ -40,7 +32,6 @@ public class MailProperties implements Validator {
     @Getter
     @Setter
     public static class Webhook {
-        /** Where events go; blank keeps them waiting in the outbox. */
         private String url;
         private String secret;
         private long intervalMs = 1000;
@@ -52,14 +43,11 @@ public class MailProperties implements Validator {
     public static class Send {
         private int concurrency = 4;
         private int maxConcurrency = 8;
-        /** Gmail's per-user rate limit: one send per mailbox this often at most. */
         private long perMailboxIntervalMs = 500;
         private int maxAttempts = 3;
         private long sweepIntervalMs = 30000;
-        /** The wait after the first failed attempt, then after every later one (§4.5). */
         private List<Duration> retryDelays = List.of(Duration.ofMinutes(1), Duration.ofMinutes(5));
 
-        /** The wait before the next attempt, after {@code attempts} have failed. */
         public Duration retryDelay(int attempts) {
             return attempts <= 1 ? retryDelays.get(0) : retryDelays.get(retryDelays.size() - 1);
         }
@@ -69,9 +57,7 @@ public class MailProperties implements Validator {
     @Setter
     public static class Tracking {
         private long intervalMs = 60000;
-        /** A copy nothing bounced within this long counts as delivered (estimated). */
         private Duration deliveredAfter = Duration.ofMinutes(15);
-        /** How long after sending a copy is looked for in the recipient's own mailbox. */
         private Duration confirmWindow = Duration.ofHours(24);
     }
 
@@ -95,7 +81,6 @@ public class MailProperties implements Validator {
         return !blank(webhook.url);
     }
 
-    /** The AES key, once it has passed {@link #validate}. */
     public byte[] secretsKeyBytes() {
         return Base64.getDecoder().decode(secretsKey.trim());
     }

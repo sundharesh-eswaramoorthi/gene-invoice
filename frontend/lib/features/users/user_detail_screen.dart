@@ -83,7 +83,6 @@ class UserDetailScreen extends ConsumerWidget {
           DetailGridItem(label: 'Email', child: ReadOnlyValue(u.email ?? '')),
           DetailGridItem(label: 'Role', child: ReadOnlyValue(u.role ?? '')),
           DetailGridItem(label: 'Active', child: ReadOnlyValue(u.active ? 'Yes' : 'No')),
-          // Staff send email from their own Gmail; customer logins never connect one.
           if (u.customerId == null)
             DetailGridItem(label: 'Gmail', child: UserGmailStatus(userId: u.id)),
           if (u.customerId != null)
@@ -99,8 +98,6 @@ class UserDetailScreen extends ConsumerWidget {
       );
 }
 
-/// The customer a customer login signs in to, by name once it has loaded. The user record carries
-/// only the id, and a customer this viewer may not open still reads as its number.
 class _CustomerLink extends ConsumerWidget {
   final int customerId;
   const _CustomerLink({required this.customerId});

@@ -23,8 +23,6 @@ class InboxScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Who sent an email is staff identity, which a customer login cannot sort or filter by; the
-    // server's inbox schema leaves that column out for them and refuses the sort (AC-A8).
     final isCustomer = ref.watch(currentUserProvider)?.isCustomer ?? false;
     return Scaffold(
       appBar: AppBar(
@@ -46,10 +44,7 @@ class InboxScreen extends ConsumerWidget {
         parse: InboxItem.fromJson,
         idOf: (i) => i.id,
         emptyMessage: 'No emails match this filter',
-        // The screen's own context rather than the cell's: the reader navigates after the table
-        // has refreshed behind it, and a cell's context may be gone by then.
         onRowTap: (_, item) => _open(context, item),
-        // Marking rows read changes the sidebar's unread badge, which lives outside this table.
         onBulkDone: () => ref.invalidate(inboxUnreadCountProvider),
         bulkActions: const [
           BulkActionSpec(action: 'MARK_READ', label: 'Mark read', icon: Icons.done_all),
@@ -116,10 +111,6 @@ class InboxScreen extends ConsumerWidget {
   static TextStyle _weight(InboxItem item) =>
       TextStyle(fontWeight: item.read ? FontWeight.normal : FontWeight.w700);
 
-  // Both posts take the container and the messenger before they go out. The screen may be gone
-  // when the answer comes (the reader's "Open" leaves it at once), and a gone screen's ref throws,
-  // so the sidebar's badge would never catch up.
-
   Future<void> _markAllRead(BuildContext context) async {
     final container = ProviderScope.containerOf(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
@@ -145,13 +136,11 @@ class InboxScreen extends ConsumerWidget {
   }
 
   Future<void> _open(BuildContext context, InboxItem item) async {
-    // Opening an email reads it; the row and the badge catch up behind the reader.
     if (!item.read) unawaited(_setRead(context, item, read: true));
     await showDialog<void>(
       context: context,
       builder: (_) => _ReaderDialog(
         item: item,
-        // The table's context, which outlives the reader that closes before navigating.
         onOpenRecord: (link) => goGuarded(context, link),
       ),
     );
@@ -168,7 +157,6 @@ class _ReaderDialog extends ConsumerStatefulWidget {
 }
 
 class _ReaderDialogState extends ConsumerState<_ReaderDialog> {
-  /// Loads the email again while its delivery can still change, as the Email tab does (§6).
   late final _refresher =
       EmailRefresher(() => ref.invalidate(emailDetailProvider(widget.item.emailId)));
 
@@ -186,15 +174,12 @@ class _ReaderDialogState extends ConsumerState<_ReaderDialog> {
     _refresher.update(email == null ? null : emailRefreshInterval([email]),
         busy: async.isLoading);
     final link = item.entityLink;
-    // Only once the email says this reader may open its record: a recipient can read an email
-    // about a record they cannot see, and the link would lead to a refusal.
     final canOpenRecord = email?.canOpenRecord ?? false;
     return AlertDialog(
       contentPadding: const EdgeInsets.fromLTRB(12, 16, 12, 0),
       content: SizedBox(
         width: MediaQuery.sizeOf(context).width < 600 ? double.maxFinite : 680,
         child: async.when(
-          // A refresh that fails keeps the email on show.
           skipError: true,
           loading: () => const Padding(
             padding: EdgeInsets.all(24),
@@ -265,10 +250,6 @@ class _InboxCard extends StatelessWidget {
   }
 }
 
-/// Says why mail may not be leaving or arriving — no mail service, or the reader's own Gmail not
-/// connected or failing — so an empty or undelivered inbox is not a mystery. Only staff who send
-/// email connect a Gmail; customer logins and readers without EMAIL_SEND hear only about the mail
-/// service, since the page a Connect would lead to turns them away.
 class _DeliveryBanner extends ConsumerWidget {
   const _DeliveryBanner();
 

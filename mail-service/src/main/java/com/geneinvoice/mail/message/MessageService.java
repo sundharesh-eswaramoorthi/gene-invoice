@@ -29,11 +29,6 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Takes copies from the backend (§4.3) and keeps every change to a copy together with its event.
- * A submit is one transaction; the queue hears of the new copies only once it has committed, so a
- * worker never looks for a row that is not there yet.
- */
 @Service
 @Slf4j
 public class MessageService {
@@ -60,7 +55,6 @@ public class MessageService {
         this.clock = clock;
     }
 
-    /** A submit after validation: every text storable, trimmed and cut as §4.3 says. */
     private record Submission(String senderRef, String senderName, String subject, String body, String groupRef,
                               boolean retry, List<CopyInput> copies) {}
 
@@ -68,19 +62,12 @@ public class MessageService {
 
     private record Saved(List<CopyState> states, List<Long> queued) {}
 
-    /**
-     * Saves the copies and queues those that can go. A copy the service already has is returned as it
-     * stands — handing the same email over again never sends it twice — unless {@code retry} asks for
-     * a failed or unsent one to be sent again.
-     */
     public List<CopyState> submit(SubmitRequest request) {
         Submission submission = validated(request);
         Saved saved;
         try {
             saved = transactions.execute(status -> save(submission));
         } catch (DataIntegrityViolationException e) {
-            // Another request saved some of the same copies at the same moment. They exist now, and the
-            // second pass returns them as they stand.
             log.info("Copies of group {} were submitted twice at once; reading them back", submission.groupRef());
             saved = transactions.execute(status -> save(submission));
         }
@@ -93,10 +80,6 @@ public class MessageService {
                 .orElseThrow(() -> ApiException.notFound("No message " + externalId));
     }
 
-    /**
-     * The copy, locked until the transaction ends and read afresh under the lock, so two changes to one
-     * copy never overwrite each other — also when the transaction read it before. Null when it is gone.
-     */
     public MailMessage locked(Long id) {
         MailMessage message = entityManager.find(MailMessage.class, id);
         if (message == null) return null;
@@ -104,10 +87,6 @@ public class MessageService {
         return message;
     }
 
-    /**
-     * Records a change to a copy the client can see: {@code seq} up by one, the row saved and a
-     * {@code message.status} event, all in the caller's transaction.
-     */
     public void changed(MailMessage message) {
         message.setSeq(message.getSeq() + 1);
         message.setUpdatedAt(clock.instant());
@@ -115,16 +94,11 @@ public class MessageService {
         recordState(message);
     }
 
-    /** The event for a copy whose change was written by an update query (the claim). */
     public void recordState(MailMessage message) {
         events.record(EventRecorder.MESSAGE_STATUS, message.getSenderRef(), message.getExternalId(),
                 CopyState.of(message));
     }
 
-    /**
-     * Puts copies on the queue and notes when. A publish that fails is only logged: the copy stays
-     * queued, and the sweeper publishes it again.
-     */
     public void publish(List<Long> ids) {
         if (ids.isEmpty()) return;
         List<Long> published = new ArrayList<>();
@@ -163,8 +137,6 @@ public class MessageService {
                         .seq(0)
                         .build();
             }
-            // New, or a failed or unsent copy sent again: as a new copy would be, keeping only its
-            // Message-ID and whether an earlier attempt may have gone out after all.
             m.setGroupRef(s.groupRef());
             m.setSenderRef(s.senderRef());
             m.setFromName(s.senderName());
@@ -219,15 +191,12 @@ public class MessageService {
         return MailText.fit(senderName + "'s Gmail connection needs to be renewed", MailMessage.ERROR_MAX);
     }
 
-    /** {@code <gm-uuid@gmail.com>}: the sender's domain, so it looks like the rest of their mail. */
     private static String newMessageId(MailConnection sender) {
         String address = sender == null ? null : sender.getGmailAddress();
         int at = address == null ? -1 : address.lastIndexOf('@');
         String domain = at < 0 || at == address.length() - 1 ? DEFAULT_DOMAIN : address.substring(at + 1);
         return "<gm-" + UUID.randomUUID() + "@" + domain + ">";
     }
-
-    // ---- validation (§4.3) -------------------------------------------------------------
 
     private static Submission validated(SubmitRequest request) {
         if (request == null) throw ApiException.badRequest("A request body is required");
@@ -280,7 +249,6 @@ public class MessageService {
                 copies);
     }
 
-    /** Storable and trimmed; blank is null. */
     private static String clean(String value) {
         String text = MailText.storable(value);
         return text == null || text.isBlank() ? null : text.trim();

@@ -46,11 +46,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
-/**
- * Sending, reading and retrying email about records (§6). Nothing here is one transaction end to
- * end: an email is saved in a short transaction of its own and handed to the mail service after it
- * commits, so the service is never called with a database transaction open.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -65,7 +60,6 @@ public class EmailService {
     private static final int PEOPLE_LIMIT = 20;
     private static final int MAX_UTC_OFFSET_MINUTES = 14 * 60;
 
-    /** A record's emails page like any list, newest first; there is nothing to filter or re-sort. */
     private static final TableSchema RECORD_EMAILS = TableSchema.of("emails", "occurredAt,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).notFilterable().build(),
             ColumnDef.of("occurredAt", "Date", ColumnType.DATE).notFilterable().build());
@@ -109,13 +103,6 @@ public class EmailService {
         }
     }
 
-    // ---- composing ---------------------------------------------------------------------
-
-    /**
-     * Everything the compose form needs for a kind of record, or for one record when an id is given.
-     * {@code utcOffsetMinutes} is where the reader is (minutes east of UTC), so a suggestion dates a
-     * record on the day the app shows them; without it, the server's own time zone.
-     */
     public EmailDtos.ContextDto context(String entityType, Long entityId, String event, Integer utcOffsetMinutes) {
         EmailEntityType type = EmailEntityType.parse(entityType);
         targets.requireTypeAccess(type);
@@ -127,12 +114,10 @@ public class EmailService {
 
         List<RoleRef> offered = target == null ? targets.rolesOffered(type) : targets.rolesOffered(target);
         EmailTargets.Person self = EmailTargets.Person.of(me);
-        // Whether each person shown can send from their Gmail, looked up together.
         Map<Long, GmailStatus> gmail = gmailConnections.statuses(Stream.concat(Stream.of(self),
                         target == null || restricted ? Stream.<EmailTargets.Person>empty()
                                 : offered.stream().flatMap(role -> target.holders(role).stream()))
                 .filter(EmailTargets.Person::internal).map(EmailTargets.Person::userId).toList());
-        // One entry per (role, level), customer level first, so the form can group the chips (§3).
         List<EmailDtos.RoleOption> roles = offered.stream().map(role -> {
             String label = role.role().label();
             String levelLabel = role.levelLabel(type);
@@ -142,7 +127,6 @@ public class EmailService {
                         null, List.of(), null);
             }
             boolean resolved = !target.holders(role).isEmpty();
-            // Whether a role is filled is the customer's to know; who fills it is not (AC-A8).
             if (restricted) {
                 return new EmailDtos.RoleOption(role.role(), label, role.level(), levelLabel, groupLabel,
                         resolved, List.of(), null);
@@ -166,10 +150,6 @@ public class EmailService {
                 roles, customerEmails, suggestion);
     }
 
-    /**
-     * The reader's offset as a zone. Offsets in use run from -12:00 to +14:00, so anything beyond
-     * ±14:00 is a mistake, not a place; an absent one leaves the server's zone.
-     */
     private static ZoneId readerZone(Integer utcOffsetMinutes) {
         if (utcOffsetMinutes == null) return ZoneId.systemDefault();
         if (utcOffsetMinutes < -MAX_UTC_OFFSET_MINUTES || utcOffsetMinutes > MAX_UTC_OFFSET_MINUTES) {
@@ -179,14 +159,12 @@ public class EmailService {
         return ZoneOffset.ofTotalSeconds(utcOffsetMinutes * 60);
     }
 
-    /** A customer login does not connect Gmail, so it is never connected. */
     private static EmailDtos.PersonDto personDto(EmailTargets.Person p, Map<Long, GmailStatus> gmail) {
         GmailStatus status = p.internal() ? gmail.getOrDefault(p.userId(), GmailStatus.NOT_CONNECTED)
                 : GmailStatus.NOT_CONNECTED;
         return new EmailDtos.PersonDto(p.userId(), p.name(), p.address(), status);
     }
 
-    /** A login usually shares the customer's address; the form lists each address once. */
     private static List<EmailDtos.CustomerAddress> distinctAddresses(EmailTargets.Target target) {
         Set<String> seen = new LinkedHashSet<>();
         return target.customerEmails().stream()
@@ -206,7 +184,6 @@ public class EmailService {
                 .toList();
     }
 
-    /** Who a send would reach, what would stop it, and why it might be saved but not sent, without saving anything. */
     public EmailDtos.PreviewDto preview(EmailDtos.SendEmailRequest req) {
         EmailTargets.Target target = targets.load(EmailEntityType.parse(req.entityType()), requireId(req.entityId()));
         EmailAddressing.Resolution resolution = addressing.resolve(
@@ -238,12 +215,6 @@ public class EmailService {
         };
     }
 
-    // ---- sending -----------------------------------------------------------------------
-
-    /**
-     * Sends one email about one record and returns it as the mail service took it: usually QUEUED
-     * there, or NOT_SENT when it cannot go out.
-     */
     public EmailDtos.EmailDto send(EmailDtos.SendEmailRequest req) {
         EmailTargets.Target target = targets.load(EmailEntityType.parse(req.entityType()), requireId(req.entityId()));
         Content content = Content.check(req.subject(), req.body(), req.to());
@@ -257,11 +228,6 @@ public class EmailService {
         return get(id);
     }
 
-    /**
-     * A separate email for each selected record, each with its own role holders and customer
-     * addresses. The request is checked once up front; a record it cannot reach anyone on is skipped
-     * with the reason. Emails are saved before this returns and handed over in the background.
-     */
     public BulkDtos.BulkResult bulk(BulkDtos.BulkRequest req) {
         if (!BULK_ACTION.equals(req.action())) {
             throw new BadRequestException(
@@ -286,7 +252,6 @@ public class EmailService {
             });
             emailByRecord.put(id, save(target, content, resolution, batchId));
         });
-        // Only rows whose transaction committed are handed on.
         dispatcher.dispatchAll(result.succeeded().stream().map(emailByRecord::get).filter(Objects::nonNull).toList());
         return result;
     }
@@ -329,11 +294,6 @@ public class EmailService {
         return email.getId();
     }
 
-    /**
-     * Sends the copies that failed or were not sent again, now (§5.4 Retry); bounced ones stay as
-     * they are. A customer login may retry only what they sent: anyone else's email would go out
-     * under that person's name (E13).
-     */
     public EmailDtos.EmailDto retry(Long id) {
         Email email = emailRepository.findById(id).orElseThrow(() -> new NotFoundException("Email not found"));
         targets.requireVisible(email.getEntityType(), email.getEntityId());
@@ -343,7 +303,6 @@ public class EmailService {
             throw new NotFoundException("Email not found");
         }
         if (!EmailViews.mayRetry(email, viewer)) throw new AccessDeniedException("Not allowed");
-        // Locked, so a report from the mail service cannot roll the copies up in between.
         Boolean requeued = transactions.execute(status -> {
             Email locked = emailRepository.findByIdForUpdate(id).orElseThrow();
             List<EmailRecipient> recipients = recipientRepository.findByEmailIdOrderByIdAsc(id);
@@ -360,8 +319,6 @@ public class EmailService {
         return get(id);
     }
 
-    // ---- reading -----------------------------------------------------------------------
-
     /** A record's emails, newest first; a customer sees only those their customer took part in (E13). */
     public PageResponse<EmailDtos.EmailDto> list(String entityType, Long entityId, Integer page, Integer size) {
         EmailEntityType type = EmailEntityType.parse(entityType);
@@ -376,11 +333,6 @@ public class EmailService {
         return PageResponse.of(views.toDtos(result.content(), viewer, true), query, result.total(), List.of());
     }
 
-    /**
-     * One email, for its sender and recipients, and for anyone who can see its record. Otherwise the
-     * record's own refusal stands (403 without the privilege, 404 outside the book); a customer who
-     * did not take part in it is told it does not exist.
-     */
     public EmailDtos.EmailDto get(Long id) {
         Email email = emailRepository.findById(id).orElseThrow(() -> new NotFoundException("Email not found"));
         List<EmailRecipient> recipients = recipientRepository.findByEmailIdOrderByIdAsc(id);
@@ -402,19 +354,12 @@ public class EmailService {
         return views.toDto(email, recipients, viewer, refused == null);
     }
 
-    // ---- delivery ----------------------------------------------------------------------
-
-    /**
-     * Whether email is sent at all, and the caller's own Gmail as the app last heard of it. Customer
-     * logins do not connect Gmail, so they learn only the first.
-     */
     public EmailDtos.DeliveryStatusDto delivery() {
         User me = currentUser.require();
         if (me.getCustomerId() != null) return new EmailDtos.DeliveryStatusDto(transport.isConfigured(), null);
         return new EmailDtos.DeliveryStatusDto(transport.isConfigured(), gmailConnections.deliveryOf(me.getId()));
     }
 
-    /** Reads the caller's own Gmail for replies now, then brings the app's copy of their connection up to date. */
     public EmailDtos.SyncResultDto sync() {
         if (currentUser.isCustomer()) throw new AccessDeniedException("Not allowed");
         if (!transport.isConfigured()) return new EmailDtos.SyncResultDto(false, 0, 0, EmailDispatcher.NOT_CONFIGURED);
@@ -431,7 +376,6 @@ public class EmailService {
                 result.enabled() || result.error() != null ? result.error() : GMAIL_NOT_CONNECTED);
     }
 
-    /** Best effort: the run's outcome (last read, last error) is on the connection. */
     private void refreshConnection(Long userId) {
         try {
             Optional<ConnectionState> state = connections.connection(userId);
@@ -445,14 +389,11 @@ public class EmailService {
         }
     }
 
-    // ---- request helpers ---------------------------------------------------------------
-
     private static Long requireId(Long entityId) {
         if (entityId == null) throw new BadRequestException("entityId is required");
         return entityId;
     }
 
-    /** A structured bulk param (a token or a list of them), read the way the request body would be. */
     private <T> T param(BulkDtos.BulkRequest req, String key, TypeReference<T> type) {
         Object raw = req.params() == null ? null : req.params().get(key);
         if (raw == null) return null;

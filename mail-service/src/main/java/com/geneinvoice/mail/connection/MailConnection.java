@@ -5,12 +5,6 @@ import lombok.*;
 
 import java.time.Instant;
 
-/**
- * One internal user's Gmail (M2), keyed by the backend's user id. The client secret and refresh
- * token are sealed by {@link SecretBox} and never leave the service. {@code version} changes only
- * when the credentials or the status do: the sync's bookkeeping is written with update queries that
- * leave it alone, so a cached access token stays valid across syncs but never outlives a reconnect.
- */
 @Entity
 @Table(name = "mail_connections")
 @Getter
@@ -36,7 +30,6 @@ public class MailConnection {
     @Column(name = "owner_name", nullable = false, length = OWNER_NAME_MAX)
     private String ownerName;
 
-    /** Lower case, from the Gmail profile. */
     @Column(name = "gmail_address", length = ADDRESS_MAX)
     private String gmailAddress;
 
@@ -49,7 +42,6 @@ public class MailConnection {
     @Column(name = "refresh_token_enc", length = 4000)
     private String refreshTokenEnc;
 
-    /** Space-separated, as Google granted them. */
     @Column(nullable = false, length = 1000)
     private String scopes;
 
@@ -60,7 +52,6 @@ public class MailConnection {
     @Column(name = "status_reason", length = REASON_MAX)
     private String statusReason;
 
-    /** Gmail's history ids are unsigned 64-bit numbers, which a Java long cannot always hold. */
     @Column(name = "history_id", length = 40)
     private String historyId;
 

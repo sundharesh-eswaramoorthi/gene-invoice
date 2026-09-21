@@ -11,10 +11,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The mail service's settings are checked when, and only when, it is the transport. */
 class MailServicePropertiesTest {
 
-    /** The transports on their own, as component scanning would find them. */
     private final ApplicationContextRunner transports = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(ConfigurationPropertiesAutoConfiguration.class))
             .withBean(ObjectMapper.class, ObjectMapper::new)

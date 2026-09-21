@@ -39,9 +39,6 @@ final userDetailProvider = FutureProvider.autoDispose.family<AppUser, int>((ref,
   return AppUser.fromJson(res.data as Map<String, dynamic>);
 });
 
-/// Opens the user form, for a new user or [existing], from the list or the details page. Once it
-/// saves, whatever shows the user is refreshed, and a new user the admin asked to notify gets the
-/// compose dialog — opened on [context], since the form's own is gone.
 Future<void> openUserForm(BuildContext context, WidgetRef ref, {AppUser? existing}) async {
   final saved = await showDialog<({int id, bool notify})>(
     context: context,
@@ -121,7 +118,6 @@ class UsersScreen extends ConsumerWidget {
               sortKey: 'active',
               cell: (context, u) => Text(u.active ? 'Yes' : 'No')),
         ],
-        // Someone who may neither edit nor send email gets no empty action column.
         rowActions: canManage || canSendEmail
             ? (context, u) => [
                   if (canManage)
@@ -141,8 +137,6 @@ class UsersScreen extends ConsumerWidget {
   }
 }
 
-/// Create / edit form for a user. Pops the saved user's id, and whether to write an email about
-/// it, so the caller can follow up once this dialog is gone; open it with [openUserForm].
 class UserFormDialog extends ConsumerStatefulWidget {
   final AppUser? existing;
   const UserFormDialog({super.key, this.existing});

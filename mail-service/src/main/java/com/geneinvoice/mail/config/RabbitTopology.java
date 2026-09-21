@@ -19,12 +19,6 @@ import org.springframework.context.annotation.Configuration;
 
 import java.time.Duration;
 
-/**
- * The send queue (§4.5), declared by the app on its first connection: {@code mail.send} feeds the
- * workers; a copy to try again later waits in a delay queue whose messages expire back into
- * {@code mail.send}; a message the worker cannot handle at all ends in {@code mail.send.dead}.
- * Not set up with {@code mail.queue: direct}, where nothing talks to RabbitMQ.
- */
 @Configuration
 @ConditionalOnProperty(prefix = "mail", name = "queue", havingValue = "rabbit", matchIfMissing = true)
 public class RabbitTopology {
@@ -61,7 +55,6 @@ public class RabbitTopology {
                 sendBinding, shortBinding, longBinding, deadBinding);
     }
 
-    /** Nobody consumes it: a message waits out its TTL, then goes back to {@code mail.send}. */
     private static Queue retryQueue(String name, Duration delay) {
         return QueueBuilder.durable(name)
                 .ttl((int) Math.min(Integer.MAX_VALUE, delay.toMillis()))
@@ -70,16 +63,11 @@ public class RabbitTopology {
                 .build();
     }
 
-    /** {@code {"id": 123}} on the wire; also picked up by the auto-configured RabbitTemplate. */
     @Bean
     public MessageConverter mailMessageConverter() {
         return new Jackson2JsonMessageConverter();
     }
 
-    /**
-     * 4 to 8 consumers, two messages each in hand. A message is acknowledged once the listener
-     * returns; one that throws is rejected without requeueing, which dead-letters it.
-     */
     @Bean(LISTENER_FACTORY)
     public SimpleRabbitListenerContainerFactory sendListenerFactory(
             SimpleRabbitListenerContainerFactoryConfigurer configurer, ConnectionFactory connectionFactory,

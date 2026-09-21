@@ -19,7 +19,6 @@ public class MessageController {
         this.messages = messages;
     }
 
-    /** Accepted: the copies are saved, and those that can go are on the queue. */
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     public SubmitRequest.Response submit(@RequestBody SubmitRequest request) {

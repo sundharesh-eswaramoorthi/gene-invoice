@@ -13,7 +13,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-/** A user's own Gmail connection, and whether someone else has one (mail-service.md §5.6). */
 @RestController
 @RequiredArgsConstructor
 public class GmailConnectionController {
@@ -32,7 +31,6 @@ public class GmailConnectionController {
         return service.connect(req);
     }
 
-    /** Any internal user, so someone who lost EMAIL_SEND can still take their mailbox back. */
     @DeleteMapping("/api/me/gmail")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> disconnect() {
@@ -46,7 +44,6 @@ public class GmailConnectionController {
         return service.ofUser(id);
     }
 
-    /** Someone else's connection, for those who manage users (an account taken over, say). */
     @DeleteMapping("/api/users/{id}/gmail")
     @PreAuthorize("hasAuthority('" + Privileges.USER_MANAGE + "')")
     public ResponseEntity<Void> disconnectUser(@PathVariable Long id) {
@@ -54,10 +51,6 @@ public class GmailConnectionController {
         return ResponseEntity.noContent().build();
     }
 
-    /**
-     * What the mail service said, with its status: Google refused (400), Google unreachable (502),
-     * or the service itself unreachable or not set up (503).
-     */
     @ExceptionHandler(MailConnectException.class)
     public ResponseEntity<ApiError> connectFailed(MailConnectException e, HttpServletRequest req) {
         HttpStatus status = HttpStatus.resolve(e.getHttpStatus());

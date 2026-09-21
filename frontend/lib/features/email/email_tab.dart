@@ -14,10 +14,6 @@ import 'email_models.dart';
 import 'email_providers.dart';
 import 'send_email_dialog.dart';
 
-/// The shared status palette (shared/widgets/status_chip.dart): queued is still waiting, sending
-/// is under way, sent and received are the good endings, partly sent is the palette's warning
-/// ("partly done"), failed went wrong, and "not sent" — the normal state without a mail service
-/// — is inert.
 Color emailStatusColor(BuildContext context, String status) {
   final scheme = Theme.of(context).colorScheme;
   return switch (status) {
@@ -38,10 +34,6 @@ class EmailStatusChip extends StatelessWidget {
       StatusChip(label: emailStatusLabel(status), color: emailStatusColor(context, status));
 }
 
-/// Asks a view of emails to load them again while their delivery can still change
-/// ([emailRefreshInterval]). Call [update] on every build with what is on screen: it keeps one
-/// timer, restarts it when the pace changes, and stops when nothing is left to follow. The owner
-/// calls [dispose] with its own, so no request outlives the view.
 class EmailRefresher {
   final VoidCallback _refresh;
   Timer? _timer;
@@ -49,7 +41,6 @@ class EmailRefresher {
 
   EmailRefresher(this._refresh);
 
-  /// [busy]: a load is under way, and its answer's build sets the next timer.
   void update(Duration? every, {bool busy = false}) {
     if (every == null) {
       _stop();
@@ -71,7 +62,6 @@ class EmailRefresher {
   void dispose() => _stop();
 }
 
-/// The Email tab on a details page: every email about the record, newest first, each in full.
 class EmailTab extends ConsumerStatefulWidget {
   final EmailEntityType type;
   final int entityId;
@@ -86,11 +76,8 @@ class EmailTab extends ConsumerStatefulWidget {
 class _EmailTabState extends ConsumerState<EmailTab> {
   static const _pageSize = 20;
 
-  /// Pages shown so far. Each is its own request, so "Show older" never refetches what is on
-  /// screen, and a send that invalidates the family refreshes them all at once.
   int _pages = 1;
 
-  /// Loads the pages on show again while an email on them is still on its way (§6).
   late final _refresher = EmailRefresher(() {
     for (var i = 0; i < _pages; i++) {
       ref.invalidate(entityEmailsProvider(_key(i)));
@@ -141,7 +128,6 @@ class _EmailTabState extends ConsumerState<EmailTab> {
         );
 
     return first.when(
-      // A refresh that fails keeps the emails already on show; the next one may do better.
       skipError: true,
       loading: () => ListView(
         padding: const EdgeInsets.all(12),
@@ -192,7 +178,6 @@ class _EmailTabState extends ConsumerState<EmailTab> {
                   );
             break;
           }
-          // Mail that arrived between two pages pushes a row onto the next page as well.
           for (final e in loaded.content) {
             if (seen.add(e.id)) emails.add(e);
           }
@@ -242,16 +227,11 @@ class _Unavailable extends StatelessWidget {
       );
 }
 
-/// One email in full: who it was from and to and how each was added, what happened to it, and
-/// the whole message. Used by the Email tab and the Inbox reader.
 class EmailCard extends ConsumerStatefulWidget {
   final EmailMessage email;
 
-  /// Names the record it is about — needed where emails about many records mix, as in the Inbox.
   final bool showRecord;
 
-  /// Seen from the viewer's Inbox, where every email is one they received. The Email tab speaks
-  /// for the system ("Outgoing · sent …"), which read to a recipient as if they had sent it.
   final bool inbox;
 
   const EmailCard({super.key, required this.email, this.showRecord = false, this.inbox = false});
@@ -264,9 +244,6 @@ class _EmailCardState extends ConsumerState<EmailCard> {
   bool _retrying = false;
 
   Future<void> _retry() async {
-    // Taken before the request, which sends at once and can take seconds: the card may be gone by
-    // the time it answers (the reader closed, another tab chosen), and a gone card's ref throws,
-    // which would read as the retry failing and leave the lists on the old status.
     final container = ProviderScope.containerOf(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
     final id = widget.email.id;
@@ -304,7 +281,6 @@ class _EmailCardState extends ConsumerState<EmailCard> {
       when = '$direction · ${emailProgress(email)}';
     }
 
-    // "as Collection POC" — unless the sender is masked, and already reads as that role.
     final roleLabel = email.fromRoleLabel;
     final fromNotes =
         roleLabel == null || roleLabel == email.from.name ? const <String>[] : ['· as $roleLabel'];
@@ -340,8 +316,6 @@ class _EmailCardState extends ConsumerState<EmailCard> {
             const SizedBox(height: 2),
             Text(when, style: muted),
             const SizedBox(height: 8),
-            // Names and addresses are separate runs now (_Person); one selection area over them
-            // keeps them as easy to copy as the single From text was.
             SelectionArea(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,7 +323,6 @@ class _EmailCardState extends ConsumerState<EmailCard> {
                   if (widget.showRecord && email.entityLabel.isNotEmpty)
                     _Field(label: 'About', child: Text(email.entityLabel)),
                   _Field(label: 'From', child: _Person(person: email.from, notes: fromNotes)),
-                  // Each To recipient gets a copy of their own, and says what became of it.
                   _Field(label: 'To', child: _Recipients(people: email.to, showDelivery: true)),
                   if (email.cc.isNotEmpty)
                     _Field(label: 'Cc', child: _Recipients(people: email.cc)),
@@ -411,7 +384,6 @@ class _EmailCardState extends ConsumerState<EmailCard> {
   }
 }
 
-/// A label beside its value; the label column is narrow enough to leave a phone the width.
 class _Field extends StatelessWidget {
   final String label;
   final Widget child;
@@ -436,7 +408,6 @@ class _Field extends StatelessWidget {
 class _Recipients extends StatelessWidget {
   final List<EmailParticipant> people;
 
-  /// Follow each person with what became of their copy.
   final bool showDelivery;
   const _Recipients({required this.people, this.showDelivery = false});
 
@@ -453,7 +424,6 @@ class _Recipients extends StatelessWidget {
               person: p,
               notes: [
                 if (p.howAdded.isNotEmpty) '— ${p.howAdded}',
-                // Kept on the email as an in-app copy; no message could leave for them.
                 if (p.address == null && !p.masked) '— no email address',
               ],
               delivery: showDelivery ? p.delivery : null,
@@ -464,19 +434,12 @@ class _Recipients extends StatelessWidget {
   }
 }
 
-/// One sender or recipient, as [EmailParticipant.display] words it, followed by [notes] and, for
-/// a recipient, what became of their copy ([delivery]). The name, the address and each note are
-/// runs of their own, so a narrow screen breaks the line between them — the name above
-/// "<bob@company.com>" — rather than inside the address, as one paragraph did ("<e2 /
-/// eui.cust…"). An address too long for a line of its own breaks after its "@".
 class _Person extends StatelessWidget {
   final EmailParticipant person;
   final List<String> notes;
   final RecipientDelivery? delivery;
   const _Person({required this.person, this.notes = const [], this.delivery});
 
-  /// "· Delivered 17 Sep 2026, 6:07 AM (estimated)" in its colour, then "· read in app …".
-  /// Delivered and read are the good endings; bounced, failed and not sent went wrong.
   List<Widget> _deliveryRuns(BuildContext context, RecipientDelivery delivery) {
     final muted = Theme.of(context).textTheme.bodySmall;
     final status = recipientDeliveryText(delivery);
@@ -492,7 +455,6 @@ class _Person extends StatelessWidget {
     return [
       if (statusRun != null)
         estimated
-            // An estimate is all there is for a mailbox the app cannot read.
             ? Tooltip(
                 message: 'No bounce came back; Gmail does not confirm delivery',
                 child: statusRun,
@@ -518,7 +480,6 @@ class _Person extends StatelessWidget {
           ? Text(text)
           : Wrap(children: [Text(text.substring(0, at + 1)), Text(text.substring(at + 1))]);
     }
-    // Read out as one person, not as three fragments.
     return MergeSemantics(
       child: Wrap(
         spacing: 4,

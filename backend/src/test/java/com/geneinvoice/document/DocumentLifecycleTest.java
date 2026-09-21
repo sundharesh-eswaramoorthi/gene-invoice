@@ -27,16 +27,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * A document's life after the upload: listing it, downloading it, editing it, deleting it, and
- * what happens to it when its record or its storage does not hold up (AC-C2 to AC-C5, AC-C13,
- * AC-C18).
- */
 class DocumentLifecycleTest extends DocumentTestBase {
 
     @Autowired PrivilegeRepository privilegeRepository;
-
-    // ---- listing (AC-C2) -------------------------------------------------------
 
     @Test
     void aRecordsDocumentsArePagedNewestFirst() throws Exception {
@@ -65,7 +58,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
         assertThat(second.get("content")).hasSize(1);
         assertThat(second.at("/content/0/filename").asText()).isEqualTo("po-1.pdf");
 
-        // One record's documents never leak into another's.
         JsonNode elsewhere = read(mockMvc.perform(get("/api/documents")
                         .param("entityType", "CUSTOMER")
                         .param("entityId", String.valueOf(acme.getId()))
@@ -73,8 +65,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
                 .andExpect(status().isOk()));
         assertThat(elsewhere.get("totalElements").asInt()).isZero();
     }
-
-    // ---- downloading (AC-C13) --------------------------------------------------
 
     @Test
     void aDownloadStreamsTheBytesWithHeadersThatKeepTheBrowserOutOfThem() throws Exception {
@@ -103,13 +93,10 @@ class DocumentLifecycleTest extends DocumentTestBase {
 
         mockMvc.perform(get("/api/documents/" + dto.get("id").asLong() + "/download").with(as(admin)))
                 .andExpect(status().isOk())
-                // The quoted name is ASCII and cannot break out of the header; the real one follows.
                 .andExpect(header().string("Content-Disposition",
                         "attachment; filename=\"___ _2026_.pdf\"; "
                                 + "filename*=UTF-8''%E0%A4%AC%E0%A4%BF%E0%A4%B2%20%222026%22.pdf"));
     }
-
-    // ---- editing ---------------------------------------------------------------
 
     @Test
     void aDescriptionKeepsItsLinesAndLosesWhatWouldReorderThem() throws Exception {
@@ -144,7 +131,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
         assertThat(edited.get("description").asText()).isEqualTo("Signed by the customer");
         assertThat(edited.get("visibility").asText()).isEqualTo("SHARED");
 
-        // A field left out is left alone.
         JsonNode again = read(mockMvc.perform(patch("/api/documents/" + id)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"description\":\"Signed and stamped\"}")
@@ -153,7 +139,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
         assertThat(again.get("description").asText()).isEqualTo("Signed and stamped");
         assertThat(again.get("visibility").asText()).isEqualTo("SHARED");
 
-        // Two edits, newest first; the one that shared it is the older.
         List<JsonNode> edits = historyEntries("INVOICE", acmeInvoice.getId(), "DOCUMENT_UPDATED");
         assertThat(edits).hasSize(2);
         JsonNode shared = edits.get(1);
@@ -173,8 +158,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
                 .andExpect(jsonPath("$.message").value("visibility must be one of [INTERNAL, SHARED]"));
     }
 
-    // ---- deleting (AC-C3) ------------------------------------------------------
-
     @Test
     void deletingIsSoftAndTheFileStopsBeingDownloadable() throws Exception {
         JsonNode dto = upload(admin, "INVOICE", acmeInvoice.getId(), "po.pdf");
@@ -188,8 +171,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
         assertThat(row.isDeleted()).isTrue();
         assertThat(row.getDeletedByUserId()).isEqualTo(admin.getId());
         assertThat(row.getDeletedAt()).isNotNull();
-        // The row is kept for the audit trail, and so are the bytes (§1, answer 8) — but nothing
-        // reaches them any more.
         assertThat(Files.exists(bytes)).isTrue();
 
         mockMvc.perform(get("/api/documents/" + id + "/download").with(as(admin)))
@@ -214,8 +195,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
                 .andExpect(status().isCreated()));
         JsonNode theirs = upload(admin, "INVOICE", acmeInvoice.getId(), "theirs.pdf");
 
-        // Sam keeps his documents when his role stops managing invoices; he still cannot touch
-        // anyone else's.
         User sam = userRepository.findById(sales.getId()).orElseThrow();
         sam.setRole(documentKeeper());
         userRepository.save(sam);
@@ -228,8 +207,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
         mockMvc.perform(delete("/api/documents/" + mine.get("id").asLong()).with(as(sales)))
                 .andExpect(status().isNoContent());
     }
-
-    // ---- the record going away (AC-C5) -----------------------------------------
 
     @Test
     void deletingACustomerTakesItsDocumentsWithIt() throws Exception {
@@ -250,16 +227,12 @@ class DocumentLifecycleTest extends DocumentTestBase {
                         .with(as(admin)))
                 .andExpect(status().isNotFound());
 
-        // Another customer's documents are untouched.
         assertThat(documentRepository.findById(elsewhere.get("id").asLong()).orElseThrow().isDeleted())
                 .isFalse();
     }
 
-    // ---- storage that does not hold up (AC-C18) --------------------------------
-
     @Test
     void anUploadThatCannotBeStoredLeavesNoRow() throws Exception {
-        // A file where the key's directory would go: storage cannot make it, so the write fails.
         Path blocked = root().resolve("invoice").resolve(String.valueOf(acmeInvoice.getId()));
         removeRecursively(blocked);
         Files.createDirectories(blocked.getParent());
@@ -276,8 +249,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
         }
     }
 
-    // ---- helpers ---------------------------------------------------------------
-
     private Path root() {
         return Path.of(documentProperties.getLocal().getRoot()).toAbsolutePath().normalize();
     }
@@ -286,7 +257,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
         return root().resolve(documentRepository.findById(documentId).orElseThrow().getStorageKey());
     }
 
-    /** May attach nothing, and keeps what it attached before. */
     private Role documentKeeper() {
         return roleRepository.findByName("DOCUMENT_KEEPER").orElseGet(() ->
                 roleRepository.save(Role.builder().name("DOCUMENT_KEEPER")
@@ -305,7 +275,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
         return entries.get(0);
     }
 
-    /** The record's history rows for one action, newest first. */
     private List<JsonNode> historyEntries(String entityType, Long entityId, String action) throws Exception {
         JsonNode history = read(mockMvc.perform(get("/api/audit")
                         .param("entityType", entityType)
@@ -317,7 +286,6 @@ class DocumentLifecycleTest extends DocumentTestBase {
                 .toList();
     }
 
-    /** Clears whatever an earlier run left at this path, file or directory. */
     private static void removeRecursively(Path path) throws IOException {
         if (!Files.exists(path)) return;
         try (var walk = Files.walk(path)) {

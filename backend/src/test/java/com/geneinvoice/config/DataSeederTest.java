@@ -15,7 +15,6 @@ import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** AC-A1: the three POC roles exist after boot, and re-running the seeder neither duplicates nor resets them. */
 class DataSeederTest extends IntegrationTestBase {
 
     @Autowired DataSeeder seeder;
@@ -82,8 +81,6 @@ class DataSeederTest extends IntegrationTestBase {
         assertThat(names(DataSeeder.ROLE_SALES_POC)).contains(Privileges.PROMISE_MANAGE);
     }
 
-    // ---- E14: email privileges ------------------------------------------------------
-
     @Test
     void emailPrivilegesAreSeededForTheRolesThatUseEmail() {
         for (String r : List.of("ADMIN", "CASHIER", "CUSTOMER", DataSeeder.ROLE_SALES_POC,
@@ -93,16 +90,10 @@ class DataSeederTest extends IntegrationTestBase {
         assertThat(names("VIEWER")).contains(Privileges.EMAIL_VIEW).doesNotContain(Privileges.EMAIL_SEND);
     }
 
-    /**
-     * An existing database meets the email privileges for the first time: the POC roles get them in
-     * that boot, because nobody could have taken away what did not exist. After that an admin's
-     * removal stands, however often the app restarts.
-     */
     @Test
     void aPocRoleIsGrantedANewPrivilegeOnlyInTheBootThatCreatesIt() {
         List<String> emailPrivileges = List.of(Privileges.EMAIL_VIEW, Privileges.EMAIL_SEND);
         try {
-            // An upgrade from before email: no such privilege rows, and no role holding them.
             for (Role role : roleRepository.findAll()) {
                 role.getPrivileges().removeIf(p -> emailPrivileges.contains(p.getName()));
                 roleRepository.save(role);
@@ -124,7 +115,6 @@ class DataSeederTest extends IntegrationTestBase {
             assertThat(names(DataSeeder.ROLE_SALES_POC))
                     .contains(Privileges.EMAIL_VIEW).doesNotContain(Privileges.EMAIL_SEND);
         } finally {
-            // Other tests share this database and expect the seeded defaults.
             Role sales = roleRepository.findByName(DataSeeder.ROLE_SALES_POC).orElseThrow();
             privilegeRepository.findByName(Privileges.EMAIL_SEND).ifPresent(sales.getPrivileges()::add);
             roleRepository.save(sales);
@@ -132,18 +122,11 @@ class DataSeederTest extends IntegrationTestBase {
         }
     }
 
-    // ---- §4.5: customer uploads ------------------------------------------------------
-
     @Test
     void aCustomerLoginMaySeeAndAttachDocumentsOnItsOwnRecords() {
         assertThat(names("CUSTOMER")).contains(Privileges.DOCUMENT_VIEW, Privileges.DOCUMENT_MANAGE);
     }
 
-    /**
-     * Attaching files is the one thing an untrusted outside account can write, so an operator who
-     * takes it away keeps it taken away: unlike the rest of a built-in role, {@code
-     * DOCUMENT_MANAGE} on CUSTOMER is not put back by the next boot (§4.5).
-     */
     @Test
     void revokingCustomerUploadsSurvivesARestart() {
         try {
@@ -154,10 +137,8 @@ class DataSeederTest extends IntegrationTestBase {
             seeder.run();
 
             assertThat(names("CUSTOMER")).doesNotContain(Privileges.DOCUMENT_MANAGE)
-                    // Only that one: they still see what is shared with them.
                     .contains(Privileges.DOCUMENT_VIEW);
         } finally {
-            // Other tests share this database and expect the seeded defaults.
             Role customer = roleRepository.findByName("CUSTOMER").orElseThrow();
             privilegeRepository.findByName(Privileges.DOCUMENT_MANAGE)
                     .ifPresent(customer.getPrivileges()::add);

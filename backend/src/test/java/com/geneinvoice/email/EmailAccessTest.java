@@ -28,8 +28,6 @@ class EmailAccessTest extends EmailTestBase {
 
     @Autowired PrivilegeRepository privilegeRepository;
 
-    // ---- what a customer login may send ------------------------------------------------
-
     @Test
     void aCustomerLoginMayNotAddressStaffByName() throws Exception {
         Invoice inv = invoice(acme, sales);
@@ -56,7 +54,6 @@ class EmailAccessTest extends EmailTestBase {
         assertThat(stored.getFromUserId()).isEqualTo(acmeLogin.getId());
         assertThat(stored.getFromCustomerId()).isEqualTo(acme.getId());
         assertThat(stored.isFromInternal()).isFalse();
-        // They addressed the Sales POC, and see the role — not the person behind it.
         assertThat(sent.at("/to/0/masked").asBoolean()).isTrue();
         assertThat(sent.at("/to/0/name").asText()).isEqualTo("Sales POC (this invoice)");
         assertThat(sent.at("/to/0/address").isNull()).isTrue();
@@ -74,16 +71,12 @@ class EmailAccessTest extends EmailTestBase {
                 List.of(toRole("COLLECTION_POC")))).andExpect(status().isOk()));
         JsonNode sent = send(acmeLogin, email("INVOICE", inv.getId(), List.of(toRole("COLLECTION_POC"), toCustomer())));
 
-        // Every active holder got it in their Inbox. A customer login's email is not sent through
-        // Gmail at all, so no copy anywhere names a holder.
         assertThat(recipientsOf(sent.get("id").asLong())).filteredOn(EmailRecipient::isInternal)
                 .extracting(EmailRecipient::getUserId).containsExactly(collections.getId(), cora.getId());
         assertThat(mailTransport.submissions()).isEmpty();
         assertThat(getOk("/api/inbox/unread-count", collections).get("count").asLong()).isEqualTo(1);
         assertThat(getOk("/api/inbox/unread-count", cora).get("count").asLong()).isEqualTo(1);
 
-        // What the customer is shown names the role once, as the compose form does: not who is behind
-        // it, nor how many.
         JsonNode listed = getOk("/api/emails", acmeLogin, "entityType", "INVOICE", "entityId", inv.getId().toString())
                 .at("/content/0");
         for (JsonNode shown : List.of(preview, sent, listed)) {
@@ -100,7 +93,6 @@ class EmailAccessTest extends EmailTestBase {
             assertThat(shown.toString())
                     .doesNotContain("cara.collections", "cora.collections", "CARA.COLLECTIONS", "CORA.COLLECTIONS");
         }
-        // Staff still see each of them.
         assertThat(getOk("/api/emails/" + sent.get("id").asLong(), admin).get("to"))
                 .filteredOn(p -> p.get("internal").asBoolean()).extracting(p -> p.get("userId").asLong())
                 .containsExactly(collections.getId(), cora.getId());
@@ -111,7 +103,6 @@ class EmailAccessTest extends EmailTestBase {
         Invoice inv = invoice(acme, sales);
         User cora = threeCollectionSeats(acme).get(0);
 
-        // Two staff by name, a role with two holders, and one of those holders by name as well.
         long id = send(admin, email("INVOICE", inv.getId(), List.of(toUser(sales), toRole("COLLECTION_POC"),
                 toUser(success), toUser(cora), toCustomer()))).get("id").asLong();
 
@@ -128,7 +119,6 @@ class EmailAccessTest extends EmailTestBase {
                     .containsExactly("Gene Invoice team", "Collection POC (customer)", "Acme Ltd", "ACME.LOGIN");
             assertThat(to.at("/0/masked").asBoolean()).isTrue();
             assertThat(to.at("/0/sources")).extracting(s -> s.get("type").asText()).containsExactly("USER");
-            // The holders' ways in, together: by the role, and (cora) by name.
             assertThat(to.at("/1/sources")).extracting(s -> s.get("type").asText()).containsExactly("ROLE", "USER");
             assertThat(to.at("/1/userId").isNull()).isTrue();
             assertThat(to.at("/2/masked").asBoolean()).isFalse();
@@ -154,7 +144,6 @@ class EmailAccessTest extends EmailTestBase {
                 .fromInternal(true)
                 .sentByUserId(admin.getId())
                 .build());
-        // A role token no role can be read from names nobody, so it says nothing about who it is.
         emailRecipientRepository.save(EmailRecipient.builder()
                 .email(stored).field(RecipientField.TO).userId(collections.getId())
                 .name("CARA.COLLECTIONS").address("cara.collections@test.local").internal(true)
@@ -198,12 +187,8 @@ class EmailAccessTest extends EmailTestBase {
                 .containsExactly("Acme Ltd", "ACME.LOGIN", "Sales POC (this invoice)");
         assertThat(customerView.at("/to/0/delivery/status").asText()).isEqualTo("SENT");
         assertThat(customerView.at("/to/1/delivery/readInAppAt").asText()).isEqualTo("2026-09-20T11:00:00Z");
-        // The staff member's copy is theirs: masked people carry no delivery, and the provider's
-        // words, which quote the address, are not repeated to the customer.
         assertThat(customerView.at("/to/2/masked").asBoolean()).isTrue();
         assertThat(customerView.at("/to/2/delivery").isNull()).isTrue();
-        // Nor does the email as a whole: both of their copies went out, so to them it was sent, not
-        // "partly sent" with a failure that could only be staff's.
         assertThat(customerView.get("status").asText()).isEqualTo("SENT");
         assertThat(customerView.get("error").isNull()).isTrue();
         assertThat(getOk("/api/emails", acmeLogin, "entityType", "INVOICE", "entityId", inv.getId().toString())
@@ -221,7 +206,6 @@ class EmailAccessTest extends EmailTestBase {
                 List.of(toRole("SALES_POC", "RECORD"), toCustomer())));
         mailTransport.mode(Mode.SUCCESS);
 
-        // Both were saved without being sent. The staff email would go out under a staff name.
         assertThat(getOk("/api/emails/" + staffs, acmeLogin).get("canRetry").asBoolean()).isFalse();
         assertThat(getOk("/api/emails", acmeLogin, "entityType", "INVOICE", "entityId", inv.getId().toString())
                 .findValues("canRetry")).extracting(JsonNode::asBoolean).containsExactlyInAnyOrder(true, false);
@@ -231,7 +215,6 @@ class EmailAccessTest extends EmailTestBase {
         assertThat(own.get("canRetry").asBoolean()).isTrue();
         JsonNode retried = read(mockMvc.perform(post("/api/emails/" + own.get("id").asLong() + "/retry").with(as(acmeLogin)))
                 .andExpect(status().isOk()));
-        // Saved again, and still not sent: customer logins do not connect Gmail.
         assertThat(retried.get("error").asText()).isEqualTo("Email from a customer login is not sent through Gmail");
         assertThat(mailTransport.submissions()).isEmpty();
         assertThat(getOk("/api/emails/" + staffs, admin).get("canRetry").asBoolean()).isTrue();
@@ -249,16 +232,12 @@ class EmailAccessTest extends EmailTestBase {
             emailRepository.save(email);
         }
 
-        // The staff sender's own Gmail address.
         assertThat(getOk("/api/emails/" + staffs, acmeLogin).get("deliveredFrom").isNull()).isTrue();
         assertThat(getOk("/api/emails/" + staffs, admin).get("deliveredFrom").asText()).isEqualTo("sender" + staffs + "@gmail.com");
         assertThat(getOk("/api/emails/" + own, acmeLogin).get("deliveredFrom").asText()).isEqualTo("sender" + own + "@gmail.com");
-        // Why their own email was not sent is theirs to know.
         assertThat(getOk("/api/emails/" + own, acmeLogin).get("error").asText())
                 .isEqualTo("Email from a customer login is not sent through Gmail");
 
-        // The service's words can quote a staff recipient's address, and a missing Gmail connection
-        // names the staff sender; the app's own reasons do neither.
         mailTransport.mode(Mode.PERMANENT_FAILURE);
         long failed = send(admin, email("INVOICE", inv.getId(), List.of(toCustomer()))).get("id").asLong();
         assertThat(getOk("/api/emails/" + failed, acmeLogin).get("error").asText()).isEqualTo("Could not be delivered");
@@ -276,8 +255,6 @@ class EmailAccessTest extends EmailTestBase {
         assertThat(getOk("/api/emails/" + unsent, acmeLogin).get("error").asText())
                 .isEqualTo("Email delivery is not configured (mail service)");
     }
-
-    // ---- what a customer login may read ----------------------------------------------
 
     @Test
     void anEmailBetweenStaffOnlyIsInvisibleToTheCustomer() throws Exception {
@@ -311,7 +288,6 @@ class EmailAccessTest extends EmailTestBase {
         assertThat(shown.at("/sentBy/name").asText()).isEqualTo("Gene Invoice team");
         assertThat(shown.at("/to/0/name").asText()).isEqualTo("Sales POC (this invoice)");
         assertThat(shown.at("/to/0/address").isNull()).isTrue();
-        // Their own people are theirs to see.
         assertThat(shown.at("/to/1/address").asText()).isEqualTo("ap@acme.test");
         assertThat(shown.at("/to/2/userId").asLong()).isEqualTo(acmeLogin.getId());
         assertThat(shown.get("readByMe").asBoolean()).isFalse();
@@ -359,8 +335,6 @@ class EmailAccessTest extends EmailTestBase {
                 .andExpect(status().isNotFound());
     }
 
-    // ---- one email by id -------------------------------------------------------------
-
     @Test
     void aRecipientReadsTheEmailEvenWithoutSeeingItsRecord() throws Exception {
         Invoice theirs = invoice(acme, otherSales);
@@ -369,7 +343,6 @@ class EmailAccessTest extends EmailTestBase {
 
         JsonNode read = getOk("/api/emails/" + id, sales);
         assertThat(read.get("readByMe").asBoolean()).isFalse();
-        // Not their book: they cannot retry it, open its record, nor list the record's other emails.
         assertThat(read.get("status").asText()).isEqualTo("NOT_SENT");
         assertThat(read.get("canRetry").asBoolean()).isFalse();
         assertThat(read.get("canOpenRecord").asBoolean()).isFalse();
@@ -403,7 +376,6 @@ class EmailAccessTest extends EmailTestBase {
     void readingNeedsEmailView() throws Exception {
         Invoice inv = invoice(acme, sales);
         User viewer = user("vic.viewer", "VIEWER");
-        // VIEWER holds EMAIL_VIEW but not EMAIL_SEND: it reads, and cannot send.
         getOk("/api/emails", viewer, "entityType", "INVOICE", "entityId", inv.getId().toString());
 
         Role invoicesOnly = roleRepository.findByName("INVOICE_READER_NO_EMAIL").orElseGet(() ->

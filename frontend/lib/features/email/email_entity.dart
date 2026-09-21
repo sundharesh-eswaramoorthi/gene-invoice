@@ -12,22 +12,16 @@ enum EmailEntityType {
   user,
   role;
 
-  /// 'INVOICE', as the API spells it.
   String get wire => name.toUpperCase();
 
-  /// 'invoice', for sentences: "Choose the invoice".
   String get noun => name;
 
-  /// 'invoices'.
   String get plural => '${name}s';
 
-  /// 'Invoice', for labels.
   String get label => '${name[0].toUpperCase()}${name.substring(1)}';
 
-  /// '/invoices' — the list page; a record's page is `$routeBase/$id`.
   String get routeBase => '/$plural';
 
-  /// '/api/invoices' — the list endpoint the record picker searches.
   String get apiPath => '/api$routeBase';
 
   static EmailEntityType? fromWire(String? wire) {
@@ -37,9 +31,6 @@ enum EmailEntityType {
     return null;
   }
 
-  // ---- the record picker ----------------------------------------------------------
-
-  /// What the search box says it searches.
   String get searchHint => switch (this) {
         customer || product || role => 'Search by name',
         invoice => 'Search by invoice number',
@@ -48,7 +39,6 @@ enum EmailEntityType {
         user => 'Search by username',
       };
 
-  /// Newest first for the records that pile up, alphabetical for the ones people name.
   String get pickerSort => switch (this) {
         customer || product || role => 'name,asc',
         invoice => 'invoiceDate,desc',
@@ -58,8 +48,6 @@ enum EmailEntityType {
         user => 'username,asc',
       };
 
-  /// The list filters for what was typed. Payments, promises and disputes have no name of their
-  /// own and are known by number, so a typed number ("42" or "#42") finds that one.
   List<String> searchFilters(String search) {
     final text = search.trim();
     if (text.isEmpty) return const [];
@@ -77,7 +65,6 @@ enum EmailEntityType {
     return ['$column:contains:$text'];
   }
 
-  /// How a row from [apiPath] reads in the picker.
   String recordLabel(Map<String, dynamic> row) => switch (this) {
         customer || product || role => '${row['name'] ?? '$label #${row['id']}'}',
         invoice => '${row['invoiceNumber'] ?? 'Invoice #${row['id']}'}',

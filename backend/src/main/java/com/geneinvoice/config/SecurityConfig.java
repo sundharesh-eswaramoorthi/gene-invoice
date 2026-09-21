@@ -58,12 +58,9 @@ public class SecurityConfig {
                 .cors(c -> c.configurationSource(corsConfigurationSource()))
                 .csrf(c -> c.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // A missing, expired or invalid token is 401, not Spring's default 403, so the app can
-                // tell "sign in again" apart from "you lack the privilege" (still 403).
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/actuator/health", "/h2-console/**").permitAll()
-                        // The mail service's webhook carries no user's token; its HMAC signature is checked instead.
                         .requestMatchers(HttpMethod.POST, "/api/mail-service/events").permitAll()
                         .anyRequest().authenticated()
                 )

@@ -8,11 +8,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.validation.Errors;
 import org.springframework.validation.Validator;
 
-/**
- * {@code app.mail.service.*}. Only bound when the mail service is the transport, and checked as it
- * is bound, so a missing setting stops startup naming the variable to set — rather than every email
- * failing later with a message nobody reads. The key and the secret are never logged.
- */
 @Component
 @ConditionalOnProperty(name = "app.mail.transport", havingValue = "mail-service")
 @ConfigurationProperties(prefix = "app.mail.service")
@@ -20,22 +15,11 @@ import org.springframework.validation.Validator;
 @Setter
 public class MailServiceProperties implements Validator {
 
-    /** Where the mail service listens, e.g. {@code http://localhost:8091}. */
     private String url = "http://localhost:8091";
-    /** Sent as {@code X-Api-Key} on every call; the service's {@code MAIL_API_KEY}. */
     private String apiKey;
-    /** Signs the service's webhook calls; the service's {@code MAIL_WEBHOOK_SECRET}. */
     private String webhookSecret;
     private long connectTimeoutMs = 5000;
-    /** Connecting a Gmail account waits on Google, so this is longer than a hand-off needs. */
     private long readTimeoutMs = 40000;
-    /**
-     * The largest webhook body read (a batch of events), 32 MiB: well above the service's largest
-     * batch (100 events, replies cut to 20,000 characters). The webhook is open to anyone who can
-     * reach the backend, and its body is read before the signature can be checked, so a larger one
-     * is refused unread (413). Should a real batch ever be refused, lower the service's
-     * {@code mail.webhook.batch-size} or raise this.
-     */
     private long webhookMaxBytes = MAX_WEBHOOK_BYTES_DEFAULT;
 
     public static final long MAX_WEBHOOK_BYTES_DEFAULT = 32L * 1024 * 1024;

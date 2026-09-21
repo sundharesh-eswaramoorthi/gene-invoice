@@ -21,14 +21,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Replies the mail service finds in a sender's Gmail are saved on the record they answer, and reach
- * whoever sent the email they answer (M10, E8).
- */
 @ExtendWith(OutputCaptureExtension.class)
 class EmailInboundTest extends EmailTestBase {
 
-    /** The collector's own Gmail, which the email went out from and the reply came back to. */
     private static final String CARAS_GMAIL = "cara.collects@gmail.com";
     private static final MailAddress MAILBOX = new MailAddress("Cara", CARAS_GMAIL);
     private static final MailAddress ACME_AP = new MailAddress("Acme Accounts", "AP@acme.test");
@@ -37,10 +32,8 @@ class EmailInboundTest extends EmailTestBase {
 
     Invoice inv;
     Email sent;
-    /** The customer's own copy, as the service reported it sent. */
     EmailRecipient copy;
 
-    /** Collections writes to the customer from their own Gmail; the service has sent the customer's copy. */
     @BeforeEach
     void sendOne() throws Exception {
         mailTransport.mode(Mode.SUCCESS);
@@ -95,7 +88,6 @@ class EmailInboundTest extends EmailTestBase {
             assertThat(r.getUserId()).isEqualTo(collections.getId());
             assertThat(r.getAddress()).isEqualTo("cara.collections@test.local");
             assertThat(r.getSources()).isEqualTo("MAILBOX");
-            // Received mail has no copies of its own.
             assertThat(r.getDeliveryStatus()).isNull();
         });
         assertThat(recipients.get(1)).satisfies(r -> {
@@ -109,7 +101,6 @@ class EmailInboundTest extends EmailTestBase {
         assertThat(inbox.at("/content/0/direction").asText()).isEqualTo("INBOUND");
         assertThat(getOk("/api/inbox", sales).get("totalElements").asLong()).isZero();
 
-        // The customer took part, so they see it too, with the collector as the team.
         JsonNode customerView = getOk("/api/emails/" + id.get(), acmeLogin);
         assertThat(customerView.at("/from/name").asText()).isEqualTo("Acme Accounts");
         assertThat(customerView.at("/to/0/masked").asBoolean()).isTrue();
@@ -119,7 +110,6 @@ class EmailInboundTest extends EmailTestBase {
 
     @Test
     void aReplyFromAStaffMembersConnectedGmailIsTheirsAndMaskedToTheCustomer() throws Exception {
-        // Sam sends from a Gmail that is not his email in Users (M4 allows it).
         gmailConnectionRepository.save(GmailConnection.builder().userId(sales.getId())
                 .status(ConnectionStatus.CONNECTED).gmailAddress("sam.personal@gmail.com").build());
 
@@ -201,7 +191,6 @@ class EmailInboundTest extends EmailTestBase {
                 new MailAddress(null, "acme.login@test.local"), List.of(MAILBOX), List.of()), hint(null))).isEmpty();
         assertThat(inbound.handle(mail("x-2", "fresh-thread", "<not-ours@elsewhere>", List.of(),
                 new MailAddress("Stranger", "stranger@elsewhere.test"), List.of(MAILBOX), List.of()), hint(null))).isEmpty();
-        // A copy id the app never gave out finds nothing either.
         assertThat(inbound.handle(mail("x-3", "fresh-thread", null, List.of(),
                 ACME_AP, List.of(MAILBOX), List.of()), hint("gi-999999-1"))).isEmpty();
         assertThat(emailRepository.findAll()).hasSize(1);
@@ -236,7 +225,6 @@ class EmailInboundTest extends EmailTestBase {
 
     @Test
     void textTheDatabaseCannotStoreIsLeftOutOfReceivedMail() {
-        // An "&#0;" in an HTML reply, or a mislabelled charset, decodes to NUL, which Postgres refuses.
         String nul = String.valueOf((char) 0);
         Optional<Long> id = inbound.handle(new IncomingMail("r-nul", "thread-copy-1", "<r-nul@mail.acme.test>",
                 null, List.of(), new MailAddress("Acme" + nul + " Accounts", "AP@acme.test"), List.of(MAILBOX),
@@ -252,8 +240,6 @@ class EmailInboundTest extends EmailTestBase {
 
     @Test
     void receivedTextCutToFitNeverEndsInHalfACharacter() {
-        // An emoji is two UTF-16 units; each text below has one across its column's last kept unit,
-        // whose first half alone Postgres would store as '?'.
         String emoji = "😀";
         Optional<Long> id = inbound.handle(new IncomingMail("r-emoji", "thread-copy-1",
                 "<r-emoji@mail.acme.test>", null, List.of(),
@@ -271,7 +257,6 @@ class EmailInboundTest extends EmailTestBase {
 
     @Test
     void mailThatCannotBeSavedIsReportedRatherThanTakenForAConcurrentImport(CapturedOutput output) {
-        // A thread id longer than its column: the insert fails, and nobody else saved the message.
         IncomingMail unsaveable = mail("r-long", "t".repeat(150), null, List.of(), ACME_AP, List.of(MAILBOX), List.of());
 
         assertThat(inbound.handle(unsaveable, hint(copyRef()))).isEmpty();

@@ -129,7 +129,6 @@ void main() {
     ]) {
       expect(find.text(title), findsOneWidget, reason: title);
     }
-    // The ageing card names its measure, so nobody reads it as days since the invoice (AC-B5).
     expect(find.text('Days overdue'), findsOneWidget);
     expect(find.text('Days since the invoice date'), findsNothing);
     expect(find.text('Collection POC'), findsOneWidget);
@@ -163,7 +162,6 @@ void main() {
     );
 
     expect(find.text('Billed and paid by month'), findsOneWidget);
-    // The key figure and the chart legend both say it; neither says "Collected".
     expect(find.text('Paid'), findsNWidgets(2));
     expect(find.text('Collected'), findsNothing);
     expect(find.text('Upcoming promises'), findsOneWidget);
@@ -171,7 +169,6 @@ void main() {
     expect(find.text('Top paying customers'), findsNothing);
     expect(find.text('Collection POC'), findsNothing);
     expect(find.text('Cleo Collections'), findsNothing);
-    // Every promise is the customer's own, so the table does not repeat their name.
     expect(find.text('Customer'), findsNothing);
     expect(find.text('Initech'), findsNothing);
   });
@@ -190,15 +187,12 @@ void main() {
 
   testWidgets('quick actions follow privileges too: no buttons that could only answer 403',
       (tester) async {
-    // A role an admin reshaped down to notifications alone. The sidebar hides Invoices and
-    // Payments for them, and the dashboard must not offer them either (DASH-02, AC-C22).
     await _pump(tester, _user('NOTIFIER', {Privileges.notificationView}));
 
     expect(find.text('All invoices'), findsNothing);
     expect(find.text('All payments'), findsNothing);
     expect(find.text('Record payment'), findsNothing);
     expect(find.byType(OutlinedButton), findsNothing);
-    // The welcome still reads as a page, not as a gap where the buttons were.
     expect(find.textContaining('Welcome'), findsOneWidget);
   });
 

@@ -5,10 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 
-/**
- * The message for each invalid field, keyed by its path in the request body, in the order found. The
- * exception's own message joins the different messages, for a caller that shows only that.
- */
 public class InvalidFieldsException extends RuntimeException {
 
     private final Map<String, String> fieldErrors;

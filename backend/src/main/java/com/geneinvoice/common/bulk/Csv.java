@@ -2,7 +2,6 @@ package com.geneinvoice.common.bulk;
 
 import java.util.List;
 
-/** Minimal RFC-4180 CSV writer for the "export selected" action. */
 public final class Csv {
 
     private Csv() {}
@@ -28,7 +27,6 @@ public final class Csv {
     private static String escape(Object value) {
         if (value == null) return "";
         String s = value.toString();
-        // A leading =, +, - or @ makes spreadsheets treat the cell as a formula.
         if (!s.isEmpty() && "=+-@".indexOf(s.charAt(0)) >= 0) {
             s = "'" + s;
         }

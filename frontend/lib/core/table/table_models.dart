@@ -1,7 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-/// One filter chip: a column, an operator, and its values.
-/// Wire form is `field:operator:value`, matching the backend's parser.
 @immutable
 class TableFilter {
   final String field;
@@ -45,8 +43,6 @@ class TableFilter {
   int get hashCode => Object.hash(field, operator, Object.hashAll(values));
 }
 
-/// Page, size, sort and filters for one list view. Round-trips through the URL so a
-/// filtered view can be shared or bookmarked.
 @immutable
 class TableQuery {
   final int page;
@@ -64,7 +60,6 @@ class TableQuery {
         filters: filters ?? this.filters,
       );
 
-  /// Changing size, sort or filters always resets to the first page (AC-D2).
   TableQuery withSize(int newSize) => copyWith(page: 0, size: newSize);
   TableQuery withSort(String? newSort) => TableQuery(page: 0, size: size, sort: newSort, filters: filters);
   TableQuery withFilters(List<TableFilter> newFilters) =>
@@ -81,7 +76,6 @@ class TableQuery {
 
   bool get hasFilters => filters.isNotEmpty;
 
-  /// Query parameters for the API call.
   Map<String, dynamic> toApiParams() => {
         'page': page,
         'size': size,
@@ -89,7 +83,6 @@ class TableQuery {
         if (filters.isNotEmpty) 'filter': filters.map((f) => f.wire).toList(),
       };
 
-  /// Query parameters for the browser URL, so the view is restorable (AC-D4).
   Map<String, dynamic> toRouteParams() => {
         if (page != 0) 'page': '$page',
         'size': '$size',
@@ -126,7 +119,6 @@ class TableQuery {
   int get hashCode => Object.hash(page, size, sort, Object.hashAll(filters));
 }
 
-/// The paged envelope every list endpoint returns.
 @immutable
 class PagedResult<T> {
   final List<T> content;
@@ -137,7 +129,6 @@ class PagedResult<T> {
   final String? sort;
   final List<String> appliedFilters;
 
-  /// Filters the server pinned on regardless of the request — a POC's locked book (AC-A6).
   final List<TableFilter> lockedFilters;
 
   const PagedResult({
@@ -180,7 +171,6 @@ class PagedResult<T> {
       );
 
   bool get isEmpty => content.isEmpty;
-  /// Row numbers for "1–20 of 45"; both are 0 on an empty page, even one past the end.
   int get firstRowNumber => content.isEmpty ? 0 : page * size + 1;
   int get lastRowNumber => content.isEmpty ? 0 : page * size + content.length;
 }
@@ -198,8 +188,6 @@ ColumnType parseColumnType(String? raw) => switch (raw) {
       _ => ColumnType.unknown,
     };
 
-/// One column as the backend describes it. The filter UI is built from these, so a
-/// column the server cannot handle is never offered (D.4).
 @immutable
 class ColumnDef {
   final String name;
@@ -277,7 +265,6 @@ class TableSchema {
   String labelFor(String name) => column(name)?.label ?? name;
 }
 
-/// Human-readable operator names for the filter builder.
 String operatorLabel(String op) => switch (op) {
       'eq' => 'is',
       'neq' => 'is not',

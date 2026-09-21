@@ -10,10 +10,7 @@ import '../auth/auth_controller.dart';
 import 'dispute_create_dialog.dart';
 import 'disputes_providers.dart';
 
-/// The Disputes tab shared by the detail screens. Reuses the existing dispute screens
-/// for anything beyond the list itself (C.3).
 class DisputesTab extends ConsumerWidget {
-  /// Filters to one record. Leave null on a customer to show all of that customer's disputes.
   final DisputeTargetType? targetType;
   final int? targetId;
   final int? customerId;

@@ -110,8 +110,6 @@ Map<String, dynamic> _email({bool? canOpenRecord = true}) => {
       'readByMe': false,
     };
 
-/// [held] keeps a request ("METHOD /path") from being answered until its future completes.
-/// [email] replaces the email the reader loads; [delivery] what GET /api/emails/delivery says.
 Future<List<RequestOptions>> _pumpInbox(
   WidgetTester tester, {
   CurrentUser? user,
@@ -190,14 +188,12 @@ Future<List<RequestOptions>> _pumpInbox(
 List<String> _posts(List<RequestOptions> requests) =>
     requests.where((r) => r.method == 'POST').map((r) => r.path).toList();
 
-/// Keeps the Inbox badge watched, as the sidebar does, and counts how often it has asked.
 int Function() _watchBadge(WidgetTester tester, List<RequestOptions> requests) {
   ProviderScope.containerOf(tester.element(find.byType(InboxScreen)))
       .listen(inboxUnreadCountProvider, (_, __) {});
   return () => requests.where((r) => r.path == '/api/inbox/unread-count').length;
 }
 
-/// Answers every unread count with [count], or fails it while [failing] says so.
 Dio _countsDio({required int count, required bool Function() failing, List<String>? asked}) =>
     Dio()
       ..interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
@@ -209,8 +205,6 @@ Dio _countsDio({required int count, required bool Function() failing, List<Strin
         }
       }));
 
-/// A person in the reader, matched by how their runs read together: the name, the address (split
-/// after its "@") and each note are separate Text widgets.
 Finder _person(String line) => find.byElementPredicate((element) {
       if (element.widget is! MergeSemantics) return false;
       final runs = <String>[];
@@ -228,8 +222,6 @@ Finder _person(String line) => find.byElementPredicate((element) {
     }, description: 'person "$line"');
 
 void main() {
-  // Real glyph widths, for the reader's line breaks at phone width. Nothing else here measures
-  // text.
   setUpAll(loadRoboto);
 
   testWidgets('on a phone Inbox sits right below Dashboard in the drawer, with its count',
@@ -287,7 +279,6 @@ void main() {
     await tester.tap(find.text('Re: Payment reminder'));
     await tester.pumpAndSettle();
     expect(_posts(requests), ['/api/inbox/501/read']);
-    // The row behind the reader refreshes, so it no longer reads as unread.
     expect(requests.where((r) => r.path == '/api/inbox').length, greaterThan(listed));
     expect(find.text('Paid yesterday.'), findsOneWidget);
     expect(_person('Jane Doe <jane@company.com> — mailbox'), findsOneWidget);
@@ -315,7 +306,6 @@ void main() {
 
   testWidgets('the reader tells its reader they received the email, whichever way it went',
       (tester) async {
-    // An email staff sent, which reached this user's Inbox as one of its recipients.
     await _pumpInbox(tester, email: {
       ..._email(),
       'direction': 'OUTBOUND',
@@ -372,8 +362,6 @@ void main() {
       return rect;
     }
 
-    // The name and the address are separate runs, each whole on its line: the address, too long
-    // to follow the name, starts a line of its own, and breaks again only after its "@".
     final name = run('e2eui Cust mu4ryb3o');
     final local = run('<e2eui.cust.mu4ryb3o@');
     final domain = run('example.com>');
@@ -467,7 +455,6 @@ void main() {
     await tester.pump(Duration.zero);
     expect(asked, ['/api/inbox/unread-count']);
 
-    // Signing out: the token is gone, so any request now would come back 401 and sign out again.
     container.read(signedIn.notifier).state = null;
     await tester.pump();
     await tester.pump(const Duration(minutes: 2));
@@ -477,8 +464,6 @@ void main() {
 
   testWidgets('staff sort by sender; a customer login is not offered it, which the server refuses',
       (tester) async {
-    // Columns in order: From, Subject, About, Received, Status.
-    // The first table; the row actions have one of their own beside it.
     List<DataColumn> columns() =>
         tester.widget<DataTable>(find.byType(DataTable).first).columns;
 
@@ -520,7 +505,6 @@ void main() {
         'The last Gmail check failed: Gmail is unavailable (503)',
         null,
       ),
-      // All well; and a customer login, who has no Gmail of their own.
       ({'configured': true, 'gmail': gmail('CONNECTED')}, null, null),
       ({'configured': true, 'gmail': null}, null, null),
     ]) {
@@ -550,8 +534,6 @@ void main() {
   });
 
   testWidgets('a reader who may not send email is never asked to connect a Gmail', (tester) async {
-    // The server's word on their Gmail may be "not connected", but the page Connect leads to
-    // turns them away: the seeded VIEWER (EMAIL_VIEW only), and a customer login that may send.
     Map<String, dynamic> gmail(String status, {String? lastSyncError}) => {
           'status': status,
           'gmailAddress': null,
@@ -574,7 +556,6 @@ void main() {
         expect(find.widgetWithText(TextButton, 'Connect'), findsNothing, reason: reason);
         expect(find.widgetWithText(TextButton, 'Reconnect'), findsNothing, reason: reason);
       }
-      // They still hear that no mail leaves the app at all.
       await _pumpInbox(tester,
           user: user, delivery: {'configured': false, 'gmail': gmail('NOT_CONNECTED')});
       expect(find.text('Email delivery is not configured'), findsOneWidget);
@@ -584,7 +565,6 @@ void main() {
 
   testWidgets('the reader follows an email on its way out, and stops once closed', (tester) async {
     final recent = DateTime.now().toUtc().subtract(const Duration(minutes: 2)).toIso8601String();
-    // Mutable: the next time the reader asks, the server says what has become of it.
     final email = {
       ..._email(),
       'direction': 'OUTBOUND',
@@ -607,7 +587,6 @@ void main() {
     int loads() => requests.where((r) => r.path == '/api/emails/91').length;
     Future<void> wait(Duration d) async {
       await tester.pump(d);
-      // The request goes out, and its answer lands: Dio takes a moment of the clock for each.
       await tester.pump(const Duration(milliseconds: 1));
       await tester.pump(const Duration(milliseconds: 1));
     }
@@ -625,7 +604,6 @@ void main() {
     expect(
         _person('Jane Doe <jane@company.com> — added directly · Sent ${formatDateTime(recent)}'),
         findsOneWidget);
-    // Followed more slowly now that it has gone.
     await wait(const Duration(seconds: 25));
     expect(loads(), 2);
     await wait(const Duration(seconds: 5));

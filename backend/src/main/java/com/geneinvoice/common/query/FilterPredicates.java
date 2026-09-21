@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** Builds a criteria {@link Predicate} for one validated filter chip. */
 final class FilterPredicates {
     private FilterPredicates() {}
 
@@ -84,11 +83,6 @@ final class FilterPredicates {
         return parts.isEmpty() ? cb.conjunction() : cb.and(parts.toArray(new Predicate[0]));
     }
 
-    /**
-     * {@code <= raw}. A bare date on a timestamp column means "through the end of that day", and is
-     * compared as {@code < the next day's start}: an end-of-day instant such as 23:59:59.999999999
-     * rounds up to midnight in a microsecond column and would catch the next day's first rows.
-     */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static Predicate atMost(Expression<?> path, Class<?> javaType, String raw, String column,
                                     CriteriaBuilder cb) {

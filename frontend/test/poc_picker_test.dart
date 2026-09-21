@@ -12,8 +12,6 @@ void main() {
     {'id': 2, 'username': 'zed', 'fullName': 'Zed Sales', 'role': 'SALES_POC', 'active': true},
   ];
 
-  // The search used to live on the field behind the dialog, so the list answered the
-  // keystroke before the last one and a typed username never filtered it.
   testWidgets('the POC search follows exactly what is typed', (tester) async {
     final searches = <String?>[];
     final dio = Dio()

@@ -9,9 +9,6 @@ import 'package:gene_invoice/features/auth/auth_controller.dart';
 
 typedef _Row = Map<String, dynamic>;
 
-/// Answers the schema request with no columns, a bulk action with [bulkResult] and every other
-/// request with [page]. With [pageError] the list request itself fails with that message and a
-/// 400, the way a size the server does not allow does.
 Dio _dio(Map<String, dynamic> page, {Map<String, dynamic>? bulkResult, String? pageError}) => Dio()
   ..interceptors.add(InterceptorsWrapper(onRequest: (options, handler) {
     if (pageError != null && options.method == 'GET' && options.path == '/api/things') {
@@ -69,8 +66,6 @@ Future<void> _pump(
       home: Scaffold(
         body: Row(
           children: [
-            // Stands in for the extended navigation rail beside every desktop list page; a phone
-            // has a drawer instead.
             if (size.width >= 900) const SizedBox(width: 257),
             Expanded(
               child: DataTableScaffold<_Row>(
@@ -183,7 +178,6 @@ void main() {
     expect(tester.getRect(find.text('Send email')).top, greaterThan(chip.bottom));
     expect(tester.getRect(find.text('New customer')).right, lessThanOrEqualTo(phone.width));
 
-    // A desktop has the width to keep them on the filter bar's line.
     await _pump(tester, page: rows, actions: actions);
     expect(tester.getRect(find.text('New customer')).top,
         lessThan(tester.getRect(find.byType(ActionChip)).bottom));
@@ -215,7 +209,6 @@ void main() {
       },
     );
 
-    // The heading's checkbox comes first.
     await tester.tap(find.byType(Checkbox).at(1));
     await tester.tap(find.byType(Checkbox).at(2));
     await tester.pumpAndSettle();
@@ -245,7 +238,6 @@ void main() {
       expect(tester.getCenter(open.at(i)).dy,
           moreOrLessEquals(tester.getCenter(find.byType(Checkbox).at(i + 1)).dy, epsilon: 0.5));
     }
-    // Selecting a row tints its actions too.
     await tester.tap(find.byType(Checkbox).at(2));
     await tester.pumpAndSettle();
     final actionRows = tester.widget<DataTable>(find.byType(DataTable).last).rows;
@@ -260,7 +252,6 @@ void main() {
       {'id': 3, 'name': 'Initech'},
     ], total: 45));
 
-    // Two rows by hand, then the whole filtered set.
     await tester.tap(find.byType(Checkbox).at(1));
     await tester.tap(find.byType(Checkbox).at(2));
     await tester.pumpAndSettle();
@@ -273,8 +264,6 @@ void main() {
     expect(tester.widgetList<Checkbox>(find.byType(Checkbox)).map((c) => c.value).toList(),
         [true, true, true, true]);
 
-    // Unticking one narrows to what is on screen, and the count says so rather than quietly
-    // dropping back to the two rows ticked before.
     await tester.tap(find.byType(Checkbox).at(2));
     await tester.pumpAndSettle();
     expect(find.text('2 selected'), findsOneWidget);
@@ -336,7 +325,6 @@ void main() {
     expect(second.left, greaterThan(first.right));
     expect(second.right, greaterThan(phone.width * 0.9));
     expect(third.top, greaterThan(first.bottom));
-    // Which leaves the rows themselves within one screen of the top.
     expect(tester.getRect(find.text('Acme Ltd')).top, lessThan(phone.height));
   });
 

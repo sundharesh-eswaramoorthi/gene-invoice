@@ -5,7 +5,6 @@ import com.geneinvoice.privilege.Privileges;
 
 import java.util.Arrays;
 
-/** The three kinds of point-of-contact this app tracks. */
 public enum PocType {
     SALES(Privileges.POC_ASSIGNABLE_SALES, "Sales POC"),
     SUCCESS(Privileges.POC_ASSIGNABLE_SUCCESS, "Customer Success POC"),
@@ -19,7 +18,6 @@ public enum PocType {
         this.label = label;
     }
 
-    /** A user may be assigned as this POC when their role carries this privilege. */
     public String assignabilityPrivilege() {
         return assignabilityPrivilege;
     }
@@ -28,7 +26,6 @@ public enum PocType {
         return label;
     }
 
-    /** Reads a POC type sent as text, e.g. in a bulk action's params; an unknown one is a 400. */
     public static PocType parse(String raw) {
         String wanted = raw == null ? "" : raw.trim();
         for (PocType t : values()) {

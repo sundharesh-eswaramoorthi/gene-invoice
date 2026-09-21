@@ -11,7 +11,6 @@ import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** A missing or bad required setting stops startup, naming the variable, without printing the secret. */
 class MailPropertiesTest {
 
     private static final String API_KEY = "mail.api-key=an-api-key-of-20-chars";
@@ -60,7 +59,6 @@ class MailPropertiesTest {
                 });
         runner.withPropertyValues(API_KEY, SECRETS_KEY, "mail.webhook.url=http://localhost:8086/api/mail-service/events",
                 "mail.webhook.secret=a-webhook-secret-of-some-length").run(context -> assertThat(context).hasNotFailed());
-        // Without a webhook, no secret is needed: events wait in the outbox.
         runner.withPropertyValues(API_KEY, SECRETS_KEY).run(context -> assertThat(context).hasNotFailed());
     }
 

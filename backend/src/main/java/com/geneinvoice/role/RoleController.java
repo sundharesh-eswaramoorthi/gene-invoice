@@ -135,7 +135,6 @@ public class RoleController {
         r.setPrivileges(wanted);
         Role saved = roleRepository.save(r);
         if (sentEmail && !sendsEmail(saved)) {
-            // Its holders may no longer send email, so their Gmail connections go (mail-service.md §5.6).
             gmailDisconnects.request(userRepository.findInternalIdsByRoleId(id));
         }
         return RoleDto.from(saved);
@@ -145,13 +144,6 @@ public class RoleController {
         return r.getPrivileges().stream().anyMatch(p -> Privileges.EMAIL_SEND.equals(p.getName()));
     }
 
-    /**
-     * The role editor is the third way to end user and role administration, beside deactivating
-     * and deleting the account itself (AUTH-03). Taking USER_MANAGE or ROLE_MANAGE off one's own
-     * role locks the editor out the moment it is saved — the very request that would put them
-     * back is refused — and taking USER_MANAGE off the last role that carries it leaves the whole
-     * deployment with nobody able to administer users. Neither is recoverable from inside the app.
-     */
     private void requireAdministrationSurvives(Long roleId, Role role, Set<Privilege> wanted) {
         Set<String> after = wanted.stream().map(Privilege::getName).collect(Collectors.toSet());
         Set<String> before = role.getPrivileges().stream().map(Privilege::getName)
@@ -166,8 +158,6 @@ public class RoleController {
                         "You cannot remove your own ability to manage users and roles");
             }
         }
-        // Nobody on another role is left to administer users: the same last-administrator rule
-        // the user editor applies, asked of everyone this role would strip at once.
         if (before.contains(Privileges.USER_MANAGE) && !after.contains(Privileges.USER_MANAGE)
                 && userRepository.countActiveHolders(Privileges.USER_MANAGE, null, roleId) == 0) {
             throw new BadRequestException("This is the last role that can manage users;"
@@ -175,7 +165,6 @@ public class RoleController {
         }
     }
 
-    /** A role still held by users cannot go: their accounts would be left without privileges. */
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.ROLE_MANAGE + "')")
     public void delete(@PathVariable Long id) {

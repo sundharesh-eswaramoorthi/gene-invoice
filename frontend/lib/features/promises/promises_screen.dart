@@ -95,8 +95,6 @@ class PromisesScreen extends ConsumerWidget {
           if (canSendEmail) sendEmailBulkAction(EmailEntityType.promise),
         ],
         columns: [
-          // Capped like every other free-text column: a 120-character customer name must not
-          // widen the table until the columns after it are off screen (UI-01, D-20).
           TableColumnSpec(
             label: 'Customer',
             sortKey: 'customerName',
@@ -158,7 +156,6 @@ class PromisesScreen extends ConsumerWidget {
               onPressed: () async {
                 final saved = await showOverrideDialog(context: context, promise: p);
                 ref.invalidate(promiseDetailProvider(p.id));
-                // The row's status and the tiles above the table both move with an override.
                 if (saved == true) {
                   ref.invalidate(tablePageProvider);
                   ref.invalidate(tableSummaryProvider);
@@ -171,7 +168,6 @@ class PromisesScreen extends ConsumerWidget {
   }
 }
 
-/// Shared "pick a user" step for the reassign-POC bulk action.
 Future<Map<String, dynamic>?> pickPocParams(BuildContext context, PocType type) async {
   PocUser? picked;
   final confirmed = await showDialog<bool>(

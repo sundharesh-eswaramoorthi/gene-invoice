@@ -7,7 +7,6 @@ import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The webhook trusts a call only when it is signed with the shared secret, and recent. */
 class WebhookSignatureTest {
 
     private static final String SECRET = "a-webhook-secret-of-some-length";
@@ -17,7 +16,6 @@ class WebhookSignatureTest {
 
     @Test
     void theSignatureIsHmacSha256OfTheTimestampAndTheBody() {
-        // printf '%s' '1790000000.{"events":[]}' | openssl dgst -sha256 -hmac 'a-webhook-secret-of-some-length'
         assertThat(WebhookSignature.sign(SECRET, TIMESTAMP, BODY))
                 .isEqualTo("sha256=f7fe42f24fb33241a26acaae1747f6af96a391bcfd8908d0ef1411915e4b8394");
     }
@@ -40,7 +38,6 @@ class WebhookSignatureTest {
         assertThat(WebhookSignature.verify(SECRET, TIMESTAMP, signature,
                 "{\"events\":[{}]}".getBytes(StandardCharsets.UTF_8), NOW)).isFalse();
         assertThat(WebhookSignature.verify(SECRET, String.valueOf(NOW.getEpochSecond() + 1), signature, BODY, NOW)).isFalse();
-        // Missing, malformed or stale.
         assertThat(WebhookSignature.verify(SECRET, null, signature, BODY, NOW)).isFalse();
         assertThat(WebhookSignature.verify(SECRET, TIMESTAMP, null, BODY, NOW)).isFalse();
         assertThat(WebhookSignature.verify(SECRET, TIMESTAMP, signature, null, NOW)).isFalse();

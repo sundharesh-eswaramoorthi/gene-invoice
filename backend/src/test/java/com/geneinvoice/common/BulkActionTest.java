@@ -36,7 +36,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Feature D.3: bulk actions are per-record, report every id, and never widen the caller's reach. */
 class BulkActionTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
@@ -79,8 +78,6 @@ class BulkActionTest extends IntegrationTestBase {
         return objectMapper.readTree(result.getResponse().getContentAsString());
     }
 
-    // ---- D-45, D-46: an ADD_POC request that could never work --------------------
-
     private org.springframework.test.web.servlet.ResultActions addPoc(User caller, Map<String, Object> body)
             throws Exception {
         return mockMvc.perform(post("/api/customers/bulk").with(as(caller))
@@ -89,8 +86,6 @@ class BulkActionTest extends IntegrationTestBase {
 
     @Test
     void anAddPocRequestNoRowCouldSatisfyIsOneBadRequest() throws Exception {
-        // Sales POCs live on invoices, not on customers: wrong for every row, so it is not
-        // "every row skipped" but a single 400.
         addPoc(admin, request("ADD_POC", "ids", List.of(acme.getId(), globex.getId()),
                         "params", Map.of("userId", collections.getId(), "pocType", "SALES")))
                 .andExpect(status().isBadRequest());
@@ -124,8 +119,6 @@ class BulkActionTest extends IntegrationTestBase {
         return m;
     }
 
-    // ---- AC-D5: partial failure reports each row and drops none -----------------
-
     @Test
     void aPartialRunReportsWhichRowsSucceededAndWhichDidNot() throws Exception {
         Invoice cancellable = invoice(acme, "10.00", sales);
@@ -148,7 +141,6 @@ class BulkActionTest extends IntegrationTestBase {
         assertThat(result.get("skipped").get(0).get("reason").asText())
                 .contains("Cannot cancel an invoice with payments");
 
-        // Every requested id is accounted for, and the good one really did commit.
         int accountedFor = result.get("succeeded").size() + result.get("failed").size()
                 + result.get("skipped").size();
         assertThat(accountedFor).isEqualTo(result.get("requested").asInt());
@@ -163,7 +155,7 @@ class BulkActionTest extends IntegrationTestBase {
         Invoice a = invoice(acme, "10.00", sales);
         Invoice b = invoice(acme, "10.00", sales);
         Invoice c = invoice(acme, "10.00", sales);
-        invoiceService.cancel(b.getId()); // already cancelled: the batch will pass over it
+        invoiceService.cancel(b.getId());
 
         JsonNode result = bulk(admin, "/api/invoices/bulk",
                 request("CANCEL", "ids", List.of(a.getId(), b.getId(), c.getId())));
@@ -177,13 +169,6 @@ class BulkActionTest extends IntegrationTestBase {
                 .isEqualTo(InvoiceStatus.CANCELLED);
     }
 
-    // ---- TBL-08: the explicit ids list is bounded --------------------------------
-
-    /**
-     * A filtered selection is capped at BULK_ID_LIMIT; the explicit-ids path was not, so one
-     * request could ask for 100,000 rows and get an outcome line for every one of them back — a
-     * multi-megabyte response the dialog would then try to render (TBL-08).
-     */
     @Test
     void aBulkRequestNamingMoreIdsThanTheLimitIsRefused() throws Exception {
         List<Long> tooMany = java.util.stream.LongStream
@@ -196,7 +181,6 @@ class BulkActionTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.fieldErrors.ids").exists());
     }
 
-    /** The limit itself is still accepted, so the refusal quotes the real boundary. */
     @Test
     void aBulkRequestNamingExactlyTheLimitIsAccepted() throws Exception {
         List<Long> atTheLimit = java.util.stream.LongStream
@@ -208,18 +192,6 @@ class BulkActionTest extends IntegrationTestBase {
                 .andExpect(status().isOk());
     }
 
-    // ---- TBL-07: two bulk runs over the same rows at the same time ----------------
-
-    /**
-     * Two runs of the same cancel used to read the rows before either committed, so both answered
-     * "succeeded" for every id and the audit log held an INVOICE_CANCELLED entry per run rather
-     * than per invoice. Only one run can actually cancel a given invoice; the other finds it
-     * already cancelled and skips it, which is a row that did not qualify rather than an error
-     * the user is shown (TBL-07).
-     *
-     * <p>The race is made deterministic: one cancel's transaction is held open while the bulk run
-     * starts inside that window, which is exactly where the bulk used to read the row.
-     */
     @Test
     void aBulkCancelThatLosesTheRaceSkipsTheRowRatherThanClaimingIt() throws Exception {
         Invoice contested = invoice(acme, "10.00", sales);
@@ -234,7 +206,6 @@ class BulkActionTest extends IntegrationTestBase {
             try {
                 transactions.executeWithoutResult(status -> {
                     invoiceService.cancel(contested.getId());
-                    // Cancelled, not yet committed: where the bulk used to read it as live.
                     cancelInFlight.countDown();
                     sleep(600);
                 });
@@ -259,7 +230,6 @@ class BulkActionTest extends IntegrationTestBase {
         assertThat(result.get("skipped").size()).isEqualTo(1);
         assertThat(result.get("skipped").get(0).get("id").asLong()).isEqualTo(contested.getId());
 
-        // One cancellation of that invoice, not one per run.
         long entries = auditLogRepository.findAll().stream()
                 .filter(a -> "INVOICE".equals(a.getEntityType())
                         && contested.getId().equals(a.getEntityId()))
@@ -293,18 +263,14 @@ class BulkActionTest extends IntegrationTestBase {
         assertThat(result.get("skipped").get(0).get("reason").asText()).isEqualTo("Already active");
     }
 
-    // ---- AC-D6: a bulk action never reaches rows the caller may not change ------
-
     @Test
     void idsOutsideTheCallersScopeAreExcludedNotAttempted() throws Exception {
         Invoice mine = invoice(acme, "10.00", sales);
         Invoice theirs = invoice(globex, "10.00", otherSales);
 
-        // sam.sales is locked to his own book, so `theirs` is not in his permitted set at all.
         JsonNode result = bulk(sales, "/api/invoices/bulk",
                 request("CANCEL", "ids", List.of(mine.getId(), theirs.getId())));
 
-        // Asked for two, acted on one: the other is reported as skipped, never silently dropped.
         assertThat(result.get("requested").asInt()).isEqualTo(2);
         assertThat(result.get("succeeded").get(0).asLong()).isEqualTo(mine.getId());
         assertThat(result.get("skipped").get(0).get("id").asLong()).isEqualTo(theirs.getId());
@@ -351,8 +317,6 @@ class BulkActionTest extends IntegrationTestBase {
                         .value(org.hamcrest.Matchers.containsString("Unknown bulk action")));
     }
 
-    // ---- AC-D7: "select all N matching the filter" spans the whole filtered set --
-
     @Test
     void selectAllMatchingTheFilterAppliesBeyondTheLoadedPage() throws Exception {
         for (int i = 0; i < 25; i++) invoice(acme, "10.00", sales);
@@ -373,7 +337,6 @@ class BulkActionTest extends IntegrationTestBase {
         for (int i = 0; i < 25; i++) invoice(acme, "10.00", sales);
         invoice(globex, "10.00", sales);
 
-        // The list response the UI already has states the count it would be acting on.
         mockMvc.perform(get("/api/invoices").with(as(admin))
                         .param("size", "10")
                         .param("filter", "customerId:eq:" + acme.getId()))
@@ -387,8 +350,6 @@ class BulkActionTest extends IntegrationTestBase {
                         .content(json(request("CANCEL"))))
                 .andExpect(status().isBadRequest());
     }
-
-    // ---- AC-D8: one audit entry per affected record -----------------------------
 
     @Test
     void aBulkReassignmentWritesOneAuditEntryPerRecord() throws Exception {
@@ -421,8 +382,6 @@ class BulkActionTest extends IntegrationTestBase {
                         .value(org.hamcrest.Matchers.containsString("params.userId")));
     }
 
-    // ---- export ------------------------------------------------------------------
-
     @Test
     void exportingTheSelectionReturnsCsvWithTheCallersVisibleColumns() throws Exception {
         Invoice inv = invoice(acme, "10.00", sales);
@@ -451,8 +410,6 @@ class BulkActionTest extends IntegrationTestBase {
 
         assertThat(csv).contains("\"'=CMD(),\"\"Ltd\"\"\"");
     }
-
-    // ---- notifications bulk ------------------------------------------------------
 
     @Test
     void markingNotificationsReadInBulkTouchesOnlyTheCallersOwn() throws Exception {

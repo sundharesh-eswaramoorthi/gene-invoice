@@ -39,11 +39,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * What a promise says it is still owed (PPD-04), who may move its Collection POC (PPD-05), how its
- * broken-promise notification reads (PPD-06), and how a bulk run reports a row that does not
- * qualify (TBL-05).
- */
 class PromiseFiguresAndPocTest extends IntegrationTestBase {
 
     @Autowired PaymentPromiseService promiseService;
@@ -84,13 +79,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
                 acme.getId(), new BigDecimal(amount), date, null, "note", invoiceIds));
     }
 
-    // ---- PPD-04: a promise's "remaining" agrees with its status --------------------
-
-    /**
-     * A promise against an invoice that has since been settled some other way is KEPT with nothing
-     * fulfilled against it, so amount − fulfilled still read as the whole amount: the row said
-     * both "kept" and "still owes 100" (PPD-04).
-     */
     @Test
     void aKeptPromiseOwesNothing() {
         Invoice settled = invoice("100.00", 1);
@@ -104,7 +92,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
         assertThat(kept.remainingAmount()).isEqualByComparingTo("0");
     }
 
-    /** A promise withdrawn in error is not a debt either, whatever it was raised for. */
     @Test
     void aCancelledPromiseOwesNothing() {
         PromiseDtos.PromiseDto live = promise("600", TOMORROW, List.of());
@@ -115,7 +102,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
         assertThat(withdrawn.remainingAmount()).isEqualByComparingTo("0");
     }
 
-    /** A promise that really is still owed keeps the arithmetic it always had. */
     @Test
     void anOpenPromiseStillShowsWhatIsLeftToPay() {
         Invoice big = invoice("1000.00", 1);
@@ -130,10 +116,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
         assertThat(open.remainingAmount()).isEqualByComparingTo("250");
     }
 
-    /**
-     * The column is sortable and filterable, so the criteria expression has to say the same thing
-     * the row does — otherwise "Remaining is 0" would not find a kept promise.
-     */
     @Test
     void filteringOnRemainingAgreesWithWhatTheRowShows() throws Exception {
         Invoice settled = invoice("100.00", 1);
@@ -155,8 +137,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
         assertThat(page.get("content").get(0).get("id").asLong()).isEqualTo(kept.id());
     }
 
-    // ---- PPD-06: the broken-promise notification reads as money --------------------
-
     /**
      * The Collection POC reads the same figure the promise page shows them; it used to arrive as a
      * bare "777.00" while every screen said ₹777.00 (PPD-06).
@@ -173,8 +153,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
         assertThat(broken).hasSize(1);
         assertThat(broken.get(0).getMessage()).contains("₹777.00").doesNotContain("promised 777.00");
     }
-
-    // ---- PPD-05: moving a promise's Collection POC needs POC_ASSIGN ----------------
 
     /**
      * A user who may manage promises but not assign POCs is refused on a payment and was allowed
@@ -225,7 +203,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
                 .isEqualTo(collections.getId());
     }
 
-    /** A caller who does hold POC_ASSIGN is unaffected. */
     @Test
     void anAdministratorStillMovesAPromisesCollectionPoc() {
         PromiseDtos.PromiseDto p = promise("100", TOMORROW, List.of());
@@ -235,8 +212,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
         assertThat(promiseRepository.findById(p.id()).orElseThrow().getCollectionPoc().getId())
                 .isEqualTo(otherCollections.getId());
     }
-
-    // ---- TBL-05: a promise that does not qualify is skipped, not failed ------------
 
     @Test
     void bulkCancellingAnAlreadyCancelledPromiseSkipsItRatherThanFailingIt() throws Exception {
@@ -255,8 +230,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
         assertThat(body.get("skipped").get(0).get("reason").asText())
                 .isEqualTo("Promise is already cancelled");
     }
-
-    // ---- AUTH-05: recompute is gated on a privilege, not on the ADMIN role name ----
 
     /**
      * Every other endpoint is keyed on a privilege, so a role composed of privileges can reach
@@ -278,7 +251,6 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
                 .andExpect(status().isOk());
     }
 
-    /** It is still not open to a promise reader who was given no override privilege. */
     @Test
     void recomputeStaysClosedToARoleWithoutTheOverridePrivilege() throws Exception {
         User clerk = promiseManagerWithoutPocAssign();

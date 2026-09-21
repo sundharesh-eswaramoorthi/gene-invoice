@@ -20,10 +20,8 @@ public class PromiseDtos {
             @NotNull @Positive @Digits(integer = 12, fraction = 2, message = Money.CENTS_MESSAGE)
             BigDecimal amount,
             @NotNull LocalDate promisedDate,
-            /** Optional: when absent the customer's primary Collection POC is used. */
             Long collectionPocUserId,
             @Size(max = FieldLimits.PROMISE_NOTES) String notes,
-            /** Optional: empty means a general promise against the account. */
             List<Long> invoiceIds
     ) {}
 
@@ -62,7 +60,6 @@ public class PromiseDtos {
             String overrideReason,
             Long overriddenByUserId,
             Instant overriddenAt,
-            /** Null for a customer-scoped caller, who never sees POC identity (AC-A8). */
             PocDtos.PocUserDto collectionPoc,
             String notes,
             List<PromiseInvoiceDto> invoices,
@@ -72,7 +69,6 @@ public class PromiseDtos {
             Instant updatedAt
     ) {}
 
-    /** Filter-aware tiles for the promises list (Feature E). */
     public record PromiseSummaryDto(
             long total,
             long openCount, BigDecimal openAmount,

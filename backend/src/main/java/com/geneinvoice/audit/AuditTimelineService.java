@@ -33,22 +33,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * The History tab of a detail screen. A timeline is anchored on one record and can be widened to
- * the records that hang off it: a customer's covers its invoices, payments, promises and disputes;
- * an invoice's covers the payments applied to it and the promises and disputes raised on it; a
- * payment's covers the promises it counts towards and the disputes raised on it.
- *
- * <p>Records older than the audit event that describes them — an invoice created before invoice
- * creation was audited, say — get that event derived from the record itself and marked
- * {@code derived}, so an upgraded database tells the whole story rather than starting at the
- * upgrade.
- */
 @Service
 @RequiredArgsConstructor
 public class AuditTimelineService {
 
-    /** Ids per audit query, comfortably under every driver's bind-parameter limit. */
     private static final int CHUNK = 1000;
 
     private static final Comparator<Instant> OLDEST_FIRST =
@@ -58,10 +46,6 @@ public class AuditTimelineService {
             .comparing(Entry::createdAt, Comparator.nullsLast(Comparator.<Instant>reverseOrder()))
             .thenComparing(Entry::id, Comparator.nullsLast(Comparator.<Long>reverseOrder()));
 
-    /**
-     * One timeline row. {@code actorHidden} marks a row whose actor was withheld from the viewer,
-     * so the screen does not mistake it for an automatic change.
-     */
     public record Entry(Long id, String entityType, Long entityId, String entityLabel,
                         String action, String beforeJson, String afterJson,
                         Long changedByUserId, Long disputeId, String reason,
@@ -145,19 +129,10 @@ public class AuditTimelineService {
         return entries;
     }
 
-    /**
-     * The timeline as a customer-scoped account may see it (AC-A8): no POC events, no POC identity
-     * inside the snapshots, and no staff names — whoever raised an invoice or took a payment on an
-     * account is usually its POC. Only {@code visibleActors}, the customer's own logins, stay named.
-     * An edit that only touched a POC leaves nothing to show and is dropped rather than rendered as
-     * an empty change.
-     */
     public List<Entry> withoutPocIdentity(List<Entry> entries, Set<Long> visibleActors) {
         List<Entry> out = new ArrayList<>();
         for (Entry e : entries) {
             if (e.action().contains("POC")) continue;
-            // A customer login sees only SHARED documents (AC-C12), and the history must not be a
-            // way round that: an entry about an internal file is not mentioned to them at all.
             if (e.action().startsWith(DOCUMENT_ACTION) && !sharedDocument(e)) continue;
             String before = stripPoc(e.beforeJson());
             String after = stripPoc(e.afterJson());
@@ -169,8 +144,6 @@ public class AuditTimelineService {
         }
         return out;
     }
-
-    // ---- events older than their audit trail -------------------------------------
 
     private List<Entry> derived(Related r, List<Entry> recorded) {
         Set<String> have = new HashSet<>();
@@ -207,7 +180,6 @@ public class AuditTimelineService {
             }
         }
         for (Payment p : r.payments) {
-            // Only what was true when it was recorded: status and credit applied are later states.
             if (!have.contains(key("PAYMENT", p.getId(), "PAYMENT_RECORDED"))) {
                 out.add(derivedEntry("PAYMENT", p.getId(), "Payment #" + p.getId(), "PAYMENT_RECORDED",
                         fields("amount", original(befores, "PAYMENT", p.getId(), "amount", p.getAmount()),
@@ -250,11 +222,6 @@ public class AuditTimelineService {
         return out;
     }
 
-    /**
-     * A field as it stood before the earliest recorded change that captured it — the nearest thing
-     * to its value at creation, since a dispute may later have replaced an invoice's items or
-     * changed a payment's amount. Falls back to the record's current value.
-     */
     private Object original(Map<String, List<Entry>> befores, String type, Long id, String field,
                             Object current) {
         String quoted = "\"" + field + "\"";
@@ -279,7 +246,6 @@ public class AuditTimelineService {
         return type + ":" + id + ":" + action;
     }
 
-    /** An ordered map that, unlike {@code Map.of}, tolerates the nulls a legacy row may carry. */
     private static Map<String, Object> fields(Object... keysAndValues) {
         Map<String, Object> m = new LinkedHashMap<>();
         for (int i = 0; i < keysAndValues.length; i += 2) {
@@ -287,8 +253,6 @@ public class AuditTimelineService {
         }
         return m;
     }
-
-    // ---- JSON --------------------------------------------------------------------
 
     private String toJson(Object o) {
         try {
@@ -307,41 +271,23 @@ public class AuditTimelineService {
         }
     }
 
-    /** Every audit action about a document; all of them name a file and who attached it. */
     private static final String DOCUMENT_ACTION = "DOCUMENT_";
 
-    /** The one visibility a customer login may be told a document has (§4.5, D7). */
     private static final String SHARED = "SHARED";
 
-    /**
-     * Fields that name a member of staff rather than a POC, and so are withheld from a customer
-     * login for the same reason the POC fields are (AC-A8). Matched on the whole name, since these
-     * carry no marker of their own the way a "…Poc…" field does.
-     */
     private static final Set<String> STAFF_NAME_FIELDS =
             Set.of("uploadedby", "changedby", "createdby", "resolvedby", "assignedby", "recordedby");
 
-    /**
-     * Whether an entry about a document is about one the customer can see anyway. Every snapshot
-     * the entry carries has to say {@code SHARED}: a file that was internal at either end of the
-     * change is not theirs to know about, and an entry this cannot read is withheld rather than
-     * guessed at.
-     */
     private boolean sharedDocument(Entry e) {
         return isShared(e.beforeJson()) && isShared(e.afterJson());
     }
 
-    /** True for an absent snapshot (an upload has no before, a delete no after) or a SHARED one. */
     private boolean isShared(String json) {
         if (json == null) return true;
         JsonNode node = readTree(json);
         return node != null && SHARED.equals(node.path("visibility").asText(null));
     }
 
-    /**
-     * Removes every key naming a POC or a member of staff, at any depth. Unreadable input is
-     * withheld, not passed on.
-     */
     private String stripPoc(String json) {
         JsonNode node = readTree(json);
         if (node == null) return null;
@@ -367,9 +313,6 @@ public class AuditTimelineService {
         return name.contains("poc") || STAFF_NAME_FIELDS.contains(name);
     }
 
-    // ---- what a timeline covers --------------------------------------------------
-
-    /** The records a timeline covers, each with the label it is shown under. */
     private static final class Related {
         final Map<String, Map<Long, String>> labels = new LinkedHashMap<>();
         final List<Customer> customers = new ArrayList<>();

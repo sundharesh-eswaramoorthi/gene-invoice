@@ -39,7 +39,6 @@ public class InvoiceController {
     private final CurrentUser currentUser;
     private final UserRepository userRepository;
 
-    /** Customer logins cannot filter or sort on the Sales POC columns (AC-A8). */
     private TableSchema schema() {
         return TableSchemas.INVOICES.visibleTo(currentUser.isCustomer());
     }
@@ -56,7 +55,6 @@ public class InvoiceController {
                 withCustomer(FilterParams.from(request), customerId)));
     }
 
-    /** Tiles over the whole filtered set — never the current page (AC-E1). */
     @GetMapping("/summary")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public InvoiceDtos.InvoiceSummaryTiles summary(
@@ -72,10 +70,6 @@ public class InvoiceController {
         return InvoiceDtos.InvoiceDto.from(service.get(id), scopeResolver.canSeePoc());
     }
 
-    /**
-     * The due date the customer's terms give, so the form can fill it in the moment a customer is
-     * picked (US-A2). It is only of use to someone raising an invoice, so it needs INVOICE_MANAGE.
-     */
     @GetMapping("/due-date-preview")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
     public InvoiceDtos.DueDatePreview dueDatePreview(
@@ -94,7 +88,6 @@ public class InvoiceController {
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
     public InvoiceDtos.InvoiceDto update(@PathVariable Long id,
                                          @Valid @RequestBody InvoiceDtos.UpdateInvoiceRequest req) {
-        // Whether the POC may change is decided by the service, which knows the current one.
         return InvoiceDtos.InvoiceDto.from(service.update(id, req), scopeResolver.canSeePoc());
     }
 
@@ -103,8 +96,6 @@ public class InvoiceController {
     public InvoiceDtos.InvoiceDto cancel(@PathVariable Long id) {
         return InvoiceDtos.InvoiceDto.from(service.cancel(id), scopeResolver.canSeePoc());
     }
-
-    // ---- bulk & export ---------------------------------------------------------
 
     public static final List<String> BULK_ACTIONS = List.of("CANCEL", "REASSIGN_SALES_POC");
 
@@ -165,10 +156,6 @@ public class InvoiceController {
                 .body(Csv.of(headers, rows));
     }
 
-    /**
-     * Explicit ids, or every id matching the FilterParams.from(request). Either way the ids are re-resolved through
-     * the caller's scope, so a bulk parameter can never widen what they may touch (AC-D6, AC-D10).
-     */
     private List<Long> resolveIds(BulkDtos.BulkRequest req) {
         TableQuery query = TableQuery.parseUnpaged(schema(), req.sort(), req.filters());
         List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT);
@@ -186,7 +173,6 @@ public class InvoiceController {
         return merged;
     }
 
-    /** Which of the three POC kinds this caller may be offered as, for pre-selecting a form. */
     @GetMapping("/assignable-check")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public java.util.Map<String, Boolean> assignableCheck() {

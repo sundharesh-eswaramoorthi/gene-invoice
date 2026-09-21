@@ -4,8 +4,6 @@ import 'package:intl/intl.dart';
 import 'reference_picker.dart';
 import 'table_models.dart';
 
-/// Builds one filter chip: pick a column, then an operator valid for that column's type,
-/// then a value editor suited to the type (D.4).
 Future<TableFilter?> showFilterEditor({
   required BuildContext context,
   required TableSchema schema,
@@ -329,7 +327,6 @@ class _FilterEditorDialogState extends State<_FilterEditorDialog> {
       );
 }
 
-/// Renders a filter as human-readable text for its chip.
 String describeFilter(TableFilter f, TableSchema? schema) {
   final label = schema?.labelFor(f.field) ?? f.field;
   if (f.operator == 'isEmpty') return '$label is empty';

@@ -93,7 +93,6 @@ class NotificationsScreen extends ConsumerWidget {
       ref.invalidate(unreadCountProvider);
     }
     if (n.link != null && context.mounted) {
-      // Backend links use the same paths as the app; admin dispute links are the exception.
       final target =
           n.link!.startsWith('/admin/disputes/') ? n.link!.replaceFirst('/admin', '') : n.link!;
       context.go(target);

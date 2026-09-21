@@ -75,7 +75,6 @@ class PaymentPromise {
   final int? overriddenByUserId;
   final DateTime? overriddenAt;
 
-  /// Null for a self-service customer, who never receives POC identity (AC-A8).
   final PocUser? collectionPoc;
   final String? notes;
   final List<PromiseInvoiceRef> invoices;
@@ -107,7 +106,6 @@ class PaymentPromise {
   bool get isLive => status != PromiseStatus.CANCELLED;
   bool get isOpen => status == PromiseStatus.OPEN || status == PromiseStatus.PARTIALLY_KEPT;
 
-  /// How the promised amount compares with what the referenced invoices actually owe.
   double get referencedBalance =>
       invoices.fold<double>(0, (sum, i) => sum + i.balance);
 

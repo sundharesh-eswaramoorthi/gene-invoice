@@ -86,7 +86,6 @@ Map<String, dynamic> _dispute({String status = 'PENDING', String? proposedChange
       'updatedAt': null,
     };
 
-/// [selfGmail] is the writer's own Gmail connection, when the server names it.
 Map<String, dynamic> _emailContext(String type, int id,
         {bool restricted = false, String? selfGmail}) =>
     {
@@ -117,8 +116,6 @@ Map<String, dynamic> _page(List<Map<String, dynamic>> rows) => {
       'totalPages': 1,
     };
 
-/// A fake backend: each "METHOD /path" answers with what its handler returns, and every request
-/// is kept so a test can read what the screen sent. Anything unrouted is a 404.
 class _Backend {
   final Map<String, Object? Function(RequestOptions)> routes;
   final List<RequestOptions> requests = [];
@@ -143,12 +140,8 @@ class _Backend {
     }));
 }
 
-/// A common laptop screen, where a detail page's top pane may take only about 390 px.
 const _laptop = Size(1366, 768);
 
-/// The app's routes that these screens move between, with stand-ins for the pages they lead to.
-/// [shellAppBar] adds the app shell's 56 px AppBar above the page, for tests that measure what
-/// fits on screen.
 Future<GoRouter> _pumpApp(
   WidgetTester tester, {
   required _Backend backend,
@@ -212,7 +205,6 @@ Future<GoRouter> _pumpApp(
   return router;
 }
 
-/// A page with one button that runs [onOpen], for the dialogs that callers open.
 Widget Function(BuildContext) _opener(Future<void> Function(BuildContext context) onOpen) =>
     (context) => Center(
           child: TextButton(onPressed: () => onOpen(context), child: const Text('open')),
@@ -278,14 +270,12 @@ void main() {
         await tester.pumpAndSettle();
 
         expect(api.sent(editing ? 'PUT /api/promises/77' : 'POST /api/promises'), hasLength(1));
-        // The form has closed and the compose form is open for the saved promise.
         expect(find.text('Notify through email'), findsNothing);
         expect(find.text('Send email'), findsOneWidget);
         final ctx = api.sent('GET /api/emails/context').single;
         expect(_query(ctx)['entityType'], 'PROMISE');
         expect(_query(ctx)['entityId'], 77);
         expect(_query(ctx)['event'], editing ? 'UPDATED' : 'CREATED');
-        // The caller hears of the save once the email form closes, whether or not it sent.
         expect(result, isNull);
 
         await tester.tap(find.text('Cancel'));
@@ -371,7 +361,6 @@ void main() {
       expect(find.text('Invoice INV-0042 — ₹1,200.00'), findsOneWidget);
       expect(find.text('Send email'), findsOneWidget);
       expect(_tabLabels(tester), ['Invoice history', 'Email']);
-      // Resolved already: no panel, so nothing to notify about.
       expect(find.text('Approve'), findsNothing);
       expect(find.text('Notify through email'), findsNothing);
     });
@@ -426,11 +415,8 @@ void main() {
         expect(shown, findsOneWidget, reason: text);
         expect(tester.getRect(shown).bottom, lessThanOrEqualTo(_laptop.height), reason: text);
       }
-      // Resolving is what a pending dispute waits for, so that tab comes first and opens; the
-      // dispute's own facts stay above the tabs.
       expect(_tabLabels(tester), ['Resolve', 'Invoice history', 'Email']);
       expect(find.text('Charged twice').hitTestable(), findsOneWidget);
-      // The proposed change once, in the tab beside the applied change that starts as its copy.
       expect(find.text('Proposed change').hitTestable(), findsOneWidget);
       expect(find.textContaining('"amount": 500.0'), findsNWidgets(2));
       expect(tester.takeException(), isNull);
@@ -504,7 +490,6 @@ void main() {
       expect(find.textContaining('FormatException').hitTestable(), findsOneWidget);
       expect(router.routerDelegate.currentConfiguration.uri.path, '/disputes/12');
 
-      // Deny applies nothing, so the malformed JSON does not stop it.
       await tester.enterText(find.byType(TextField).last, 'Not a duplicate');
       await tester.tap(find.text('Deny'));
       await tester.pumpAndSettle();
@@ -544,7 +529,6 @@ void main() {
           size: _laptop,
           shellAppBar: true);
 
-      // The applied change first, then the admin notes.
       await tester.enterText(find.byType(TextField).last, 'Refund issued');
       await tester.tap(find.text('Notify through email'));
       await tester.tap(find.text('Approve'));
@@ -556,7 +540,6 @@ void main() {
       expect(_query(ctx)['entityType'], 'DISPUTE');
       expect(_query(ctx)['entityId'], 12);
       expect(_query(ctx)['event'], 'UPDATED');
-      // Still on the dispute, which now reads as approved, while the email is written.
       expect(router.routerDelegate.currentConfiguration.uri.path, '/disputes/12');
       expect(find.text('About: Dispute #12'), findsOneWidget);
 
@@ -588,7 +571,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('About: Dispute #12'), findsOneWidget);
 
-      // Nothing written yet, so nothing to ask about.
       await tester.tap(find.widgetWithText(TextButton, 'Connect'));
       await tester.pumpAndSettle();
       expect(router.routerDelegate.currentConfiguration.uri.path, '/me/gmail');
@@ -618,7 +600,7 @@ void main() {
       expect(find.text('Acme Ltd'), findsOneWidget);
       expect(find.text('₹1,200.00'), findsOneWidget);
       expect(find.text('₹1,000.00'), findsOneWidget);
-      expect(find.text('Open'), findsOneWidget); // the status chip
+      expect(find.text('Open'), findsOneWidget);
       expect(find.text('Bob Smith'), findsOneWidget);
       expect(find.text('INV-0042'), findsOneWidget);
       expect(find.text(' • ₹1,000.00 left'), findsOneWidget);
@@ -628,7 +610,6 @@ void main() {
       }
       expect(_tabLabels(tester), ['History', 'Email']);
 
-      // Every action still has room on a phone.
       tester.view.physicalSize = const Size(400, 800);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
@@ -705,7 +686,6 @@ void main() {
 
         expect(find.widgetWithText(OutlinedButton, 'Send email'), findsOneWidget);
         expect(find.byTooltip('Send email'), findsOneWidget);
-        // A selection offers sending one email per row beside the page's own button.
         await tester.tap(find.byType(Checkbox).last);
         await tester.pumpAndSettle();
         expect(find.text('Send email'), findsNWidgets(2));

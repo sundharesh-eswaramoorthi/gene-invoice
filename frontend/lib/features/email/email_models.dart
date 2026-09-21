@@ -18,8 +18,6 @@ Map<String, dynamic>? _map(Object? raw) => raw is Map ? raw.cast<String, dynamic
 
 DateTime? _date(Object? raw) => raw == null ? null : DateTime.tryParse(raw.toString());
 
-// ---- addressing ---------------------------------------------------------------------
-
 /// Which people a role token means (L1): everyone holding that seat on the record's customer, or
 /// the one person the record itself stores.
 abstract final class EmailRoleLevel {
@@ -27,15 +25,11 @@ abstract final class EmailRoleLevel {
   static const record = 'RECORD';
 }
 
-/// One From or To entry in a send request (§5). Value equality, so the same role or person is
-/// never added twice; the same role at the two levels is two entries, not one.
 @immutable
 class EmailToken {
-  /// USER, ROLE or CUSTOMER.
   final String type;
   final int? userId;
 
-  /// An EmailRole key such as COLLECTION_POC.
   final String? role;
 
   /// An [EmailRoleLevel] for a role. Null on a token written before levels, which the server reads
@@ -95,10 +89,8 @@ class EmailToken {
       'EmailToken($type${userId ?? ''}${role ?? ''}${level == null ? '' : ':$level'})';
 }
 
-/// One way a recipient came to be on an email.
 @immutable
 class EmailSource {
-  /// USER, ROLE, CUSTOMER, MAILBOX or HEADER.
   final String type;
   final String? role;
 
@@ -106,8 +98,6 @@ class EmailSource {
   /// levels, which kept none — the server names it by the role alone rather than claiming one (L7).
   final String? level;
 
-  /// The level is already in the server's words here — "Sales POC (this invoice)" — so this is
-  /// what the app prints.
   final String? label;
 
   const EmailSource({required this.type, this.role, this.level, this.label});
@@ -130,28 +120,18 @@ class EmailSource {
       };
 }
 
-/// What became of one To recipient's own copy of an outbound email (mail-service.md M8). Gmail
-/// sends no receipts, so Sent is Gmail accepting it; Delivered is the copy seen in the
-/// recipient's own connected Gmail ([deliveredConfirmed]), or else no bounce within 15 minutes;
-/// Read is known only for a recipient whose own Gmail is connected.
 @immutable
 class RecipientDelivery {
-  /// QUEUED, SENDING, SENT, DELIVERED, READ, BOUNCED, FAILED or NOT_SENT. Null when there is no
-  /// copy: the recipient has no address, or the email was sent before copies were tracked.
   final String? status;
 
-  /// Why it bounced, failed or was not sent. A customer viewer gets "Could not be delivered" in
-  /// place of the provider's text.
   final String? error;
   final DateTime? sentAt;
   final DateTime? deliveredAt;
   final bool deliveredConfirmed;
 
-  /// Read in Gmail.
   final DateTime? readAt;
   final DateTime? bouncedAt;
 
-  /// Read in the app's Inbox, which only a recipient with a login has.
   final DateTime? readInAppAt;
 
   const RecipientDelivery({
@@ -176,15 +156,11 @@ class RecipientDelivery {
         readInAppAt: _date(json['readInAppAt']),
       );
 
-  /// Still on its way out of the service.
   bool get inProgress => status == 'QUEUED' || status == 'SENDING';
 
-  /// Out, but a read or a bounce may still change it.
   bool get tracking => status == 'SENT' || status == 'DELIVERED';
 }
 
-/// "Delivered 17 Sep 2026, 6:07 AM (estimated)", "Bounced: 550 5.1.1 …": a copy's status as the
-/// Email tab shows it after the recipient's name. Null when there is no copy to speak of.
 String? recipientDeliveryText(RecipientDelivery delivery) {
   String at(String word, DateTime? time) =>
       time == null ? word : '$word ${formatDateTime(time)}';
@@ -220,8 +196,6 @@ class EmailParticipant {
   final bool masked;
   final List<EmailSource> sources;
 
-  /// What became of this recipient's own copy. Null for masked people, received mail, and
-  /// recipients of older emails whom nothing more is known about.
   final RecipientDelivery? delivery;
 
   const EmailParticipant({
@@ -246,15 +220,12 @@ class EmailParticipant {
             : RecipientDelivery.fromJson(_map(json['delivery'])!),
       );
 
-  /// "Bob Smith <bob@company.com>", or the name alone when there is no address to show.
   String get display {
     if (address == null || address!.isEmpty) return name.isEmpty ? '—' : name;
     if (name.isEmpty || name == address) return address!;
     return '$name <$address>';
   }
 
-  /// "added directly, Collection POC". A masked person is already named by their role, so that
-  /// role is not repeated after it.
   String get howAdded => sources
       .map((s) => s.description)
       .where((d) => d != name)
@@ -262,8 +233,6 @@ class EmailParticipant {
       .join(', ');
 }
 
-/// A role offered on the record at one level, and who holds it right now (§4). In To a role
-/// reaches everyone who holds it; as From it is one person, since an email has one sender.
 @immutable
 class EmailRoleOption {
   final String role;
@@ -272,21 +241,14 @@ class EmailRoleOption {
   /// An [EmailRoleLevel]: the customer's POC book, or what this record stores (L1).
   final String level;
 
-  /// "Customer" at customer level, else the record's noun: "Invoice", "Payment".
   final String levelLabel;
 
-  /// What the form calls the group of roles at this level: "Customer level", "Invoice level".
   final String groupLabel;
 
-  /// Null when there is no record to resolve against — the list and bulk compose.
   final bool? resolved;
 
-  /// Everyone the role reaches in To, primary first. Empty when unresolved, without a record, or
-  /// masked from this viewer.
   final List<EmailPerson> people;
 
-  /// The one person who sends when this role is the From: the primary, else the next active
-  /// holder. Null in the same cases as an empty [people].
   final EmailPerson? sender;
 
   const EmailRoleOption({
@@ -317,30 +279,23 @@ class EmailRoleOption {
     );
   }
 
-  /// The From or To entry that picks this role at this level.
   EmailToken get token => EmailToken.role(role, level: level);
 
-  /// The role with its level named, in the server's own words for a source (§3): "Sales POC
-  /// (customer)", "Sales POC (this invoice)". For where the group heading is not there to say it.
   String get labelWithLevel => level == EmailRoleLevel.record
       ? '$label (this ${levelLabel.toLowerCase()})'
       : '$label (customer)';
 }
 
-/// The roles of one level as the compose form lists them: a heading and the roles under it (§4).
 @immutable
 class EmailRoleGroup {
-  /// An [EmailRoleLevel].
   final String level;
 
-  /// "Customer level", "Invoice level".
   final String label;
   final List<EmailRoleOption> roles;
 
   const EmailRoleGroup({required this.level, required this.label, required this.roles});
 }
 
-/// A person as the compose form lists them: the caller, a role holder or a people-search hit.
 @immutable
 class EmailPerson {
   final int? userId;
@@ -348,8 +303,6 @@ class EmailPerson {
   final String? username;
   final String? email;
 
-  /// Their Gmail connection ([GmailStatus]): only a connected sender's email leaves the app
-  /// (mail-service.md M5). Null when masked.
   final String? gmail;
 
   const EmailPerson({this.userId, required this.name, this.username, this.email, this.gmail});
@@ -364,42 +317,30 @@ class EmailPerson {
 
   String get display => email == null || email!.isEmpty ? name : '$name <$email>';
 
-  /// Known not to have a working Gmail connection, so email from them is saved but not sent.
   bool get gmailNotConnected => gmail != null && gmail != GmailStatus.connected;
 }
 
-/// The API's values for a user's Gmail connection (mail-service.md §5.3).
 abstract final class GmailStatus {
   static const connected = 'CONNECTED';
   static const needsReconnect = 'NEEDS_RECONNECT';
   static const notConnected = 'NOT_CONNECTED';
 }
 
-/// A user's own Gmail connection (GET /api/me/gmail). The app's copy of it — for another user
-/// (GET /api/users/{id}/gmail) or in the delivery status — has only some of these fields.
 @immutable
 class GmailConnection {
-  /// False when the app has no mail service, so there is nothing to connect to. Only
-  /// /api/me/gmail says; the shorter shapes leave it out and read as configured.
   final bool configured;
 
-  /// A [GmailStatus] value.
   final String status;
   final String? gmailAddress;
 
-  /// Not secret, so the form can offer it again for a reconnect. The client secret and the
-  /// refresh token never come back.
   final String? clientId;
 
-  /// Why the connection needs renewing.
   final String? reason;
   final DateTime? connectedAt;
 
-  /// When the mailbox was last read, and why the last read failed.
   final DateTime? lastSyncedAt;
   final String? lastSyncError;
 
-  /// Set when the mail service could not be reached and this is the app's last known copy.
   final String? serviceError;
   final DateTime? updatedAt;
 
@@ -432,7 +373,6 @@ class GmailConnection {
   bool get isConnected => status == GmailStatus.connected;
   bool get needsReconnect => status == GmailStatus.needsReconnect;
 
-  /// There is a connection, working or not, so the form offers Reconnect and Disconnect.
   bool get exists => isConnected || needsReconnect;
 }
 
@@ -449,13 +389,10 @@ class EmailAddress {
       );
 }
 
-/// Whether mail really leaves the app (mail-service.md M13), and the caller's own Gmail.
 @immutable
 class EmailDelivery {
   final bool configured;
 
-  /// The caller's own connection (GET /api/emails/delivery). Null for customer logins, who do
-  /// not connect Gmail, and in the compose context, which says only [configured].
   final GmailConnection? gmail;
 
   const EmailDelivery({required this.configured, this.gmail});
@@ -481,8 +418,6 @@ class EmailSuggestion {
       );
 }
 
-/// Everything the compose form needs about one record, or about a type when no record is chosen
-/// yet (GET /api/emails/context).
 @immutable
 class EmailContext {
   final EmailEntityType? entityType;
@@ -491,7 +426,6 @@ class EmailContext {
   final String? entityLink;
   final EmailDelivery delivery;
 
-  /// A customer login: From is always themselves, and To offers roles and customer emails only.
   final bool restricted;
   final EmailPerson self;
   final List<EmailRoleOption> roles;
@@ -542,13 +476,9 @@ class EmailContext {
     return null;
   }
 
-  /// The role a From or To token names, or null when this record does not offer it.
   EmailRoleOption? roleOf(EmailToken token) =>
       token.isRole ? role(token.role!, level: token.level) : null;
 
-  /// The roles in the labelled groups the form shows them in, in the server's order: the
-  /// customer's POC book first, then the record's own fields (§4). A level with no roles is not
-  /// a group at all.
   List<EmailRoleGroup> get roleGroups {
     final byLevel = <String, List<EmailRoleOption>>{};
     for (final r in roles) {
@@ -561,7 +491,6 @@ class EmailContext {
   }
 }
 
-/// A role that resolved to nobody when the email was sent or previewed.
 @immutable
 class EmailUnresolved {
   final String token;
@@ -577,18 +506,14 @@ class EmailUnresolved {
       );
 }
 
-/// What Send would do with the form as it stands (POST /api/emails/preview).
 @immutable
 class EmailPreview {
   final EmailParticipant? from;
   final List<EmailParticipant> to;
   final List<EmailUnresolved> unresolved;
 
-  /// What would make Send fail. Send stays disabled while any is listed.
   final List<String> problems;
 
-  /// Why the email would be saved but not sent — no mail service, or a sender without a
-  /// working Gmail. Send stays enabled: the email is still worth keeping.
   final List<String> warnings;
 
   const EmailPreview({
@@ -608,14 +533,8 @@ class EmailPreview {
       );
 }
 
-// ---- saved emails -------------------------------------------------------------------
-
-/// Why an email a customer login wrote was never handed to Gmail, in the server's own words
-/// (`EmailDispatcher.CUSTOMER_SENDER`). It is saved for everyone on it to read, and that is all
-/// that can ever happen to it (mail-service.md M13).
 const notSentFromCustomerLogin = 'Email from a customer login is not sent through Gmail';
 
-/// One saved email (EmailDto).
 @immutable
 class EmailMessage {
   final int id;
@@ -624,11 +543,8 @@ class EmailMessage {
   final String entityLabel;
   final String? entityLink;
 
-  /// OUTBOUND or INBOUND.
   final String direction;
 
-  /// QUEUED, SENDING, SENT, PARTIAL, FAILED, NOT_SENT or RECEIVED. An outbound email's status
-  /// sums up its recipients' copies (mail-service.md M12).
   final String status;
   final String subject;
   final String body;
@@ -639,7 +555,6 @@ class EmailMessage {
   final List<EmailParticipant> cc;
   final List<EmailUnresolved> unresolved;
 
-  /// Who pressed Send. Null for received mail.
   final String? sentByName;
   final int? sentByUserId;
   final String? deliveredFrom;
@@ -649,11 +564,8 @@ class EmailMessage {
   final DateTime? sentAt;
   final bool canRetry;
 
-  /// Whether this viewer may open the record it is about. A sender or recipient may read an email
-  /// about a record they cannot see, and a link to that record would only lead to a refusal.
   final bool canOpenRecord;
 
-  /// Null when this viewer is not one of its To recipients.
   final bool? readByMe;
 
   const EmailMessage({
@@ -724,7 +636,6 @@ class EmailMessage {
   }
 }
 
-/// One row of the caller's inbox: a To recipient row of theirs (InboxItemDto).
 @immutable
 class InboxItem {
   final int id;
@@ -785,9 +696,6 @@ String emailStatusLabel(String status) => switch (status) {
       _ => humanizeEnum(status),
     };
 
-/// When the email was written or sent and what became of it, by its status: "sent 17 Sep 2026,
-/// 6:07 AM", "written …, failed". Only a sent email has a send time; the rest are told apart by
-/// status, so a failed one no longer reads "not sent yet" as though it were still on its way.
 String emailProgress(EmailMessage email) {
   final written = formatDateTime(email.occurredAt);
   return switch (email.status) {
@@ -802,8 +710,6 @@ String emailProgress(EmailMessage email) {
   };
 }
 
-/// The snackbar after a send or a retry, by the status the server settled on. The server answers
-/// once the mail service has the email, so it is usually still on its way.
 String emailOutcomeMessage(EmailMessage email) {
   final error = email.error == null || email.error!.isEmpty ? null : email.error;
   return switch (email.status) {
@@ -816,10 +722,6 @@ String emailOutcomeMessage(EmailMessage email) {
   };
 }
 
-/// How often a view of [emails] asks for them again, or null when nothing on it can still change
-/// (mail-service.md §6): every 5 seconds while an email or a copy is on its way out, every 30
-/// while a copy went out in the last day — a read or a bounce may still come — and not at all
-/// otherwise.
 Duration? emailRefreshInterval(Iterable<EmailMessage> emails, {DateTime? now}) {
   final since = (now ?? DateTime.now()).subtract(const Duration(hours: 24));
   var tracking = false;

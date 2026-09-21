@@ -12,8 +12,6 @@ class DashColumn {
   final int flex;
   final bool numeric;
 
-  /// Below this table width the column is dropped, so a phone keeps the columns that matter
-  /// instead of scrolling sideways.
   final double minTableWidth;
 
   const DashColumn(this.label, {this.flex = 1, this.numeric = false, this.minTableWidth = 0});
@@ -26,8 +24,6 @@ class DashRow {
   const DashRow(this.cells, {this.onTap});
 }
 
-/// A compact read-only table: a header and hairline-separated rows, each optionally opening its
-/// record.
 class DashTable extends StatelessWidget {
   final List<DashColumn> columns;
   final List<DashRow> rows;
@@ -100,7 +96,6 @@ Widget _text(BuildContext context, String text, {bool numeric = false, bool mute
   );
 }
 
-/// Whole days between two instants' UTC calendar dates.
 int _daysBetween(DateTime from, DateTime to) {
   DateTime day(DateTime d) {
     final u = d.toUtc();
@@ -110,7 +105,6 @@ int _daysBetween(DateTime from, DateTime to) {
   return day(to).difference(day(from)).inDays;
 }
 
-/// Customers owing the most. A row opens the customer when the user may see customers.
 class TopOutstandingTable extends StatelessWidget {
   final CustomerRanking ranking;
   final bool canOpenCustomer;
@@ -149,7 +143,6 @@ class TopOutstandingTable extends StatelessWidget {
   }
 }
 
-/// Customers who paid the most over the chosen period.
 class TopPayingTable extends StatelessWidget {
   final CustomerRanking ranking;
   final bool canOpenCustomer;
@@ -182,8 +175,6 @@ class TopPayingTable extends StatelessWidget {
   }
 }
 
-/// The next promises falling due. A customer login sees only its own, so it gets no Customer
-/// column; the Collection POC column is for staff who may see POCs.
 class UpcomingPromisesTable extends StatelessWidget {
   final List<PaymentPromise> promises;
   final bool showCustomer;
@@ -197,7 +188,6 @@ class UpcomingPromisesTable extends StatelessWidget {
   });
 
   static String _due(DateTime promisedDate, DateTime today) {
-    // A promised date is a calendar date, so compare it as one.
     final due = DateTime.utc(promisedDate.year, promisedDate.month, promisedDate.day);
     final days = due.difference(today).inDays;
     return switch (days) {

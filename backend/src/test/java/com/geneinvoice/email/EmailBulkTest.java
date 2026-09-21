@@ -28,7 +28,6 @@ import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** A bulk send is a separate email per record, each addressed on its own record (§6 POST /api/emails/bulk). */
 class EmailBulkTest extends EmailTestBase {
 
     @Autowired PaymentService paymentService;
@@ -75,7 +74,6 @@ class EmailBulkTest extends EmailTestBase {
         assertThat(recipientsOf(emails.get(0).getId())).extracting(EmailRecipient::getUserId).containsExactly(sales.getId());
         assertThat(recipientsOf(emails.get(1).getId())).extracting(EmailRecipient::getUserId).containsExactly(otherSales.getId());
         assertThat(emails).extracting(Email::getBatchId).doesNotContainNull().containsOnly(emails.get(0).getBatchId());
-        // Handed over as the request finished (tests switch the background thread off), one hand-off per email.
         assertThat(emails).extracting(Email::getStatus).containsOnly(EmailStatus.QUEUED);
         assertThat(emails).extracting(Email::getHandedOffAt).doesNotContainNull();
         assertThat(mailTransport.submissions()).extracting(s -> s.groupRef())
@@ -101,7 +99,6 @@ class EmailBulkTest extends EmailTestBase {
         assertThat(result.get("succeeded")).hasSize(2);
         List<Email> emails = emailsNewestLast();
         assertThat(emails).extracting(Email::getEntityId).containsExactly(acmes.getId(), globexs.getId());
-        // Each record's sender is its own customer's primary, and its To every holder there.
         assertThat(emails).extracting(Email::getFromUserId).containsExactly(collections.getId(), cody.getId());
         assertThat(recipientsOf(emails.get(0).getId())).extracting(EmailRecipient::getUserId)
                 .containsExactly(collections.getId(), cora.getId());
@@ -144,7 +141,6 @@ class EmailBulkTest extends EmailTestBase {
         assertThat(emails).extracting(Email::getUnresolved)
                 .containsExactly("ROLE:RECORD:COLLECTION_POC", "ROLE:RECORD:SALES_POC");
 
-        // A kind that cannot store the role at all refuses it up front.
         postJson("/api/emails/bulk", admin, bulk("ids", List.of(payment.getId()),
                         "params", params("PAYMENT", List.of(toRole("SALES_POC", "RECORD")))))
                 .andExpect(status().isBadRequest())
@@ -262,7 +258,6 @@ class EmailBulkTest extends EmailTestBase {
                 "params", params("CUSTOMER", List.of(toCustomer()))));
         assertThat(result.get("succeeded")).hasSize(2);
 
-        // A customer login reaches only its own customer.
         JsonNode own = run(acmeLogin, bulk("ids", List.of(acme.getId(), globex.getId()),
                 "params", params("CUSTOMER", List.of(toCustomer()))));
         assertThat(own.get("succeeded")).extracting(JsonNode::asLong).containsExactly(acme.getId());
@@ -276,7 +271,6 @@ class EmailBulkTest extends EmailTestBase {
     void aRoleSentToUsersReachesCustomerLoginsAndSkipsStaffWithTheReason() throws Exception {
         seat(acme, com.geneinvoice.poc.PocType.COLLECTION, collections);
 
-        // A selection of users may hold customer logins, so the role is accepted for the kind.
         JsonNode result = run(admin, bulk("ids", List.of(sales.getId(), acmeLogin.getId()),
                 "params", params("USER", List.of(toRole("COLLECTION_POC")))));
 

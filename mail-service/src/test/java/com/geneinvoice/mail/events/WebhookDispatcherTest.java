@@ -20,7 +20,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The outbox delivered to the backend (§4.8): signed, in order, in batches, and patiently. */
 class WebhookDispatcherTest extends IntegrationTestBase {
 
     private static final String SECRET = "test-webhook-secret-0123456789";
@@ -84,7 +83,6 @@ class WebhookDispatcherTest extends IntegrationTestBase {
         assertThat(events.get(1).get("data").get("externalId").asText()).isEqualTo("gi-91-1");
         assertThat(eventRepository.findAll()).allSatisfy(e -> assertThat(e.getDeliveredAt()).isEqualTo(T0));
 
-        // Delivered once only.
         assertThat(dispatcher.dispatch()).isZero();
         assertThat(backend.deliveries()).hasSize(1);
     }
@@ -117,7 +115,6 @@ class WebhookDispatcherTest extends IntegrationTestBase {
         assertThat(failed.getLastError()).isEqualTo("The webhook answered 503: {\"processed\":0}");
         assertThat(dispatcher.currentWait()).isEqualTo(Duration.ofSeconds(1));
 
-        // Waiting: nothing is sent until the wait is over.
         assertThat(dispatcher.dispatch()).isZero();
         assertThat(backend.deliveries()).hasSize(1);
 

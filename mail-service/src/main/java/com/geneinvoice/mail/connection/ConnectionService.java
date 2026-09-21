@@ -24,11 +24,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Each internal user's Gmail connection (M2, §4.4). Connecting checks the three pasted values with
- * Google before anything is stored — a token, the scopes it carries, the account it belongs to — and
- * no transaction is open during those calls. The secrets are sealed at rest and never returned.
- */
 @Service
 @Slf4j
 public class ConnectionService {
@@ -39,7 +34,6 @@ public class ConnectionService {
     /** Any of these lets a token send mail (M3). */
     static final Set<String> SEND_SCOPES = Set.of(GOOGLE_PREFIX + "gmail.send", GOOGLE_PREFIX + "gmail.compose",
             GOOGLE_PREFIX + "gmail.modify", "https://mail.google.com/");
-    /** Any of these lets a token read mail. */
     static final Set<String> READ_SCOPES = Set.of(GOOGLE_PREFIX + "gmail.readonly", GOOGLE_PREFIX + "gmail.modify",
             "https://mail.google.com/");
 
@@ -62,10 +56,6 @@ public class ConnectionService {
         this.clock = clock;
     }
 
-    /**
-     * Connects the owner's Gmail, or replaces the connection they had. Nothing is stored unless Google
-     * accepts the values, grants both sending and reading, and names the account.
-     */
     public ConnectionDto connect(String ownerRef, ConnectRequest request) {
         String owner = checkedOwnerRef(ownerRef);
         String clientId = trimmed(request == null ? null : request.clientId());
@@ -112,13 +102,8 @@ public class ConnectionService {
                     .createdAt(now)
                     .build());
             if (c.getHistoryId() == null || !gmailAddress.equals(c.getGmailAddress())) {
-                // A mailbox not read before starts from where it stands now: what is already there was
-                // not sent by the service from it.
                 c.setHistoryId(profile.historyId());
             }
-            // The same mailbox again (renewed credentials, typically after Google expired the token)
-            // keeps its cursor, so bounces, replies and reads that came while it could not be read are
-            // still picked up; a cursor Gmail no longer keeps falls back to the last week (§4.7).
             c.setOwnerName(ownerName != null ? ownerName : c.getOwnerName() != null ? c.getOwnerName() : owner);
             c.setGmailAddress(gmailAddress);
             c.setClientId(clientId);
@@ -151,15 +136,10 @@ public class ConnectionService {
                 .map(ConnectionDto::of).toList());
     }
 
-    /** The owner's connection as it is now, if they ever connected. */
     public Optional<MailConnection> byOwner(String ownerRef) {
         return transactions.execute(status -> connections.findByOwnerRef(ownerRef));
     }
 
-    /**
-     * Revokes the refresh token at Google (best effort: a failure is only logged, the connection goes
-     * either way) and wipes both secrets. Nothing to do for an owner who never connected.
-     */
     public void disconnect(String ownerRef) {
         MailConnection current = byOwner(ownerRef).orElse(null);
         if (current == null) return;
@@ -182,9 +162,6 @@ public class ConnectionService {
             c.setRefreshTokenEnc(null);
             c.setStatus(ConnectionStatus.DISCONNECTED);
             c.setStatusReason(null);
-            // Nothing reads this mailbox any more, so the last check and why it failed are about a
-            // connection that is gone: kept, they would be shown beside "Not connected" (and an
-            // invalid_grant text would even end "Reconnect Gmail."). Connecting again starts afresh.
             c.setLastSyncedAt(null);
             c.setLastSyncError(null);
             c.setUpdatedAt(clock.instant());
@@ -195,13 +172,6 @@ public class ConnectionService {
         log.info("Gmail disconnected for {}", ownerRef);
     }
 
-    /**
-     * Google refused the credentials of {@code seen} while sending or reading: the connection needs
-     * renewing, and the backend hears so once. Nothing changes when the owner has reconnected or
-     * disconnected since those credentials were read, or it is already marked.
-     *
-     * @return whether the connection changed
-     */
     public boolean needsReconnect(MailConnection seen, GoogleAuthException refusal) {
         tokens.forget(seen.getId());
         Boolean changed = transactions.execute(status -> {
@@ -233,7 +203,6 @@ public class ConnectionService {
         return "send or read mail";
     }
 
-    /** Google turned the request down (400), rather than being out of reach or failing (502). */
     private static boolean refusal(GmailApiException e) {
         return !e.isTransientFailure() && e.status() >= 400 && e.status() < 500;
     }

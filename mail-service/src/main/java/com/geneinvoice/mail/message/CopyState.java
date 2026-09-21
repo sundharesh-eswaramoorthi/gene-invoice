@@ -2,7 +2,6 @@ package com.geneinvoice.mail.message;
 
 import java.time.Instant;
 
-/** One copy as the backend sees it (§4.3): the answer to a submit, and the data of a {@code message.status} event. */
 public record CopyState(String externalId, String groupRef, long seq, MessageStatus status, String error, int attempts,
                         String fromAddress, Instant sentAt, Instant deliveredAt, boolean deliveredConfirmed,
                         Instant readAt, Instant bouncedAt, String providerMessageId, String providerThreadId,

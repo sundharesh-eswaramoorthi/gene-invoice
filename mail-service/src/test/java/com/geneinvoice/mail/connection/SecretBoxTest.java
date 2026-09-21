@@ -9,7 +9,6 @@ import java.util.Base64;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Secrets sealed with AES-256-GCM: readable with the key only, and only as they were sealed. */
 class SecretBoxTest {
 
     private static byte[] key(int first) {
@@ -28,7 +27,6 @@ class SecretBoxTest {
 
         assertThat(sealed).doesNotContain("refresh-token");
         assertThat(box.open(sealed)).isEqualTo(secret);
-        // base64 of a 12-byte IV, the ciphertext and a 16-byte tag.
         byte[] bytes = Base64.getDecoder().decode(sealed);
         assertThat(bytes).hasSize(12 + secret.getBytes(StandardCharsets.UTF_8).length + 16);
     }

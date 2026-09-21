@@ -21,11 +21,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 
-/**
- * The few Gmail API calls the service makes, each on one connection's mailbox ({@code users/me} with
- * that connection's access token). Failures come out as {@link GmailApiException}, already sorted
- * into transient and permanent; a refused refresh token as {@link GoogleAuthException}.
- */
 @Component
 public class GmailClient {
 
@@ -52,29 +47,24 @@ public class GmailClient {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record MessageAdded(MessageRef message) {}
 
-    /** Labels taken off a message: {@code labelIds} were removed, {@code message.labelIds} are what it has left. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record LabelsRemoved(MessageRef message, List<String> labelIds) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record History(String id, List<MessageAdded> messagesAdded, List<LabelsRemoved> labelsRemoved) {}
 
-    /** One page of mailbox changes; {@code historyId} is where the mailbox stands now. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record HistoryPage(List<History> history, String nextPageToken, String historyId) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record MessagePage(List<MessageRef> messages, String nextPageToken) {}
 
-    /** A thread's messages, oldest first, each with only its id and labels. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ThreadMessages(String id, List<MessageRef> messages) {}
 
-    /** A message's current labels and its size in bytes, without its content. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record MessageInfo(String id, String threadId, List<String> labelIds, Long sizeEstimate) {}
 
-    /** {@code raw} is the whole RFC 822 message, base64url; {@code internalDate} is epoch millis. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record RawMessage(String id, String threadId, List<String> labelIds, String internalDate, String raw) {}
 
@@ -87,7 +77,6 @@ public class GmailClient {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record MetadataMessage(Payload payload) {}
 
-    /** {@code users.messages.send} with the message as written, headers and all. */
     public SendResult send(MailConnection mailbox, byte[] mime) {
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(mime);
         return call(mailbox, token -> http.post()
@@ -103,7 +92,6 @@ public class GmailClient {
         return call(mailbox, this::profileWith);
     }
 
-    /** The profile with a token just granted, before there is a connection to cache it for. */
     public Profile profile(String accessToken) {
         try {
             return profileWith(accessToken);
@@ -120,10 +108,6 @@ public class GmailClient {
                 .body(Profile.class);
     }
 
-    /**
-     * Messages added, and labels removed, since {@code startHistoryId}. Mail taken out of Spam or Trash,
-     * and mail read, show only as a removed label. A 404 means Gmail no longer keeps history that old.
-     */
     public HistoryPage history(MailConnection mailbox, String startHistoryId, String pageToken) {
         MultiValueMap<String, String> query = new LinkedMultiValueMap<>();
         query.add("startHistoryId", startHistoryId);
@@ -137,7 +121,6 @@ public class GmailClient {
                 .body(HistoryPage.class));
     }
 
-    /** Message ids matching a Gmail search, newest first; with {@code includeSpamTrash}, Spam and Trash too. */
     public MessagePage listMessages(MailConnection mailbox, String search, String pageToken, boolean includeSpamTrash) {
         MultiValueMap<String, String> query = new LinkedMultiValueMap<>();
         query.add("q", search);
@@ -150,7 +133,6 @@ public class GmailClient {
                 .body(MessagePage.class));
     }
 
-    /** A message's labels and size, which say whether to download it at all. */
     public MessageInfo messageInfo(MailConnection mailbox, String id) {
         return call(mailbox, token -> http.get()
                 .uri(uri("/messages/{id}", Map.of("format", "metadata"), Map.of("id", id)))
@@ -159,7 +141,6 @@ public class GmailClient {
                 .body(MessageInfo.class));
     }
 
-    /** The messages of a thread, ids and labels only ({@code format=minimal}). A 404: the thread is gone. */
     public ThreadMessages thread(MailConnection mailbox, String threadId) {
         return call(mailbox, token -> http.get()
                 .uri(uri("/threads/{id}", Map.of("format", "minimal"), Map.of("id", threadId)))
@@ -176,11 +157,6 @@ public class GmailClient {
                 .body(RawMessage.class));
     }
 
-    /**
-     * Headers of a stored message as Gmail keeps them, by lower-case name (the first value of each).
-     * What Gmail sent can differ from what the service wrote: it may put its own Message-ID, and it
-     * puts the account's address in From when the one there is not one of its aliases.
-     */
     public Map<String, String> headers(MailConnection mailbox, String id, List<String> names) {
         MultiValueMap<String, String> query = new LinkedMultiValueMap<>();
         query.add("format", "metadata");
@@ -200,7 +176,6 @@ public class GmailClient {
         return headers;
     }
 
-    /** Runs a call with the mailbox's token, and once more with a fresh one when Google says the token is no good. */
     private <T> T call(MailConnection mailbox, Function<String, T> request) {
         try {
             return request.apply(tokens.accessToken(mailbox));
@@ -221,7 +196,6 @@ public class GmailClient {
         return uri(path, query, Map.of());
     }
 
-    /** A query parameter that is null is left out. */
     private URI uri(String path, Map<String, String> query, Map<String, String> pathVariables) {
         MultiValueMap<String, String> values = new LinkedMultiValueMap<>();
         query.forEach((name, value) -> {
@@ -230,7 +204,6 @@ public class GmailClient {
         return buildUri(path, values, pathVariables);
     }
 
-    /** Values go in as URI variables, so a search or page token is encoded rather than read as syntax. */
     private URI buildUri(String path, MultiValueMap<String, String> query, Map<String, String> pathVariables) {
         String base = properties.getGoogle().getApiBaseUrl().trim().replaceAll("/+$", "");
         UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(base).path("/gmail/v1/users/me" + path);

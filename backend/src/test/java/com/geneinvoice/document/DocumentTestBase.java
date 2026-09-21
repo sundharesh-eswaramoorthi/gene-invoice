@@ -32,11 +32,6 @@ import java.util.zip.ZipOutputStream;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * The people, records and files the document tests share. Two customers with a login each, and a
- * Sales POC on each one's invoice, so every test can ask what someone outside the book or outside
- * the customer sees.
- */
 abstract class DocumentTestBase extends IntegrationTestBase {
 
     @Autowired protected InvoiceService invoiceService;
@@ -76,8 +71,6 @@ abstract class DocumentTestBase extends IntegrationTestBase {
         globexInvoice = invoice(globex, otherSales);
     }
 
-    // ---- records ---------------------------------------------------------------
-
     protected Invoice invoice(Customer customer, User salesPoc) {
         actAs(admin);
         return invoiceService.create(new InvoiceDtos.CreateInvoiceRequest(customer.getId(), null, null,
@@ -89,8 +82,6 @@ abstract class DocumentTestBase extends IntegrationTestBase {
         return paymentService.record(new PaymentDtos.CreatePaymentRequest(customer.getId(),
                 new BigDecimal(amount), "Cash", null, List.of(), collector.getId(), null));
     }
-
-    // ---- files -----------------------------------------------------------------
 
     protected static byte[] pdf() {
         return "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n%%EOF\n"
@@ -115,7 +106,6 @@ abstract class DocumentTestBase extends IntegrationTestBase {
         return openXml("xl/workbook.xml");
     }
 
-    /** A ZIP with no Open XML manifest: the first four bytes say ZIP and nothing else does. */
     protected static byte[] plainZip() {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
@@ -154,9 +144,6 @@ abstract class DocumentTestBase extends IntegrationTestBase {
         return all;
     }
 
-    // ---- requests --------------------------------------------------------------
-
-    /** The part as a browser sends it: a name the user chose and whatever type the client claims. */
     protected static MockMultipartFile part(String filename, byte[] bytes, String claimedType) {
         return new MockMultipartFile("file", filename, claimedType, bytes);
     }
@@ -170,7 +157,6 @@ abstract class DocumentTestBase extends IntegrationTestBase {
                 .with(as(as));
     }
 
-    /** Uploads a PDF and answers with the document it made. */
     protected JsonNode upload(User as, String entityType, Long entityId, String filename) throws Exception {
         return read(mockMvc.perform(uploadRequest(as, entityType, entityId,
                         part(filename, pdf(), "application/pdf")))

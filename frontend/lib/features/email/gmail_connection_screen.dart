@@ -10,10 +10,6 @@ import '../../shared/widgets/detail_scaffold.dart';
 import 'email_models.dart';
 import 'email_providers.dart';
 
-/// Where a member of staff connects their own Gmail, which sends the email they write in the app
-/// and reads the replies to it (mail-service.md M2). They paste the three values their own Google
-/// OAuth client and Google's OAuth Playground give them (§8). The secret two go to the server once
-/// and never come back; the client ID is offered again for a reconnect.
 class GmailConnectionScreen extends ConsumerStatefulWidget {
   const GmailConnectionScreen({super.key});
 
@@ -31,16 +27,11 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
   bool _showSecret = false;
   bool _showToken = false;
 
-  /// Connecting (the server checks the values with Google) or disconnecting.
   bool _busy = false;
   String? _error;
 
-  /// The server's own word on a field, shown under it until the field is edited.
   Map<String, String> _fieldErrors = const {};
 
-  /// The client ID is filled in once, from the first load that knows it; from then on the field
-  /// is the user's. A load answered from the app's copy (the mail service could not be asked)
-  /// never knows it, so a Refresh once the service is back still fills it in.
   bool _prefilled = false;
 
   @override
@@ -53,7 +44,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Customer logins do not connect Gmail: their email is saved in the app but not sent (§9).
     final allowed = ref.watch(canConnectGmailProvider);
     return Scaffold(
       appBar: AppBar(
@@ -71,7 +61,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
           ? const RecordUnavailable(
               message: 'Gmail is connected by the staff who send email from the app.')
           : ref.watch(myGmailProvider).when(
-                // A refresh that fails keeps the page, and what is typed into it.
                 skipError: true,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, _) => _LoadError(
@@ -107,7 +96,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
               Card(
                 clipBehavior: Clip.antiAlias,
                 child: ExpansionTile(
-                  // Open for someone setting up for the first time; one to renew knows the way.
                   initiallyExpanded: !g.exists,
                   leading: const Icon(Icons.help_outline),
                   title: const Text('How to get these'),
@@ -128,14 +116,10 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
     final clientId = g.clientId;
     if (clientId == null || clientId.isEmpty) return;
     _prefilled = true;
-    // After this frame: a controller changed during a build would rebuild its field mid-build.
-    // Whatever the user has typed meanwhile stays.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _clientId.text.isEmpty) _clientId.text = clientId;
     });
   }
-
-  // ---- status -----------------------------------------------------------------------
 
   Widget _statusCard(GmailConnection g) {
     final theme = Theme.of(context);
@@ -185,7 +169,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
         style: muted,
       ));
     }
-    // Answered from the app's own copy: the mail service could not be asked.
     if (g.serviceError != null && g.serviceError!.isNotEmpty) {
       lines.add(Text(g.serviceError!, style: errorStyle));
     }
@@ -215,8 +198,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
       ),
     );
   }
-
-  // ---- form -------------------------------------------------------------------------
 
   Widget _formCard(GmailConnection g) {
     final theme = Theme.of(context);
@@ -325,9 +306,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  // Google's refusal is the whole answer to pressing Connect, so it is read out
-                  // as it appears: a selectable text alone is an (empty-labelled) read-only field
-                  // in the accessibility tree, and a screen reader would say nothing at all.
                   child: Semantics(
                     container: true,
                     liveRegion: true,
@@ -355,9 +333,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
     });
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
-    // Taken before the request, which checks the values with Google and can take a while: the
-    // page may be left meanwhile, and a gone page's ref throws, so the rest of the app would go
-    // on showing the old status.
     final container = ProviderScope.containerOf(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _busy = true);
@@ -368,8 +343,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
         'refreshToken': _refreshToken.text.trim(),
       });
       final connected = GmailConnection.fromJson((res.data as Map).cast<String, dynamic>());
-      // The secrets have done their job; nothing keeps them on screen. The client ID stays, as
-      // it was sent.
       if (mounted) {
         _clientSecret.clear();
         _refreshToken.clear();
@@ -387,8 +360,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
             for (final f in fields.entries)
               if (_fields.contains(f.key)) f.key: f.value,
           };
-          // Anything the fields cannot show goes under the form: Google's refusal, a service
-          // that cannot be reached.
           _error = fields.isNotEmpty && _fieldErrors.length == fields.length
               ? null
               : apiErrorMessage(e);
@@ -411,8 +382,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Disconnect Gmail?'),
-        // A width of its own: a dialog sized to one long sentence spans the window on a desktop
-        // and reads as a banner. Narrower windows keep their own width, which is less than this.
         content: const SizedBox(
           width: 420,
           child: Text(
@@ -449,7 +418,6 @@ class _GmailConnectionScreenState extends ConsumerState<GmailConnectionScreen> {
   }
 }
 
-/// The steps of mail-service.md §8, and why a connection needs renewing every week.
 class _HowTo extends StatelessWidget {
   const _HowTo();
 
@@ -457,7 +425,6 @@ class _HowTo extends StatelessWidget {
   static const _scopes =
       'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
 
-  /// Each step, with **bold** for what is clicked or typed.
   static const _steps = [
     'In Google Cloud Console, create a project, then **APIs & Services → Library → Gmail API → '
         'Enable**.',
@@ -491,7 +458,6 @@ class _HowTo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    // One selection over the steps, so the addresses and the scopes can be copied.
     return SelectionArea(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,8 +545,6 @@ class _LoadError extends StatelessWidget {
       );
 }
 
-/// A user's Gmail on their details page (GET /api/users/{id}/gmail): "Connected as …", "Needs
-/// renewing" — why, in its tooltip — or "Not connected".
 class UserGmailStatus extends ConsumerWidget {
   final int userId;
   const UserGmailStatus({super.key, required this.userId});

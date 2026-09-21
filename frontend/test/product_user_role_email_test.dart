@@ -56,8 +56,6 @@ Map<String, dynamic> _page(List<Map<String, dynamic>> rows) => {
       'totalPages': 1,
     };
 
-/// A fake backend: each "METHOD /path" answers with what its handler returns, and every request
-/// is kept so a test can read what the screen sent.
 class _Backend {
   final Map<String, Object? Function(RequestOptions)> routes;
   final List<RequestOptions> requests = [];
@@ -123,7 +121,6 @@ Future<void> _pump(
   final router = GoRouter(
     initialLocation: location,
     routes: [
-      // Stands in for the list pages' "New …" buttons, which open these same forms.
       GoRoute(
         path: '/forms',
         builder: (_, __) => Scaffold(
@@ -172,7 +169,6 @@ Future<void> _tickNotifyAndSave(WidgetTester tester) async {
   await tester.pumpAndSettle();
 }
 
-/// The compose dialog asked about exactly this record and event.
 void _expectComposeFor(_Backend backend, String type, int id) {
   final asked = backend.sent('GET /api/emails/context').single.queryParameters;
   expect(asked, {
@@ -300,7 +296,6 @@ void main() {
       await _pump(tester,
           backend: _backend(), user: _user({Privileges.productView}), location: '/products');
 
-      // Someone who may neither edit nor send has nothing in the row but the row itself.
       expect(find.byTooltip('Send email'), findsNothing);
       await tester.tap(find.text('Widget'));
       await tester.pumpAndSettle();
@@ -329,7 +324,6 @@ void main() {
       final tabs = tester.widgetList<Tab>(find.byType(Tab)).map((t) => t.text).toList();
       expect(tabs, ['History', 'Email']);
 
-      // Edit reuses the list's form, without the create-only Notify box, and refreshes the page.
       final loads = backend.sent('GET /api/products/7').length;
       await tester.tap(find.widgetWithText(OutlinedButton, 'Edit'));
       await tester.pumpAndSettle();

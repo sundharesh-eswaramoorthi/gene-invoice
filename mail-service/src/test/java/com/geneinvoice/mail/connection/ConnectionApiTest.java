@@ -21,7 +21,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Connecting a user's Gmail (§4.3, §4.4) through the API, against a stand-in for Google. */
 class ConnectionApiTest extends IntegrationTestBase {
 
     private static final String SEND = "https://www.googleapis.com/auth/gmail.send";
@@ -63,7 +62,6 @@ class ConnectionApiTest extends IntegrationTestBase {
         assertThat(dto.get("lastSyncError").isNull()).isTrue();
         assertThat(answer).doesNotContain("secret-7", "1//refresh-7", "tok-1");
 
-        // The refresh-token grant, trimmed values, then the profile with the token it gave.
         assertThat(google.requests("POST", "/token")).singleElement().satisfies(request -> {
             assertThat(request.header("Content-Type")).startsWith("application/x-www-form-urlencoded");
             assertThat(request.form()).containsExactlyInAnyOrderEntriesOf(Map.of(
@@ -74,7 +72,6 @@ class ConnectionApiTest extends IntegrationTestBase {
         });
         assertThat(google.requests("GET", FakeGoogle.api("/profile"))).singleElement()
                 .satisfies(request -> assertThat(request.header("Authorization")).isEqualTo("Bearer tok-1"));
-        // The scope came with the token, so tokeninfo was not needed.
         assertThat(google.requests("GET", "/tokeninfo")).isEmpty();
 
         MailConnection stored = connection("7");
@@ -93,7 +90,6 @@ class ConnectionApiTest extends IntegrationTestBase {
             assertThat(event.getPayload()).doesNotContain("secret-7", "refresh-7");
         });
 
-        // The token from connecting is kept for sending.
         assertThat(tokens.accessToken(stored)).isEqualTo("tok-1");
         assertThat(google.requests("POST", "/token")).hasSize(1);
 
@@ -120,7 +116,6 @@ class ConnectionApiTest extends IntegrationTestBase {
         assertThat(second.getVersion()).isGreaterThan(first.getVersion());
         assertThat(tokens.accessToken(second)).isEqualTo("tok-2");
         assertThat(events("connection.status")).hasSize(2);
-        // Another mailbox: read from where it stands now, not from the old mailbox's place.
         assertThat(second.getHistoryId()).isEqualTo("7000");
     }
 
@@ -130,17 +125,14 @@ class ConnectionApiTest extends IntegrationTestBase {
         connectJane(200);
         assertThat(connection("7").getHistoryId()).isEqualTo("1000");
 
-        // A week later the token has expired; mail came in meanwhile, and Jane pastes a new token.
         google.account("Jane@Gmail.com", "1//refresh-7-renewed");
         google.historyAt("Jane@Gmail.com", "1500");
         call(put("/api/v1/connections/7"), body("123-abc.apps.googleusercontent.com", "secret-7", "1//refresh-7-renewed"))
                 .andExpect(status().isOk());
 
-        // What came in meanwhile is still to be read.
         assertThat(connection("7").getHistoryId()).isEqualTo("1000");
         assertThat(connection("7").getGmailAddress()).isEqualTo("jane@gmail.com");
 
-        // A mailbox that never got a place gets the profile's.
         connectionRepository.findByOwnerRef("7").ifPresent(c -> {
             c.setHistoryId(null);
             connectionRepository.save(c);
@@ -171,7 +163,6 @@ class ConnectionApiTest extends IntegrationTestBase {
                 "clientSecret", "The client secret is too long",
                 "refreshToken", "The refresh token is too long"));
 
-        // At the limits it is accepted, and a long name is cut rather than refused.
         google.account("jane@gmail.com", "r".repeat(2000));
         Map<String, Object> atLimits = body("c".repeat(300), "s".repeat(300), "r".repeat(2000));
         atLimits.put("ownerName", "N".repeat(250));
@@ -267,7 +258,6 @@ class ConnectionApiTest extends IntegrationTestBase {
                 .isEqualTo("This refresh token cannot send or read mail" + MAKE_A_NEW_ONE);
         assertThat(connectionRepository.findAll()).isEmpty();
 
-        // Wider scopes do both.
         google.account("jane@gmail.com", "1//full", "https://mail.google.com/");
         call(put("/api/v1/connections/7"), body("c", "s", "1//full")).andExpect(status().isOk());
         google.account("sam@gmail.com", "1//modify", "https://www.googleapis.com/auth/gmail.modify");
@@ -315,7 +305,6 @@ class ConnectionApiTest extends IntegrationTestBase {
         assertThat(events("connection.status")).extracting(e -> payload(e).get("status").asText())
                 .containsExactly("CONNECTED", "DISCONNECTED");
 
-        // Again, or for someone who never connected: nothing to do, and still 204.
         call(delete("/api/v1/connections/7")).andExpect(status().isNoContent());
         call(delete("/api/v1/connections/99")).andExpect(status().isNoContent());
         assertThat(events("connection.status")).hasSize(2);
@@ -325,8 +314,6 @@ class ConnectionApiTest extends IntegrationTestBase {
     @Test
     void disconnectingAlsoClearsTheLastCheckAndWhyItFailed() throws Exception {
         connect("7", "Jane Doe", "jane@gmail.com");
-        // Reading the mailbox failed at some point — a Gmail 5xx, or Google refusing the token — so
-        // the failure sits on the connection and is shown while it stands.
         MailConnection failing = connection("7");
         failing.setLastSyncedAt(T0);
         failing.setLastSyncError("Gmail is unavailable (500): Backend Error");
@@ -336,16 +323,11 @@ class ConnectionApiTest extends IntegrationTestBase {
 
         call(delete("/api/v1/connections/7")).andExpect(status().isNoContent());
 
-        // Nothing reads the mailbox any more: the error belongs to a connection that is gone, and
-        // would otherwise be answered beside NOT_CONNECTED to the owner (and its invalid_grant text
-        // would tell them to reconnect a connection they just removed).
         JsonNode gone = read(call(get("/api/v1/connections/7")).andExpect(status().isOk()));
         assertThat(gone.get("status").asText()).isEqualTo("DISCONNECTED");
         assertThat(gone.get("lastSyncError").isNull()).isTrue();
         assertThat(gone.get("lastSyncedAt").isNull()).isTrue();
 
-        // A row disconnected before this was so, with the error still on it, is cleaned by asking
-        // again — without reporting a status that did not change.
         MailConnection stale = connection("7");
         stale.setLastSyncedAt(T0);
         stale.setLastSyncError("Gmail is unavailable (500): Backend Error");

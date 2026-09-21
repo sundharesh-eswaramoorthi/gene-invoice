@@ -23,15 +23,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * What a customer's own record, login and email address guarantee over its life.
- *
- * <p>Three things used to go wrong at the edges of that life. Removing a customer left no trace at
- * all and took its history out of reach with it (CP-04). Deleting the customer's login on its own
- * left a customer nobody could ever sign in as, and freed its email for a second customer to take,
- * so every email to that address then belonged to two records (CP-05). And a username was unique
- * only in the case it was typed in, so "ADMIN" could be minted beside "admin" (CP-06).
- */
 class CustomerLifecycleTest extends IntegrationTestBase {
 
     @Autowired AuditLogRepository auditLogRepository;
@@ -56,8 +47,6 @@ class CustomerLifecycleTest extends IntegrationTestBase {
         return objectMapper.readTree(body);
     }
 
-    // ---- CP-04: a deletion leaves a trail, and the trail stays readable ---------
-
     @Test
     void deletingACustomerIsRecordedAndItsHistoryIsStillReadable() throws Exception {
         long id = createCustomer("Gone Ltd", "ap@gone.test", "gone.login").get("id").asLong();
@@ -70,8 +59,6 @@ class CustomerLifecycleTest extends IntegrationTestBase {
                 .extracting(a -> a.getAction())
                 .contains("CUSTOMER_CREATED", "CUSTOMER_UPDATED", "CUSTOMER_DELETED");
 
-        // The record is gone, so its own read cannot vouch for the caller; the view privilege
-        // they hold does. Without this the deletion was invisible after the fact.
         String history = mockMvc.perform(get("/api/audit").with(as(admin))
                         .param("entityType", "CUSTOMER").param("entityId", String.valueOf(id)))
                 .andExpect(status().isOk())
@@ -84,8 +71,6 @@ class CustomerLifecycleTest extends IntegrationTestBase {
         JsonNode customer = createCustomer("Gone Ltd", "ap@gone.test", "gone.login");
         long id = customer.get("id").asLong();
         User theirLogin = userRepository.findByUsername("gone.login").orElseThrow();
-        // Taken while the account still exists: the deletion removes it with the customer, and
-        // what is being asked is what that token would still reach.
         RequestPostProcessor asThem = as(theirLogin);
 
         mockMvc.perform(get("/api/audit").with(asThem)
@@ -94,7 +79,6 @@ class CustomerLifecycleTest extends IntegrationTestBase {
 
         mockMvc.perform(delete("/api/customers/" + id).with(as(admin))).andExpect(status().isOk());
 
-        // A customer-scoped caller is refused: with no record there is nothing to say it is theirs.
         mockMvc.perform(get("/api/audit").with(asThem)
                         .param("entityType", "CUSTOMER").param("entityId", String.valueOf(id)))
                 .andExpect(status().isNotFound());
@@ -112,8 +96,6 @@ class CustomerLifecycleTest extends IntegrationTestBase {
         assertThat(auditLogRepository.findByEntityTypeAndEntityIdIn("USER", List.of(spare.getId())))
                 .extracting(a -> a.getAction()).contains("USER_DELETED");
     }
-
-    // ---- CP-05: a customer's login and its email address ------------------------
 
     @Test
     void aCustomersLoginCannotBeDeletedOnItsOwn() throws Exception {
@@ -144,8 +126,6 @@ class CustomerLifecycleTest extends IntegrationTestBase {
     @Test
     void anEmailFreedByADeletedLoginIsStillTheCustomersOwn() throws Exception {
         long id = createCustomer("Orphan Ltd", "ap@orphan.test", "orphan.login").get("id").asLong();
-        // The login is gone from the users table — whether by the guard above or by an older
-        // deployment that allowed it — and the address must still belong to its customer.
         userRepository.deleteById(userRepository.findByUsername("orphan.login").orElseThrow().getId());
 
         send(post("/api/customers"), admin, Map.of("name", "Second Ltd", "email", "ap@orphan.test",
@@ -166,7 +146,6 @@ class CustomerLifecycleTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.message").value("Email already exists"));
     }
 
-    /** Re-saving a customer as it stands is always allowed, email and all. */
     @Test
     void aCustomerCanBeSavedWithTheEmailItAlreadyHas() throws Exception {
         long id = createCustomer("First Ltd", "ap@first.test", "first.login").get("id").asLong();
@@ -175,8 +154,6 @@ class CustomerLifecycleTest extends IntegrationTestBase {
                 Map.of("name", "First Limited", "email", "ap@first.test"))
                 .andExpect(status().isOk());
     }
-
-    // ---- CP-06: usernames read the same whatever their case ---------------------
 
     @Test
     void aUsernameIsTakenWhateverCaseItIsTypedIn() throws Exception {

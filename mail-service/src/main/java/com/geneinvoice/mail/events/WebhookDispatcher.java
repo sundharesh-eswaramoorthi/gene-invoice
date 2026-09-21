@@ -23,13 +23,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * Delivers the outbox to the backend (§4.8): the oldest undelivered events, in order, as one signed
- * POST per batch. Anything but a 2xx leaves them undelivered, and the next try waits 1 s, then 2 s,
- * 4 s … up to 5 minutes, until one succeeds. The events wait in the database meanwhile, so nothing is
- * lost to a backend that is down; the backend applies them idempotently, so one delivered twice is
- * harmless.
- */
 @Component
 @Slf4j
 public class WebhookDispatcher {
@@ -39,7 +32,6 @@ public class WebhookDispatcher {
     static final Duration KEEP_DELIVERED = Duration.ofDays(7);
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
-    /** Batches one run may send back to back when there is a backlog; the next run carries on. */
     private static final int MAX_BATCHES_PER_RUN = 10;
     private static final int ANSWER_EXCERPT = 200;
 
@@ -53,7 +45,6 @@ public class WebhookDispatcher {
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
-    /** The wait after the last failure; null after a success. */
     private Duration wait;
     private Instant nextTryAt = Instant.MIN;
 
@@ -75,11 +66,6 @@ public class WebhookDispatcher {
         }
     }
 
-    /**
-     * Sends what is waiting, unless there is no webhook or the wait after a failure is not over.
-     *
-     * @return the number of events the backend accepted
-     */
     public synchronized int dispatch() {
         if (!properties.webhookEnabled()) return 0;
         if (clock.instant().isBefore(nextTryAt)) return 0;
@@ -107,12 +93,10 @@ public class WebhookDispatcher {
         return delivered;
     }
 
-    /** How long the dispatcher waits before trying again; null when the last try succeeded. */
     public synchronized Duration currentWait() {
         return wait;
     }
 
-    /** Delivered events are kept a week for looking into, then deleted. */
     @Scheduled(fixedDelayString = "PT24H", initialDelayString = "PT10M")
     public void deleteDelivered() {
         Integer deleted = transactions.execute(status ->
@@ -120,7 +104,6 @@ public class WebhookDispatcher {
         if (deleted != null && deleted > 0) log.info("Deleted {} delivered mail event(s) older than a week", deleted);
     }
 
-    /** Null when the backend took the batch, else what went wrong. */
     private String post(List<MailEvent> batch) {
         String body;
         try {
@@ -151,7 +134,6 @@ public class WebhookDispatcher {
         }
     }
 
-    /** {@code {"events": [{"id", "type", "occurredAt", "data"}]}}, the data exactly as recorded. */
     private String body(List<MailEvent> batch) throws JsonProcessingException {
         ObjectNode root = json.createObjectNode();
         ArrayNode list = root.putArray("events");

@@ -29,7 +29,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Each internal user connects their own Gmail with three values (mail-service.md §5.6). */
 class GmailConnectionTest extends EmailTestBase {
 
     @Autowired DataSource dataSource;
@@ -61,7 +60,6 @@ class GmailConnectionTest extends EmailTestBase {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.clientId").doesNotExist())
                 .andExpect(jsonPath("$.fieldErrors.refreshToken").value("Enter the refresh token"));
-        // The service's limits, checked here so the words land under the field.
         connect(sales, values("c".repeat(301), "s".repeat(301), "t".repeat(2001)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.clientId").value("The client ID is too long"))
@@ -120,7 +118,6 @@ class GmailConnectionTest extends EmailTestBase {
                 .andExpect(jsonPath("$.message").value("Could not reach the mail service: refused"));
         mockMvc.perform(delete("/api/me/gmail").with(as(sales))).andExpect(status().isServiceUnavailable());
 
-        // Nothing was kept of a connection that did not happen.
         assertThat(gmailConnectionRepository.findById(sales.getId())).isEmpty();
     }
 
@@ -174,7 +171,6 @@ class GmailConnectionTest extends EmailTestBase {
         assertThat(mine(sales).get("status").asText()).isEqualTo("NOT_CONNECTED");
         assertThat(getOk("/api/users/" + sales.getId() + "/gmail", admin).get("status").asText())
                 .isEqualTo("NOT_CONNECTED");
-        // Nothing to disconnect is not an error.
         mockMvc.perform(delete("/api/me/gmail").with(as(collections))).andExpect(status().isNoContent());
     }
 
@@ -182,7 +178,6 @@ class GmailConnectionTest extends EmailTestBase {
     void disconnectingLeavesNoWordOfTheLastGmailCheckBehind() throws Exception {
         mailTransport.mode(Mode.SUCCESS);
         connect(sales, values("id", "secret", "token")).andExpect(status().isOk());
-        // Reading the mailbox failed while the connection stood: the error is kept and shown.
         String failed = "Google no longer accepts this Gmail connection (invalid_grant: Token has been"
                 + " expired or revoked.). Reconnect Gmail.";
         mailTransport.hold(RecordingMailTransport.state(sales.getId(), "SAM.SALES", ConnectionStatus.NEEDS_RECONNECT,
@@ -192,9 +187,6 @@ class GmailConnectionTest extends EmailTestBase {
 
         mockMvc.perform(delete("/api/me/gmail").with(as(sales))).andExpect(status().isNoContent());
 
-        // Nothing is connected any more, so nothing is left to have failed: a stale error here would
-        // tell someone with no connection that their last Gmail check failed — and this one would
-        // even ask them to reconnect what they just removed.
         for (JsonNode answer : List.of(mine(sales), getOk("/api/emails/delivery", sales).get("gmail"))) {
             assertThat(answer.get("status").asText()).isEqualTo("NOT_CONNECTED");
             assertThat(answer.get("reason").isNull()).isTrue();
@@ -207,8 +199,6 @@ class GmailConnectionTest extends EmailTestBase {
             assertThat(copy.getLastSyncedAt()).isNull();
         });
 
-        // The same for a copy left over from an older row: the service has no connection for them,
-        // so the app forgets everything it kept of one.
         gmailConnectionRepository.save(GmailConnection.builder().userId(collections.getId())
                 .status(ConnectionStatus.DISCONNECTED).gmailAddress("cara@gmail.com")
                 .lastSyncedAt(Instant.parse("2026-09-20T10:05:00Z")).lastSyncError(failed).build());
@@ -227,7 +217,6 @@ class GmailConnectionTest extends EmailTestBase {
             connect(caller, values("id", "secret", "token")).andExpect(status().isForbidden());
         }
         assertThat(mailTransport.connectCalls()).isEmpty();
-        // Disconnecting is for every internal user, so one who lost EMAIL_SEND can take their mailbox back.
         mockMvc.perform(delete("/api/me/gmail").with(as(viewer))).andExpect(status().isNoContent());
         mockMvc.perform(delete("/api/me/gmail").with(as(acmeLogin))).andExpect(status().isForbidden());
         assertThat(mailTransport.disconnectCalls()).containsExactly(viewer.getId());
@@ -257,8 +246,6 @@ class GmailConnectionTest extends EmailTestBase {
         CountDownLatch inserted = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
         List<Throwable> failures = new CopyOnWriteArrayList<>();
-        // The service's connection.status report makes the app's first copy while the answer to the
-        // connect is on its way back: it has inserted the row, and not yet committed.
         Thread report = new Thread(() -> {
             try {
                 transactions.executeWithoutResult(tx -> {
@@ -283,7 +270,6 @@ class GmailConnectionTest extends EmailTestBase {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            // The report commits while this request is writing its own copy.
             Thread committer = new Thread(() -> {
                 try {
                     Thread.sleep(300);
@@ -320,7 +306,6 @@ class GmailConnectionTest extends EmailTestBase {
 
         connect(sales, values("id", "secret", "token")).andExpect(status().isOk());
 
-        // Connecting waits on Google; a pooled connection held meanwhile would be kept from the rest of the app.
         assertThat(inUse).containsExactly(0);
     }
 }

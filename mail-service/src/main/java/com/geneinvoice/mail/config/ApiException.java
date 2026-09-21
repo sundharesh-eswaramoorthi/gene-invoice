@@ -2,7 +2,6 @@ package com.geneinvoice.mail.config;
 
 import org.springframework.http.HttpStatus;
 
-/** A request that fails with this status and a message the caller can show as it is. */
 public class ApiException extends RuntimeException {
 
     private final HttpStatus status;

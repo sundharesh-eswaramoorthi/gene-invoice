@@ -20,7 +20,6 @@ class EmailTextTest {
         String emoji = HIGH + LOW;
         assertThat(EmailText.storable("Plain ₹1,200.00 " + emoji)).isEqualTo("Plain ₹1,200.00 " + emoji);
         assertThat(EmailText.storable("a" + NUL + "b" + NUL)).isEqualTo("ab");
-        // A lone surrogate is not UTF-8; one of a pair stays with its partner.
         assertThat(EmailText.storable("x" + HIGH + "y" + LOW + "z" + HIGH))
                 .isEqualTo("x" + REPLACEMENT + "y" + REPLACEMENT + "z" + REPLACEMENT);
     }
@@ -28,7 +27,6 @@ class EmailTextTest {
     @Test
     void textCutToFitNeverEndsInHalfACharacter() {
         String emoji = HIGH + LOW;
-        // The emoji takes units 4 and 5 of 7: fitting 6 keeps 5 units and "…", which would split it.
         String text = "abcd" + emoji + "e";
         assertThat(EmailText.fit(text, 6)).isEqualTo("abcd…");
         assertThat(EmailText.fit(text, 5)).isEqualTo("abcd…");

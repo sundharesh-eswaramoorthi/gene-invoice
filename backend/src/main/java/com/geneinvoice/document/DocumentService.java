@@ -32,25 +32,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Attaching files to records, and reading them back (§4). Nothing here is one transaction end to
- * end: the upload is checked and stored with no transaction open, and only the row is written in
- * one, so a database connection is never held while bytes are moving.
- *
- * <p>The order a failure leaves things in is the point of AC-C18. Bytes are stored before the row
- * is written and removed again when writing it fails, so a row never points at bytes that are not
- * there, and bytes without a row are unreachable by any endpoint.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class DocumentService {
 
     static final String NOT_FOUND = "Document not found";
-    /** What an upload says when the record it was landing on went while it was being stored. */
     static final String PARENT_GONE = "Customer not found";
 
-    /** A record's documents page like any list, newest first; there is nothing to filter or re-sort. */
     private static final TableSchema RECORD_DOCUMENTS = TableSchema.of("documents", "uploadedAt,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).notFilterable().build(),
             ColumnDef.of("uploadedAt", "Uploaded", ColumnType.DATE).notFilterable().build());
@@ -66,21 +55,12 @@ public class DocumentService {
     private final CurrentUser currentUser;
     private final TransactionTemplate transactions;
 
-    /** The bytes on their way out, and what the browser should call them. */
     public record Download(String filename, long sizeBytes, InputStream stream) {}
 
-    /** What an upload, an edit and a delete are written to the audit log as. */
     private record DocumentSnapshot(Long id, String filename, String contentType, long sizeBytes,
                                     DocumentVisibility visibility, String description,
                                     String uploadedBy) {}
 
-    // ---- uploading ---------------------------------------------------------------------
-
-    /**
-     * Attaches a file to a record the caller may change. A customer login's upload lands
-     * {@code SHARED} whatever it asks for: an internal document would be invisible to the very
-     * person who uploaded it (§1, answer 4).
-     */
     public DocumentDto upload(String entityType, Long entityId, MultipartFile file,
                               String description, String visibility) {
         DocumentEntityType type = DocumentEntityType.parse(entityType);
@@ -128,18 +108,12 @@ public class DocumentService {
                     return document;
                 });
             } catch (RuntimeException e) {
-                // A transaction that threw did not write the row, so nothing can reach these
-                // bytes: take them back out. The guard stops at the transaction — past here the
-                // document is real, and a failure building the answer is a 500 over a whole
-                // document rather than a reason to take its file away from it (AC-C18).
                 storage.delete(key);
                 throw e;
             }
             return toDto(saved);
         }
     }
-
-    // ---- reading -----------------------------------------------------------------------
 
     /** A record's documents, newest first; a customer login sees only the shared ones (D7). */
     @Transactional(readOnly = true)
@@ -153,7 +127,6 @@ public class DocumentService {
                 query, result.total(), List.of());
     }
 
-    /** How many there are, for the tab's badge — counted the same way the list is filtered. */
     @Transactional(readOnly = true)
     public DocumentDtos.DocumentCount count(String entityType, Long entityId) {
         DocumentEntityType type = DocumentEntityType.parse(entityType);
@@ -164,20 +137,12 @@ public class DocumentService {
                 : repository.countByEntityTypeAndEntityIdAndDeletedFalse(type, entityId));
     }
 
-    /**
-     * The bytes, for a caller allowed to have them. Authorised on this request and every request,
-     * with no URL that outlives the check (D8); the stream is opened here and handed straight to
-     * the response, so no file is ever read into memory.
-     */
     @Transactional(readOnly = true)
     public Download download(Long id) {
         Document doc = visible(id);
         return new Download(doc.getFilename(), doc.getSizeBytes(), storage.open(doc.getStorageKey()));
     }
 
-    // ---- changing ----------------------------------------------------------------------
-
-    /** The description and the visibility; never a customer login, which cannot share or unshare. */
     @Transactional
     public DocumentDto update(Long id, DocumentDtos.PatchDocumentRequest req) {
         if (currentUser.isCustomer()) throw new AccessDeniedException("Not allowed");
@@ -194,15 +159,6 @@ public class DocumentService {
         return toDto(saved);
     }
 
-    /**
-     * Soft-deletes it (AC-C3): whoever may change the record, and whoever uploaded it, and never a
-     * customer login. The row and the bytes are both retained — the row for the audit trail, the
-     * bytes because nothing reaches them once the row is deleted (§1, answer 8).
-     *
-     * <p>The row is read under its write lock, so a second delete of the same document waits for
-     * this one and then finds it already deleted. Deleting a document twice at once is one delete
-     * and one 404, exactly as deleting it twice in a row is (DOC-3).
-     */
     @Transactional
     public void delete(Long id) {
         if (currentUser.isCustomer()) throw new AccessDeniedException("Not allowed");
@@ -223,9 +179,6 @@ public class DocumentService {
                 before, null, me.getId(), null, null);
     }
 
-    // ---- what the caller may see -------------------------------------------------------
-
-    /** A live document the caller may read: the record's own answer, then visibility (§4.5). */
     private Document visible(Long id) {
         Document doc = live(id);
         targets.requireVisible(doc.getEntityType(), doc.getEntityId());
@@ -235,7 +188,6 @@ public class DocumentService {
         return doc;
     }
 
-    /** A document that has not been deleted; a deleted one is gone as far as any endpoint knows. */
     private Document live(Long id) {
         return notDeleted(repository.findById(id));
     }
@@ -250,7 +202,6 @@ public class DocumentService {
                 .orElseThrow(() -> new NotFoundException(NOT_FOUND));
     }
 
-    /** The documents on one record that this caller may see. */
     private List<PredicateFactory> onRecord(DocumentEntityType type, Long entityId) {
         List<PredicateFactory> scope = new ArrayList<>(List.of(
                 (root, q, cb) -> cb.equal(root.get("entityType"), type),
@@ -275,19 +226,11 @@ public class DocumentService {
                 d.getUploadedAt(), true, manage, manage || uploader);
     }
 
-    // ---- storage keys ------------------------------------------------------------------
-
-    /**
-     * Where the bytes go: the kind of record, its id, and a name nobody can guess or collide with,
-     * with the extension of what the file turned out to be. Nothing the uploader sent is in it, so
-     * no name can reach outside the storage root (AC-C8).
-     */
     private static String key(DocumentEntityType type, Long entityId, String contentType) {
         return type.noun() + "/" + entityId + "/" + UUID.randomUUID()
                 + "." + ContentSniffer.extensionOf(contentType);
     }
 
-    /** Hands the staged bytes to storage, and closes the read of them whatever happens. */
     private StoredFile store(DocumentRules.Staged staged, String key) {
         try (InputStream bytes = new BufferedInputStream(Files.newInputStream(staged.file()))) {
             return storage.put(bytes, key, staged.contentType(), properties.getMaxSizeBytes());

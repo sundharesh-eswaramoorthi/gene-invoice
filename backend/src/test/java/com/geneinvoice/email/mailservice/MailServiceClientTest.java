@@ -34,7 +34,6 @@ import java.util.concurrent.Executors;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** The client speaks the mail service's API (mail-service.md §4.3) and words its failures (§5.2). */
 class MailServiceClientTest {
 
     private static final String API_KEY = "test-api-key-0123456789";
@@ -116,8 +115,6 @@ class MailServiceClientTest {
                         new CopyRequest("gi-91-502", "Ann Lee", "ann@acme.test")));
     }
 
-    // ---- sending ---------------------------------------------------------------------
-
     @Test
     void aHandOffPostsTheCopiesWithTheApiKeyAndReadsWhereEachStands() throws Exception {
         on("POST", "/api/v1/messages", 202, """
@@ -164,7 +161,6 @@ class MailServiceClientTest {
             assertThat(e.isTransientFailure()).isTrue();
         });
 
-        // The service's message already joins its field messages, so they are not repeated.
         on("POST", "/api/v1/messages", 400, """
                 {"status":400,"error":"Bad Request","message":"Enter a subject; The body is too long",
                  "fieldErrors":{"subject":"Enter a subject","body":"The body is too long"}}
@@ -183,7 +179,6 @@ class MailServiceClientTest {
         assertThatThrownBy(() -> client.submit(submission()))
                 .hasMessage("The mail service refused the email: HTTP 401");
 
-        // An answer that is not the service's: it may have the copies, and handing them over again is harmless.
         on("POST", "/api/v1/messages", 202, "<html>proxy</html>");
         assertThatThrownBy(() -> client.submit(submission())).isInstanceOfSatisfying(MailSendException.class, e -> {
             assertThat(e.getMessage()).startsWith("Unexpected answer from the mail service");
@@ -220,8 +215,6 @@ class MailServiceClientTest {
         });
     }
 
-    // ---- connections -------------------------------------------------------------------
-
     private static final String CONNECTED = """
             {"ownerRef": "7", "ownerName": "Jane Doe", "status": "CONNECTED", "gmailAddress": "jane@gmail.com",
              "clientId": "123-abc.apps.googleusercontent.com",
@@ -246,7 +239,6 @@ class MailServiceClientTest {
         assertThat(state.gmailAddress()).isEqualTo("jane@gmail.com");
         assertThat(state.scopes()).hasSize(2);
         assertThat(state.connectedAt()).isEqualTo(Instant.parse("2026-09-20T10:00:00Z"));
-        // The request's secrets never show up in its text.
         assertThat(new MailServiceDtos.ConnectRequest("Jane", "id", "s3cret", "1//refresh").toString())
                 .doesNotContain("s3cret", "1//refresh");
     }

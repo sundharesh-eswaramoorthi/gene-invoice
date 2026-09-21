@@ -12,7 +12,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The sweeper (§4.5): sends that died half way, and queue messages that were lost. */
 class SendSweeperTest extends IntegrationTestBase {
 
     @Autowired SendSweeper sweeper;
@@ -24,7 +23,6 @@ class SendSweeperTest extends IntegrationTestBase {
         google.on("POST", FakeGoogle.api("/messages/send"), 200, "{\"id\":\"gm-1\",\"threadId\":\"th-1\"}");
     }
 
-    /** A worker took the copy and died before it could say how the send went. */
     private long claimedAndAbandoned(String externalId) {
         submit(submission("7", "Jane Doe", "91", false, copy(externalId, "Bob", "bob@acme.com")));
         long id = message(externalId).getId();
@@ -49,10 +47,8 @@ class SendSweeperTest extends IntegrationTestBase {
         assertThat(failed.getError()).isEqualTo("Sending was interrupted; retry to send again");
         assertThat(failed.isDeliveryUncertain()).isTrue();
         assertThat(statusTrail("gi-91-1")).containsExactly("QUEUED@1", "FAILED@3");
-        // Never sent again on its own.
         assertThat(queue.enqueued()).isEmpty();
 
-        // A retry by hand looks in Sent mail first: it had gone out.
         google.on("GET", FakeGoogle.api("/messages"), 200, "{\"messages\":[{\"id\":\"gm-0\",\"threadId\":\"th-0\"}]}");
         submit(submission("7", "Jane Doe", "91", true, copy("gi-91-1", "Bob", "bob@acme.com")));
         work();
@@ -73,7 +69,6 @@ class SendSweeperTest extends IntegrationTestBase {
         queue.take();
 
         sweeper.sweep();
-        // Never put on the queue: at once. Put on it just now: left alone.
         assertThat(queue.take()).containsExactly(lost);
         assertThat(message("gi-91-1").getEnqueuedAt()).isEqualTo(T0);
 
@@ -98,7 +93,6 @@ class SendSweeperTest extends IntegrationTestBase {
         sweeper.sweep();
         assertThat(queue.take()).isEmpty();
 
-        // The delay queue lost it: two minutes after it was due, the sweeper sends it on.
         clock.advance(Duration.ofMinutes(1).plusSeconds(1));
         sweeper.sweep();
         assertThat(queue.take()).isEqualTo(List.of(id));

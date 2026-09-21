@@ -10,7 +10,6 @@ import java.util.Optional;
 
 public interface InvoiceNumberSequenceRepository extends JpaRepository<InvoiceNumberSequence, Long> {
 
-    /** Reads the row with SELECT ... FOR UPDATE; it stays locked until the transaction ends. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select s from InvoiceNumberSequence s where s.id = :id")
     Optional<InvoiceNumberSequence> lockById(@Param("id") Long id);

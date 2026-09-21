@@ -42,11 +42,6 @@ const _divya = {'userId': 15, 'name': 'Divya Nair', 'email': 'divya@company.com'
 Map<String, dynamic> _holder(int userId, String name) =>
     {'userId': userId, 'name': name, 'email': '${name.split(' ').first.toLowerCase()}@company.com'};
 
-/// An invoice's context as §4 of email-role-levels.md has it: the customer's three POC seats, then
-/// the invoice's own Sales POC. [salesPocs], [successPocs] and [collectionPocs] are the active
-/// holders of those seats on the customer, primary first; [recordSalesPoc] is the one person the
-/// invoice stores (null: nobody holds it there). [configured]: a mail service is set up;
-/// [selfGmail]: the caller's own Gmail connection.
 Map<String, dynamic> _context({
   bool restricted = false,
   bool withRecord = true,
@@ -127,9 +122,6 @@ Map<String, dynamic> _savedEmail(String status, {String? error}) => {
       'canRetry': false,
     };
 
-/// A fake backend: each "METHOD /path" answers with what its handler returns, and every request
-/// is kept so a test can read what the dialog sent. A request in [held] is answered only once its
-/// future completes.
 class _Backend {
   final Map<String, Object? Function(RequestOptions)> routes;
   final List<RequestOptions> requests = [];
@@ -219,7 +211,6 @@ Future<void> _pump(
   await tester.pumpAndSettle();
 }
 
-/// Lets the debounced preview go out and come back.
 Future<void> _settlePreview(WidgetTester tester) async {
   await tester.pump(const Duration(milliseconds: 500));
   await tester.pumpAndSettle();
@@ -228,21 +219,16 @@ Future<void> _settlePreview(WidgetTester tester) async {
 FilledButton _sendButton(WidgetTester tester, String label) => tester.widget<FilledButton>(
     find.ancestor(of: find.text(label), matching: find.byWidgetPredicate((w) => w is FilledButton)));
 
-/// Every tooltip the form has on show, but the To chips' "Remove". A chip that cannot be pressed
-/// builds no tooltip of its own, so a chip's `tooltip` field alone would not prove one is there.
 List<String> _tooltips(WidgetTester tester) => [
       for (final t in tester.widgetList<Tooltip>(find.byType(Tooltip)))
         if ((t.message ?? '').isNotEmpty && t.message != 'Remove') t.message!,
     ];
 
-/// What the From field's menu says for [value], without opening it.
 String? _fromItemText(WidgetTester tester, String value) {
   final items = tester.widget<DropdownButton<String>>(find.byType(DropdownButton<String>)).items!;
   return _itemWords(items.singleWhere((i) => i.value == value).child);
 }
 
-/// The words of a From item, however it lays them out: the name, which gives way when the row is
-/// narrow, and the Gmail marker beside it, which does not.
 String _itemWords(Widget widget) => switch (widget) {
       FromPickerItem(:final name, :final note) => '$name$note',
       DropdownMenuItem(:final child) => _itemWords(child),
@@ -252,16 +238,12 @@ String _itemWords(Widget widget) => switch (widget) {
       _ => '',
     };
 
-/// What the From field itself reads with the menu closed — the chosen item, away from the
-/// headings that name its level in the menu.
 String _closedFrom(WidgetTester tester) {
   final stack = tester.widget<IndexedStack>(find.descendant(
       of: find.byType(DropdownButton<String>), matching: find.byType(IndexedStack)));
   return _itemWords(stack.children[stack.index!]);
 }
 
-/// Opens the From menu from what the closed field reads now and picks one of its lines; [at] tells
-/// two alike apart, as the two levels of one role are in bulk.
 Future<void> _chooseFrom(WidgetTester tester, String open, String line, {int at = 0}) async {
   await tester.tap(find.text(open));
   await tester.pumpAndSettle();
@@ -270,14 +252,12 @@ Future<void> _chooseFrom(WidgetTester tester, String open, String line, {int at 
   await tester.pumpAndSettle();
 }
 
-/// Every line of the From field's menu in order, the group headings among the senders.
 List<String> _fromMenu(WidgetTester tester) => [
       for (final item
           in tester.widget<DropdownButton<String>>(find.byType(DropdownButton<String>)).items!)
         _itemWords(item.child),
     ];
 
-/// The chips offered under one heading of To — "Add", "Customer level", "Invoice level" — in order.
 List<String> _chipsUnder(WidgetTester tester, String heading) {
   return [
     for (final chip in tester.widgetList<ActionChip>(
@@ -286,8 +266,6 @@ List<String> _chipsUnder(WidgetTester tester, String heading) {
   ];
 }
 
-/// One chip by the heading it sits under, for the words both levels offer ("Sales POC · nobody
-/// assigned").
 Finder _chipIn(String heading, String text) =>
     find.descendant(of: _row(heading), matching: find.widgetWithText(ActionChip, text));
 
@@ -319,7 +297,6 @@ void main() {
       expect([for (final p in option.people) p.userId], [21, 22]);
       expect(option.sender?.display, 'Anil Kumar <anil@company.com>');
 
-      // The same read as part of the whole context.
       final ctx = EmailContext.fromJson(_context(collectionPocs: [anil, bala]));
       expect([for (final p in ctx.role('COLLECTION_POC')!.people) p.userId], [21, 22]);
       expect(ctx.role('COLLECTION_POC')!.sender?.userId, 21);
@@ -347,11 +324,9 @@ void main() {
         'COLLECTION_POC CUSTOMER',
         'SALES_POC RECORD',
       ]);
-      // The customer's POC book first, then what the invoice itself stores (§4).
       expect([for (final g in ctx.roleGroups) g.label], ['Customer level', 'Invoice level']);
       expect([for (final g in ctx.roleGroups) g.roles.length], [3, 1]);
       expect(ctx.roleGroups.last.roles.single.levelLabel, 'Invoice');
-      // The same role at the two levels is two options, told apart by their level.
       expect(ctx.role('SALES_POC', level: EmailRoleLevel.record)!.sender?.name, 'Divya Nair');
       expect(ctx.role('SALES_POC', level: EmailRoleLevel.customer)!.people, isEmpty);
       expect(ctx.role('COLLECTION_POC', level: EmailRoleLevel.record), isNull);
@@ -369,7 +344,6 @@ void main() {
       expect(option.levelLabel, 'Customer');
       expect(option.groupLabel, 'Customer level');
       expect(option.token, const EmailToken.role('SALES_POC', level: EmailRoleLevel.customer));
-      // Every such role is then one group, as the form has always shown them.
       final ctx = EmailContext.fromJson({
         ..._context(),
         'roles': const [
@@ -419,14 +393,11 @@ void main() {
 
       final offered = find.widgetWithText(ActionChip, text);
       expect(offered, findsOneWidget, reason: text);
-      // Names alone leave out the addresses, which the tooltip gives, one person a line.
       expect(_tooltips(tester), [if (tooltip != null) tooltip], reason: text);
-      // An email has one sender, whoever else holds the role: the primary.
       expect(_fromItemText(tester, 'role:COLLECTION_POC:CUSTOMER'),
           holders.isEmpty ? 'Collection POC · nobody assigned' : 'Collection POC · $anilInFull',
           reason: text);
 
-      // Once added, its chip in To says the same.
       await tester.tap(offered);
       await tester.pumpAndSettle();
       expect(find.widgetWithText(InputChip, text), findsOneWidget, reason: text);
@@ -443,7 +414,6 @@ void main() {
         backend: _backend(context: _context(successPocs: [_holder(13, 'Chitra Devi')])),
         onOpen: _openInvoice);
 
-    // The customer's three seats first, in their own order, then what the invoice stores (§4).
     expect(_chipsUnder(tester, 'Customer level'), [
       'Sales POC · nobody assigned',
       'Customer Success POC · Chitra Devi <chitra@company.com>',
@@ -453,22 +423,17 @@ void main() {
     expect(_chipsUnder(tester, 'Add'), ['Person…']);
     double top(String text) => tester.getTopLeft(find.text(text)).dy;
     expect(top('Customer level'), lessThan(top('Invoice level')));
-    // The customer's own addresses come after both groups.
     expect(top('Invoice level'), lessThan(top('Customer emails · ap@acme.com')));
 
-    // Either Sales POC can be picked, or both: each chip reaches the people of its own level.
     await tester.tap(_chipIn('Invoice level', 'Sales POC · Divya Nair <divya@company.com>'));
     await tester.pumpAndSettle();
     await tester.tap(_chipIn('Customer level', 'Sales POC · nobody assigned'));
     await tester.pumpAndSettle();
-    // In the box, away from the headings, each of the two says which POC it is — in the server's
-    // own words for a source.
     expect(
         find.widgetWithText(
             InputChip, 'Sales POC (this invoice) · Divya Nair <divya@company.com>'),
         findsOneWidget);
     expect(find.widgetWithText(InputChip, 'Sales POC (customer) · nobody assigned'), findsOneWidget);
-    // A group with nothing left to add is gone, heading and all.
     expect(find.text('Invoice level'), findsNothing);
     expect(_chipsUnder(tester, 'Customer level'), [
       'Customer Success POC · Chitra Devi <chitra@company.com>',
@@ -519,12 +484,10 @@ void main() {
     ]);
     final items =
         tester.widget<DropdownButton<String>>(find.byType(DropdownButton<String>)).items!;
-    // A heading names its group and is never a sender.
     expect([for (final i in items) i.value!].where((v) => v.startsWith('group:')),
         ['group:CUSTOMER', 'group:RECORD']);
     expect([for (final i in items) if (!i.enabled) i.value], ['group:CUSTOMER', 'group:RECORD']);
 
-    // Chosen, the invoice's own Sales POC goes to the server with its level.
     await tester.tap(find.text('Me (Jane Doe)'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sales POC · Divya Nair <divya@company.com>').last);
@@ -544,15 +507,12 @@ void main() {
         context: _context(salesPocs: [_holder(21, 'Anil Kumar'), _holder(22, 'Bala Raman')]));
     await _pump(tester, backend: backend, onOpen: _openInvoice);
 
-    // The menu says the level once, in the heading over each group; the closed field has no
-    // heading over it, so there the role names its own level (§4).
     expect(_closedFrom(tester), 'Me (Jane Doe)');
     await _chooseFrom(tester, 'Me (Jane Doe)', 'Sales POC · Divya Nair <divya@company.com>');
     expect(_closedFrom(tester), 'Sales POC (this invoice) · Divya Nair <divya@company.com>');
     await _chooseFrom(tester, 'Sales POC (this invoice) · Divya Nair <divya@company.com>',
         'Sales POC · Anil Kumar <anil@company.com>');
     expect(_closedFrom(tester), 'Sales POC (customer) · Anil Kumar <anil@company.com>');
-    // Offered at one level only, it reads as it does in the menu.
     await _chooseFrom(tester, 'Sales POC (customer) · Anil Kumar <anil@company.com>',
         'Collection POC · Bob Smith <bob@company.com>');
     expect(_closedFrom(tester), 'Collection POC · Bob Smith <bob@company.com>');
@@ -582,10 +542,8 @@ void main() {
     await _settlePreview(tester);
     expect(backend.sent('POST /api/emails/preview').last.data['to'],
         [{'type': 'ROLE', 'role': 'SALES_POC', 'level': 'RECORD'}]);
-    // The server's own words for the level say which Sales POC found nobody.
     expect(find.text('Sales POC (this invoice) — nobody assigned'), findsOneWidget);
     expect(_sendButton(tester, 'Send').onPressed, isNull);
-    // The customer's seat is still there to add beside it.
     expect(_chipsUnder(tester, 'Customer level').first, 'Sales POC · nobody assigned');
   });
 
@@ -638,8 +596,6 @@ void main() {
 
       expect(tester.takeException(), isNull, reason: '$size');
       expect(find.widgetWithText(InputChip, chip), findsOneWidget);
-      // A Wrap reports no overflow for a child wider than itself, so check where they end: the
-      // chip's label and the sender's name are each wider than a phone.
       for (final field in [find.byType(InputChip), find.byType(DropdownButton<String>)]) {
         expect(tester.getRect(field).right, lessThanOrEqualTo(size.width), reason: '$size');
       }
@@ -682,7 +638,6 @@ void main() {
     await _pump(tester, backend: backend, onOpen: _openInvoice);
     final subject = find.widgetWithText(TextFormField, 'Subject *');
 
-    // Before any Send, emptying the field says nothing yet.
     await tester.enterText(subject, 'x');
     await tester.enterText(subject, '');
     await tester.pumpAndSettle();
@@ -699,7 +654,6 @@ void main() {
     expect(find.text('Add at least one recipient'), findsNothing);
     expect(find.text('Enter a subject'), findsNothing);
 
-    // Emptied again after that first Send, it says so at once.
     await tester.enterText(subject, '   ');
     await tester.pumpAndSettle();
     expect(find.text('Enter a subject'), findsOneWidget);
@@ -716,7 +670,6 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
 
-    // A suggestion after a save, and a list page's form before a record is chosen, ask the same.
     final notify = _backend(context: _context(suggestion: {'subject': 's', 'body': '', 'to': []}));
     await _pump(tester,
         backend: notify,
@@ -740,7 +693,6 @@ void main() {
     final backend = _backend(problems: [problem]);
     await _pump(tester, backend: backend, onOpen: _openInvoice);
 
-    // An unassigned role says so on its chip, before any preview.
     await tester.tap(find.text('Sales POC · nobody assigned'));
     await tester.enterText(find.widgetWithText(TextFormField, 'Subject *'), 'Reminder');
     await _settlePreview(tester);
@@ -748,7 +700,6 @@ void main() {
     expect(find.text(problem), findsOneWidget);
     expect(_sendButton(tester, 'Send').onPressed, isNull);
 
-    // Removing the only recipient clears the problem, and Send says what is missing instead.
     await tester.tap(find.byTooltip('Remove'));
     await _settlePreview(tester);
     expect(find.text(problem), findsNothing);
@@ -775,10 +726,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ann Admin'));
     await tester.pumpAndSettle();
-    // The same person can be the sender (in From) and a recipient (the role's chip).
     await tester.tap(find.widgetWithText(ActionChip, 'Collection POC · Bob Smith <bob@company.com>'));
     await tester.pumpAndSettle();
-    // And the invoice's own Sales POC beside the customer's seats.
     await tester.tap(_chipIn('Invoice level', 'Sales POC · Divya Nair <divya@company.com>'));
     await tester.pumpAndSettle();
 
@@ -806,7 +755,6 @@ void main() {
       'body': 'Please pay.',
       'entityId': 42,
     });
-    // The preview asked about the same form.
     expect(backend.sent('POST /api/emails/preview').last.data['from'],
         {'type': 'ROLE', 'role': 'COLLECTION_POC', 'level': 'CUSTOMER'});
     expect(find.text('Email saved — not sent: No Gmail'), findsOneWidget);
@@ -816,14 +764,12 @@ void main() {
 
   testWidgets('closing the form while its email is out still says how it went, and refreshes',
       (tester) async {
-    // Closed and gone before the answer, or still animating out when it comes.
     for (final goneFirst in [true, false]) {
       final answer = Completer<void>();
       final backend = _backend()..held['POST /api/emails'] = answer.future;
       EmailComposeOutcome? result;
       await _pump(tester,
           backend: backend, onOpen: (c) => _openInvoice(c, onResult: (r) => result = r));
-      // The sidebar's Inbox badge, which a send refreshes.
       ProviderScope.containerOf(tester.element(find.text('open')))
           .listen(inboxUnreadCountProvider, (_, __) {});
       int badgeFetches() => backend.sent('GET /api/inbox/unread-count').length;
@@ -835,7 +781,6 @@ void main() {
       await tester.tap(find.text('Send'));
       await tester.pump();
 
-      // The back button still closes the dialog while it sends.
       await Navigator.of(tester.element(find.text('About: Invoice INV-0042'))).maybePop();
       if (goneFirst) {
         await tester.pumpAndSettle();
@@ -851,7 +796,6 @@ void main() {
       expect(find.text('Email sent'), findsOneWidget, reason: 'goneFirst: $goneFirst');
       expect(find.text('open'), findsOneWidget, reason: 'the page behind stays');
       expect(badgeFetches(), before + 1);
-      // Closed before the answer, by the back button: the form never said it had sent.
       expect(result, EmailComposeOutcome.closed);
     }
   });
@@ -901,8 +845,6 @@ void main() {
     final backend = _backend();
     await _pump(tester, backend: backend, size: const Size(400, 820), onOpen: _openInvoice);
 
-    // Both groups and the customer's addresses are below the fold on a phone; the form scrolls
-    // to them rather than cutting them off.
     for (final chip in [
       find.text('Customer emails · ap@acme.com'),
       find.text('Collection POC · Bob Smith <bob@company.com>'),
@@ -944,8 +886,6 @@ void main() {
     expect(find.text('Total ₹1,200.00'), findsOneWidget);
     await _settlePreview(tester);
     expect(find.byTooltip('Remove'), findsNWidgets(3));
-    // Each suggested role went in at the level this invoice offers it, so its chip is the one its
-    // group offers and neither is offered twice.
     expect(find.widgetWithText(InputChip, 'Sales POC · Divya Nair <divya@company.com>'),
         findsOneWidget);
     expect(_chipsUnder(tester, 'Customer level'),
@@ -992,8 +932,6 @@ void main() {
     );
 
     expect(find.text('Choose the invoice this email is about'), findsOneWidget);
-    // Both groups are offered before a record is chosen, the roles named alone until there is one
-    // to resolve them against (§4).
     expect(_chipsUnder(tester, 'Customer level'),
         ['Sales POC', 'Customer Success POC', 'Collection POC']);
     expect(_chipsUnder(tester, 'Invoice level'), ['Sales POC']);
@@ -1026,7 +964,6 @@ void main() {
     expect(backend.sent('GET /api/emails/context').last.queryParameters['entityId'], 42);
     expect(find.text('Customer emails · ap@acme.com'), findsOneWidget);
     expect(find.text('Sales POC · nobody assigned'), findsOneWidget);
-    // The chosen invoice's own Sales POC now names the one person it stores.
     expect(_chipsUnder(tester, 'Invoice level'), ['Sales POC · Divya Nair <divya@company.com>']);
   });
 
@@ -1075,7 +1012,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Collection POC · Anil Kumar, Bala Raman'), findsOneWidget);
 
-    // The next record's context is slow to come back.
     final answer = Completer<void>();
     backend.held['GET /api/emails/context'] = answer.future;
     await pick('INV-0042', 'INV-0043');
@@ -1095,8 +1031,6 @@ void main() {
 
   testWidgets('a sender role chosen before the record stays on show when that record has no roles',
       (tester) async {
-    // A list of users offers the customer seats' roles, since some users are customer logins; an
-    // internal user, once picked, offers none (roles: []).
     Map<String, dynamic> role(String key, String label) =>
         {'role': key, 'label': label, 'resolved': null, 'people': [], 'sender': null};
     final backend = _backend();
@@ -1141,8 +1075,6 @@ void main() {
     await tester.tap(find.text('sam'));
     await tester.pumpAndSettle();
 
-    // The From field still says what was chosen, rather than failing to find it among the roles;
-    // the server's preview and send then say it is not a role on this user.
     expect(tester.takeException(), isNull);
     expect(find.text('About: User sam'), findsOneWidget);
     expect(find.text('Collection POC'), findsOneWidget);
@@ -1160,7 +1092,6 @@ void main() {
         warnings: [notConnected],
         status: 'NOT_SENT',
       );
-      // Tall enough for the whole form, so where the warning sits can be read off the screen.
       await _pump(tester, backend: backend, size: const Size(1366, 1100), onOpen: _openInvoice);
 
       await tester.tap(find.text('Customer emails · ap@acme.com'));
@@ -1172,7 +1103,6 @@ void main() {
       final box = tester.widget<Container>(
           find.ancestor(of: warning, matching: find.byType(Container)).first);
       expect((box.decoration as BoxDecoration).color, Colors.amber.shade100);
-      // Below the whole form, right above the buttons.
       expect(tester.getRect(warning).top,
           greaterThan(tester.getRect(find.widgetWithText(TextFormField, 'Message')).bottom));
       expect(tester.getRect(warning).bottom, lessThan(tester.getRect(find.text('Send')).top));
@@ -1194,7 +1124,6 @@ void main() {
         expect(find.text(line), findsOneWidget, reason: gmail);
         expect(find.widgetWithText(TextButton, 'Connect'), findsOneWidget, reason: gmail);
 
-        // Another sender sends from their own Gmail, not mine.
         await tester.tap(find.text('Me (Jane Doe)'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Collection POC · Bob Smith <bob@company.com>').last);
@@ -1204,8 +1133,6 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      // Connected; no mail service at all (the notice says so); a customer login, who does not
-      // connect Gmail.
       for (final (context, user) in [
         (_context(configured: true, selfGmail: 'CONNECTED'), _staff),
         (_context(configured: false, selfGmail: 'NOT_CONNECTED'), _staff),
@@ -1218,7 +1145,6 @@ void main() {
         await tester.pumpAndSettle();
       }
 
-      // The list page's form and the bulk form offer it too.
       for (final open in <Future<void> Function(BuildContext)>[
         (context) => showSendEmailForPickedRecord(context, type: EmailEntityType.invoice),
         (context) => sendEmailBulkAction(EmailEntityType.invoice).buildParams!(context),
@@ -1302,7 +1228,6 @@ void main() {
       expect(_fromItemText(tester, 'role:COLLECTION_POC:CUSTOMER'),
           'Collection POC · Bob Smith <bob@company.com> · Gmail not connected');
       expect(_fromItemText(tester, 'self'), 'Me (Jane Doe)');
-      // In To the role reaches its people, whoever sends: no note there.
       expect(find.widgetWithText(ActionChip, 'Collection POC · Bob Smith <bob@company.com>'),
           findsOneWidget);
 
@@ -1316,7 +1241,6 @@ void main() {
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
-      // A connected holder, and no mail service at all, say nothing more.
       for (final context in [
         _context(configured: true, collectionPocs: [
           {..._bob, 'gmail': 'CONNECTED'},
@@ -1332,8 +1256,6 @@ void main() {
     });
 
     testWidgets('the Gmail marker survives a name too long for the row', (tester) async {
-      // A real name and address, wider than the From field at either size, so something must be
-      // cut: the marker is what makes the item worth reading, so it is not what goes.
       const carlos = {
         'userId': 12,
         'name': 'Carlos Duarte',
@@ -1355,27 +1277,21 @@ void main() {
 
         await tester.tap(find.byType(DropdownButton<String>));
         await tester.pumpAndSettle();
-        // In the open menu the name gives way — shortened where there is room for some of it,
-        // dropped where the marker alone fills the row — and nothing overflows either way.
         final note = tester.renderObject<RenderParagraph>(find.text(marker).last);
         final nameFinder =
             find.text('Collection POC · Carlos Duarte <carlos.collect.e2e2@gmail.com>');
         if (size.width > 800) {
-          // Room for some of the name: it is cut to fit and the marker stays whole beside it.
           final name = tester.renderObject<RenderParagraph>(nameFinder.last);
           expect(name.size.width, lessThan(name.getMaxIntrinsicWidth(double.infinity)),
               reason: reason);
           expect(note.size.width, closeTo(note.getMaxIntrinsicWidth(double.infinity), 0.5),
               reason: reason);
         } else {
-          // A phone row is narrower than the marker itself: the name goes altogether and the
-          // marker takes the row, rather than being pushed off the end of it.
           expect(note.size.width, greaterThan(0), reason: reason);
           expect(note.size.width, lessThanOrEqualTo(size.width), reason: reason);
         }
         expect(tester.takeException(), isNull, reason: reason);
 
-        // Chosen, the closed field says it too.
         await tester.tap(find.text(marker).last);
         await tester.pumpAndSettle();
         expect(_fromItemText(tester, 'role:COLLECTION_POC:CUSTOMER'),
@@ -1417,7 +1333,6 @@ void main() {
     );
 
     expect(find.text('Selected invoices — a separate email for each'), findsOneWidget);
-    // Both groups are offered without a record, each chip standing for every selected row (§4).
     expect(_chipsUnder(tester, 'Customer level'), [
       "Sales POC (each record's)",
       "Customer Success POC (each record's)",
@@ -1436,8 +1351,6 @@ void main() {
     ]);
     expect(_fromItemText(tester, 'role:COLLECTION_POC:CUSTOMER'), "Collection POC (each record's)");
 
-    // The two Sales POC lines of the menu read alike under their headings, and bulk runs no
-    // preview, so the closed field is the only thing that says whose POC of each row would send.
     await _chooseFrom(tester, 'Me (Jane Doe)', "Sales POC (each record's)");
     expect(_closedFrom(tester), "Sales POC (each customer's)");
     await _chooseFrom(tester, "Sales POC (each customer's)", "Sales POC (each record's)", at: 1);
@@ -1449,13 +1362,10 @@ void main() {
     await tester.tap(_chipIn('Invoice level', "Sales POC (each record's)"));
     await tester.pumpAndSettle();
 
-    // Nobody is named in bulk, so the two Sales POCs in the box would read exactly alike: each
-    // says whose POC every row's would be instead.
     await tester.tap(_chipIn('Customer level', "Sales POC (each record's)"));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(InputChip, "Sales POC (each customer's)"), findsOneWidget);
     expect(find.widgetWithText(InputChip, "Sales POC (each invoice's)"), findsOneWidget);
-    // Alone again, the one left is the plain role.
     await tester.tap(find.descendant(
         of: find.widgetWithText(InputChip, "Sales POC (each customer's)"),
         matching: find.byTooltip('Remove')));

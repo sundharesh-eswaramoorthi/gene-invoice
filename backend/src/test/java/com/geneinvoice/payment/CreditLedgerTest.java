@@ -19,11 +19,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Money that moves through customer credit stays booked to the payment it came from, so voiding
- * that payment takes it back wherever it went: out of credit, or off the invoices the credit paid.
- * After any void, money on live invoices plus credit equals what active payments collected.
- */
 class CreditLedgerTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;

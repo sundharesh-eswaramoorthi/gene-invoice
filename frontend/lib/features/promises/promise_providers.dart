@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../shared/models/promise.dart';
 
-/// Promises attached to one record — a customer, an invoice, or a payment.
 @immutable
 class PromiseScope {
   final int? customerId;
@@ -44,7 +43,6 @@ final promiseDetailProvider =
   return PaymentPromise.fromJson((res.data as Map).cast<String, dynamic>());
 });
 
-/// Open promises a cashier can attach a payment to while recording it (US-B3).
 final openPromisesForCustomerProvider =
     FutureProvider.autoDispose.family<List<PaymentPromise>, int>((ref, customerId) async {
   final dio = ref.watch(dioProvider);

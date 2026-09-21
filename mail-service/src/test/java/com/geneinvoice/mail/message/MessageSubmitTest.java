@@ -19,7 +19,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Handing copies over (§4.3): validation, what a new copy becomes, idempotency and retry. */
 class MessageSubmitTest extends IntegrationTestBase {
 
     private static final String NUL = String.valueOf((char) 0);
@@ -146,7 +145,6 @@ class MessageSubmitTest extends IntegrationTestBase {
         work();
         int events = eventRepository.findAll().size();
 
-        // Handed over again, even asking for a retry: it was sent, so it stays as it is.
         List<CopyState> again = submit(submission("7", "Jane Doe", "91", true, copy("gi-91-501", "Bob", "bob@acme.com")));
 
         assertThat(again).singleElement().satisfies(state -> {
@@ -204,7 +202,6 @@ class MessageSubmitTest extends IntegrationTestBase {
         });
         connect("7", "Jane Doe", "jane@gmail.com");
 
-        // Without retry, a not-sent copy stays as it is.
         assertThat(submit(submission("7", "Jane Doe", "91", false, copy("gi-91-1", "Bob", "bob@acme.com"))))
                 .singleElement().extracting(CopyState::status).isEqualTo(MessageStatus.NOT_SENT);
 
@@ -226,7 +223,6 @@ class MessageSubmitTest extends IntegrationTestBase {
         assertThat(queue.enqueued()).containsExactly(m.getId());
         assertThat(statusTrail("gi-91-1")).containsExactly("NOT_SENT@1", "QUEUED@2");
 
-        // A failed copy is sent again from scratch.
         google.on("POST", FakeGoogle.api("/messages/send"), 400,
                 FakeGoogle.gmailError(400, "Invalid To header"));
         google.on("GET", FakeGoogle.api("/messages"), 200, "{\"resultSizeEstimate\":0}");

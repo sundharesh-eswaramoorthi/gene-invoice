@@ -5,8 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'poc_providers.dart';
 
-/// Searchable picker for a point of contact. Only offers users whose role carries the
-/// matching assignability privilege, and only while they are active (AC-A3).
 class PocPicker extends StatelessWidget {
   final PocType type;
   final PocUser? value;
@@ -16,8 +14,6 @@ class PocPicker extends StatelessWidget {
   final String? errorText;
   final String? labelOverride;
 
-  /// False where the surrounding layout already labels the field — a DetailGrid cell, say — so
-  /// the name does not appear twice, once above the box and again inside it.
   final bool showLabel;
 
   const PocPicker({
@@ -111,8 +107,6 @@ class _PocPickerDialogState extends ConsumerState<_PocPickerDialog> {
     super.dispose();
   }
 
-  // The dialog owns the search, so the list always answers what is in the box now. Held by the
-  // field behind the dialog, it rebuilt the field but not the dialog: one keystroke behind.
   void _onSearchChanged(String value) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
@@ -189,7 +183,6 @@ class _PocPickerDialogState extends ConsumerState<_PocPickerDialog> {
   }
 }
 
-/// Small badge shown against a record that predates the POC field (AC-A9).
 class PocMissingBadge extends StatelessWidget {
   final String label;
   const PocMissingBadge({super.key, this.label = 'POC missing'});

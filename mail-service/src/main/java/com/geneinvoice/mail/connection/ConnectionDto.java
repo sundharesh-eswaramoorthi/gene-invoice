@@ -4,7 +4,6 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
-/** A connection as the backend sees it (§4.3): never the client secret or the refresh token. */
 public record ConnectionDto(String ownerRef, String ownerName, ConnectionStatus status, String gmailAddress,
                             String clientId, List<String> scopes, String statusReason, Instant connectedAt,
                             Instant lastSyncedAt, String lastSyncError) {

@@ -17,11 +17,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-/**
- * Only the backend calls {@code /api/v1/**}: every request carries the shared key in {@code X-Api-Key}.
- * Both keys are hashed before comparing, so the comparison takes the same time whatever was sent and
- * says nothing about the key's length. The health endpoint stays open for monitoring.
- */
 public class ApiKeyFilter extends OncePerRequestFilter {
 
     public static final String HEADER = "X-Api-Key";

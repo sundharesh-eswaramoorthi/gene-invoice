@@ -16,8 +16,6 @@ CurrentUser _user(int id, {int? customerId}) => CurrentUser(
     );
 
 void main() {
-  // The server answers each user with their own schema; a customer's has no POC columns. A schema
-  // kept from the previous user offered a customer filters the server then refused.
   test('the column list is fetched again when a different user signs in', () async {
     final signedIn = StateProvider<CurrentUser?>((ref) => _user(1));
     var fetches = 0;

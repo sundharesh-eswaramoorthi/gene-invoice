@@ -41,13 +41,6 @@ class PocPickerAndSeatTest extends IntegrationTestBase {
                 .map(User::getUsername).toList();
     }
 
-    // ---- CP-11: the search box is a plain substring search -------------------------
-
-    /**
-     * The user's text went into a LIKE pattern untouched, so an underscore matched any character
-     * and a percent sign matched everything — "m_ya" found "maya", and "%" returned the lot
-     * (CP-11).
-     */
     @Test
     void anUnderscoreInTheSearchMatchesOnlyAnUnderscore() {
         User maya = user("maya", DataSeeder.ROLE_SUCCESS_POC);
@@ -73,8 +66,6 @@ class PocPickerAndSeatTest extends IntegrationTestBase {
     void aBackslashInTheSearchIsMatchedLiterally() {
         user("maya", DataSeeder.ROLE_SUCCESS_POC);
 
-        // An unescaped backslash would be read as the escape character and leave a dangling
-        // escape at the end of the pattern, which the database refuses outright.
         assertThat(assignableUsernames("\\")).isEmpty();
     }
 
@@ -85,8 +76,6 @@ class PocPickerAndSeatTest extends IntegrationTestBase {
 
         assertThat(assignableUsernames("may")).containsExactly(maya.getUsername());
     }
-
-    // ---- CP-08: removing the same seat twice ---------------------------------------
 
     @Test
     void removingASeatThatIsAlreadyGoneIsANotFound() {
@@ -100,11 +89,6 @@ class PocPickerAndSeatTest extends IntegrationTestBase {
                 .hasMessage("POC assignment not found");
     }
 
-    /**
-     * Three requests for the same seat at once — a double-clicked X on a chip. One removes it and
-     * the losers are told it is not there; none of them may come back as "Unexpected error", which
-     * is what an unserialised read-then-delete used to raise (CP-08).
-     */
     @Test
     void concurrentRemovalsOfOneSeatLeaveOneWinnerAndNoUnexpectedError() throws Exception {
         User success = user("sara.success", DataSeeder.ROLE_SUCCESS_POC);
@@ -138,7 +122,6 @@ class PocPickerAndSeatTest extends IntegrationTestBase {
                 .as("the losers are told the seat is not there, not that something went wrong")
                 .isInstanceOf(com.geneinvoice.common.NotFoundException.class));
 
-        // The roster is left correct: the one remaining seat, and it is the primary.
         List<CustomerPoc> left = pocService.listFor(acme.getId());
         assertThat(left).hasSize(1);
         assertThat(left.get(0).isPrimary()).isTrue();

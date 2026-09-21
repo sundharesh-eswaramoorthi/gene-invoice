@@ -18,10 +18,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * User and role administration answers a clash with a message the admin can act on — never a
- * failed insert — and a blank email is no email, not a second '' colliding with the first.
- */
 class UserRoleAdminTest extends IntegrationTestBase {
 
     User admin;
@@ -43,10 +39,6 @@ class UserRoleAdminTest extends IntegrationTestBase {
     private static String unique(String prefix) {
         return prefix + System.nanoTime();
     }
-
-    // ---- D-27 -------------------------------------------------------------------
-
-    // ---- D-42: one password rule everywhere -------------------------------------
 
     private Long viewerRoleId() {
         return roleRepository.findAll().stream().filter(r -> "VIEWER".equals(r.getName()))
@@ -72,8 +64,6 @@ class UserRoleAdminTest extends IntegrationTestBase {
                         "roleId", viewerRoleId()))
                 .andExpect(status().isOk());
     }
-
-    // ---- D-43: deleting something that isn't there ------------------------------
 
     @Test
     void deletingARoleThatDoesNotExistIsNotFound() throws Exception {
@@ -137,12 +127,9 @@ class UserRoleAdminTest extends IntegrationTestBase {
         mockMvc.perform(delete("/api/roles/99999999").with(as(admin))).andExpect(status().isNotFound());
     }
 
-    // ---- D-28 -------------------------------------------------------------------
-
     @Test
     void aBlankEmailIsStoredAsNoEmail() throws Exception {
         createUser("nobody.one", "").andExpect(status().isOk()).andExpect(jsonPath("$.email", nullValue()));
-        // A second blank email used to collide with the first on the unique column.
         Long id = objectMapper.readTree(createUser("nobody.two", "")
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).get("id").asLong();
 
@@ -151,8 +138,6 @@ class UserRoleAdminTest extends IntegrationTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.active").value(true));
     }
-
-    // ---- D-29 -------------------------------------------------------------------
 
     @Test
     void overlongOrMalformedUserFieldsAreFieldErrors() throws Exception {

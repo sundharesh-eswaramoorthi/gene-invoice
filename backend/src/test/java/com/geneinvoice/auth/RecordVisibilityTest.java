@@ -65,13 +65,6 @@ class RecordVisibilityTest extends IntegrationTestBase {
         pocService.add(acme.getId(), PocType.COLLECTION, collections.getId(), true);
     }
 
-    // ---- AUTH-08: a foreign record answers as a missing one -------------------------
-
-    /**
-     * 403 for another customer's record and 404 for one that does not exist let a customer login
-     * walk the id space and count records that are none of theirs. One answer for both, as
-     * /api/customers and /api/documents already give (AUTH-08).
-     */
     @Test
     void aCustomerCannotTellAForeignInvoiceFromAMissingOne() throws Exception {
         Invoice foreign = invoiceService.create(new InvoiceDtos.CreateInvoiceRequest(
@@ -108,7 +101,6 @@ class RecordVisibilityTest extends IntegrationTestBase {
                 .andExpect(status().isNotFound());
     }
 
-    /** A customer still reads its own records, which is the point of the login. */
     @Test
     void aCustomerStillReadsItsOwnInvoice() throws Exception {
         Invoice own = invoiceService.create(new InvoiceDtos.CreateInvoiceRequest(
@@ -119,9 +111,6 @@ class RecordVisibilityTest extends IntegrationTestBase {
                 .andExpect(status().isOk());
     }
 
-    // ---- AUTH-07: a table's shape needs that table's view privilege ------------------
-
-    /** A role holding no privileges at all: it may sign in and nothing more. */
     private User zeroPrivilegeUser() {
         Role role = roleRepository.save(Role.builder()
                 .name("ZERO_PRIVILEGE")
@@ -131,11 +120,6 @@ class RecordVisibilityTest extends IntegrationTestBase {
         return user("zed.zero", role.getName());
     }
 
-    /**
-     * The schema endpoints carried no check of any kind, so a caller who is 403 on GET /api/users
-     * could still read the users table's columns, types, operators and sortability — and every
-     * other table's in one call (AUTH-07).
-     */
     @Test
     void aCallerWithNoPrivilegesCannotReadATableSchema() throws Exception {
         User zed = zeroPrivilegeUser();
@@ -161,7 +145,6 @@ class RecordVisibilityTest extends IntegrationTestBase {
 
         var schemas = objectMapper.readTree(body);
         assertThat(schemas.fieldNames()).toIterable().containsExactly("products");
-        // The list of table names agrees with it, rather than naming tables it would then refuse.
         String entities = mockMvc.perform(get("/api/table-schemas").with(as(pam)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
@@ -173,7 +156,6 @@ class RecordVisibilityTest extends IntegrationTestBase {
                 .andExpect(status().isForbidden());
     }
 
-    /** An administrator is unaffected: every table is still there. */
     @Test
     void anAdministratorStillReadsEverySchema() throws Exception {
         String body = mockMvc.perform(get("/api/table-schemas/all").with(as(admin)))

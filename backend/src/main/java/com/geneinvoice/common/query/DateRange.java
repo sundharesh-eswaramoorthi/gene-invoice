@@ -5,7 +5,6 @@ import com.geneinvoice.common.BadRequestException;
 import java.time.LocalDate;
 import java.util.List;
 
-/** The relative date presets a DATE column's `relative` operator accepts. */
 public record DateRange(LocalDate from, LocalDate toInclusive) {
 
     public static final List<String> PRESETS =

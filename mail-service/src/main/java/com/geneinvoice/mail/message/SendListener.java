@@ -7,11 +7,6 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
-/**
- * Hands each queue message to the {@link SendWorker}. The worker settles every failure it can on the
- * copy itself; what escapes it (the database gone, say) rejects the message into
- * {@code mail.send.dead}, and the copy's row stays for the sweeper.
- */
 @Component
 @ConditionalOnProperty(prefix = "mail", name = "queue", havingValue = "rabbit", matchIfMissing = true)
 @Slf4j

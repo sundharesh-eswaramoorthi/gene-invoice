@@ -1,23 +1,17 @@
 import 'package:dio/dio.dart';
 
-/// An answer other than 200: a route returns one to fail its request with [status] and [data],
-/// as the server's `ApiError` does.
 class FakeFailure {
   final int status;
   final Object? data;
   const FakeFailure(this.status, this.data);
 }
 
-/// A fake server behind a real [Dio]: each "METHOD /path" answers with what its route returns (a
-/// [FakeFailure] fails it), an unknown one with 404, and every request is kept so a test can
-/// read what was sent. A request in [held] is answered only once its future completes.
 class FakeBackend {
   final Map<String, Object? Function(RequestOptions)> routes;
   final List<RequestOptions> requests = [];
   final Map<String, Future<void>> held = {};
   FakeBackend(this.routes);
 
-  /// The requests made to "METHOD /path", in order.
   List<RequestOptions> sent(String key) =>
       requests.where((r) => '${r.method} ${r.path}' == key).toList();
 

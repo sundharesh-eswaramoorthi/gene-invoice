@@ -28,12 +28,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Someone who may no longer send email loses their Gmail connection at the mail service — deleted,
- * deactivated, or left without EMAIL_SEND — and whoever manages users can remove anyone's
- * (mail-service.md §5.6). Otherwise the service would keep reading their mailbox, and a retry of
- * one of their emails would still go out from their Gmail.
- */
 class GmailOffboardingTest extends EmailTestBase {
 
     @Autowired GmailDisconnects gmailDisconnects;
@@ -44,14 +38,11 @@ class GmailOffboardingTest extends EmailTestBase {
         mailTransport.mode(Mode.SUCCESS);
     }
 
-    /** The user connects their own Gmail, as they would on the Gmail connection page. */
     private void connected(User u) throws Exception {
         mockMvc.perform(put("/api/me/gmail").with(as(u)).contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("clientId", "id-" + u.getId(), "clientSecret", "secret", "refreshToken", "token"))))
                 .andExpect(status().isOk());
         assertThat(mailTransport.held(u.getId()).status()).isEqualTo(ConnectionStatus.CONNECTED);
-        // A check of their mailbox failed while the connection stood, so the app's copy carries the
-        // error. It is about the connection, so it must not outlive it.
         gmailConnectionRepository.findById(u.getId()).ifPresent(copy -> {
             copy.setLastSyncedAt(Instant.parse("2026-09-20T10:05:00Z"));
             copy.setLastSyncError("Gmail is unavailable (500): Backend Error");
@@ -69,7 +60,6 @@ class GmailOffboardingTest extends EmailTestBase {
         assertThat(gmailConnectionRepository.findById(u.getId())).get().satisfies(c -> {
             assertThat(c.getStatus()).isEqualTo(ConnectionStatus.DISCONNECTED);
             assertThat(c.getDisconnectRequestedAt()).isNull();
-            // Nothing of the connection is left to be shown beside "Not connected".
             assertThat(c.getReason()).isNull();
             assertThat(c.getLastSyncedAt()).isNull();
             assertThat(c.getLastSyncError()).isNull();
@@ -98,7 +88,6 @@ class GmailOffboardingTest extends EmailTestBase {
     void movingSomeoneToARoleThatDoesNotSendEmailRemovesTheirs() throws Exception {
         connected(collections);
 
-        // Renaming them keeps it; losing EMAIL_SEND does not.
         updateUser(collections.getId(), Map.of("fullName", "Cara C.")).andExpect(status().isOk());
         assertStillConnected(collections);
         updateUser(collections.getId(), Map.of("roleId", role("VIEWER").getId())).andExpect(status().isOk());
@@ -171,7 +160,6 @@ class GmailOffboardingTest extends EmailTestBase {
 
         updateUser(collections.getId(), Map.of("active", false)).andExpect(status().isOk());
 
-        // The deactivation stands; the removal waits, marked.
         assertThat(userRepository.findById(collections.getId()).orElseThrow().isActive()).isFalse();
         assertThat(mailTransport.held(collections.getId()).status()).isEqualTo(ConnectionStatus.CONNECTED);
         assertThat(gmailConnectionRepository.findById(collections.getId())).get()
@@ -206,7 +194,6 @@ class GmailOffboardingTest extends EmailTestBase {
     void someoneWhoNoLongerSendsEmailCanStillDisconnectTheirOwn() throws Exception {
         User demoted = user("dee.demoted", "SALES_POC");
         connected(demoted);
-        // Moved to a role without EMAIL_SEND behind the app's back, so nothing removed it.
         User fresh = userRepository.findById(demoted.getId()).orElseThrow();
         fresh.setRole(role("VIEWER"));
         userRepository.save(fresh);

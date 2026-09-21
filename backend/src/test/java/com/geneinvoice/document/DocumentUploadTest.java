@@ -18,11 +18,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * What may be attached and what is made of it (§4.3): the three kinds of record, the allow-list
- * read from the bytes rather than from what the client claimed, the size limit, and the filename,
- * which is cleaned for display and never used as a path (AC-C6 to AC-C9).
- */
 class DocumentUploadTest extends DocumentTestBase {
 
     @Test
@@ -41,7 +36,6 @@ class DocumentUploadTest extends DocumentTestBase {
         assertThat(onPayment.get("entityLabel").asText()).isEqualTo("Payment #" + payment.getId());
         assertThat(onPayment.get("entityLink").asText()).isEqualTo("/payments/" + payment.getId());
 
-        // Each record counts its own, which is what the tab's badge shows (AC-C1).
         for (JsonNode uploaded : List.of(onCustomer, onInvoice, onPayment)) {
             mockMvc.perform(get("/api/documents/count")
                             .param("entityType", uploaded.get("entityType").asText())
@@ -69,7 +63,6 @@ class DocumentUploadTest extends DocumentTestBase {
         assertThat(stored.getUploadedByName()).isEqualTo("Default Cashier");
         assertThat(stored.isDeleted()).isFalse();
 
-        // The key is the server's own, and no byte of the file is in the database (AC-C16).
         assertThat(stored.getStorageKey())
                 .startsWith("invoice/" + acmeInvoice.getId() + "/")
                 .endsWith(".pdf")
@@ -103,7 +96,6 @@ class DocumentUploadTest extends DocumentTestBase {
 
     @Test
     void whatTheClientCallsTheFileIsIgnoredAndTheBytesDecide() throws Exception {
-        // A PNG sent as a PDF is stored as a PNG; a text file sent as a PDF is refused (AC-C7).
         JsonNode lying = read(mockMvc.perform(uploadRequest(admin, "INVOICE", acmeInvoice.getId(),
                         part("actually-a-png.pdf", png(), "application/pdf")))
                 .andExpect(status().isCreated()));
@@ -152,11 +144,6 @@ class DocumentUploadTest extends DocumentTestBase {
                 .andExpect(jsonPath("$.fieldErrors.file").value(DocumentRules.NO_FILE));
     }
 
-    /**
-     * A part over the container's own limit is refused before any controller is reached, so it is
-     * answered by the advice rather than by {@link DocumentRules} — in the same words and the same
-     * shape, so a user never sees two different messages for one limit (AC-C9).
-     */
     @Test
     void theContainersOwnLimitAnswersInTheSameWords() {
         DocumentUploadAdvice advice = new DocumentUploadAdvice(documentProperties);
@@ -171,16 +158,10 @@ class DocumentUploadTest extends DocumentTestBase {
                 .containsEntry("file", "The file is larger than 10 MB");
     }
 
-    /**
-     * And the two limits are one setting rather than two numbers that happen to match today: a
-     * deployment that raises {@code DOCUMENT_MAX_BYTES} raises the container's ceiling with it,
-     * so the message above is always the limit that actually fired (§4.3, AC-C9).
-     */
     @Test
     void theContainersCeilingIsTheConfiguredLimitItself() {
         assertThat(multipartProperties.getMaxFileSize().toBytes())
                 .isEqualTo(documentProperties.getMaxSizeBytes());
-        // The whole form is a little larger than the file it carries.
         assertThat(multipartProperties.getMaxRequestSize().toBytes())
                 .isGreaterThan(documentProperties.getMaxSizeBytes());
     }
@@ -194,11 +175,6 @@ class DocumentUploadTest extends DocumentTestBase {
                         .value("entityType must be one of [CUSTOMER, INVOICE, PAYMENT]"));
     }
 
-    /**
-     * A null byte in a note is not a conflict with anything: it is a character that cannot be
-     * stored, and it goes the way a filename's does. Postgres refuses it in a text column, and
-     * letting it through turned an upload into "This change conflicts with existing data" (DOC-4).
-     */
     @Test
     void aDescriptionKeepsItsLinesAndLosesWhatCannotBeStored() throws Exception {
         JsonNode dto = read(mockMvc.perform(uploadRequest(admin, "INVOICE", acmeInvoice.getId(),
@@ -222,8 +198,6 @@ class DocumentUploadTest extends DocumentTestBase {
         assertThat(documentRepository.count()).isZero();
     }
 
-    // ---- filenames (AC-C8) -----------------------------------------------------
-
     @Test
     void aFilenameThatTriesToBeAPathKeepsOnlyItsLastName() throws Exception {
         record Name(String sent, String shown) {}
@@ -243,7 +217,6 @@ class DocumentUploadTest extends DocumentTestBase {
                     .andExpect(status().isCreated()));
             assertThat(dto.get("filename").asText()).as(name.sent()).isEqualTo(name.shown());
 
-            // Whatever was sent, the bytes went to a generated key well inside the root.
             String key = documentRepository.findById(dto.get("id").asLong()).orElseThrow().getStorageKey();
             assertThat(key).as(name.sent())
                     .doesNotContain("..")
@@ -251,13 +224,6 @@ class DocumentUploadTest extends DocumentTestBase {
         }
     }
 
-    /**
-     * A name is one line of text that says what the file is. Characters that reorder it or take up
-     * no room say nothing and hide what does: {@code invoice}, U+202E, {@code fdp.exe.pdf} is an
-     * executable that reads as a PDF in the documents tab and, worse, in the name the browser
-     * saves it under. They are dropped where the control characters are, so the name that is
-     * stored is the name that is shown and the name that is downloaded (DOC-6, AC-C8).
-     */
     @Test
     void aFilenameLosesTheCharactersThatReorderOrHideIt() throws Exception {
         record Name(String what, String sent, String shown) {}
@@ -278,10 +244,6 @@ class DocumentUploadTest extends DocumentTestBase {
         }
     }
 
-    /**
-     * And so the header a browser reads the name from carries nothing of them either — neither in
-     * the ASCII fallback nor in the encoded form clients prefer, which is where they survived.
-     */
     @Test
     void aReorderedNameReachesTheDownloadHeaderCleaned() throws Exception {
         JsonNode dto = read(mockMvc.perform(uploadRequest(admin, "INVOICE", acmeInvoice.getId(),
@@ -308,7 +270,6 @@ class DocumentUploadTest extends DocumentTestBase {
 
     @Test
     void aFilenameIsNeverCutBetweenTheHalvesOfOneCharacter() {
-        // One letter and then 200 emoji: the cut at 260 would land inside the 130th, so it goes whole.
         String name = "x" + "\uD83D\uDCC4".repeat(200) + ".pdf";
 
         String cleaned = DocumentRules.cleanFilename(name);
@@ -317,8 +278,6 @@ class DocumentUploadTest extends DocumentTestBase {
         assertThat(Character.isHighSurrogate(cleaned.charAt(cleaned.length() - 1))).isFalse();
         assertThat(cleaned.codePointCount(0, cleaned.length())).isEqualTo(130);
     }
-
-    // ---- the audit trail (AC-C4) -----------------------------------------------
 
     @Test
     void anUploadIsInTheRecordsHistory() throws Exception {

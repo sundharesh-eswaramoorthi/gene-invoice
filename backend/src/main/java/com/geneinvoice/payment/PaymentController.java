@@ -44,7 +44,6 @@ public class PaymentController {
     private final UserRepository userRepository;
     private final TableQueryExecutor queryExecutor;
 
-    /** Customer logins cannot filter or sort on the Collection POC columns (AC-A8). */
     private TableSchema schema() {
         return TableSchemas.PAYMENTS.visibleTo(currentUser.isCustomer());
     }
@@ -86,7 +85,6 @@ public class PaymentController {
     @PreAuthorize("hasAuthority('" + Privileges.PAYMENT_MANAGE + "')")
     public PaymentDtos.PaymentDto update(@PathVariable Long id,
                                          @Valid @RequestBody PaymentDtos.UpdatePaymentRequest req) {
-        // Whether the POC may change is decided by the service, which knows the current one.
         return PaymentDtos.PaymentDto.from(paymentService.update(id, req), scopeResolver.canSeePoc());
     }
 
@@ -109,8 +107,6 @@ public class PaymentController {
         return new CustomerCreditDto(c.getId(), c.getName(), c.getCreditBalance());
     }
 
-    // ---- bulk & export ---------------------------------------------------------
-
     public static final List<String> BULK_ACTIONS = List.of("REASSIGN_COLLECTION_POC");
 
     @PostMapping("/bulk")
@@ -118,8 +114,6 @@ public class PaymentController {
     public BulkDtos.BulkResult bulk(@Valid @RequestBody BulkDtos.BulkRequest req) {
         List<Long> ids = resolveIds(req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
-        // Voiding is deliberately not a bulk action: it moves money and must be confirmed one
-        // record at a time through the dispute flow.
         if (!"REASSIGN_COLLECTION_POC".equals(req.action())) {
             throw new BadRequestException(
                     "Unknown bulk action: " + req.action() + " (expected one of " + BULK_ACTIONS + ")");

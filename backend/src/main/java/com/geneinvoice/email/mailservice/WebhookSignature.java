@@ -10,11 +10,6 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.Locale;
 
-/**
- * The mail service signs each webhook call: {@code X-Mail-Signature: sha256={hex HMAC-SHA256(secret,
- * timestamp + "." + body)}}, with the timestamp in {@code X-Mail-Timestamp} (unix seconds). A call
- * whose timestamp is more than five minutes off is refused, so a recorded call cannot be replayed later.
- */
 public final class WebhookSignature {
 
     private WebhookSignature() {}
@@ -34,14 +29,9 @@ public final class WebhookSignature {
         }
         byte[] expected = sign(secret, timestampHeader, body).getBytes(StandardCharsets.US_ASCII);
         byte[] given = signatureHeader.trim().toLowerCase(Locale.ROOT).getBytes(StandardCharsets.US_ASCII);
-        // In constant time, so the answer's timing does not give the signature away byte by byte.
         return MessageDigest.isEqual(expected, given);
     }
 
-    /**
-     * Whether the {@code X-Mail-Timestamp} header is a time within {@link #TOLERANCE} of now. Checked
-     * before the body is read, as well as with the signature: a call that fails it is refused unread.
-     */
     public static boolean timely(String timestampHeader, Instant now) {
         if (timestampHeader == null) return false;
         long seconds;
@@ -54,7 +44,6 @@ public final class WebhookSignature {
         return seconds >= nowSeconds - TOLERANCE.getSeconds() && seconds <= nowSeconds + TOLERANCE.getSeconds();
     }
 
-    /** The {@code X-Mail-Signature} value for this timestamp and body. */
     public static String sign(String secret, String timestamp, byte[] body) {
         try {
             Mac mac = Mac.getInstance(ALGORITHM);

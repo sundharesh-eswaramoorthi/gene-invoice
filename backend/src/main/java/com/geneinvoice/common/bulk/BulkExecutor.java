@@ -14,10 +14,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Runs a per-record operation for a bulk action. Each record commits or rolls back on its own, so
- * one bad row cannot take the batch with it, and every id is accounted for in the result.
- */
 @Component
 public class BulkExecutor {
 
@@ -28,7 +24,6 @@ public class BulkExecutor {
         this.perRecord.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
-    /** Thrown by an operation when the caller may not act on that record, or it does not qualify. */
     public static class IneligibleException extends RuntimeException {
         public IneligibleException(String message) {
             super(message);
@@ -40,13 +35,6 @@ public class BulkExecutor {
         void apply(Long id);
     }
 
-    /**
-     * Wraps an operation whose refusals are eligibility rules — "already cancelled", "has
-     * payments, refund first" — so they are reported as skipped rather than failed, the way
-     * {@link IneligibleException} already is. The single-record endpoints keep their 400: it is
-     * only the bulk dialog, which renders failures as errors, that was calling four perfectly
-     * normal rows a failure (TBL-05).
-     */
     public static RecordOperation eligibility(RecordOperation op) {
         return id -> {
             try {
@@ -57,17 +45,11 @@ public class BulkExecutor {
         };
     }
 
-    /** One reason for every id the caller cannot reach, so the response never reveals which exist. */
     public static final String NOT_REACHABLE = "Not found, or outside your scope or the current filter";
 
     /** Why a row was left alone when a concurrent writer got to it first (TBL-07). */
     public static final String CHANGED_WHILE_RUNNING = "This record changed while the action was running";
 
-    /**
-     * Runs a bulk action over the ids the request asked for. An id outside {@code permitted} —
-     * unknown, outside the caller's scope, or not matching the filter — is reported as skipped,
-     * never silently dropped, so every requested id lands in exactly one outcome (AC-D5, AC-D6).
-     */
     public BulkDtos.BulkResult run(BulkDtos.BulkRequest req, List<Long> permitted, boolean truncated,
                                    RecordOperation op) {
         List<Long> requested = req.allMatching() || req.ids() == null ? permitted : req.ids();

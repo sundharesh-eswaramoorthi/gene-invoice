@@ -33,7 +33,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** What the compose form is given before sending: roles, addresses, suggestions, people and a preview. */
 class EmailContextTest extends EmailTestBase {
 
     @Autowired PaymentService paymentService;
@@ -44,7 +43,6 @@ class EmailContextTest extends EmailTestBase {
         return getOk("/api/emails/context", caller, params);
     }
 
-    /** A suggested token as it is written down: {@code ROLE:CUSTOMER:COLLECTION_POC}, {@code USER:7}. */
     private List<String> tokens(JsonNode suggestion) {
         return java.util.stream.StreamSupport.stream(suggestion.get("to").spliterator(), false)
                 .map(t -> t.get("type").asText() + (t.has("level") ? ":" + t.get("level").asText() : "")
@@ -52,8 +50,6 @@ class EmailContextTest extends EmailTestBase {
                         + (t.has("userId") ? ":" + t.get("userId").asLong() : ""))
                 .toList();
     }
-
-    // ---- context -------------------------------------------------------------------
 
     @Test
     void aRecordsContextNamesWhoHoldsEachRoleAndTheCustomersAddresses() throws Exception {
@@ -84,7 +80,6 @@ class EmailContextTest extends EmailTestBase {
         assertThat(ctx.at("/roles/0/sender").isNull()).isTrue();
         assertThat(ctx.at("/roles/1/people/0/userId").asLong()).isEqualTo(collections.getId());
         assertThat(ctx.at("/roles/1/sender/userId").asLong()).isEqualTo(collections.getId());
-        // The invoice's own Sales POC, under the record's own heading — the only Sales POC there is.
         assertThat(ctx.at("/roles/2/levelLabel").asText()).isEqualTo("Invoice");
         assertThat(ctx.at("/roles/2/resolved").asBoolean()).isTrue();
         assertThat(ctx.at("/roles/2/people")).hasSize(1);
@@ -114,13 +109,11 @@ class EmailContextTest extends EmailTestBase {
         assertThat(collection.at("/sender/userId").asLong()).isEqualTo(collections.getId());
         assertThat(collection.has("person")).isFalse();
 
-        // With the primary gone, the next active holder is everyone the role reaches, and sends.
         deactivate(collections);
         JsonNode after = context(admin, "entityType", "INVOICE", "entityId", invoiceId).at("/roles/1");
         assertThat(after.get("people")).extracting(p -> p.get("userId").asLong()).containsExactly(cora.getId());
         assertThat(after.at("/sender/userId").asLong()).isEqualTo(cora.getId());
 
-        // A customer login learns the role is filled, not by whom.
         JsonNode masked = context(acmeLogin, "entityType", "INVOICE", "entityId", invoiceId);
         assertThat(masked.at("/roles/1/resolved").asBoolean()).isTrue();
         assertThat(masked.at("/roles/1/people")).isEmpty();
@@ -142,14 +135,6 @@ class EmailContextTest extends EmailTestBase {
         assertThat(reads).isEqualTo(1);
     }
 
-    /**
-     * Every role the compose form offers is one somebody can actually hold (CP-01).
-     *
-     * <p>The customer level used to offer a Sales POC seat that neither write path would create —
-     * {@code PocService.add} and the bulk Add-POC both refuse a customer-level SALES outright — so
-     * the entry could never resolve. It was permanently unusable as a recipient, disabled Send
-     * when picked as the sender, and skipped every row of a bulk send.
-     */
     @Test
     void everyRoleTheComposeFormOffersIsOneSomebodyCanActuallyHold() throws Exception {
         Invoice inv = invoice(acme, sales);
@@ -165,7 +150,6 @@ class EmailContextTest extends EmailTestBase {
                     .andExpect(status().isOk());
         }
 
-        // With a holder in every seat the form names, nothing it offers is left unheld.
         JsonNode filled = context(admin, "entityType", "INVOICE", "entityId", invoiceId);
         assertThat(filled.get("roles")).isNotEmpty();
         assertThat(filled.get("roles")).allSatisfy(r -> {
@@ -175,7 +159,6 @@ class EmailContextTest extends EmailTestBase {
         });
     }
 
-    /** Somebody this deployment can seat as that kind of POC. */
     private User assignableAs(PocType type) {
         return switch (type) {
             case SUCCESS -> success;
@@ -202,7 +185,6 @@ class EmailContextTest extends EmailTestBase {
         assertThat(products.at("/customerEmails/available").asBoolean()).isFalse();
         assertThat(products.get("suggestion").isNull()).isTrue();
 
-        // An internal user has no customer, so no customer emails apply to them.
         JsonNode internalUser = context(admin, "entityType", "USER", "entityId", sales.getId().toString());
         assertThat(internalUser.at("/customerEmails/available").asBoolean()).isFalse();
     }
@@ -211,17 +193,14 @@ class EmailContextTest extends EmailTestBase {
     void onlyACustomerLoginsRecordOffersItsCustomersRoles() throws Exception {
         seat(acme, PocType.COLLECTION, collections);
 
-        // Nobody could ever hold a seat on a user who belongs to no customer.
         assertThat(context(admin, "entityType", "USER", "entityId", sales.getId().toString()).get("roles")).isEmpty();
 
         JsonNode login = context(admin, "entityType", "USER", "entityId", acmeLogin.getId().toString());
-        // A user stores no POC of its own, so only the customer's book applies.
         assertThat(login.get("roles")).extracting(r -> r.get("level").asText() + ":" + r.get("role").asText())
                 .containsExactly("CUSTOMER:CUSTOMER_SUCCESS_POC", "CUSTOMER:COLLECTION_POC");
         assertThat(login.at("/roles/1/people/0/userId").asLong()).isEqualTo(collections.getId());
         assertThat(login.at("/customerEmails/available").asBoolean()).isTrue();
 
-        // A list or bulk compose may cover customer logins, so the kind still offers them.
         assertThat(context(admin, "entityType", "USER").get("roles")).extracting(r -> r.get("role").asText())
                 .containsExactly("CUSTOMER_SUCCESS_POC", "COLLECTION_POC");
     }
@@ -277,7 +256,6 @@ class EmailContextTest extends EmailTestBase {
         assertThat(ctx.at("/roles/3/people/0/userId").asLong()).isEqualTo(cole.getId());
         assertThat(ctx.at("/roles/3/sender/userId").asLong()).isEqualTo(cole.getId());
 
-        // Before any record is picked, a kind offers the same two groups and says nothing of who.
         JsonNode kind = context(admin, "entityType", "DISPUTE");
         assertThat(kind.get("roles")).extracting(r -> r.get("level").asText() + ":" + r.get("role").asText())
                 .containsExactly("CUSTOMER:CUSTOMER_SUCCESS_POC", "CUSTOMER:COLLECTION_POC",
@@ -302,8 +280,6 @@ class EmailContextTest extends EmailTestBase {
                         .param("entityType", "INVOICE").param("event", "DELETED"))
                 .andExpect(status().isBadRequest());
     }
-
-    // ---- suggestions -----------------------------------------------------------------
 
     @Test
     void eachKindOfRecordSuggestsAnEmailForItsEvents() throws Exception {
@@ -345,11 +321,10 @@ class EmailContextTest extends EmailTestBase {
         assertThat(disputeCreated.get("subject").asText())
                 .isEqualTo("Dispute #" + dispute.getId() + " raised on Invoice " + inv.getInvoiceNumber());
         assertThat(disputeCreated.get("body").asText()).contains("Wrong quantity");
-        // The customer's people, and the Sales POC its invoice target names (§3).
         assertThat(tokens(disputeCreated)).containsExactly("ROLE:CUSTOMER:CUSTOMER_SUCCESS_POC",
                 "ROLE:CUSTOMER:COLLECTION_POC", "ROLE:RECORD:SALES_POC");
 
-        actAs(admin); // a MockMvc request clears the thread's security context behind it
+        actAs(admin);
         disputeService.deny(dispute.getId(), new DisputeDtos.ResolveDisputeRequest("Quantity was right", null));
         JsonNode disputeUpdated = context(admin, "entityType", "DISPUTE", "entityId", dispute.getId().toString(),
                 "event", "UPDATED").get("suggestion");
@@ -379,7 +354,6 @@ class EmailContextTest extends EmailTestBase {
 
     @Test
     void suggestedDatesAreTheDayWhereTheReaderIs() throws Exception {
-        // 23:52 UTC is 05:22 the next morning in India, and that is the day the app shows there.
         Instant lateUtc = Instant.parse("2026-09-16T23:52:00Z");
         Invoice inv = invoice(acme, sales);
         Invoice stored = invoiceRepository.findById(inv.getId()).orElseThrow();
@@ -401,7 +375,6 @@ class EmailContextTest extends EmailTestBase {
                 "utcOffsetMinutes", "-300").at("/suggestion/body").asText()).contains("Date: 2026-09-16");
         assertThat(context(admin, "entityType", "INVOICE", "entityId", invoiceId, "event", "CREATED",
                 "utcOffsetMinutes", "840").at("/suggestion/body").asText()).contains("Date: 2026-09-17");
-        // Without the reader's offset, the server's own time zone.
         assertThat(context(admin, "entityType", "INVOICE", "entityId", invoiceId, "event", "CREATED")
                 .at("/suggestion/body").asText())
                 .contains("Date: " + LocalDate.ofInstant(lateUtc, ZoneId.systemDefault()));
@@ -425,8 +398,6 @@ class EmailContextTest extends EmailTestBase {
         assertThat(EmailText.money(new BigDecimal("12345678.905"))).isEqualTo("₹1,23,45,678.91");
         assertThat(EmailText.money(new BigDecimal("-50"))).isEqualTo("-₹50.00");
     }
-
-    // ---- people and preview ------------------------------------------------------------
 
     @Test
     void peopleSearchFindsActiveStaffByAnyNameOrAddress() throws Exception {
@@ -500,8 +471,6 @@ class EmailContextTest extends EmailTestBase {
         assertThat(emailRepository.count()).isZero();
     }
 
-    // ---- who can send from their Gmail -------------------------------------------------
-
     private void mirror(User u, ConnectionStatus status) {
         gmailConnectionRepository.save(GmailConnection.builder().userId(u.getId()).status(status)
                 .gmailAddress(u.getUsername() + "@gmail.com").build());
@@ -526,7 +495,6 @@ class EmailContextTest extends EmailTestBase {
         assertThat(found).extracting(p -> p.get("username").asText() + ":" + p.get("gmail").asText())
                 .contains("cara.collections:NEEDS_RECONNECT", "cora.collections:NOT_CONNECTED");
 
-        // Customer logins do not connect Gmail; whom a role stands for they are not told at all.
         JsonNode theirs = context(acmeLogin, "entityType", "INVOICE", "entityId", inv.getId().toString());
         assertThat(theirs.at("/sender/self/gmail").asText()).isEqualTo("NOT_CONNECTED");
         assertThat(theirs.at("/roles/1/people")).isEmpty();
@@ -556,14 +524,12 @@ class EmailContextTest extends EmailTestBase {
         mirror(admin, ConnectionStatus.CONNECTED);
         JsonNode fine = read(postJson("/api/emails/preview", admin, fromMe).andExpect(status().isOk()));
         assertThat(fine.get("warnings")).isEmpty();
-        // Warnings do not stop Send; problems do.
         assertThat(fine.get("problems")).isEmpty();
 
         JsonNode customer = read(postJson("/api/emails/preview", acmeLogin, fromMe).andExpect(status().isOk()));
         assertThat(customer.get("warnings")).extracting(JsonNode::asText).containsExactly(
                 "Email from a customer login is saved in the app and is not sent through Gmail.");
 
-        // A sender role nobody holds is a problem, not a warning.
         deactivate(sales);
         JsonNode nobody = read(postJson("/api/emails/preview", admin, email("INVOICE", inv.getId(),
                 List.of(toCustomer()), "from", toRole("SALES_POC", "RECORD"))).andExpect(status().isOk()));

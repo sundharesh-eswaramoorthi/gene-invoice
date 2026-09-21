@@ -126,8 +126,6 @@ public class ProductController {
                 currentUser.require().getId(), null, "Product deleted");
     }
 
-    // ---- bulk & export ---------------------------------------------------------
-
     public static final List<String> BULK_ACTIONS = List.of("ACTIVATE", "DEACTIVATE");
 
     @PostMapping("/bulk")

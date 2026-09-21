@@ -29,10 +29,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The single source of truth for what every table can be sorted and filtered by. The frontend
- * builds its filter UI from these definitions, and every list request is validated against them.
- */
 public final class TableSchemas {
 
     private TableSchemas() {}
@@ -40,8 +36,6 @@ public final class TableSchemas {
     private static List<String> names(Class<? extends Enum<?>> e) {
         return Arrays.stream(e.getEnumConstants()).map(Enum::name).toList();
     }
-
-    // ---- invoices ------------------------------------------------------------------
 
     public static final TableSchema INVOICES = TableSchema.of("invoices", "invoiceDate,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
@@ -64,8 +58,6 @@ public final class TableSchemas {
             // Overdue is derived from the clock rather than stored (D3), so it is a filter and not
             // a value; sorting by lateness is sorting by due date.
             ColumnDef.of("overdue", "Overdue", ColumnType.BOOLEAN).notSortable()
-                    // There is no column to read: the filter below is the whole of it, and the
-                    // path is a stand-in that nothing resolves.
                     .path((root, q, cb) -> root.get("id"))
                     .filter((spec, root, q, cb) -> overduePredicate(spec, root, cb))
                     .build(),
@@ -77,12 +69,6 @@ public final class TableSchemas {
                     .pocRestricted().path(ColumnDef.nested("salesPoc", "fullName")).build(),
             ColumnDef.of("createdAt", "Created", ColumnType.DATE).build());
 
-    /**
-     * An invoice is overdue when its due date has gone, it still owes something, and it was not
-     * cancelled (D3). Built against the query's own root, so the caller's scope and filter chips
-     * still apply and a customer login filtering by overdue sees only their own (AC-A6). The
-     * summary tiles count the same rows through the same predicate (AC-A7).
-     */
     public static Predicate invoiceOverdue(Root<?> root, CriteriaBuilder cb, LocalDate today) {
         return cb.and(
                 cb.lessThan(root.<LocalDate>get("dueDate"), today),
@@ -93,10 +79,6 @@ public final class TableSchemas {
 
     private static Predicate overduePredicate(FilterSpec spec, Root<?> root, CriteriaBuilder cb) {
         Predicate overdue = invoiceOverdue(root, cb, InvoiceDates.today());
-        // An invoice with no due date at all — only reachable where the upgrade could not make
-        // the column not null (§2.5) — is not overdue, the way Invoice#isOverdue reads it. Said
-        // here too, because SQL makes every comparison with a null unknown, which would drop the
-        // row out of both halves of the filter instead of one.
         return asBoolean(spec.first())
                 ? overdue
                 : cb.or(cb.isNull(root.get("dueDate")), cb.not(overdue));
@@ -108,8 +90,6 @@ public final class TableSchemas {
         if (v.equalsIgnoreCase("false")) return false;
         throw new BadRequestException("Expected true or false but got: " + raw);
     }
-
-    // ---- payments ------------------------------------------------------------------
 
     public static final TableSchema PAYMENTS = TableSchema.of("payments", "paidAt,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
@@ -130,8 +110,6 @@ public final class TableSchemas {
                     .path(ColumnDef.referenceId("collectionPoc")).build(),
             ColumnDef.of("collectionPocName", "Collection POC name", ColumnType.TEXT)
                     .pocRestricted().path(ColumnDef.nested("collectionPoc", "fullName")).build());
-
-    // ---- customers -----------------------------------------------------------------
 
     public static final TableSchema CUSTOMERS = TableSchema.of("customers", "name,asc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
@@ -154,7 +132,6 @@ public final class TableSchemas {
                     .build(),
             ColumnDef.of("createdAt", "Created", ColumnType.DATE).build());
 
-    /** Sum of live invoice balances for the customer this root points at. */
     private static Expression<BigDecimal> customerOutstanding(Root<?> root, CriteriaQuery<?> q, CriteriaBuilder cb) {
         Subquery<BigDecimal> sq = q.subquery(BigDecimal.class);
         Root<Invoice> inv = sq.from(Invoice.class);
@@ -166,10 +143,6 @@ public final class TableSchemas {
         return sq;
     }
 
-    /**
-     * A customer's POC seats are a to-many relationship, so "is" means "has a seat held by",
-     * and "is empty" means "holds no seat of this kind" — the POC-missing filter of AC-A9.
-     */
     private static Predicate pocSeatPredicate(FilterSpec spec, Root<?> root, CriteriaQuery<?> q,
                                               CriteriaBuilder cb, PocType type) {
         Subquery<Long> sq = q.subquery(Long.class);
@@ -214,8 +187,6 @@ public final class TableSchemas {
         }
     }
 
-    // ---- payment promises ----------------------------------------------------------
-
     public static final TableSchema PROMISES = TableSchema.of("promises", "promisedDate,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
             ColumnDef.of("customerId", "Customer", ColumnType.REFERENCE)
@@ -237,13 +208,11 @@ public final class TableSchemas {
             ColumnDef.of("collectionPocName", "Collection POC name", ColumnType.TEXT)
                     .pocRestricted().path(ColumnDef.nested("collectionPoc", "fullName")).build(),
             ColumnDef.of("notes", "Notes", ColumnType.TEXT).notSortable().build(),
-            // Backs the Promises tab on Invoice Details, which asks for ?invoiceId=N.
             ColumnDef.of("invoiceId", "Invoice", ColumnType.REFERENCE)
                     .reference("invoice").notSortable()
                     .path((root, q, cb) -> root.get("id"))
                     .filter((spec, root, q, cb) -> promiseLinkPredicate("invoices", spec, root, q, cb))
                     .build(),
-            // Backs the Promises tab on Payment Details: the promises that payment counts towards.
             ColumnDef.of("paymentId", "Payment", ColumnType.REFERENCE)
                     .reference("payment").notSortable()
                     .path((root, q, cb) -> root.get("id"))
@@ -251,12 +220,6 @@ public final class TableSchemas {
                     .build(),
             ColumnDef.of("createdAt", "Created", ColumnType.DATE).build());
 
-    /**
-     * amount - fulfilled, floored at zero so an overpayment never reads as a negative debt, and
-     * zero outright for a promise that is settled or withdrawn. Mirrors
-     * {@link com.geneinvoice.promise.PaymentPromise#getRemainingAmount()} so sorting and
-     * filtering on the column agree with the figure the row shows (PPD-04).
-     */
     static Expression<BigDecimal> promiseRemaining(Root<?> root, CriteriaQuery<?> q, CriteriaBuilder cb) {
         Expression<BigDecimal> diff = cb.diff(
                 root.<BigDecimal>get("amount"), root.<BigDecimal>get("fulfilledAmount"));
@@ -267,12 +230,6 @@ public final class TableSchemas {
                 .otherwise(diff);
     }
 
-    /**
-     * A promise covers any number of invoices, and counts any number of payments, through link
-     * tables ({@code association} is "invoices" or "payments"). So "is" means "linked to this one",
-     * and "is empty" means none — for invoices, a general promise against the account. Matching
-     * through an EXISTS subquery keeps a promise with several links to one row and one count.
-     */
     private static Predicate promiseLinkPredicate(String association, FilterSpec spec, Root<?> root,
                                                   CriteriaQuery<?> q, CriteriaBuilder cb) {
         Subquery<Long> sq = q.subquery(Long.class);
@@ -308,8 +265,6 @@ public final class TableSchemas {
         };
     }
 
-    // ---- products ------------------------------------------------------------------
-
     public static final TableSchema PRODUCTS = TableSchema.of("products", "name,asc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
             ColumnDef.of("name", "Name", ColumnType.TEXT).build(),
@@ -317,8 +272,6 @@ public final class TableSchemas {
             ColumnDef.of("price", "Price", ColumnType.MONEY).build(),
             ColumnDef.of("active", "Active", ColumnType.BOOLEAN).build(),
             ColumnDef.of("createdAt", "Created", ColumnType.DATE).build());
-
-    // ---- users ---------------------------------------------------------------------
 
     public static final TableSchema USERS = TableSchema.of("users", "username,asc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
@@ -331,14 +284,10 @@ public final class TableSchemas {
             ColumnDef.of("customerId", "Customer account", ColumnType.NUMBER).build(),
             ColumnDef.of("createdAt", "Created", ColumnType.DATE).build());
 
-    // ---- roles ---------------------------------------------------------------------
-
     public static final TableSchema ROLES = TableSchema.of("roles", "name,asc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
             ColumnDef.of("name", "Name", ColumnType.TEXT).build(),
             ColumnDef.of("description", "Description", ColumnType.TEXT).notSortable().build());
-
-    // ---- disputes ------------------------------------------------------------------
 
     public static final TableSchema DISPUTES = TableSchema.of("disputes", "createdAt,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
@@ -352,8 +301,6 @@ public final class TableSchemas {
             ColumnDef.of("createdAt", "Opened", ColumnType.DATE).build(),
             ColumnDef.of("resolvedAt", "Resolved", ColumnType.DATE).build());
 
-    // ---- notifications -------------------------------------------------------------
-
     public static final TableSchema NOTIFICATIONS = TableSchema.of("notifications", "createdAt,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
             ColumnDef.of("type", "Type", ColumnType.TEXT).build(),
@@ -362,12 +309,6 @@ public final class TableSchemas {
             ColumnDef.of("read", "Read", ColumnType.BOOLEAN).build(),
             ColumnDef.of("createdAt", "Received", ColumnType.DATE).build());
 
-    // ---- inbox ---------------------------------------------------------------------
-
-    /**
-     * Rows are email recipient rows — always the caller's own To rows — and most columns read
-     * through to the email. Who sent it is staff identity, so customer logins cannot filter on it.
-     */
     public static final TableSchema INBOX = TableSchema.of("inbox", "occurredAt,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
             ColumnDef.of("subject", "Subject", ColumnType.TEXT)

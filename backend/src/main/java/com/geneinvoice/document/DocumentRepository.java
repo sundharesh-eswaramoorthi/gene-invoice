@@ -13,12 +13,6 @@ import java.util.Optional;
 
 public interface DocumentRepository extends JpaRepository<Document, Long> {
 
-    /**
-     * The document, locked until the transaction ends. A delete reads the row through this, so two
-     * deletes of one document line up: the second waits, then reads the first's soft delete and
-     * answers 404, rather than both reading a live row and each writing its own deletion — and its
-     * own audit entry — over the other's (DOC-3, AC-C3).
-     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from Document d where d.id = :id")
     Optional<Document> findByIdForUpdate(@Param("id") Long id);
@@ -31,11 +25,6 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
 
     List<Document> findByCustomerIdAndDeletedFalseOrderByIdAsc(Long customerId);
 
-    /**
-     * Soft-deletes every live document of one customer — its own, and those on its invoices and
-     * payments — in one statement, as the customer itself is deleted (AC-C5). Clears the
-     * persistence context, which would otherwise keep serving the pre-update rows.
-     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update Document d

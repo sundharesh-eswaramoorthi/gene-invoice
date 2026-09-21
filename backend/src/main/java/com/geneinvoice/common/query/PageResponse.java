@@ -3,7 +3,6 @@ package com.geneinvoice.common.query;
 import java.util.List;
 import java.util.function.Function;
 
-/** The paged envelope every list endpoint returns. */
 public record PageResponse<T>(
         List<T> content,
         int page,
@@ -12,7 +11,6 @@ public record PageResponse<T>(
         int totalPages,
         String sort,
         List<String> appliedFilters,
-        /** Filters the server pinned on regardless of what the caller asked for (locked scope). */
         List<String> lockedFilters
 ) {
     public static <T> PageResponse<T> of(List<T> content, TableQuery query, long total,

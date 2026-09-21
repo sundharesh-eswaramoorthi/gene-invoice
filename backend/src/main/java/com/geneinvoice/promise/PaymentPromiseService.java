@@ -48,12 +48,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Owns the promise lifecycle. Status is never set by hand except through
- * {@link #override}: {@link #evaluate} recomputes it from the current payment and invoice facts,
- * which makes it idempotent and safe to re-run after a void, an invoice edit or a cancellation
- * (AC-B6).
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -73,8 +67,6 @@ public class PaymentPromiseService {
     private final NotificationService notificationService;
     private final CurrentUser currentUser;
     private final UserRepository userRepository;
-
-    // ---- lifecycle -------------------------------------------------------------
 
     @Transactional
     public PromiseDtos.PromiseDto create(PromiseDtos.CreatePromiseRequest req) {
@@ -124,8 +116,6 @@ public class PaymentPromiseService {
         promise.setAmount(req.amount());
         promise.setPromisedDate(req.promisedDate());
         promise.setNotes(req.notes());
-        // Only an actual change of POC is validated, so a promise whose POC has since been
-        // deactivated can still be edited (AC-A5).
         Long previousPocId = promise.getCollectionPoc() == null ? null : promise.getCollectionPoc().getId();
         if (req.collectionPocUserId() != null && !req.collectionPocUserId().equals(previousPocId)) {
             // Moving a promise's Collection POC is the same act as moving a payment's, and needs
@@ -153,7 +143,6 @@ public class PaymentPromiseService {
         return toDto(saved);
     }
 
-    /** Reassigns only the Collection POC. Used by the inline row action and the bulk action. */
     @Transactional
     public PromiseDtos.PromiseDto reassignCollectionPoc(Long id, Long userId) {
         PaymentPromise promise = get(id);
@@ -161,7 +150,6 @@ public class PaymentPromiseService {
                 promise.getPromisedDate(), userId, promise.getNotes(), null));
     }
 
-    /** Withdraws a promise raised in error. Linked payments are unlinked but never touched (AC-B11). */
     @Transactional
     public PromiseDtos.PromiseDto cancel(Long id, String reason) {
         PaymentPromise promise = get(id);
@@ -173,7 +161,6 @@ public class PaymentPromiseService {
         promise.setFulfilledAmount(BigDecimal.ZERO);
         promise.setStatus(PromiseStatus.CANCELLED);
         promise.setBrokenNotifiedAt(null);
-        // A withdrawn promise is pinned to nothing; the override stays readable in its history.
         promise.setStatusOverridden(false);
         promise.setOverrideReason(null);
         promise.setOverriddenByUserId(null);
@@ -182,12 +169,10 @@ public class PaymentPromiseService {
 
         auditService.record(ENTITY, id, "PROMISE_CANCELLED", before, snapshot(saved),
                 currentUser.require().getId(), null, reason);
-        // The money this promise was counting is free for the customer's other promises now.
         reevaluateForCustomer(saved.getCustomer().getId());
         return toDto(saved);
     }
 
-    /** Pins a status by hand when reality disagrees with the arithmetic (AC-B6, AC-B9). */
     @Transactional
     public PromiseDtos.PromiseDto override(Long id, PromiseStatus status, String reason) {
         if (reason == null || reason.isBlank()) {
@@ -197,8 +182,6 @@ public class PaymentPromiseService {
             throw new BadRequestException("Use cancel to withdraw a promise");
         }
         PaymentPromise promise = get(id);
-        // Overriding would bring a withdrawn promise back to life, and clearing that override
-        // would then re-link its payments.
         if (promise.getStatus() == PromiseStatus.CANCELLED) {
             throw new BadRequestException("A cancelled promise cannot be overridden");
         }
@@ -218,7 +201,6 @@ public class PaymentPromiseService {
         return toDto(saved);
     }
 
-    /** Drops a manual override and hands the promise back to automatic tracking. */
     @Transactional
     public PromiseDtos.PromiseDto clearOverride(Long id) {
         PaymentPromise promise = get(id);
@@ -238,25 +220,14 @@ public class PaymentPromiseService {
         return toDto(saved);
     }
 
-    // ---- evaluation ------------------------------------------------------------
-
     private static final String RECOMPUTED = "Recomputed from payments";
 
-    /**
-     * Recomputes links, fulfilment and status from current facts — for every live promise of the
-     * customer at once, since they share its payments. Returns true when this promise changed.
-     * Safe to call repeatedly and from any direction.
-     */
     @Transactional
     public boolean evaluate(PaymentPromise promise) {
         if (promise.getStatus() == PromiseStatus.CANCELLED) return false;
         return evaluateCustomer(promise.getCustomer().getId(), true, RECOMPUTED).contains(promise);
     }
 
-    /**
-     * Evaluates every live promise of a customer together and returns those that changed. Only a
-     * backfill after a rule change passes {@code notify = false}: that is no news for the POC.
-     */
     private List<PaymentPromise> evaluateCustomer(Long customerId, boolean notify, String reason) {
         List<PaymentPromise> live = promiseRepository.findLiveByCustomer(customerId);
         List<Payment> payments = paymentRepository.findByCustomerIdOrderByPaidAtDesc(customerId).stream()
@@ -297,27 +268,18 @@ public class PaymentPromiseService {
         return true;
     }
 
-    /**
-     * Works the status out from current facts. Once the promised date has gone, only money that
-     * arrived <em>by</em> that date can keep the promise: paying late does not un-break it, though
-     * the payment is still recorded against the fulfilled amount.
-     */
     private PromiseStatus targetStatus(PaymentPromise promise, Fulfilment fulfilment) {
         LocalDate today = InvoiceDates.today();
         boolean datePassed = today.isAfter(promise.getPromisedDate());
         boolean invoiceScoped = !promise.getInvoices().isEmpty();
         List<Invoice> live = liveInvoices(promise);
 
-        // Every invoice the promise named has been cancelled — a dispute erased the debt, so
-        // there is nothing left to break over (AC-B6).
         if (invoiceScoped && live.isEmpty()) return PromiseStatus.KEPT;
 
         boolean invoicesSettled =
                 invoiceScoped && live.stream().allMatch(i -> i.getBalance().signum() <= 0);
 
         if (!datePassed) {
-            // On the promised day itself a general promise is measured against what the account
-            // still owes, not only against the money linked to it (AC-B7).
             boolean dateReached = !today.isBefore(promise.getPromisedDate());
             // The promised money having arrived keeps the promise whatever it was scoped to: a
             // promise of part of a large invoice, paid in full and on time, is kept the moment
@@ -331,7 +293,6 @@ public class PaymentPromiseService {
             return fulfilment.total().signum() > 0 ? PromiseStatus.PARTIALLY_KEPT : PromiseStatus.OPEN;
         }
 
-        // The date has gone. Judge it on what was actually paid in time.
         BigDecimal onTime = fulfilment.onTime();
         boolean keptOnTime = onTime.compareTo(promise.getAmount()) >= 0
                 || (invoiceScoped && invoicesSettled && !fulfilment.paidLate())
@@ -341,29 +302,14 @@ public class PaymentPromiseService {
         return onTime.signum() > 0 ? PromiseStatus.PARTIALLY_KEPT : PromiseStatus.BROKEN;
     }
 
-    /**
-     * Money counted towards a promise, split by whether it arrived before the promised date ran
-     * out. {@code paidLate} also covers a linked payment whose money went to another promise: an
-     * invoice settled only after the date was not settled in time, whoever it counted for.
-     */
     private record Fulfilment(BigDecimal onTime, BigDecimal late, boolean paidLate) {
         BigDecimal total() {
             return onTime.add(late);
         }
     }
 
-    /** Part of one payment counted towards one promise. */
     private record Share(Payment payment, BigDecimal amount) {}
 
-    /**
-     * Shares each active payment out across the customer's live promises, once (AC-B12). Money a
-     * payment put on an invoice goes first to the promises covering that invoice; whatever it has
-     * left counts towards the general promises. Both go first to promises the payment is still in
-     * time for — late money cannot un-break a promise, so it should not be taken from one it can
-     * still keep — then earliest promised date first. No promise takes more than it promised, so
-     * one payment can keep several promises but never counts twice. Payments go oldest first, so
-     * later money never displaces earlier.
-     */
     private Map<PaymentPromise, List<Share>> shareOut(List<PaymentPromise> live, List<Payment> payments) {
         Map<PaymentPromise, List<Share>> shares = new IdentityHashMap<>();
         Map<PaymentPromise, BigDecimal> need = new IdentityHashMap<>();
@@ -406,23 +352,16 @@ public class PaymentPromiseService {
         return shares;
     }
 
-    /** Money paid before a promise was made was not paid towards it. */
     private static boolean counts(Payment payment, PaymentPromise promise) {
         return promise.getCreatedAt() == null || payment.getPaidAt() == null
                 || !payment.getPaidAt().isBefore(promise.getCreatedAt());
     }
 
-    /** Whether a promise covers this invoice. A cancelled invoice is owed by no one any more. */
     private static boolean covers(PaymentPromise promise, Invoice invoice) {
         return invoice.getStatus() != InvoiceStatus.CANCELLED
                 && promise.getInvoices().stream().anyMatch(i -> i.getId().equals(invoice.getId()));
     }
 
-    /**
-     * A promise's linked payments are the ones that count towards it, plus any that paid one of its
-     * invoices — which settles the promise even when an earlier promise on the same invoice took
-     * the money (AC-B3). A voided payment is never linked (AC-B6).
-     */
     private void relink(PaymentPromise promise, List<Share> shares, List<Payment> payments) {
         Set<Payment> links = new LinkedHashSet<>();
         shares.forEach(s -> links.add(s.payment()));
@@ -436,7 +375,6 @@ public class PaymentPromiseService {
         promise.getPayments().addAll(links);
     }
 
-    /** Call after {@link #relink}: the promise's links decide whether anything arrived late. */
     private Fulfilment fulfilment(PaymentPromise promise, List<Share> shares) {
         BigDecimal onTime = BigDecimal.ZERO;
         BigDecimal late = BigDecimal.ZERO;
@@ -455,7 +393,6 @@ public class PaymentPromiseService {
         return payment.getPaidAt() != null && payment.getPaidAt().isAfter(endOfPromisedDate(promise));
     }
 
-    /** The last instant that still counts as paying by the promised date. */
     private Instant endOfPromisedDate(PaymentPromise promise) {
         return promise.getPromisedDate().plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
     }
@@ -466,12 +403,6 @@ public class PaymentPromiseService {
                 .toList();
     }
 
-    /**
-     * What the customer still owes on the invoices a general promise answers for: those dated by
-     * the end of the promised date, and any that already existed when the promise was made
-     * (AC-B7). An invoice raised after both is a new debt the promise never covered, so it cannot
-     * break a promise that was already kept.
-     */
     private BigDecimal owedUnderPromise(PaymentPromise promise) {
         Instant deadline = endOfPromisedDate(promise);
         Instant made = promise.getCreatedAt();
@@ -488,14 +419,6 @@ public class PaymentPromiseService {
         return total;
     }
 
-    // ---- re-entry points -------------------------------------------------------
-
-    /**
-     * The invoices a payment should pay first because the cashier ticked their promises (US-B3):
-     * each ticked promise's live invoices, once it is checked to be this customer's and still live.
-     * When the cashier also chose invoices, a ticked promise on invoices must share one with them,
-     * or the payment could never count towards it.
-     */
     @Transactional(readOnly = true)
     public Set<Long> invoicesToPayFirst(List<Long> promiseIds, Long customerId, Set<Long> chosenInvoiceIds) {
         Set<Long> first = new LinkedHashSet<>();
@@ -521,25 +444,17 @@ public class PaymentPromiseService {
         return first;
     }
 
-    /** Re-evaluates every live promise of a customer. Called after any payment or invoice change. */
     @Transactional
     public void reevaluateForCustomer(Long customerId) {
         if (customerId == null) return;
         evaluateCustomer(customerId, true, RECOMPUTED).forEach(promiseRepository::save);
     }
 
-    /** One promise whose status or fulfilled amount a recomputation moves. */
     public record RecomputeChange(Long promiseId, Long customerId, String customerName,
                                   BigDecimal amount, LocalDate promisedDate, boolean overridden,
                                   PromiseStatus statusBefore, PromiseStatus statusAfter,
                                   BigDecimal fulfilledBefore, BigDecimal fulfilledAfter) {}
 
-    /**
-     * Re-evaluates every live promise under the current rules and reports each one whose status or
-     * fulfilled amount moves. With {@code apply = false} nothing is kept: it is a preview. Applying
-     * audits each status change but sends no broken-promise notification — a change in how the
-     * app counts is not something the POC needs to act on.
-     */
     @Transactional
     public List<RecomputeChange> recomputeAll(boolean apply) {
         List<RecomputeChange> changes = new ArrayList<>();
@@ -567,17 +482,12 @@ public class PaymentPromiseService {
         return changes;
     }
 
-    /** Re-evaluates promises touching one invoice, plus the rest of that customer's book. */
     @Transactional
     public void reevaluateForInvoice(Long invoiceId) {
         invoiceRepository.findById(invoiceId)
                 .ifPresent(inv -> reevaluateForCustomer(inv.getCustomer().getId()));
     }
 
-    /**
-     * Flips overdue open promises to BROKEN so list results, filters and totals are right even for
-     * a user who never opens the record (AC-B5).
-     */
     @Transactional
     public int sweepOverdue() {
         List<PaymentPromise> overdue = promiseRepository.findOverdueOpen(InvoiceDates.today());
@@ -592,8 +502,6 @@ public class PaymentPromiseService {
         return changed;
     }
 
-    // ---- reads -----------------------------------------------------------------
-
     @Transactional(readOnly = true)
     public PaymentPromise get(Long id) {
         PaymentPromise promise = promiseRepository.findById(id)
@@ -604,7 +512,6 @@ public class PaymentPromiseService {
         if (callerCustomer != null && !callerCustomer.equals(promise.getCustomer().getId())) {
             throw new NotFoundException("Payment promise not found");
         }
-        // A POC limited to their own book cannot reach another's promise by id either (AC-A6).
         if (!queryExecutor.inScope(PaymentPromise.class, TableSchemas.PROMISES, id,
                 scopeResolver.forPromises().predicates())) {
             throw new NotFoundException("Payment promise not found");
@@ -612,7 +519,6 @@ public class PaymentPromiseService {
         return promise;
     }
 
-    /** Loads and renders in one transaction; the links are lazy and must not outlive it. */
     @Transactional(readOnly = true)
     public PromiseDtos.PromiseDto dto(Long id) {
         return toDto(get(id));
@@ -627,8 +533,6 @@ public class PaymentPromiseService {
     public List<PaymentPromise> listForInvoice(Long invoiceId) {
         return promiseRepository.findByInvoiceId(invoiceId);
     }
-
-    // ---- list, tiles, DTOs -----------------------------------------------------
 
     @Transactional(readOnly = true)
     public PageResponse<PromiseDtos.PromiseDto> page(TableQuery query) {
@@ -651,11 +555,6 @@ public class PaymentPromiseService {
                 scopeResolver.forPromises().predicates(), List.of("customer", "collectionPoc")).content();
     }
 
-    /**
-     * Tiles over the whole filtered set. Each promise contributes to exactly one status bucket, and
-     * evaluation shares each payment out once, so the fulfilled total never exceeds what was
-     * collected (AC-B12, AC-E1).
-     */
     @Transactional(readOnly = true)
     public PromiseDtos.PromiseSummaryDto tiles(TableQuery query) {
         ScopeResolver.Scope scope = scopeResolver.forPromises();
@@ -689,7 +588,6 @@ public class PaymentPromiseService {
     @Transactional(readOnly = true)
     public PromiseDtos.PromiseDto toDto(PaymentPromise p) {
         boolean showPoc = scopeResolver.canSeePoc();
-        // Who created or overrode a promise is staff identity, often the POC's own id (AC-A8).
         boolean showStaff = !currentUser.isCustomer();
         return new PromiseDtos.PromiseDto(
                 p.getId(), p.getCustomer().getId(), p.getCustomer().getName(),
@@ -711,8 +609,6 @@ public class PaymentPromiseService {
                 showStaff ? p.getCreatedByUserId() : null, p.getCreatedAt(), p.getUpdatedAt());
     }
 
-    // ---- helpers ---------------------------------------------------------------
-
     private User resolveCollectionPoc(Long requested, Long customerId) {
         if (requested != null) {
             return pocService.requireAssignable(requested, PocType.COLLECTION);
@@ -723,11 +619,6 @@ public class PaymentPromiseService {
                                 + "so pick one explicitly"));
     }
 
-    /**
-     * Loads the invoices a promise covers. A cancelled invoice cannot be newly promised against,
-     * but one already linked when it was cancelled stays acceptable, so the promise can still be
-     * edited afterwards.
-     */
     private Set<Invoice> resolveInvoices(List<Long> ids, Long customerId, Set<Long> alreadyLinked) {
         Set<Invoice> resolved = new LinkedHashSet<>();
         if (ids == null || ids.isEmpty()) return resolved;
@@ -765,7 +656,6 @@ public class PaymentPromiseService {
         promise.setBrokenNotifiedAt(Instant.now());
     }
 
-    /** Compact form written into the audit trail. */
     private Object snapshot(PaymentPromise p) {
         return new PromiseAuditSnapshot(p.getId(), p.getCustomer().getId(), p.getAmount(),
                 p.getPromisedDate(), p.getStatus(), p.getFulfilledAmount(),

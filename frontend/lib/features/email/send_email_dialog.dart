@@ -13,30 +13,21 @@ import 'email_models.dart';
 import 'email_providers.dart';
 
 enum SendEmailMode {
-  /// About one known record.
   single,
 
-  /// From a list page: the dialog first asks which record.
   picker,
 
-  /// Parameters for a bulk action; the table posts them, one email per row.
   bulk,
 }
 
-/// How a compose form about one record ended.
 enum EmailComposeOutcome {
-  /// The email was saved: sent, queued, or kept in the app unsent.
   sent,
 
-  /// Closed without Send, or while a send was still out (its snackbar then says how it went).
   closed,
 
-  /// Closed on the way to the Gmail connection page ("Connect"). The app is already headed there,
-  /// so a caller must not navigate anywhere else afterwards: a later go() would win over it.
   leftForGmail,
 }
 
-/// Opens the compose dialog about one record.
 Future<EmailComposeOutcome> openSendEmailDialog(
   BuildContext context, {
   required EmailEntityType type,
@@ -46,7 +37,6 @@ Future<EmailComposeOutcome> openSendEmailDialog(
 }) async {
   final outcome = await showDialog<EmailComposeOutcome>(
     context: context,
-    // A tap beside the dialog must not throw away a half-written email.
     barrierDismissible: false,
     builder: (_) => SendEmailDialog(
       mode: SendEmailMode.single,
@@ -69,7 +59,6 @@ Future<EmailComposeOutcome> openSendEmailForPickedRecord(BuildContext context,
   return outcome ?? EmailComposeOutcome.closed;
 }
 
-/// The bulk action's parameters, `{entityType, from, to, subject, body}`, or null when abandoned.
 Future<Map<String, dynamic>?> openBulkEmailParams(BuildContext context,
     {required EmailEntityType type}) {
   return showDialog<Map<String, dynamic>>(
@@ -104,20 +93,14 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   final _subject = TextEditingController();
   final _body = TextEditingController();
 
-  /// The record the email is about. In picker mode it stays null until one is chosen; in bulk
-  /// mode it is always null, since every row is its own record.
   int? _entityId;
   Map<String, dynamic>? _pickedRecord;
 
-  /// Null means the caller themselves, which the server assumes when From is left out.
   EmailToken? _from;
   final List<EmailToken> _to = [];
 
-  /// Names for people added through the search; a token carries only the id.
   final Map<int, EmailPerson> _people = {};
 
-  /// The last context loaded. Choosing another record reloads it, and the form keeps showing
-  /// this one meanwhile rather than collapsing to a spinner.
   EmailContext? _context;
   bool _seeded = false;
 
@@ -126,9 +109,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   String? _error;
   bool _sending = false;
 
-  /// Off until a Send finds the subject missing. From then on the field checks itself as it is
-  /// typed in, so "Enter a subject" goes as soon as there is one — as the To error goes when a
-  /// recipient is added — rather than staying until the next Send.
   AutovalidateMode _subjectValidation = AutovalidateMode.disabled;
 
   EmailPreview? _preview;
@@ -136,8 +116,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   bool _previewing = false;
   Timer? _previewDebounce;
 
-  /// Only the newest preview may land; an older answer arriving late would describe a form that
-  /// no longer exists.
   int _previewSeq = 0;
   String _previewedSubject = '';
 
@@ -148,7 +126,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     super.initState();
     _entityId = widget.entityId;
     _subject.addListener(() {
-      // The listener also fires for cursor moves; only a changed subject is worth a request.
       if (_subject.text == _previewedSubject) return;
       _previewedSubject = _subject.text;
       _schedulePreview();
@@ -163,8 +140,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     super.dispose();
   }
 
-  // ---- request ----------------------------------------------------------------------
-
   /// Trimmed, with any pasted line breaks turned into spaces, as the server stores it (E16).
   String get _cleanSubject => _subject.text.replaceAll(RegExp(r'\s*[\r\n]+\s*'), ' ').trim();
 
@@ -177,8 +152,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
       };
 
   Map<String, dynamic> _request(int entityId) => {..._fields(), 'entityId': entityId};
-
-  // ---- preview ----------------------------------------------------------------------
 
   void _schedulePreview() {
     _previewDebounce?.cancel();
@@ -217,8 +190,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
       if (mounted && seq == _previewSeq) setState(() => _previewing = false);
     }
   }
-
-  // ---- editing ----------------------------------------------------------------------
 
   /// A suggestion arrives with the context after a save (E12); it fills the form once, and only
   /// what the user has not already typed.
@@ -306,7 +277,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
       _pickedRecord = row;
       _entityId = (row['id'] as num).toInt();
       _recordError = null;
-      // The last preview described another record.
       _preview = null;
       _previewError = null;
     });
@@ -330,20 +300,15 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
       return;
     }
 
-    // Taken before the request: the dialog can be gone by the time it answers (the back button
-    // still closes it), and a gone dialog's ref throws, which would save the email without a word
-    // and leave the lists behind it on their old rows.
     final container = ProviderScope.containerOf(context, listen: false);
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _sending = true);
     try {
       final res = await container.read(dioProvider).post('/api/emails', data: _request(_entityId!));
       final email = EmailMessage.fromJson((res.data as Map).cast<String, dynamic>());
-      // The record's Email tab, and the Inbox of anyone it reached — the sender among them.
       container.invalidate(entityEmailsProvider);
       container.invalidate(inboxUnreadCountProvider);
       container.invalidate(tablePageProvider);
-      // Closed already, the dialog may still be animating out; a pop then would close the page.
       if (mounted && (ModalRoute.of(context)?.isCurrent ?? false)) {
         Navigator.of(context).pop(EmailComposeOutcome.sent);
       }
@@ -355,18 +320,8 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     }
   }
 
-  // ---- labels -----------------------------------------------------------------------
-
-  /// A role in To reaches everyone who holds it; as the sender ([asSender]) it is one person. One
-  /// person is named in full; several by name only — "Anil, Bala", or "Anil + 2 more" from three
-  /// on, so a long list still says how many there are when the chip is cut short. The chip's
-  /// tooltip ([_roleTooltip]) and the preview give each one's address. Until [ctx] is the picked
-  /// record's, the role is named alone: the people of the record picked before are not this one's.
-  /// Which level the role is at is said once, by the group it sits under (§4), not on every chip;
-  /// [levelled] names it on the chip itself, for one that stands away from its heading.
   String _roleText(EmailRoleOption r, EmailContext ctx,
       {bool asSender = false, bool levelled = false}) {
-    // Every row is its own record, so a levelled chip says whose POC each row's is.
     if (_bulk) {
       return levelled
           ? "${r.label} (each ${r.levelLabel.toLowerCase()}'s)"
@@ -385,12 +340,9 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     };
   }
 
-  /// The record offers this role at both levels, so wherever its name stands away from the group
-  /// headings — the closed From field — that name has to say which of the two it is (§4).
   bool _offeredAtBothLevels(EmailContext ctx, EmailRoleOption r) =>
       ctx.roles.where((other) => other.role == r.role).length > 1;
 
-  /// Everyone a role reaches, one per line with their address, when its chip names them in short.
   String? _roleTooltip(EmailRoleOption r, EmailContext ctx) {
     if (_bulk || _entityId == null || ctx.entityId != _entityId || r.people.length < 2) return null;
     return r.people.map((p) => p.display).join('\n');
@@ -413,19 +365,12 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
           ? ' · Gmail not connected'
           : '';
 
-  /// The one person who would send as role [r] — when the From item names them for this record.
   EmailPerson? _roleSender(EmailRoleOption r, EmailContext ctx) =>
       _bulk || _entityId == null || ctx.entityId != _entityId ? null : r.sender;
 
-  /// "Me" is the sender, with no working Gmail of their own: the form offers the way to connect.
   bool _offerConnect(EmailContext ctx) =>
       ctx.delivery.configured && !ctx.restricted && _from == null && ctx.self.gmailNotConnected;
 
-  /// Leaves the form for the Gmail connection page. The form closes on the way — the page is
-  /// behind it — so anything written is asked about first. It closes saying so
-  /// ([EmailComposeOutcome.leftForGmail]), so a caller that would move on after it (a new
-  /// invoice's form heading back to the list) leaves the app on the Gmail page instead. The bulk
-  /// form hands back parameters, not an outcome: closed without them, the bulk action is dropped.
   Future<void> _openGmailConnection() async {
     if (_subject.text.trim().isNotEmpty || _body.text.trim().isNotEmpty) {
       final leave = await showDialog<bool>(
@@ -451,7 +396,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   String _personText(int userId) {
     final known = _people[userId];
     if (known != null) return known.display;
-    // A suggested person the form was never told the name of; the preview knows it.
     for (final p in _preview?.to ?? const <EmailParticipant>[]) {
       if (p.userId == userId) return p.display;
     }
@@ -463,9 +407,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     if (t.isCustomer) return _customerEmailsText(ctx);
     final option = ctx.roleOf(t);
     if (option == null) return _roleKeyLabel(t.role!);
-    // A chip in the To box stands away from the headings that name the level, so one role added
-    // at both levels says on each chip which POC it is — otherwise the two would read alike, and
-    // in bulk, where neither names anybody, identically.
     final bothLevels = _to.where((other) => other.isRole && other.role == t.role).length > 1;
     return _roleText(option, ctx, levelled: bothLevels);
   }
@@ -475,15 +416,11 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     return option == null ? null : _roleTooltip(option, ctx);
   }
 
-  /// The heading over one level's roles — "Customer level", then "Invoice level" (§4). To and the
-  /// From picker use the same words, so the two lists read as one.
   Widget _groupLabel(String text) {
     final theme = Theme.of(context);
     return Text(text,
         style: theme.textTheme.labelLarge?.copyWith(color: theme.colorScheme.onSurfaceVariant));
   }
-
-  // ---- build ------------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
@@ -523,8 +460,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
                   Flexible(
                     child: SingleChildScrollView(child: _form(ctx, loading: async.isLoading)),
                   ),
-                  // Right above Send, outside the scrolling form, so they are read before
-                  // sending. They do not stop it: the email is saved either way.
                   for (final warning in warnings)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
@@ -560,12 +495,10 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     final String subtitle;
     switch (widget.mode) {
       case SendEmailMode.bulk:
-        // The table states the exact count in its confirmation, before anything is sent.
         subtitle = 'Selected ${type.plural} — a separate email for each';
       case SendEmailMode.picker when _pickedRecord == null:
         subtitle = 'Choose the ${type.noun} this email is about';
       case SendEmailMode.picker:
-        // The server's label once the chosen record's context has loaded, the row's until then.
         final loaded = ctx != null && ctx.entityId == _entityId ? ctx.entityLabel : null;
         subtitle = 'About: ${loaded ?? type.recordLabel(_pickedRecord!)}';
       case SendEmailMode.single:
@@ -673,9 +606,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
             // record offers rather than leaving the dropdown without an item for its value.
             ? _fromRoleValue(from.role!, chosen?.level ?? from.level)
             : 'user:${from.userId}';
-    // Every item twice over: what the open menu shows, and what the closed field shows once it is
-    // the one chosen. They are built together so the two lists stay in step, as DropdownButton
-    // needs them to be.
     final items = <DropdownMenuItem<String>>[];
     final closed = <Widget>[];
     void item(String v, Widget menu, {Widget? shut, bool enabled = true}) {
@@ -684,25 +614,16 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     }
 
     item('self', _fromItem('Me (${ctx.self.name})'));
-    // The same groups as To, in the same order, each role naming the one person who would send for
-    // it (§4). A heading is shown but never chosen.
     for (final group in ctx.roleGroups) {
       item('group:${group.level}', _groupLabel(group.label), enabled: false);
       for (final r in group.roles) {
         final note = _gmailNote(_roleSender(r, ctx), ctx);
-        // The menu item sits under the heading that says its level; the closed field does not, so
-        // there a role offered at both levels says which of the two it is — otherwise the two
-        // would read alike, and in bulk, which has no preview to tell them apart, identically.
         item(_fromRoleValue(r.role, r.level),
             _fromItem(_roleText(r, ctx, asSender: true), note: note),
             shut: _fromItem(_roleText(r, ctx, asSender: true, levelled: _offeredAtBothLevels(ctx, r)),
                 note: note));
       }
     }
-    // A role chosen before the record was, which that record does not offer: a list of users
-    // offers the customer seats' roles, an internal user none. It stays on show, as a To chip
-    // does, and the preview says why it cannot be used; without an item of its own the dropdown
-    // would have no item for its value.
     if (from != null && from.isRole && chosen == null) {
       item(value, _fromItem(_roleKeyLabel(from.role!)));
     }
@@ -729,7 +650,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
                   } else if (v.startsWith('role:')) {
                     _setFrom(_fromRoleToken(v));
                   } else if (v == 'other') {
-                    // "Someone else…": nothing changes unless a person is actually picked.
                     final person = await _pickPerson('Send as someone else');
                     if (person?.userId == null || !mounted) return;
                     _people[person!.userId!] = person;
@@ -741,15 +661,8 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     );
   }
 
-  /// One item of the From picker: who would send, with the marker of §6 after them when their
-  /// email would be saved but not sent. The name is what gives way when the row is too narrow —
-  /// the marker is short, and it is the reason to read the item at all: a picker that cuts it off
-  /// ("Collection POC · Carlos Duarte <…> · Gmail not con…") cannot be used to choose a sender
-  /// whose email actually goes out.
   Widget _fromItem(String text, {String note = ''}) => FromPickerItem(name: text, note: note);
 
-  /// The From picker's value for a role at its level, "role:SALES_POC:CUSTOMER", and back again:
-  /// the same role at the two levels is two items, so the level has to be part of the value.
   String _fromRoleValue(String role, String? level) => 'role:$role:${level ?? ''}';
 
   EmailToken _fromRoleToken(String value) {
@@ -758,7 +671,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     return EmailToken.role(parts.first, level: level);
   }
 
-  /// Under From while "Me" has no working Gmail: the email would be saved but not sent.
   Widget _connectLine() {
     final theme = Theme.of(context);
     return Padding(
@@ -787,8 +699,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
             ? Icons.badge_outlined
             : Icons.business_outlined;
 
-    // A level's chips, without the roles already in To. A group left with none is not shown, as a
-    // level the record has no roles at is not (§4).
     final groups = [
       for (final group in ctx.roleGroups)
         (
@@ -824,9 +734,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
                   runSpacing: 6,
                   children: [
                     for (final t in _to)
-                      // A chip shows its own tooltip only when it can be pressed, and this one
-                      // can only be removed. An empty message adds nothing; over the delete
-                      // button its "Remove" wins.
                       Tooltip(
                         message: _tokenTooltip(t, ctx) ?? '',
                         child: InputChip(
@@ -925,7 +832,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
               bullet([
                 p.display,
                 if (p.howAdded.isNotEmpty) p.howAdded,
-                // Kept on the email as an in-app copy, but no message leaves for them.
                 if (p.address == null && !p.masked) 'no email address',
               ].join(' — ')),
             if (preview.unresolved.isNotEmpty) ...[
@@ -949,7 +855,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   }
 }
 
-/// COLLECTION_POC → "Collection POC", for a suggested role the context did not describe.
 String _roleKeyLabel(String key) => key
     .split('_')
     .where((w) => w.isNotEmpty)
@@ -960,7 +865,6 @@ class _Notice extends StatelessWidget {
   final IconData icon;
   final String text;
 
-  /// The theme's tertiary container by default; the preview's warnings are amber.
   final Color? background;
   final Color? foreground;
   const _Notice({required this.icon, required this.text, this.background, this.foreground});
@@ -1007,8 +911,6 @@ class _LoadError extends StatelessWidget {
       );
 }
 
-/// Searches the server as the user types, like SearchPickerField's dialog, but says what the
-/// search covers — a person's name, username or email; an invoice's number.
 class _SearchDialog<T> extends StatefulWidget {
   final String title;
   final String hint;
@@ -1039,7 +941,6 @@ class _SearchDialogState<T> extends State<_SearchDialog<T>> {
     super.dispose();
   }
 
-  // The dialog owns the search, so the list always answers what is in the box now.
   void _onSearchChanged(String text) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
@@ -1110,18 +1011,11 @@ class _SearchDialogState<T> extends State<_SearchDialog<T>> {
   }
 }
 
-/// One line of the From picker: who would send, and after them the marker of §6 when their email
-/// would be saved but not sent. The row is often narrower than the two together — a long name with
-/// its address at phone width leaves less room than the marker alone needs — so the name is
-/// measured against what is left after the marker and gives way first, by ellipsis and then
-/// altogether. The marker is the reason to read the line at all, so it is never what goes first.
 class FromPickerItem extends StatelessWidget {
   const FromPickerItem({super.key, required this.name, required this.note});
 
-  /// Who would send, e.g. "Collection POC · Bob Smith <bob@company.com>".
   final String name;
 
-  /// " · Gmail not connected", or empty when their email would go out.
   final String note;
 
   @override
@@ -1137,7 +1031,6 @@ class FromPickerItem extends StatelessWidget {
           textScaler: MediaQuery.textScalerOf(context),
           maxLines: 1,
         )..layout();
-        // The picker also lays an item out with no width limit, to size itself to its widest one.
         final room = constraints.maxWidth.isFinite
             ? (constraints.maxWidth - painter.width).clamp(0.0, double.infinity)
             : double.infinity;

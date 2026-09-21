@@ -19,7 +19,6 @@ public class InboxService {
         return repository.countByUserIdAndFieldAndReadFalse(userId, RecipientField.TO);
     }
 
-    /** Someone else's row, or a Cc row, is as absent as one that never existed. */
     @Transactional
     public void setRead(Long id, Long userId, boolean read) {
         Marked marked = mark(id, userId, read);
@@ -33,11 +32,6 @@ public class InboxService {
 
     enum Marked { CHANGED, ALREADY, NOT_FOUND, NOT_OURS }
 
-    /**
-     * Marks one of the user's own Inbox rows read or unread. Keeps when it was first read; marking
-     * unread forgets it. Only the read columns are written, never a row loaded earlier, since a report
-     * from the mail service may be changing the same row's copy at the same moment.
-     */
     Marked mark(Long id, Long userId, boolean read) {
         int changed = read ? repository.markRead(id, userId, Instant.now()) : repository.markUnread(id, userId);
         if (changed > 0) return Marked.CHANGED;

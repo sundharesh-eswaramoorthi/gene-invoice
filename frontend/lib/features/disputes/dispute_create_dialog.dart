@@ -31,8 +31,6 @@ Future<bool?> showDisputeDialog({
     ),
   );
   if (filed == null) return false;
-  // The caller's context, never the closed form's, and before handing back, so a caller that
-  // moves on after filing has not yet taken that context away.
   if (context.mounted) {
     await notifyByEmailAfterSave(context,
         notify: filed.notify,
@@ -138,7 +136,6 @@ class _DisputeCreateDialogState extends ConsumerState<_DisputeCreateDialog> {
       final id = ((res.data as Map)['id'] as num).toInt();
       ref.invalidate(scopedDisputesProvider);
       ref.invalidate(tablePageProvider);
-      // The invoice's or payment's History tab now shows "Dispute opened".
       ref.invalidate(auditHistoryProvider);
       if (mounted) Navigator.of(context).pop((id: id, notify: _notify));
     } catch (e) {

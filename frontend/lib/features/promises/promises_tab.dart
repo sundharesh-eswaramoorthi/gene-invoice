@@ -12,16 +12,11 @@ import '../auth/auth_controller.dart';
 import 'promise_form_dialog.dart';
 import 'promise_providers.dart';
 
-// promiseStatusColor now lives in shared/widgets/status_chip.dart, beside the colours for
-// invoices, payments and disputes, so every screen can use the same palette.
-
 class PromiseStatusChip extends StatelessWidget {
   final PromiseStatus status;
   final bool overridden;
   const PromiseStatusChip({super.key, required this.status, this.overridden = false});
 
-  // The shared chip, so promises, invoices, payments and disputes are one widget rather than
-  // four copies of the same shape.
   @override
   Widget build(BuildContext context) => StatusChip(
         label: promiseStatusLabel(status),
@@ -38,7 +33,6 @@ class PromiseStatusChip extends StatelessWidget {
       );
 }
 
-/// The Payment Promise tab shared by the Customer and Invoice detail screens (C.3).
 class PromisesTab extends ConsumerWidget {
   final int customerId;
   final String? customerName;
@@ -48,8 +42,6 @@ class PromisesTab extends ConsumerWidget {
   /// line, which it cannot do for an invoice it knows nothing about (UI-02).
   final InvoiceSummary? invoice;
 
-  /// When set, the tab shows only the promises this payment counts towards. Promises are raised
-  /// from the customer or an invoice, so the tab offers no "Raise promise" here.
   final int? paymentId;
 
   const PromisesTab({
@@ -172,8 +164,6 @@ class PromiseCard extends ConsumerWidget {
                 spacing: 6,
                 runSpacing: 4,
                 children: promise.invoices
-                    // A cancelled invoice owes nothing, whatever balance it last showed. The chip
-                    // takes that invoice's own status colour.
                     .map((i) => StatusChip(
                           label: i.status == 'CANCELLED'
                               ? '${i.invoiceNumber} • cancelled'
@@ -203,8 +193,6 @@ class PromiseCard extends ConsumerWidget {
               alignment: Alignment.centerRight,
               child: Wrap(
                 children: [
-                  // Anyone who can see the card may open the promise's own page. The tab sits on
-                  // detail screens that guard unsaved edits, so the move asks about those first.
                   TextButton.icon(
                     icon: const Icon(Icons.open_in_new, size: 18),
                     label: const Text('Open'),
@@ -253,8 +241,6 @@ class PromiseCard extends ConsumerWidget {
   }
 }
 
-/// Asks for a reason and cancels [promise]. Resolves true once it is cancelled; a refusal from the
-/// server is shown as a snackbar on [context]. Shared by the promise card and the promise's page.
 Future<bool> cancelPromise(BuildContext context, WidgetRef ref, PaymentPromise promise) async {
   final reason = TextEditingController();
   final ok = await showDialog<bool>(

@@ -71,7 +71,6 @@ void main() {
     expect(auditActionLabel('USER_UPDATED'), 'User updated');
     expect(auditActionLabel('USER_ACTIVATED'), 'User activated');
     expect(auditActionLabel('USER_DEACTIVATED'), 'User deactivated');
-    // Sentence case throughout: nothing reads as Title Case beside "Invoice updated".
     for (final label in [
       for (final action in [
         'INVOICE_DUE_DATE_CHANGED',
@@ -93,7 +92,6 @@ void main() {
             before: _dueDateMoved['before'], after: _dueDateMoved['after']),
         '2026-01-15 → 2026-02-14 · Net 30',
       );
-      // An invoice given a date by hand keeps its terms in the summary.
       expect(
         _headline('INVOICE_DUE_DATE_CHANGED',
             before: {'dueDate': null, 'paymentTerm': null},
@@ -121,7 +119,6 @@ void main() {
             before: _documentShared['before'], after: _documentShared['after']),
         'terms.pdf · Internal → Shared',
       );
-      // A description edited on its own leaves the name to say which file it was.
       expect(
         _headline('DOCUMENT_UPDATED',
             before: _documentShared['before'], after: _documentShared['before']),

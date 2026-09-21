@@ -2,9 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Token storage that uses flutter_secure_storage on mobile and
-/// shared_preferences on web (secure storage on web has caveats and limited
-/// browser support).
 abstract class TokenStorage {
   static TokenStorage create() => kIsWeb ? _WebStorage() : _SecureStorage();
 

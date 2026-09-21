@@ -19,17 +19,14 @@ public enum EmailEntityType {
     USER,
     ROLE;
 
-    /** What one record is called in a sentence, e.g. "this invoice". */
     public String noun() {
         return name().toLowerCase(Locale.ROOT);
     }
 
-    /** The noun to open a label with, e.g. "Invoice level". */
     public String title() {
         return noun().substring(0, 1).toUpperCase(Locale.ROOT) + noun().substring(1);
     }
 
-    /** Reads a type sent as text, in a query parameter or a bulk action's params; an unknown one is a 400. */
     public static EmailEntityType parse(String raw) {
         String wanted = raw == null ? "" : raw.trim();
         for (EmailEntityType t : values()) {

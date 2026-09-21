@@ -27,11 +27,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Turns exceptions into the {@link ApiError} shape. A mistake in the request is a 4xx with a short
- * message the caller can act on; only a genuine fault is a 500, and that never echoes internal
- * detail — class names, SQL and parser text stay in the server log (AC-D9).
- */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
@@ -75,17 +70,12 @@ public class GlobalExceptionHandler {
                 ApiError.validation(req.getRequestURI(), errors));
     }
 
-    /**
-     * Field errors found by a service rather than by annotations — where the fields arrive inside a
-     * bulk action's params, say, so both paths answer in the same shape.
-     */
     @ExceptionHandler(InvalidFieldsException.class)
     public ResponseEntity<ApiError> invalidFields(InvalidFieldsException ex, HttpServletRequest req) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
                 ApiError.validation(req.getRequestURI(), ex.getFieldErrors()));
     }
 
-    /** Thrown with the message for each invalid field, keyed by the field's name in the request. */
     public static class InvalidFieldsException extends RuntimeException {
         private final Map<String, String> fieldErrors;
 
@@ -99,7 +89,6 @@ public class GlobalExceptionHandler {
         }
     }
 
-    /** Unreadable JSON, a missing body, or a value of the wrong type inside the body. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiError> unreadable(HttpMessageNotReadableException ex, HttpServletRequest req) {
         if (ex.getCause() instanceof MismatchedInputException mie && !mie.getPath().isEmpty()) {
@@ -112,7 +101,6 @@ public class GlobalExceptionHandler {
         return badRequest(message, req);
     }
 
-    /** A path variable or query parameter that doesn't convert, e.g. /api/invoices/abc. */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ApiError> typeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest req) {
         return badRequest("Invalid value for '" + ex.getName() + "': " + expectation(ex.getRequiredType()), req);
@@ -142,19 +130,12 @@ public class GlobalExceptionHandler {
                 ApiError.of(404, "Not Found", "No such endpoint", req.getRequestURI()));
     }
 
-    /** A unique or foreign-key constraint refused the write. The SQL behind it stays server-side. */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> conflict(DataIntegrityViolationException ex, HttpServletRequest req) {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(
                 ApiError.of(409, "Conflict", "This change conflicts with existing data", req.getRequestURI()));
     }
 
-    /**
-     * Two requests reached the same row at the same moment and this one lost — an optimistic
-     * version that moved under it, a lock it could not take, a row another transaction had already
-     * deleted. Nothing was written, and the caller can simply try again, so it is a 409 with a
-     * sentence they can act on rather than "Unexpected error" (PPD-03).
-     */
     @ExceptionHandler(ConcurrencyFailureException.class)
     public ResponseEntity<ApiError> concurrency(ConcurrencyFailureException ex, HttpServletRequest req) {
         log.warn("Concurrent change on {} {}: {}", req.getMethod(), req.getRequestURI(), ex.getMessage());
@@ -175,7 +156,6 @@ public class GlobalExceptionHandler {
                 ApiError.of(400, "Bad Request", message, req.getRequestURI()));
     }
 
-    /** Jackson's path into the body as the caller wrote it, e.g. {@code items[0].quantity}. */
     private static String fieldPath(JsonMappingException ex) {
         StringBuilder path = new StringBuilder();
         for (JsonMappingException.Reference ref : ex.getPath()) {
@@ -189,7 +169,6 @@ public class GlobalExceptionHandler {
         return path.toString();
     }
 
-    /** What a value of this type should look like, in words rather than a Java class name. */
     private static String expectation(Class<?> type) {
         if (type == null) return "has the wrong type";
         if (type.isEnum()) return "must be one of " + Arrays.toString(type.getEnumConstants());

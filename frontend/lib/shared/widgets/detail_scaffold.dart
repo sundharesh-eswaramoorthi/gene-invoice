@@ -3,18 +3,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_client.dart';
 
-/// One tab in a detail screen's lower half. [builder] runs only once the tab is first
-/// opened, so each tab loads its own data lazily (AC-C4).
 class DetailTab {
   final String label;
   final IconData icon;
 
-  /// Stable key used in the URL so the selected tab survives a refresh (AC-C3).
   final String slug;
   final WidgetBuilder builder;
 
-  /// How many rows the tab holds, shown on its icon, so the page says there is something there
-  /// before the tab is opened (documents, AC-C1). Null shows no badge; 0 shows the tab plainly.
   final int? badgeCount;
 
   const DetailTab({
@@ -26,8 +21,6 @@ class DetailTab {
   });
 }
 
-/// The shared layout for Customer, Invoice and Payment details: the editable facts on
-/// top, the conversation below. On a narrow screen the split becomes one scroll (AC-C6).
 class DetailScaffold extends StatefulWidget {
   final String title;
   final String? subtitle;
@@ -57,8 +50,6 @@ class DetailScaffold extends StatefulWidget {
 class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStateMixin {
   late TabController _controller;
 
-  /// Tabs already opened at least once; their content stays mounted so switching back
-  /// does not refetch, and the top section never reloads (AC-C3).
   final Set<int> _visited = {};
 
   /// The top pane scrolls only when its content is taller than the room it may take (about half
@@ -95,8 +86,6 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
         ..clear()
         ..add(_controller.index);
     } else if (oldWidget.initialTabSlug != widget.initialTabSlug) {
-      // The URL moved to another tab — a link, or browser back/forward — so follow it. A change
-      // the tab bar made itself already points at the current tab, and this is a no-op.
       final i = _initialIndex();
       if (i != _controller.index) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -138,8 +127,6 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
       controller: _controller,
       children: [
         for (var i = 0; i < widget.tabs.length; i++)
-          // Built only once the tab has been opened, so each loads its own data lazily and a
-          // failure inside one stays inside it (AC-C4).
           _visited.contains(i)
               ? Builder(builder: widget.tabs[i].builder)
               : const SizedBox.shrink(),
@@ -147,7 +134,6 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
     );
 
     if (isNarrow) {
-      // One vertical scroll, with the tab bar pinned so it stays reachable.
       return NestedScrollView(
         headerSliverBuilder: (context, _) => [
           SliverToBoxAdapter(child: header),
@@ -163,14 +149,9 @@ class _DetailScaffoldState extends State<DetailScaffold> with TickerProviderStat
 
     return LayoutBuilder(
       builder: (context, constraints) => Column(
-        // Stretched, so a top pane narrower than the page starts at its left edge under the title
-        // instead of being centred in it — a pending dispute's facts sat in the middle of the page.
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           header,
-          // The top pane is as tall as its content, not a fixed half of the page, so an ordinary
-          // record shows in full with nothing to scroll. Only a genuinely tall top (or a short
-          // window) scrolls, and it never takes more than about half the page from the tabs.
           ConstrainedBox(
             constraints: BoxConstraints(maxHeight: constraints.maxHeight * 0.55),
             child: Scrollbar(
@@ -231,8 +212,6 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 12, 16, 4),
       child: LayoutBuilder(builder: (context, constraints) {
-        // On a phone the chips and buttons took the width the title needed, until an invoice
-        // number broke mid-token; there they get a line of their own under the title.
         if (constraints.maxWidth < 600) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,8 +234,6 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// A tab's icon, with its count on it when it has one. An empty tab keeps the plain icon: a "0"
-/// badge is noise where the tab itself already says there is nothing.
 class _TabIcon extends StatelessWidget {
   final DetailTab tab;
   const _TabIcon({required this.tab});
@@ -289,34 +266,27 @@ class _PinnedTabBar extends SliverPersistentHeaderDelegate {
       oldDelegate.tabBar != tabBar || oldDelegate.color != color;
 }
 
-/// One cell of a [DetailGrid]: a label above its field.
 class DetailGridItem {
   final String label;
   final Widget child;
 
-  /// How many columns the cell spans when the grid has that many (a notes field across two, say).
   final int span;
 
   const DetailGridItem({required this.label, required this.child, this.span = 1});
 }
 
-/// Lays a detail page's fields out in columns rather than one full-width row each, so the top of
-/// the page shows a record at a glance: three columns when there is room, two on a medium window,
-/// one on a phone. Labels sit above their fields, which saves the width a side label would take.
 class DetailGrid extends StatelessWidget {
   final List<DetailGridItem> items;
   final double spacing;
 
   const DetailGrid({super.key, required this.items, this.spacing = 16});
 
-  /// Columns for a grid this wide. Public so a test can pin the breakpoints.
   static int columnsFor(double width) => width >= 1000 ? 3 : (width >= 640 ? 2 : 1);
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final columns = columnsFor(constraints.maxWidth);
-      // Floored so rounding can never push the last cell of a row onto the next one.
       final unit = ((constraints.maxWidth - spacing * (columns - 1)) / columns).floorToDouble();
       return Wrap(
         spacing: spacing,
@@ -344,7 +314,6 @@ class DetailGrid extends StatelessWidget {
       item.span < 1 ? 1 : (item.span > columns ? columns : item.span);
 }
 
-/// A read-only value, used where the caller lacks the privilege to edit (AC-C2).
 class ReadOnlyValue extends StatelessWidget {
   final String value;
   const ReadOnlyValue(this.value, {super.key});
@@ -356,8 +325,6 @@ class ReadOnlyValue extends StatelessWidget {
       );
 }
 
-/// Distinguishes "does not exist" from "you may not see it", so the caller gets a clean state
-/// rather than a crash or an empty shell (AC-C8).
 String notFoundMessage(Object error, String noun) {
   if (error is DioException) {
     final status = error.response?.statusCode;
@@ -367,7 +334,6 @@ String notFoundMessage(Object error, String noun) {
   return 'Could not load this $noun: ${apiErrorMessage(error)}';
 }
 
-/// A clean not-found / forbidden state instead of a crash or an empty shell (AC-C8).
 class RecordUnavailable extends StatelessWidget {
   final String message;
   final VoidCallback? onBack;

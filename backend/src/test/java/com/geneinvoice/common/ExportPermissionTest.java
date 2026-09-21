@@ -16,10 +16,6 @@ import java.util.Set;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * EXPORT_DATA means exporting what the caller can already list. Every export also needs the
- * table's view privilege, so a role can never download a table whose list it is refused.
- */
 class ExportPermissionTest extends IntegrationTestBase {
 
     private static final List<String> TABLES = List.of(

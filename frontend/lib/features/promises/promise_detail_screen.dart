@@ -51,7 +51,6 @@ class PromiseDetailScreen extends ConsumerWidget {
           onBack: () => goGuarded(context, '/promises'),
           titleTrailing: [
             PromiseStatusChip(status: p.status, overridden: p.statusOverridden),
-            // The same actions, on the same terms, as the promise's card on a customer or invoice.
             if (canManage && p.isLive)
               TextButton.icon(
                 icon: const Icon(Icons.edit_outlined, size: 18),
@@ -107,7 +106,6 @@ class PromiseDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// Top section, tabs and the lists the user came from all pick up the change (AC-C5).
   void _refresh(WidgetRef ref) {
     ref.invalidate(promiseDetailProvider(id));
     ref.invalidate(scopedPromisesProvider);
@@ -139,7 +137,6 @@ class PromiseDetailScreen extends ConsumerWidget {
               child: _link(context, p.customerName, '/customers/${p.customerId}'),
             ),
             DetailGridItem(label: 'Promised by', child: Text(formatDate(p.promisedDate))),
-            // A customer login never learns who its POC is (AC-A8).
             if (canSeePoc)
               DetailGridItem(
                 label: 'Collection POC',
@@ -188,8 +185,6 @@ class PromiseDetailScreen extends ConsumerWidget {
     );
   }
 
-  /// An invoice the promise covers: its number opens it, and what it still owes follows. A
-  /// cancelled invoice owes nothing, whatever balance it last showed.
   Widget _invoice(BuildContext context, PromiseInvoiceRef i) => Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [

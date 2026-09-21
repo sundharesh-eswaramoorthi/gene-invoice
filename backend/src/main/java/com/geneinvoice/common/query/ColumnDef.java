@@ -6,11 +6,6 @@ import jakarta.persistence.criteria.JoinType;
 
 import java.util.List;
 
-/**
- * One filterable/sortable column of a table. Filter values are bound through the criteria API via
- * the column's own resolver, so no user-supplied string ever reaches the persistence layer as
- * query text (AC-D9).
- */
 public record ColumnDef(
         String name,
         String label,
@@ -18,12 +13,9 @@ public record ColumnDef(
         boolean sortable,
         boolean filterable,
         List<String> enumValues,
-        /** Non-null for REFERENCE columns: which picker the UI should show. */
         String referenceKind,
-        /** True when the column carries POC identity and must be hidden from customer-scoped users. */
         boolean pocRestricted,
         PathResolver path,
-        /** When set, replaces the generic path-based filtering for this column. */
         PredicateResolver customFilter
 ) {
 
@@ -31,22 +23,18 @@ public record ColumnDef(
         return new Builder(name, label, type);
     }
 
-    /** A plain attribute on the root. */
     public static PathResolver attr(String attribute) {
         return (root, q, cb) -> root.get(attribute);
     }
 
-    /** A nested attribute reached through a left join, e.g. {@code customer.name}. */
     public static PathResolver nested(String association, String attribute) {
         return (root, q, cb) -> leftJoin(root, association).get(attribute);
     }
 
-    /** The id of a to-one association, without forcing a join. */
     public static PathResolver referenceId(String association) {
         return (root, q, cb) -> root.get(association).get("id");
     }
 
-    /** Reuses an existing left join rather than adding a duplicate one. */
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static Join<?, ?> leftJoin(From<?, ?> from, String association) {
         for (Join<?, ?> j : from.getJoins()) {

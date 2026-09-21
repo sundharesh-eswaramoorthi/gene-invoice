@@ -33,14 +33,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuditController {
 
-    /** Entity types the history panel can be anchored to. */
     public static final Set<String> SUPPORTED = Set.of(
             "INVOICE", "PAYMENT", "CUSTOMER", "PROMISE", "USER", "PRODUCT");
 
-    /** Of those, the ones a customer-scoped account may ever read — and only their own rows. */
     private static final Set<String> CUSTOMER_READABLE = Set.of("INVOICE", "PAYMENT", "CUSTOMER", "PROMISE");
 
-    /** The privilege that lets a caller see each kind of record, and so its history. */
     private static final Map<String, String> VIEW_PRIVILEGE = Map.of(
             "INVOICE", Privileges.INVOICE_VIEW,
             "PAYMENT", Privileges.PAYMENT_VIEW,
@@ -61,22 +58,12 @@ public class AuditController {
     private final UserRepository userRepository;
     private final CurrentUser currentUser;
 
-    /**
-     * One timeline row. {@code entityLabel} names the record the row is about (an invoice number,
-     * "Payment #12"), which matters once related records are mixed in; {@code derived} marks an
-     * event reconstructed from a record older than its audit trail, which has no audit id;
-     * {@code actorHidden} marks a row whose actor is withheld from this viewer.
-     */
     public record AuditEntryDto(Long id, String entityType, Long entityId, String entityLabel,
                                 String action, String beforeJson, String afterJson,
                                 Long changedByUserId, String changedByUsername,
                                 Long disputeId, String reason,
                                 Instant createdAt, boolean derived, boolean actorHidden) {}
 
-    /**
-     * A record's history, newest first. With {@code includeRelated} it also covers the records
-     * hanging off it — see {@link AuditTimelineService}.
-     */
     @GetMapping
     @PreAuthorize("hasAuthority('" + Privileges.AUDIT_VIEW + "')")
     public List<AuditEntryDto> history(@RequestParam String entityType,
@@ -92,7 +79,6 @@ public class AuditController {
         List<AuditTimelineService.Entry> entries = timelineService.timeline(type, entityId, includeRelated);
         Long callerCustomer = currentUser.customerIdOrNull();
         if (callerCustomer != null) {
-            // A customer login sees its own account's actions named, and nobody else's.
             Set<Long> ownLogins = new HashSet<>();
             ownLogins.add(currentUser.require().getId());
             userRepository.findByCustomerId(callerCustomer).ifPresent(u -> ownLogins.add(u.getId()));
@@ -109,11 +95,6 @@ public class AuditController {
                 e.disputeId(), e.reason(), e.createdAt(), e.derived(), e.actorHidden())).toList();
     }
 
-    /**
-     * A record's history is readable exactly where the record is: the caller needs the record's
-     * view privilege, and the service's own read by id applies the customer restriction and the
-     * POC's book. Users and products carry no customer or book restriction.
-     */
     private void ensureCallerCanSee(String entityType, Long entityId) {
         if (!currentUser.has(VIEW_PRIVILEGE.get(entityType))) {
             throw new AccessDeniedException("Not allowed");
@@ -134,14 +115,6 @@ public class AuditController {
         }
     }
 
-    /**
-     * The record's own read decides, exactly as it does everywhere else — but a record that has
-     * been deleted cannot answer, and its history is the only place the deletion is now recorded
-     * (CP-04). So a "not found" is tested against the table itself: a row that is still there was
-     * refused because it is outside the caller's book or not their customer's, and stays refused;
-     * one that is really gone leaves the caller's view privilege, already checked above, to decide.
-     * A customer login is refused either way — with no record there is nothing to say it is theirs.
-     */
     private void readOrGone(Long entityId, Runnable readRecord, Predicate<Long> stillExists) {
         try {
             readRecord.run();

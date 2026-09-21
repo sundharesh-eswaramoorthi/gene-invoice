@@ -34,7 +34,6 @@ public class InboxController {
     private final TableQueryExecutor queryExecutor;
     private final BulkExecutor bulkExecutor;
 
-    /** Customer logins cannot filter or sort on who sent an email: that is staff names (AC-A8). */
     private TableSchema schema() {
         return TableSchemas.INBOX.visibleTo(currentUser.isCustomer());
     }
@@ -101,7 +100,6 @@ public class InboxController {
         });
     }
 
-    /** A user only ever sees and acts on their own To rows; no filter can widen that. */
     private List<PredicateFactory> ownedByCaller() {
         Long me = currentUser.require().getId();
         return List.of((root, q, cb) -> cb.and(

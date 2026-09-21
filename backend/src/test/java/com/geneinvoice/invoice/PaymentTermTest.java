@@ -8,10 +8,6 @@ import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Terms are counted in calendar days with no weekend or holiday rolling (answer 9), and CUSTOM is
- * the one term that carries no arithmetic of its own.
- */
 class PaymentTermTest {
 
     @Test
@@ -26,10 +22,8 @@ class PaymentTermTest {
         assertThat(PaymentTerm.NET_90.due(raised)).isEqualTo(LocalDate.of(2026, 12, 19));
     }
 
-    /** A Saturday stays a Saturday: nothing rolls forward. */
     @Test
     void aDueDateLandingOnAWeekendIsLeftWhereItFalls() {
-        // 2026-09-19 is a Saturday, and Net 30 from 2026-08-20 lands on it.
         assertThat(PaymentTerm.NET_30.due(LocalDate.of(2026, 8, 20)))
                 .isEqualTo(LocalDate.of(2026, 9, 19));
     }

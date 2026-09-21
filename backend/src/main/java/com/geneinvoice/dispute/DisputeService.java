@@ -124,8 +124,6 @@ public class DisputeService {
         d.setResolvedByUserId(currentUser.require().getId());
         if (req != null && req.adminNotes() != null) d.setAdminNotes(req.adminNotes());
         d = disputeRepository.save(d);
-        // Approval is audited on the invoice or payment it changed; a denial changes nothing
-        // there, so it is recorded on the dispute itself.
         auditService.record(ENTITY, d.getId(), "DISPUTE_DENIED", null, toDto(d),
                 d.getResolvedByUserId(), d.getId(),
                 d.getAdminNotes() == null ? d.getReason() : d.getAdminNotes());
@@ -162,18 +160,10 @@ public class DisputeService {
                 d.getTargetType(), d.getTargetId(), target.summary(), target.number(), target.amount(),
                 d.getReason(), d.getProposedChangeJson(),
                 d.getStatus(), d.getAdminNotes(),
-                // The staff member who resolved it is not the customer's to see (AC-A8).
                 currentUser.isCustomer() ? null : d.getResolvedByUserId(), d.getResolvedAt(),
                 d.getCreatedAt(), d.getUpdatedAt());
     }
 
-    /**
-     * The dispute, locked until the transaction ends, and still pending as of that lock. Both
-     * halves matter: a double-clicked Approve used to let two requests past an unlocked status
-     * read and then race inside the money they both moved, so one of them came back "Unexpected
-     * error" after an action that had in fact succeeded. Now the second one waits, sees the
-     * status the first one wrote, and is told the plain truth instead (PPD-03).
-     */
     private Dispute mustBePending(Long disputeId) {
         Dispute d = disputeRepository.findByIdForUpdate(disputeId)
                 .orElseThrow(() -> new NotFoundException("Dispute not found"));
@@ -211,10 +201,6 @@ public class DisputeService {
         };
     }
 
-    /**
-     * What a dispute is about: the record's number and amount, for the client to format, and the
-     * plain summary older clients read. Number and amount are null once the record is gone.
-     */
     private record Target(String number, BigDecimal amount, String summary) {}
 
     private Target describeTarget(Dispute d) {
@@ -230,7 +216,6 @@ public class DisputeService {
         };
     }
 
-    /** Dispatch the applied JSON change to the right service method. */
     private void applyChange(Dispute d, String changeJson) {
         if (changeJson == null || changeJson.isBlank()) {
             throw new BadRequestException("No change specified for approval");
@@ -260,7 +245,6 @@ public class DisputeService {
                 if (!itemsNode.isArray() || itemsNode.isEmpty()) {
                     throw new BadRequestException("replace_items requires non-empty items array");
                 }
-                // Quantity and price rules are the invoice's own; replaceItems enforces them.
                 List<InvoiceDtos.LineInput> items = new ArrayList<>();
                 for (JsonNode it : itemsNode) {
                     items.add(new InvoiceDtos.LineInput(wholeNumber(it, "productId"),
@@ -303,9 +287,6 @@ public class DisputeService {
         }
     }
 
-    // ---- reading an approved change strictly: a bad value is the approver's mistake, a 400 ----
-
-    /** A required whole number, written as a JSON number or a numeric string. */
     private static long wholeNumber(JsonNode node, String field) {
         JsonNode v = node.get(field);
         if (v != null && v.isIntegralNumber() && v.canConvertToLong()) return v.asLong();
@@ -313,7 +294,6 @@ public class DisputeService {
             try {
                 return Long.parseLong(v.asText().trim());
             } catch (NumberFormatException ignored) {
-                // reported below
             }
         }
         throw new BadRequestException(field + " must be a whole number");
@@ -327,7 +307,6 @@ public class DisputeService {
         return (int) value;
     }
 
-    /** An optional amount, written as a JSON number or a numeric string; null when absent. */
     private static BigDecimal decimal(JsonNode node, String field) {
         JsonNode v = node.get(field);
         if (v == null || v.isNull()) return null;
@@ -336,13 +315,11 @@ public class DisputeService {
             try {
                 return new BigDecimal(v.asText().trim());
             } catch (NumberFormatException ignored) {
-                // reported below
             }
         }
         throw new BadRequestException(field + " must be a number");
     }
 
-    /** Optional text; null when absent, refused when longer than the column that stores it. */
     private static String text(JsonNode node, String field, int maxLength) {
         JsonNode v = node.get(field);
         if (v == null || v.isNull()) return null;
@@ -354,7 +331,6 @@ public class DisputeService {
     }
 
     private void notifyCustomerOfResolution(Dispute d, String type, String title) {
-        // notify the user who opened the dispute (typically the customer's user account)
         notificationService.notify(
                 d.getOpenedByUserId(),
                 type,

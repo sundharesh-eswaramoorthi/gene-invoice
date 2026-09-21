@@ -100,7 +100,6 @@ public class NotificationController {
         });
     }
 
-    /** A user only ever sees and acts on their own notifications; no FilterParams.from(request) can widen that. */
     private List<PredicateFactory> ownedByCaller() {
         Long me = currentUser.require().getId();
         return List.of((root, q, cb) -> cb.equal(root.get("userId"), me));

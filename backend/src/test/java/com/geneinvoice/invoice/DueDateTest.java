@@ -30,14 +30,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Feature A: where an invoice's due date comes from (§2.2). The customer's terms decide it at
- * creation, the date is stored rather than the terms (D1), and nobody has to type it in the
- * common case.
- */
 class DueDateTest extends IntegrationTestBase {
 
-    /** A Sunday, far enough back that every derived date is unambiguous. */
     static final Instant RAISED = Instant.parse("2026-03-01T09:00:00Z");
     static final LocalDate RAISED_DAY = LocalDate.of(2026, 3, 1);
 
@@ -66,15 +60,12 @@ class DueDateTest extends IntegrationTestBase {
     }
 
     private Customer onTerms(Customer c, PaymentTerm term) {
-        // A MockMvc request clears the thread's security context on its way out, so anything
-        // calling a service after one has to say who it is again.
         actAs(admin);
         customerService.update(c.getId(), new CustomerDtos.CustomerUpdateRequest(
                 c.getName(), c.getPhone(), c.getEmail(), c.getAddress(), term, null));
         return customerRepository.findById(c.getId()).orElseThrow();
     }
 
-    /** A create request as JSON, so an absent field really is absent rather than null. */
     private Map<String, Object> createBody(Customer c) {
         Map<String, Object> body = new HashMap<>();
         body.put("customerId", c.getId());
@@ -83,8 +74,6 @@ class DueDateTest extends IntegrationTestBase {
         body.put("items", List.of(Map.of("productId", widget.getId(), "quantity", 1)));
         return body;
     }
-
-    // ---- where the date comes from ----------------------------------------------
 
     @Test
     void aCustomerWithNoTermsOfTheirOwnGetsTheSystemDefault() {
@@ -119,7 +108,6 @@ class DueDateTest extends IntegrationTestBase {
         assertThat(inv.getDueDate()).isEqualTo(RAISED_DAY.plusDays(15));
     }
 
-    /** US-A3: a negotiated date, recorded as the custom date it is. */
     @Test
     void aDateOnItsOwnIsAnOverrideAndIsRecordedAsCustom() {
         LocalDate negotiated = RAISED_DAY.plusDays(7);
@@ -129,7 +117,6 @@ class DueDateTest extends IntegrationTestBase {
         assertThat(inv.getPaymentTerm()).isEqualTo(PaymentTerm.CUSTOM);
     }
 
-    /** AC-A1: there is no way to make an invoice without one, whatever the request left out. */
     @Test
     void everyInvoiceLeavesTheServiceWithADueDate() {
         Invoice noDate = invoiceService.create(new InvoiceDtos.CreateInvoiceRequest(acme.getId(),
@@ -144,10 +131,6 @@ class DueDateTest extends IntegrationTestBase {
         });
     }
 
-    /**
-     * D1 and AC-A2: the invoice stores the resulting date, not a pointer to the terms, so moving
-     * a customer onto longer terms leaves money already billed where it was.
-     */
     @Test
     void changingACustomersTermsNeverMovesAnInvoiceAlreadyRaised() {
         Invoice before = invoice(onTerms(acme, PaymentTerm.NET_15), RAISED, null, null);
@@ -160,11 +143,8 @@ class DueDateTest extends IntegrationTestBase {
                     assertThat(unmoved.getDueDate()).isEqualTo(RAISED_DAY.plusDays(15));
                     assertThat(unmoved.getPaymentTerm()).isEqualTo(PaymentTerm.NET_15);
                 });
-        // Only the invoice raised after the change takes the new terms.
         assertThat(after.getDueDate()).isEqualTo(RAISED_DAY.plusDays(90));
     }
-
-    // ---- editing an existing invoice ---------------------------------------------
 
     @Test
     void anExplicitDateOnAnUpdateIsAnOverrideAndAnExplicitTermRecomputes() {
@@ -194,7 +174,6 @@ class DueDateTest extends IntegrationTestBase {
         assertThat(saved.getPaymentTerm()).isEqualTo(PaymentTerm.NET_30);
     }
 
-    /** AC-A8: moving a collections deadline gets an entry of its own, old → new. */
     @Test
     void anOverrideIsAuditedOldToNew() {
         Invoice inv = invoice(acme, RAISED, null, null);
@@ -212,13 +191,11 @@ class DueDateTest extends IntegrationTestBase {
             assertThat(entry.getChangedByUserId()).isEqualTo(admin.getId());
         });
 
-        // An edit that does not move the date files no such entry.
         invoiceService.update(inv.getId(), new InvoiceDtos.UpdateInvoiceRequest("note", null));
         assertThat(auditService.historyFor(InvoiceService.ENTITY, inv.getId()))
                 .filteredOn(e -> e.getAction().equals("INVOICE_DUE_DATE_CHANGED")).hasSize(1);
     }
 
-    /** AC-A8 on the other side of the arrangement: the customer's terms. */
     @Test
     void aCustomersTermsChangeIsAuditedOldToNew() {
         onTerms(acme, PaymentTerm.NET_60);
@@ -230,13 +207,10 @@ class DueDateTest extends IntegrationTestBase {
                     assertThat(entry.getAfterJson()).contains("NET_60");
                 });
 
-        // Saving the same terms again is not a change.
         onTerms(acme, PaymentTerm.NET_60);
         assertThat(auditService.historyFor(CustomerService.ENTITY, acme.getId()))
                 .filteredOn(e -> e.getAction().equals("CUSTOMER_PAYMENT_TERM_CHANGED")).hasSize(1);
     }
-
-    // ---- AC-A5: validation --------------------------------------------------------
 
     @Test
     void aDueDateBeforeTheInvoiceDateIsRefused() throws Exception {
@@ -262,11 +236,6 @@ class DueDateTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.fieldErrors.dueDate").value("Pick a due date for custom terms"));
     }
 
-    /**
-     * The mirror of the rule above (§2.2). Named terms say how the date is worked out and a date
-     * says what it is, so a request carrying both is refused rather than one of them being
-     * thrown away without a word.
-     */
     @Test
     void namedTermsWithADateBesideThemAreRefused() throws Exception {
         Map<String, Object> body = createBody(acme);
@@ -281,7 +250,6 @@ class DueDateTest extends IntegrationTestBase {
         assertThat(invoiceRepository.findAll()).isEmpty();
     }
 
-    /** And an edit is the same request in miniature: the date it holds is the one it keeps. */
     @Test
     void anEditNamingBothIsRefusedAndMovesNothing() throws Exception {
         Invoice inv = invoice(acme, RAISED, null, null);
@@ -300,7 +268,6 @@ class DueDateTest extends IntegrationTestBase {
         });
     }
 
-    /** Some contracts really are Net 365: the API takes it, and only the form warns. */
     @Test
     void aDateFarBeyondTheHorizonIsAccepted() {
         LocalDate farOff = RAISED_DAY.plusYears(3);
@@ -313,7 +280,6 @@ class DueDateTest extends IntegrationTestBase {
         assertThat(invoice(acme, RAISED, RAISED_DAY, null).getDueDate()).isEqualTo(RAISED_DAY);
     }
 
-    /** A custom date is one invoice's arrangement, never a standing one (§2.1). */
     @Test
     void acustomerCannotBePutOnCustomTerms() throws Exception {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
@@ -324,8 +290,6 @@ class DueDateTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.fieldErrors.paymentTerm",
                         org.hamcrest.Matchers.containsString("Custom terms belong on one invoice")));
     }
-
-    // ---- US-A2: the form's preview -------------------------------------------------
 
     @Test
     void thePreviewNamesTheTermsAndWhereTheyCameFrom() throws Exception {
@@ -379,18 +343,10 @@ class DueDateTest extends IntegrationTestBase {
                 .andExpect(status().isBadRequest());
     }
 
-    // ---- AC-A3: the date is on every read path ------------------------------------
-
-    /**
-     * The preview hands over a customer's commercial terms, so it may not reach a customer the
-     * caller could not read: an id outside a POC's book answers exactly as {@code GET
-     * /api/customers/{id}} does, rather than confirming the customer exists (AC-A6).
-     */
     @Test
     void thePreviewDoesNotReachOutsideTheCallersBook() throws Exception {
         Customer globex = customer("Globex Corp");
         onTerms(globex, PaymentTerm.NET_60);
-        // Acme is Sam's: he owns an invoice on it. Globex is nobody's.
         invoice(acme, RAISED, null, null);
 
         mockMvc.perform(get("/api/customers/" + globex.getId()).with(as(sales)))
@@ -399,12 +355,10 @@ class DueDateTest extends IntegrationTestBase {
                         .param("customerId", String.valueOf(globex.getId())))
                 .andExpect(status().isNotFound());
 
-        // The customer he does have answers as usual.
         mockMvc.perform(get("/api/invoices/due-date-preview").with(as(sales))
                         .param("customerId", String.valueOf(acme.getId())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.paymentTerm").value("NET_30"));
-        // As does everything, for an admin who may see the whole book.
         mockMvc.perform(get("/api/invoices/due-date-preview").with(as(admin))
                         .param("customerId", String.valueOf(globex.getId())))
                 .andExpect(status().isOk())
@@ -413,7 +367,6 @@ class DueDateTest extends IntegrationTestBase {
 
     @Test
     void theDetailAndTheListRowBothCarryTheDateAndItsTerms() throws Exception {
-        // Raised today, so the terms put the date safely ahead of the clock.
         Invoice inv = invoice(onTerms(acme, PaymentTerm.NET_45), Instant.now(), null, null);
         String due = InvoiceDates.today().plusDays(45).toString();
 
@@ -442,7 +395,6 @@ class DueDateTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.paymentTermLabel").value("Net 60"));
     }
 
-    /** AC-A10: promises are a negotiated exception to the due date, not a contradiction of it. */
     @Test
     void aPromiseDatedAfterTheDueDateIsStillAValidPromise() throws Exception {
         User collector = user("cora.collect", DataSeeder.ROLE_COLLECTION_POC);
@@ -461,7 +413,6 @@ class DueDateTest extends IntegrationTestBase {
                 .satisfies(p -> assertThat(p.getPromisedDate()).isAfter(inv.getDueDate()));
     }
 
-    /** The terms move with the date when a POC edits through the API, not only through a service. */
     @Test
     void theApiEditAcceptsBothAndTheDetailComesBackWithThem() throws Exception {
         Invoice inv = invoice(acme, RAISED, null, null);

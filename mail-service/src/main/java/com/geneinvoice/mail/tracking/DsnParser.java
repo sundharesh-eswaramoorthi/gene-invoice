@@ -25,22 +25,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Tells a delivery-status notice (a bounce) from any other message, and reads what it says (§4.7
- * step 5). A notice is a {@code multipart/report; report-type=delivery-status} (RFC 3464), as Gmail
- * writes its "Delivery Status Notification (Failure)", or a message from {@code mailer-daemon@} or
- * {@code postmaster@} carrying {@code X-Failed-Recipients}, as some servers write theirs.
- */
 public final class DsnParser {
 
     static final String DEFAULT_ERROR = "The recipient's mail server rejected the message";
     private static final int ERROR_MAX = 1000;
-    /** How deep nested multiparts are followed; real notices nest two or three levels. */
     private static final int MAX_DEPTH = 8;
 
     private DsnParser() {}
 
-    /** One recipient's block of the {@code message/delivery-status} part. */
     public record Recipient(String address, String action, String status, String diagnosticCode) {
 
         boolean failed() {
@@ -48,25 +40,17 @@ public final class DsnParser {
         }
     }
 
-    /**
-     * @param recipients        the per-recipient blocks, in order
-     * @param failedRecipients  the addresses of the {@code X-Failed-Recipients} header
-     * @param originalMessageId the Message-ID of the message the notice is about, when it says
-     */
     public record Report(List<Recipient> recipients, List<String> failedRecipients, String originalMessageId) {
 
-        /** Delivery failed: a recipient's {@code Action: failed}, or {@code X-Failed-Recipients} alone. */
         public boolean failed() {
             if (recipients.stream().anyMatch(Recipient::failed)) return true;
             return recipients.stream().allMatch(r -> r.action() == null) && !failedRecipients.isEmpty();
         }
 
-        /** Only delayed: the server is still trying, so nothing is decided yet. */
         public boolean delayed() {
             return !failed() && !recipients.isEmpty() && recipients.stream().allMatch(r -> "delayed".equals(r.action()));
         }
 
-        /** The addresses that failed, in lower case. */
         public Set<String> failedAddresses() {
             Set<String> addresses = new LinkedHashSet<>();
             recipients.stream().filter(Recipient::failed).map(Recipient::address)
@@ -75,11 +59,6 @@ public final class DsnParser {
             return addresses;
         }
 
-        /**
-         * What the copy to {@code address} shows: {@code "{Status} {Diagnostic-Code}"} of its failed
-         * block (else the first failed block), without the {@code smtp;} prefix, or a plain sentence
-         * when the notice gives neither.
-         */
         public String error(String address) {
             Recipient block = recipients.stream()
                     .filter(r -> r.failed() && r.address() != null && r.address().equalsIgnoreCase(address))
@@ -93,7 +72,6 @@ public final class DsnParser {
         }
     }
 
-    /** The report when the message is a delivery-status notice, else empty. */
     public static Optional<Report> parse(byte[] raw) throws MessagingException {
         return parse(GmailMime.read(raw));
     }
@@ -116,7 +94,6 @@ public final class DsnParser {
                 originalId == null ? null : GmailMime.messageId(originalId)));
     }
 
-    /** What the walk through the parts finds. */
     private static final class Found {
         final List<Recipient> recipients = new ArrayList<>();
         final Map<String, String> perMessage = new LinkedHashMap<>();
@@ -145,10 +122,6 @@ public final class DsnParser {
         }
     }
 
-    /**
-     * The delivery-status fields: a block for the message, then one per recipient, separated by blank
-     * lines, each written like mail headers (folded lines continue the one before).
-     */
     private static void readStatus(String text, Found found) {
         for (String block : text.replace("\r\n", "\n").replace('\r', '\n').split("\n[ \t]*\n")) {
             Map<String, String> fields = fields(block);
@@ -188,7 +161,6 @@ public final class DsnParser {
         return fields;
     }
 
-    /** {@code rfc822; bob@acme.test} → {@code bob@acme.test}. */
     private static String address(String typed) {
         if (typed == null) return null;
         int semicolon = typed.indexOf(';');
@@ -197,7 +169,6 @@ public final class DsnParser {
         return address.isEmpty() ? null : address;
     }
 
-    /** {@code smtp; 550 5.1.1 …} → {@code 550 5.1.1 …}. */
     private static String diagnostic(String code) {
         if (code == null) return null;
         String text = code.trim();

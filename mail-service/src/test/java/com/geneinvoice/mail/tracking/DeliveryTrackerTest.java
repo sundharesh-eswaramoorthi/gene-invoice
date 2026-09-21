@@ -19,7 +19,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Delivered and read (§4.6): confirmed in the recipient's own Gmail, or estimated when no bounce came. */
 class DeliveryTrackerTest extends IntegrationTestBase {
 
     private static final String SEARCH = FakeGoogle.api("/messages");
@@ -41,7 +40,6 @@ class DeliveryTrackerTest extends IntegrationTestBase {
         assertThat(message("gi-91-1").getStatus()).isEqualTo(MessageStatus.SENT);
     }
 
-    /** Sam's mailbox has the copy as {@code sam-msg-1}, with these labels. */
     private void inSamsMailbox(String... labels) {
         google.onMailbox("sam@gmail.com", "GET", SEARCH, 200,
                 "{\"messages\":[{\"id\":\"sam-msg-1\",\"threadId\":\"sam-th-1\"}],\"resultSizeEstimate\":1}");
@@ -68,7 +66,6 @@ class DeliveryTrackerTest extends IntegrationTestBase {
         Exchange search = google.requests("sam@gmail.com", "GET", SEARCH).get(0);
         assertThat(search.param("q")).isEqualTo("rfc822msgid:" + bare);
         assertThat(search.param("includeSpamTrash")).isEqualTo("true");
-        // Bob has no connected Gmail: nobody looked for his copy.
         assertThat(google.requests("GET", SEARCH)).hasSize(1);
         assertThat(message("gi-91-2").getStatus()).isEqualTo(MessageStatus.SENT);
 
@@ -76,7 +73,6 @@ class DeliveryTrackerTest extends IntegrationTestBase {
         assertThat(payload(events("message.status").get(events("message.status").size() - 1))
                 .get("deliveredConfirmed").asBoolean()).isTrue();
 
-        // Found once is enough.
         tracker.track();
         assertThat(google.requests("GET", SEARCH)).hasSize(1);
     }
@@ -92,7 +88,6 @@ class DeliveryTrackerTest extends IntegrationTestBase {
         assertThat(copy.getReadAt()).isEqualTo(T0);
         assertThat(copy.getDeliveredAt()).isEqualTo(T0);
         assertThat(copy.isDeliveredConfirmed()).isTrue();
-        // One change, one event.
         assertThat(statusTrail("gi-91-1")).containsExactly("QUEUED@1", "SENDING@2", "SENT@3", "READ@4");
     }
 
@@ -111,7 +106,6 @@ class DeliveryTrackerTest extends IntegrationTestBase {
         assertThat(bob.isDeliveredConfirmed()).isFalse();
         assertThat(bob.getDeliveredAt()).isEqualTo(T0.plus(Duration.ofMinutes(15)).plusSeconds(1));
 
-        // Sam's copy, not found yet, is estimated too, and is still looked for in his mailbox later.
         assertThat(message("gi-91-1").getStatus()).isEqualTo(MessageStatus.DELIVERED);
         inSamsMailbox("INBOX", "UNREAD");
         clock.advance(Duration.ofMinutes(1));
@@ -151,7 +145,6 @@ class DeliveryTrackerTest extends IntegrationTestBase {
         tracker.track();
 
         assertThat(connection("8").getStatus()).isEqualTo(ConnectionStatus.NEEDS_RECONNECT);
-        // Not found in Sam's mailbox; after an hour without a bounce, delivered by estimate only.
         assertThat(message("gi-91-1").getRecipientMessageId()).isNull();
         assertThat(message("gi-91-1").isDeliveredConfirmed()).isFalse();
         assertThat(events("connection.status")).extracting(e -> payload(e).get("ownerRef").asText() + ":"

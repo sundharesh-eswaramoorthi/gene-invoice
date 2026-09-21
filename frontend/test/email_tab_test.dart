@@ -25,7 +25,6 @@ CurrentUser _user(Set<String> privileges, {int? customerId}) => CurrentUser(
       customerId: customerId,
     );
 
-/// What staff see: every name and address, and how each person came to be on the email.
 Map<String, dynamic> _staffEmail(int id) => {
       'id': id,
       'entityType': 'INVOICE',
@@ -247,7 +246,7 @@ void main() {
     expect(_person('Pat Nomail — added directly — no email address'), findsOneWidget);
     expect(_person('ops@acme.com — as addressed'), findsOneWidget);
     expect(find.text('Customer Success POC — nobody assigned'), findsOneWidget);
-    expect(find.text('Jane Doe'), findsNWidgets(2)); // the sender, and who sent it
+    expect(find.text('Jane Doe'), findsNWidgets(2));
     expect(find.text('billing@company.com'), findsOneWidget);
     expect(find.text('Mailbox refused the message (after 3 attempts)'), findsOneWidget);
     expect(find.text('Hello,\nplease pay INV-0042.'), findsOneWidget);
@@ -265,17 +264,14 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    // The masked sender already reads as the role: no "Collection POC · as Collection POC".
     expect(find.text('Collection POC'), findsOneWidget);
     expect(find.textContaining('as Collection POC'), findsNothing);
-    // A masked recipient is named by the role alone, not "Sales POC — Sales POC".
     expect(find.text('Sales POC'), findsOneWidget);
     expect(find.text('Gene Invoice team'), findsOneWidget);
     expect(find.textContaining('no email address'), findsNothing);
     expect(find.textContaining('null'), findsNothing);
     expect(find.text('Sent'), findsOneWidget);
     expect(find.text('(no message)'), findsOneWidget);
-    // No EMAIL_SEND: nothing to send or retry with.
     expect(find.text('Send email'), findsNothing);
     expect(find.text('Retry'), findsNothing);
   });
@@ -307,8 +303,6 @@ void main() {
   });
 
   group('an email a customer login wrote is never offered a retry (QMX-4)', () {
-    /// Saved, and never handed to Gmail: a customer login has no connection to send through
-    /// (mail-service.md M13), so a retry would come back with the same words every time.
     Map<String, dynamic> notSent(Map<String, dynamic> email) => {
           ...email,
           'status': 'NOT_SENT',
@@ -363,7 +357,6 @@ void main() {
               : _staffEmail(1),
         ));
       }));
-    // The Inbox reader closing, or another tab chosen, takes the card away mid-request.
     final showCard = ValueNotifier(true);
     await tester.pumpWidget(ProviderScope(
       overrides: [
@@ -383,7 +376,6 @@ void main() {
         ),
       ),
     ));
-    // Anything else showing this email, such as the Inbox reader, reloads it after a retry.
     ProviderScope.containerOf(tester.element(find.byType(Scaffold)))
         .listen(emailDetailProvider(1), (_, __) {});
     await tester.pumpAndSettle();
@@ -469,7 +461,6 @@ void main() {
     expect(find.text('Outgoing · sent ${formatDateTime('2026-09-17T09:00:01Z')}'), findsOneWidget);
     expect(find.byIcon(Icons.call_made), findsOneWidget);
 
-    // The same email, opened by one of its recipients.
     await pump(inbox: true);
     expect(find.text('Received ${formatDateTime('2026-09-17T09:00:00Z')}'), findsOneWidget);
     expect(find.byIcon(Icons.call_received), findsOneWidget);
@@ -550,7 +541,6 @@ void main() {
           }),
           customer('Hal', {'status': 'FAILED', 'error': 'Gmail refused the request (400): Bad To'}),
           customer('Ivy', {'status': 'NOT_SENT', 'error': 'Jane Doe has not connected Gmail'}),
-          // In the app only: no address, so no copy — but read in the Inbox.
           const {
             'name': 'Jon Nomail',
             'address': null,
@@ -595,7 +585,6 @@ void main() {
         expect(_person(line), findsOneWidget, reason: line);
       }
 
-      // Only an estimate says how little it knows.
       expect(find.byTooltip('No bounce came back; Gmail does not confirm delivery'),
           findsOneWidget);
       expect(
@@ -619,7 +608,6 @@ void main() {
     test('a copy reads by its status, with its time or its reason', () {
       String? text(Map<String, dynamic> json) =>
           recipientDeliveryText(RecipientDelivery.fromJson(json));
-      // Keys the server leaves out read as nothing known.
       expect(text({}), isNull);
       expect(RecipientDelivery.fromJson(const {}).deliveredConfirmed, isFalse);
       expect(text({'status': 'SENT'}), 'Sent');
@@ -668,14 +656,12 @@ void main() {
           const Duration(seconds: 30));
       expect(every([email('SENT', delivery: {'status': 'DELIVERED', 'sentAt': recent})]),
           const Duration(seconds: 30));
-      // Any email on its way sets the pace for the whole page.
       expect(
           every([
             email('SENT', delivery: {'status': 'DELIVERED', 'sentAt': recent}),
             email('QUEUED'),
           ]),
           const Duration(seconds: 5));
-      // Nothing left to follow: older than a day, or settled.
       expect(every([email('SENT', delivery: {'status': 'DELIVERED', 'sentAt': dayOld})]), isNull);
       expect(every([email('SENT', delivery: {'status': 'READ', 'sentAt': recent})]), isNull);
       expect(every([email('FAILED', delivery: {'status': 'BOUNCED', 'sentAt': recent})]), isNull);
@@ -722,7 +708,6 @@ void main() {
       int loads() => requests.where((r) => r.path == '/api/emails').length;
       Future<void> wait(Duration d) async {
         await tester.pump(d);
-        // The request goes out, and its answer lands: Dio takes a moment of the clock for each.
         await tester.pump(const Duration(milliseconds: 1));
         await tester.pump(const Duration(milliseconds: 1));
       }
@@ -745,7 +730,6 @@ void main() {
       await wait(const Duration(minutes: 5));
       expect(loads(), 3);
 
-      // The Refresh button still asks, whenever it is pressed.
       await tester.tap(find.byTooltip('Refresh'));
       await wait(Duration.zero);
       expect(loads(), 4);
@@ -771,11 +755,8 @@ void main() {
   });
 }
 
-/// The tab's own list; every SelectableText inside it scrolls too.
 final _list = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;
 
-/// A person on the card, matched by how their runs read together: the name, the address (split
-/// after its "@") and each note are separate Text widgets.
 Finder _person(String line) => find.byElementPredicate((element) {
       if (element.widget is! MergeSemantics) return false;
       final runs = <String>[];

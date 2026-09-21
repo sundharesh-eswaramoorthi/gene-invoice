@@ -6,17 +6,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Counts the SQL one request runs, so a test can say a table is read once rather than once per
- * thing asked of it. Hibernate builds it by name (application-test.yml) and it counts nothing
- * until a test asks it to, so the rest of the suite pays one field read per statement.
- */
 public class CountingStatements implements StatementInspector {
 
     private static final List<String> RUN = new ArrayList<>();
     private static volatile boolean counting;
 
-    /** Runs the body with the SQL counted, and gives back how often it read that table. */
     public static long reads(String table, ThrowingRunnable body) throws Exception {
         synchronized (RUN) {
             RUN.clear();
@@ -32,7 +26,6 @@ public class CountingStatements implements StatementInspector {
         }
     }
 
-    /** A test body that may throw, as a request does. */
     public interface ThrowingRunnable {
         void run() throws Exception;
     }

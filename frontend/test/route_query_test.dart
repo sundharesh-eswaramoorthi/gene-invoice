@@ -9,8 +9,6 @@ import 'package:go_router/go_router.dart';
 // a plus-addressed email, "+GST" in a note — was written unencoded and read back as a space, and
 // the link then quietly showed different rows (TBL-03).
 
-/// A list screen reduced to the URL round-trip: it prints the filters the route carries, and
-/// pushes [next] when "apply" is tapped.
 class _ListScreen extends StatelessWidget {
   final GoRouterState state;
   final TableQuery next;
@@ -49,8 +47,6 @@ Future<GoRouter> _pump(WidgetTester tester, TableQuery next,
 
 void main() {
   group('a filter written to the URL reads back unchanged (AC-D4)', () {
-    // Each of these means something different to the server from what '+'-for-space decoding
-    // would make of it.
     const awkward = {
       'phone': '+91 5551234',
       'email': 'ap+billing@acme.example',
@@ -67,11 +63,8 @@ void main() {
         await tester.tap(find.text('apply'));
         await tester.pumpAndSettle();
 
-        // The chip the user sees is built from the URL, and says exactly what they filtered on.
         expect(find.text(filter.wire), findsOneWidget);
         expect(find.text('size=10 sort=name,asc page=0'), findsOneWidget);
-        // Nothing in the link stands for something else, so the address bar cannot show it as a
-        // different filter from the one that was applied.
         final url = router.routerDelegate.currentConfiguration.uri.toString();
         expect(url, isNot(contains(' ')));
         expect(url, isNot(contains('+')));
@@ -79,9 +72,6 @@ void main() {
 
     }
 
-    // The address bar shows the escapes that do not change the URL's shape decoded — a ':' for
-    // %3A, a '+' for %2B, a space for %20 — and that is the form people copy out of it into a
-    // message, a bookmark or another tab. This is the link the bug was reported on.
     String asShown(String url) => url
         .replaceAll('%3A', ':')
         .replaceAll('%2C', ',')
@@ -113,7 +103,6 @@ void main() {
       for (final f in filters) {
         expect(find.text(f.wire), findsOneWidget);
       }
-      // No sort of its own is left out of the URL, so the list's default comes back.
       expect(find.text('size=50 sort=name,asc page=2'), findsOneWidget);
       expect(router.routerDelegate.currentConfiguration.uri.queryParametersAll['f'],
           filters.map((f) => f.wire).toList());

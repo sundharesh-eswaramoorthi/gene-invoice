@@ -6,11 +6,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/**
- * Retries transient delivery failures when their wait is over and finishes anything left queued,
- * such as a bulk send cut short by a restart (E9); and asks the mail service again to remove the
- * Gmail connections of people who may no longer send, when it could not be reached before.
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j

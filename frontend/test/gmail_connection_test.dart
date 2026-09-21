@@ -30,7 +30,6 @@ final _staff = _user({Privileges.emailView, Privileges.emailSend});
 const _connectedAt = '2026-09-20T10:00:00Z';
 const _checkedAt = '2026-09-20T11:30:00Z';
 
-/// GmailConnectionDto (mail-service.md §5.6).
 Map<String, dynamic> _gmail({
   bool configured = true,
   String status = 'NOT_CONNECTED',
@@ -63,8 +62,6 @@ Map<String, dynamic> _connected({String? lastSyncError}) => _gmail(
       lastSyncError: lastSyncError,
     );
 
-/// A fake server whose connection is [initial] until a connect or a disconnect changes it, as
-/// the real one's does. [onPut] answers the connect instead of connecting.
 FakeBackend _backend(Map<String, dynamic> initial, {Object? Function(RequestOptions)? onPut}) {
   var current = initial;
   return FakeBackend({
@@ -102,7 +99,6 @@ Future<void> _pumpScreen(
 
 Finder _field(String label) => find.widgetWithText(TextFormField, label);
 
-/// What the field holds, and whether it shows it.
 EditableText _editable(WidgetTester tester, String label) => tester.widget<EditableText>(
     find.descendant(of: _field(label), matching: find.byType(EditableText)));
 
@@ -128,7 +124,6 @@ void main() {
       expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
       expect(find.text('Reconnect'), findsNothing);
       expect(find.text('Disconnect'), findsNothing);
-      // Open for someone setting up for the first time.
       expect(find.text(_stepFive), findsOneWidget);
       expect(find.text(_sevenDays), findsOneWidget);
       expect(find.textContaining('Exchange authorization code for tokens'), findsOneWidget);
@@ -140,7 +135,6 @@ void main() {
       expect(find.text('Enter the refresh token'), findsOneWidget);
       expect(backend.sent('PUT /api/me/gmail'), isEmpty);
 
-      // Blanks are as good as nothing.
       await tester.enterText(_field('Client ID'), '   ');
       await tester.tap(find.widgetWithText(FilledButton, 'Connect'));
       await tester.pumpAndSettle();
@@ -183,14 +177,12 @@ void main() {
         'refreshToken': '1//0g-token',
       });
       expect(find.text('Gmail connected as jane@gmail.com'), findsOneWidget);
-      // The page asks again, and shows what the server now says.
       expect(backend.sent('GET /api/me/gmail'), hasLength(2));
       expect(find.text('Connected as jane@gmail.com since ${formatDateTime(_connectedAt)}'),
           findsOneWidget);
       expect(find.text('Last checked for replies ${formatDateTime(_checkedAt)}'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
       expect(find.text('Disconnect'), findsOneWidget);
-      // The secrets are not kept on screen; the client ID is not secret.
       expect(_editable(tester, 'Client secret').controller.text, isEmpty);
       expect(_editable(tester, 'Refresh token').controller.text, isEmpty);
       expect(_editable(tester, 'Client ID').controller.text, '123-abc.apps.googleusercontent.com');
@@ -217,7 +209,6 @@ void main() {
       expect(find.text(refused), findsOneWidget);
       expect(find.text('Not connected'), findsOneWidget);
       expect(backend.sent('GET /api/me/gmail'), hasLength(1));
-      // Nothing was saved, so what was typed stays for another try.
       expect(_editable(tester, 'Refresh token').controller.text, 'token');
 
       answer = const FakeFailure(
@@ -235,7 +226,6 @@ void main() {
       expect(find.text('Refresh token is too long'), findsOneWidget);
       expect(find.text('Could not reach Google: timed out'), findsNothing);
       expect(find.text('One or more fields are invalid'), findsNothing);
-      // Edited, the field has nothing more to say.
       await tester.enterText(_field('Refresh token'), 'shorter');
       await tester.pumpAndSettle();
       expect(find.text('Refresh token is too long'), findsNothing);
@@ -254,7 +244,6 @@ void main() {
       expect(_editable(tester, 'Client secret').controller.text, isEmpty);
       expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
 
-      // Someone renewing knows the way; the steps are a tap away.
       expect(find.text(_sevenDays), findsNothing);
       await tester.tap(find.text('How to get these'));
       await tester.pumpAndSettle();
@@ -282,7 +271,6 @@ void main() {
 
     testWidgets('answered from the app\'s copy, the client ID is filled in once the service is back',
         (tester) async {
-      // The app's copy never holds the client ID (GmailConnectionService.fromCopy).
       final fromCopy = {
         ..._connected(),
         'clientId': null,
@@ -302,7 +290,6 @@ void main() {
       expect(find.text('Could not reach the mail service: Connection refused'), findsNothing);
       expect(_editable(tester, 'Client ID').controller.text, '123-abc.apps.googleusercontent.com');
 
-      // Filled in once: what the user writes over it stays through the next Refresh.
       await tester.enterText(_field('Client ID'), 'other.apps.googleusercontent.com');
       await tester.tap(find.byTooltip('Refresh'));
       await tester.pumpAndSettle();
@@ -457,8 +444,6 @@ void main() {
         'GET /api/users/8/gmail': (_) => gmail,
       });
       await tester.pumpWidget(ProviderScope(
-        // A scope of its own each time: one kept from the last pump would follow the new Dio
-        // and ask again for what it already showed.
         key: UniqueKey(),
         overrides: [
           dioProvider.overrideWithValue(backend.dio),
@@ -496,7 +481,6 @@ void main() {
         expect(find.text('Gmail'), findsOneWidget, reason: text);
         expect(find.text(text), findsOneWidget);
         expect(backend.sent('GET /api/users/8/gmail'), hasLength(1));
-        // Why it needs renewing is a hover away.
         expect(find.byTooltip('Reconnect Gmail.'),
             json['status'] == 'NEEDS_RECONNECT' ? findsOneWidget : findsNothing);
       }

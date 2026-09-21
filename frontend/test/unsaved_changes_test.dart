@@ -28,8 +28,6 @@ void main() {
     });
   });
 
-  // The sidebar, the drawer, the bell and links all navigate with go(), which a PopScope never
-  // sees; a route's onExit does.
   testWidgets('a go() away from a route with unsaved edits is held until the user agrees',
       (tester) async {
     final unsaved = UnsavedChanges();
@@ -63,8 +61,6 @@ void main() {
     expect(find.text('customers page'), findsOneWidget);
   });
 
-  // A refused navigation must never start: one onExit cancels still leaves a duplicate entry in
-  // the browser history that swallows the next Back press.
   testWidgets('goGuarded asks first and navigates only when the user agrees', (tester) async {
     final unsaved = UnsavedChanges();
     var asked = 0;

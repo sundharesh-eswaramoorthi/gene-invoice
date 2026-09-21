@@ -9,12 +9,6 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-/**
- * What a file actually is, read from its own first bytes rather than from its extension or from
- * what the client said it was (AC-C7). An Office file is a ZIP, so the four signature bytes only
- * say "ZIP": which Office file it is comes from the parts inside, which is why this is given the
- * staged file rather than a handful of bytes.
- */
 final class ContentSniffer {
 
     static final String PDF = "application/pdf";
@@ -23,7 +17,6 @@ final class ContentSniffer {
     static final String DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-    /** The extension a stored file is given; nothing from the uploader's name is used (§4.4). */
     private static final Map<String, String> EXTENSIONS = Map.of(
             PDF, "pdf", PNG, "png", JPEG, "jpg", DOCX, "docx", XLSX, "xlsx");
 
@@ -36,7 +29,6 @@ final class ContentSniffer {
 
     private ContentSniffer() {}
 
-    /** The type the bytes are, or null when they are none this app accepts. */
     static String detect(Path file) {
         byte[] head = head(file);
         if (starts(head, PDF_MAGIC)) return PDF;
@@ -50,11 +42,6 @@ final class ContentSniffer {
         return EXTENSIONS.getOrDefault(contentType, "bin");
     }
 
-    /**
-     * A ZIP is a DOCX or an XLSX when it carries the Open XML manifest and a {@code word/} or
-     * {@code xl/} part. Anything else — a plain ZIP, a JAR, an ODT — is not something this app
-     * accepts, so it is left unrecognised rather than guessed at.
-     */
     private static String openXml(Path file) {
         try (ZipFile zip = new ZipFile(file.toFile())) {
             boolean manifest = zip.getEntry(OPEN_XML_MANIFEST) != null;
@@ -66,7 +53,6 @@ final class ContentSniffer {
             }
             return null;
         } catch (IOException e) {
-            // Not a ZIP this JVM can read, whatever its first four bytes say.
             return null;
         }
     }

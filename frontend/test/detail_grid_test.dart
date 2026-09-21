@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gene_invoice/shared/widgets/detail_scaffold.dart';
 
-/// The top of a detail page should read at a glance: fields in columns when there is room, rather
-/// than one full-width row each that pushes the page into scrolling.
 Future<void> _pumpGrid(WidgetTester tester, double width) async {
   tester.view.physicalSize = Size(width, 800);
   tester.view.devicePixelRatio = 1;

@@ -13,20 +13,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * An email outlives the record it was recorded against — it is a record of something that was
- * actually said — but it stops claiming that record is still there (CP-13).
- *
- * <p>The emails table carries its entity as a type and an id with no foreign key and no cascade,
- * so deleting a customer left every email on it offering a link to a 404, under a label naming a
- * customer that no longer existed.
- */
 class EmailAfterCustomerDeletedTest extends EmailTestBase {
 
     @Autowired EmailCascade emailCascade;
     @Autowired PlatformTransactionManager transactionManager;
 
-    /** The cascade runs inside the deleting transaction; a direct call needs one of its own. */
     private int cascade(Long customerId) {
         return new TransactionTemplate(transactionManager)
                 .execute(status -> emailCascade.onCustomerDeleted(customerId));
@@ -39,7 +30,6 @@ class EmailAfterCustomerDeletedTest extends EmailTestBase {
         long emailId = sent.get("id").asLong();
         assertThat(sent.get("entityLink").asText()).isEqualTo("/customers/" + doomed.getId());
 
-        // The customer's own login goes with it, so nothing here can be read as that customer.
         userRepository.findByCustomerId(doomed.getId()).ifPresent(userRepository::delete);
         mockMvc.perform(delete("/api/customers/" + doomed.getId()).with(as(admin)))
                 .andExpect(status().isOk());
@@ -56,7 +46,6 @@ class EmailAfterCustomerDeletedTest extends EmailTestBase {
                 .endsWith(" (deleted)");
     }
 
-    /** Emails on customers that are still there are untouched by another customer going. */
     @Test
     void anotherCustomersEmailsAreLeftAlone() throws Exception {
         Customer doomed = customer("Mail Orphan", "orphan@t.example");
@@ -69,7 +58,6 @@ class EmailAfterCustomerDeletedTest extends EmailTestBase {
         assertThat(after.get("entityLabel").asText()).doesNotContain("(deleted)");
     }
 
-    /** Marking is idempotent, so a re-run of the cascade is a no-op rather than a second pass. */
     @Test
     void markingTheSameCustomerTwiceChangesNothingTheSecondTime() throws Exception {
         Customer doomed = customer("Mail Orphan", "orphan@t.example");

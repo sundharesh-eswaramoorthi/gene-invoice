@@ -26,22 +26,13 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
-/**
- * The mail service every integration test runs against: one bean in the shared context, switched
- * between behaviours by the test rather than mocked per class, which would fork the context. It
- * records every hand-off and answers the way the service does — a copy it has is returned as it is,
- * and only a retry sends a failed or unsent one again, with its {@code seq} one up. Starts, and is
- * reset to, "not configured": what the app does without the mail service.
- */
 public class RecordingMailTransport implements MailTransport, MailConnections {
 
-    /** {@code SUCCESS}: the service takes the copies. The failures are of the hand-off itself. */
     public enum Mode { NOT_CONFIGURED, SUCCESS, TRANSIENT_FAILURE, PERMANENT_FAILURE }
 
     public static final String UNAVAILABLE = "The mail service is unavailable (503)";
     public static final String REFUSED = "The mail service refused the email: Bad Request";
 
-    /** What the service makes of a new or retried copy. */
     public record Outcome(RecipientDeliveryStatus status, String error) {
         public static Outcome queued() {
             return new Outcome(RecipientDeliveryStatus.QUEUED, null);
@@ -89,7 +80,6 @@ public class RecordingMailTransport implements MailTransport, MailConnections {
         this.mode = mode;
     }
 
-    /** Runs as each hand-off arrives, while the dispatcher waits on the service. */
     public void beforeSubmit(Consumer<Submission> hook) {
         this.beforeSubmit = hook;
     }
@@ -98,29 +88,23 @@ public class RecordingMailTransport implements MailTransport, MailConnections {
         this.outcome = decide;
     }
 
-    /** Which copies the answer to a hand-off mentions: all of them, as the service's contract says, unless a test says otherwise. */
     public void reported(Predicate<CopyRequest> which) {
         this.reported = which;
     }
 
-    /** Every hand-off, accepted or not. */
     public List<Submission> submissions() {
         return List.copyOf(submissions);
     }
 
-    /** Every copy handed over, in order, across all hand-offs. */
     public List<CopyRequest> copiesHandedOver() {
         List<CopyRequest> all = new ArrayList<>();
         submissions.forEach(s -> all.addAll(s.copies()));
         return all;
     }
 
-    /** The service's state of a copy, as the last hand-off left it. */
     public CopyState copy(String externalId) {
         return copies.get(externalId);
     }
-
-    // ---- MailTransport -----------------------------------------------------------------
 
     @Override
     public boolean isConfigured() {
@@ -154,14 +138,10 @@ public class RecordingMailTransport implements MailTransport, MailConnections {
         return state;
     }
 
-    // ---- MailConnections ---------------------------------------------------------------
-
-    /** Every connection call fails this way until cleared, as when the service is down or Google refuses. */
     public void failConnections(MailConnectException failure) {
         this.connectionFailure = failure;
     }
 
-    /** Runs as a connect arrives, while the caller waits on the service (and the service on Google). */
     public void beforeConnect(Runnable hook) {
         this.beforeConnect = hook;
     }
@@ -170,7 +150,6 @@ public class RecordingMailTransport implements MailTransport, MailConnections {
         this.syncResult = result;
     }
 
-    /** The service holds this connection for the user, as if they had connected. */
     public void hold(ConnectionState state) {
         connections.put(Long.parseLong(state.ownerRef()), state);
     }
@@ -183,12 +162,10 @@ public class RecordingMailTransport implements MailTransport, MailConnections {
         return List.copyOf(syncCalls);
     }
 
-    /** Every disconnect asked for, including those that failed. */
     public List<Long> disconnectCalls() {
         return List.copyOf(disconnectCalls);
     }
 
-    /** The connection the service holds for the user, as it stands; null when it never had one. */
     public ConnectionState held(long userId) {
         return connections.get(userId);
     }
@@ -197,7 +174,6 @@ public class RecordingMailTransport implements MailTransport, MailConnections {
         return state(userId, name, status, gmail, reason, Instant.parse("2026-09-20T10:05:00Z"), null);
     }
 
-    /** The same, with a say over the last read of the mailbox and what it left behind. */
     public static ConnectionState state(long userId, String name, ConnectionStatus status, String gmail, String reason,
                                         Instant lastSyncedAt, String lastSyncError) {
         return new ConnectionState(String.valueOf(userId), name, status, gmail, "client-" + userId,
@@ -231,8 +207,6 @@ public class RecordingMailTransport implements MailTransport, MailConnections {
         disconnectCalls.add(userId);
         if (mode == Mode.NOT_CONFIGURED) throw new MailConnectException(503, NoopMailTransport.NOT_CONFIGURED);
         if (connectionFailure != null) throw connectionFailure;
-        // As the service does (mail-service.md §4.3): the secrets go, the status is DISCONNECTED and
-        // the reason, the last check and its error — all of the connection that is gone — are cleared.
         connections.computeIfPresent(userId, (id, s) -> new ConnectionState(s.ownerRef(), s.ownerName(),
                 ConnectionStatus.DISCONNECTED, s.gmailAddress(), s.clientId(), s.scopes(), null, s.connectedAt(),
                 null, null));

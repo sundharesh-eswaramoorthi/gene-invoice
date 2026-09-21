@@ -27,12 +27,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Saves replies the mail service found in a sender's Gmail against the record they belong to
- * (mail-service.md §5.5, M10). It runs from the service's webhook, with nobody signed in, so it
- * reads records without access checks and decides nothing about who may see them — the Email tab and
- * the Inbox do that when they are read.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -44,13 +38,8 @@ public class EmailInboundService implements IncomingMailHandler {
     private final UserRepository userRepository;
     private final TransactionTemplate transactions;
 
-    /** The record a message is saved on, and the email of ours it answers, if any. */
     private record Link(EmailEntityType type, Long id, String label, Email repliedTo) {}
 
-    /**
-     * @param hint whose mailbox the reply arrived in, which stands for them in its To and Cc, and
-     *             the copy it answers as the service knows it
-     */
     @Override
     public Optional<Long> handle(IncomingMail received, InboundHint hint) {
         if (received.providerMessageId() == null || received.providerMessageId().isBlank()) {
@@ -61,18 +50,15 @@ public class EmailInboundService implements IncomingMailHandler {
         try {
             return transactions.execute(status -> save(mail, hint));
         } catch (DataIntegrityViolationException e) {
-            // The provider id is unique, so a concurrent call may have saved it in the meantime.
             if (emailRepository.existsByProviderMessageId(mail.providerMessageId())) {
                 return known(mail.providerMessageId());
             }
-            // Otherwise nothing was saved and the service will not offer the message again, so leave a trace.
             log.warn("Received mail {} could not be saved: {}", mail.providerMessageId(),
                     e.getMostSpecificCause().getMessage());
             return Optional.empty();
         }
     }
 
-    /** Every text the message brings, as the database can store it; lookups by its addresses and Message-IDs too. */
     private static IncomingMail storable(IncomingMail mail) {
         return new IncomingMail(mail.providerMessageId(), mail.providerThreadId(),
                 EmailText.storable(mail.rfcMessageId()), EmailText.storable(mail.inReplyTo()),
@@ -97,10 +83,8 @@ public class EmailInboundService implements IncomingMailHandler {
     private Optional<Long> save(IncomingMail mail, InboundHint hint) {
         Optional<Email> existing = emailRepository.findByProviderMessageId(mail.providerMessageId());
         if (existing.isPresent()) {
-            // Received before: the same id again. Sent by us before the mail service: our own copy, not a reply.
             return existing.filter(e -> e.getDirection() == EmailDirection.INBOUND).map(Email::getId);
         }
-        // One of our copies, which the service should have passed over.
         if (recipientRepository.existsByProviderMessageId(mail.providerMessageId())) return Optional.empty();
         String messageId = messageId(mail.rfcMessageId());
         if (messageId != null && (emailRepository.existsByRfcMessageIdAndDirection(messageId, EmailDirection.OUTBOUND)
@@ -151,12 +135,6 @@ public class EmailInboundService implements IncomingMailHandler {
         return Optional.of(saved.getId());
     }
 
-    /**
-     * Which record the message belongs to (M10): the email whose copy it answers, as the service
-     * knows it; else the newest email in its Gmail thread; else the email its In-Reply-To or
-     * References names. Emails are found by their own ids and by their copies'. Mail that answers
-     * none of the app's emails is not the app's business, whoever wrote it.
-     */
     private Link link(IncomingMail mail, InboundHint hint) {
         Map<Long, Email> related = new LinkedHashMap<>();
         Email anchor = hint == null ? null : CopyRef.parse(hint.repliedToExternalId())
@@ -173,7 +151,6 @@ public class EmailInboundService implements IncomingMailHandler {
             anchor = related.values().stream().max(NEWEST_LAST).orElse(null);
         }
         if (anchor == null) {
-            // In-Reply-To names the message answered; References, oldest first, the thread before it.
             List<String> quoted = new ArrayList<>();
             if (messageId(mail.inReplyTo()) != null) quoted.add(messageId(mail.inReplyTo()));
             List<String> references = new ArrayList<>(mail.references());
@@ -181,7 +158,6 @@ public class EmailInboundService implements IncomingMailHandler {
             references.stream().map(EmailInboundService::messageId).filter(Objects::nonNull).forEach(quoted::add);
             Set<String> ids = new LinkedHashSet<>(quoted);
             if (!ids.isEmpty()) {
-                // A Message-ID the app sent: an email's own (before the mail service), or one of its copies'.
                 Map<String, Email> byMessageId = new LinkedHashMap<>();
                 emailRepository.findByRfcMessageIdInOrderByOccurredAtDescIdDesc(ids)
                         .forEach(e -> byMessageId.putIfAbsent(e.getRfcMessageId(), e));
@@ -210,7 +186,6 @@ public class EmailInboundService implements IncomingMailHandler {
         return directory.userByAddress(address).or(() -> directory.userByGmail(address));
     }
 
-    /** The sender as the app knows them: a user (staff or customer login), a customer, or a stranger. */
     private void describeSender(Email.EmailBuilder email, MailAddress header, String address) {
         String headerName = header.name() == null || header.name().isBlank() ? null : header.name().trim();
         Optional<User> user = userAt(address);
@@ -259,10 +234,6 @@ public class EmailInboundService implements IncomingMailHandler {
         recipients.add(field, null, null, headerName, address, false, "HEADER");
     }
 
-    /**
-     * The mailbox's owner, as the person they are in the app; the answered email's stored sender
-     * when that user is gone; the header entry when neither is known.
-     */
     private void addMailboxOwner(RecipientSet recipients, RecipientField field, InboundHint hint, Email repliedTo,
                                  String headerName, String address) {
         User owner = userRepository.findById(hint.mailboxOwnerUserId()).orElse(null);
@@ -276,13 +247,11 @@ public class EmailInboundService implements IncomingMailHandler {
         }
     }
 
-    /** The mailbox itself, or a {@code local+tag@domain} alias of it, which delivers to the same place. */
     private static boolean isMailbox(String address, String mailbox) {
         if (mailbox == null || mailbox.isBlank()) return false;
         return EmailDirectory.withoutTag(address).equals(EmailDirectory.withoutTag(mailbox));
     }
 
-    /** Message-IDs compare in their bracketed form, however a header happened to write them. */
     private static String messageId(String raw) {
         if (raw == null || raw.isBlank()) return null;
         String id = raw.trim();

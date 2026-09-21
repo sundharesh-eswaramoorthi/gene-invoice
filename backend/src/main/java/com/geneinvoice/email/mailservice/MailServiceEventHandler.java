@@ -42,11 +42,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-/**
- * Applies what the mail service reports (mail-service.md §5.5): a copy's progress, a reply found in
- * a sender's mailbox, a connection that changed. Each event is its own transaction, and applying one
- * twice changes nothing, since the service sends a batch again until it is answered 2xx.
- */
 @Component
 @ConditionalOnProperty(name = "app.mail.transport", havingValue = "mail-service")
 @RequiredArgsConstructor
@@ -67,7 +62,6 @@ public class MailServiceEventHandler {
     private final TransactionTemplate transactions;
     private final ObjectMapper json;
 
-    /** Applies one event. Types the app does not know are ignored; so is anything about what it does not have. */
     public void apply(Event event) {
         switch (event.type() == null ? "" : event.type()) {
             case "message.status" -> copyChanged(data(event, CopyState.class));
@@ -77,12 +71,6 @@ public class MailServiceEventHandler {
         }
     }
 
-    /**
-     * The database could not be used, as opposed to this event being wrong: the batch stops there
-     * and the service sends it again later. Besides Spring's transient failures (a lock not granted
-     * in time, say), that is a connection that could not be had or broke under the transaction —
-     * whose failed rollback can hide the error that broke it.
-     */
     public static boolean databaseUnavailable(Throwable failure) {
         for (Throwable t = failure; t != null; t = t.getCause()) {
             if (t instanceof TransientDataAccessException || t instanceof DataAccessResourceFailureException
@@ -105,17 +93,6 @@ public class MailServiceEventHandler {
         }
     }
 
-    // ---- message.status ------------------------------------------------------------------
-
-    /**
-     * A copy moved on: record it with the email locked, and roll the email up again, unless it is old
-     * news. Only a report on a copy the app still has queued says the service has the hand-off that
-     * copy waits for (its answer may have been lost). A report on a copy handed over before — the
-     * copy that went out, while a retry of another waits to be handed over — says nothing about that
-     * hand-off, which the dispatcher still owns: marking the email handed off would leave the retried
-     * copy queued here for good, and rolling a hand-off under way back to QUEUED would take the
-     * email from the dispatcher, whose failure then goes unrecorded.
-     */
     private void copyChanged(CopyState state) {
         Optional<CopyRef> ref = CopyRef.parse(state.externalId());
         if (ref.isEmpty()) {
@@ -140,7 +117,6 @@ public class MailServiceEventHandler {
             if (awaitingHandOff) EmailDeliveryRollup.handedOff(email, Instant.now());
             EmailDeliveryRollup.apply(email, recipients);
             if (handOffUnderWay && email.getHandedOffAt() == null && email.getStatus() == EmailStatus.QUEUED) {
-                // Its other copies are still queued here because the dispatcher is handing them over now.
                 email.setStatus(EmailStatus.SENDING);
             }
             recipientRepository.save(copy);
@@ -148,9 +124,6 @@ public class MailServiceEventHandler {
         });
     }
 
-    // ---- message.received ----------------------------------------------------------------
-
-    /** A reply in a thread the app started from someone's Gmail, saved on the record it answers. */
     private void replyReceived(MessageReceived m) {
         Long owner = userId(m.ownerRef());
         if (owner == null) {
@@ -173,9 +146,6 @@ public class MailServiceEventHandler {
                 : parties.stream().filter(Objects::nonNull).map(MailServiceEventHandler::address).toList();
     }
 
-    // ---- connection.status ---------------------------------------------------------------
-
-    /** The app's copy follows the service; a connection that stopped working tells its owner once. */
     private void connectionChanged(ConnectionState state) {
         Long userId = userId(state.ownerRef());
         if (userId == null) {
@@ -196,7 +166,6 @@ public class MailServiceEventHandler {
         });
     }
 
-    /** The backend's user id the service keys things by, or null when it is not one. */
     private static Long userId(String ownerRef) {
         if (ownerRef == null || !ownerRef.matches("\\d{1,18}")) return null;
         return Long.parseLong(ownerRef);

@@ -18,10 +18,6 @@ import 'package:go_router/go_router.dart';
 
 import 'support/roboto.dart';
 
-// The row quick actions of the widest lists, measured as a 1366x900 desktop browser shows them:
-// the real screens in the real shell, its sidebar contracted as it starts, desktop density, and
-// text in Roboto (see loadRoboto).
-
 const _admin = CurrentUser(
   id: 1,
   username: 'admin',
@@ -45,10 +41,9 @@ const _admin = CurrentUser(
   customerId: null,
 );
 
-// Wide, but the kind of values the lists really hold.
 const _customer = 'Sri Venkateswara Chemicals 104';
 const _poc = 'Karthikeyan Subramaniam';
-const _crores = 12345678.90; // ₹1,23,45,678.90
+const _crores = 12345678.90;
 
 Map<String, dynamic> _page(List<Map<String, dynamic>> rows) =>
     {'content': rows, 'page': 0, 'size': 20, 'totalElements': rows.length, 'totalPages': 1};
@@ -71,7 +66,6 @@ Object? _answer(RequestOptions o) {
             'total': _crores,
             'paidAmount': i == 2 ? _crores - 100 : 0,
             'balance': i == 2 ? 100 : _crores,
-            // Unpaid rows offer every action there is; "Partially paid" is the widest status.
             'status': i == 2 ? 'PARTIALLY_PAID' : 'UNPAID',
             'salesPoc': _person(7),
             'pocMissing': i == 1,
@@ -165,20 +159,17 @@ void main() {
   };
 
   for (final MapEntry(key: location, value: tooltips) in lists.entries) {
-    // A browser on a desktop reports that platform, which gives the app its compact density.
     testWidgets('at 1366px the $location row actions are on screen, however wide the columns',
         (tester) async {
       await _pump(tester, location);
       expect(tester.takeException(), isNull);
 
-      // The sidebar starts contracted, and the columns still need more than the space left.
       expect(tester.getSize(find.byType(NavigationRail)).width, 80);
       final sideways = tester
           .widgetList<SingleChildScrollView>(find.byType(SingleChildScrollView))
           .singleWhere((s) => s.scrollDirection == Axis.horizontal)
           .controller!;
       expect(sideways.position.maxScrollExtent, greaterThan(0));
-      // Which an always-visible scrollbar says, with the columns 24px apart (D-19, D-20).
       final scrollbars = tester.widgetList<Scrollbar>(find.byType(Scrollbar));
       expect(scrollbars.where((s) => s.thumbVisibility == true), hasLength(1));
       expect(tester.widget<DataTable>(find.byType(DataTable).first).columnSpacing, 24);
@@ -191,15 +182,11 @@ void main() {
           final rect = tester.getRect(buttons.at(i));
           expect(rect.left, greaterThanOrEqualTo(81), reason: '$location $tip at $rect');
           expect(rect.right, lessThanOrEqualTo(1366), reason: '$location $tip at $rect');
-          // Compact, and still a 32px target.
           expect(rect.width, greaterThanOrEqualTo(32), reason: '$location $tip is $rect');
           expect(rect.height, greaterThanOrEqualTo(32), reason: '$location $tip is $rect');
         }
-        // Nothing hides them.
         expect(buttons.hitTestable(), findsNWidgets(count), reason: '$location $tip');
       }
-      // And each row's actions sit on that row, level with its checkbox (the first is the
-      // heading's).
       final open = find.byTooltip('Open');
       final checkboxes = find.byType(Checkbox);
       expect(open, findsNWidgets(3));

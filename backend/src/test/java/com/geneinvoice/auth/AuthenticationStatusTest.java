@@ -13,10 +13,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * A caller without a valid session gets 401 so the app signs them out; a signed-in caller who lacks
- * the privilege gets 403. Before, both were 403, and an expired session left every screen failing.
- */
 class AuthenticationStatusTest extends IntegrationTestBase {
 
     @Autowired JwtService jwtService;
@@ -43,7 +39,6 @@ class AuthenticationStatusTest extends IntegrationTestBase {
                 .andExpect(status().isForbidden());
     }
 
-    /** Deactivating a user (directly, or by deleting them while they are a POC) ends their session. */
     @Test
     void aDeactivatedUsersExistingTokenStopsWorking() throws Exception {
         User cashier = user("cal.cashier", "CASHIER");

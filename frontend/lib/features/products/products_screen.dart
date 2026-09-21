@@ -15,8 +15,6 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
 
-/// Active products whose name contains [search], first page by name, for the invoice line
-/// pickers. An inactive product cannot go on a new invoice, so it is never offered.
 Future<List<Product>> searchActiveProducts(Dio dio, String search) async {
   final res = await dio.get('/api/products', queryParameters: {
     'size': 20,
@@ -36,9 +34,6 @@ final productDetailProvider =
   return Product.fromJson(res.data as Map<String, dynamic>);
 });
 
-/// Opens the product form, for a new product or [existing], from the list or the details page.
-/// Once it saves, whatever shows the product is refreshed, and a new product the user asked to
-/// notify about gets the compose dialog — opened on [context], since the form's own is gone.
 Future<void> openProductForm(BuildContext context, WidgetRef ref, {Product? existing}) async {
   final saved = await showDialog<({int id, bool notify})>(
     context: context,
@@ -116,7 +111,6 @@ class ProductsScreen extends ConsumerWidget {
               sortKey: 'active',
               cell: (context, p) => Text(p.active ? 'Yes' : 'No')),
         ],
-        // Someone who may neither edit nor send email gets no empty action column.
         rowActions: canManage || canSendEmail
             ? (context, p) => [
                   if (canManage)
@@ -136,8 +130,6 @@ class ProductsScreen extends ConsumerWidget {
   }
 }
 
-/// Create / edit form for a product. Pops the saved product's id, and whether to write an email
-/// about it, so the caller can follow up once this dialog is gone; open it with [openProductForm].
 class ProductFormDialog extends ConsumerStatefulWidget {
   final Product? existing;
   const ProductFormDialog({super.key, this.existing});

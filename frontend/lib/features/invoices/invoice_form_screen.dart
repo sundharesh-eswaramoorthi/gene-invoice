@@ -19,8 +19,6 @@ import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../products/products_screen.dart';
 
-/// The terms line reads "Net 30 — due 20 Oct 2026" (US-A2), where a date in words says more than
-/// the table format does.
 final DateFormat _dueDateInWords = DateFormat('d MMM yyyy');
 
 class _LineDraft {
@@ -52,13 +50,10 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   bool _notify = false;
   String? _error;
 
-  /// Filled from the preview the moment a customer is picked (US-A2), and by hand after that.
   PaymentTerm? _term;
   String? _termLabel;
   DateTime? _dueDate;
 
-  /// The invoice date the server worked the preview out from, which a change of terms recomputes
-  /// against. Until a preview arrives there is none, and the terms field waits for a customer.
   DateTime? _invoiceDate;
   bool _previewing = false;
   String? _previewError;
@@ -74,8 +69,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
 
   double get _total => _lines.fold<double>(0, (sum, l) => sum + l.lineTotal);
 
-  /// Pre-selects the signed-in user when they are themselves assignable; otherwise the
-  /// field starts empty and blocks submission (US-A2).
   void _preselectSelf(List<PocUser> assignable, int? myUserId) {
     if (_pocPreselected || myUserId == null) return;
     _pocPreselected = true;
@@ -97,8 +90,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     if (customer != null) _previewDueDate(customer);
   }
 
-  /// The due date the customer's terms give, the moment they are picked (US-A2). It comes from
-  /// the server, which stamps the invoice date, rather than from this browser's clock.
   Future<void> _previewDueDate(Customer customer) async {
     setState(() {
       _previewing = true;
@@ -111,7 +102,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     try {
       final res = await ref.read(dioProvider).get('/api/invoices/due-date-preview',
           queryParameters: {'customerId': customer.id});
-      // A slow answer for a customer already replaced must not overwrite the current one.
       if (!mounted || _customer?.id != customer.id) return;
       final preview = DueDatePreview.fromJson((res.data as Map).cast<String, dynamic>());
       setState(() {
@@ -121,7 +111,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
         _invoiceDate = preview.invoiceDate;
       });
     } catch (e) {
-      // The invoice can still be saved: the server applies the customer's terms itself.
       if (mounted && _customer?.id == customer.id) {
         setState(() => _previewError = apiErrorMessage(e));
       }
@@ -135,7 +124,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     setState(() {
       _term = term;
       _termLabel = term.label;
-      // Custom keeps the date that is showing; every other term recomputes it (§2.2).
       final due = _invoiceDate == null ? null : term.due(_invoiceDate!);
       if (due != null) _dueDate = due;
     });
@@ -146,12 +134,10 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: _dueDate ?? basis,
-      // Earlier than the invoice date is a 400 from the server, so it cannot be picked (AC-A5).
       firstDate: DateTime(basis.year, basis.month, basis.day),
       lastDate: DateTime(basis.year + 5, basis.month, basis.day),
     );
     if (picked == null) return;
-    // A date chosen by hand makes the terms Custom, whatever they were (§2.2, US-A3).
     setState(() {
       _dueDate = DateTime(picked.year, picked.month, picked.day);
       _term = PaymentTerm.CUSTOM;
@@ -159,10 +145,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     });
   }
 
-  /// A far-future due date is legitimate — some contracts really are Net 365 — so beyond the
-  /// horizon the form asks rather than refuses (AC-A5). Counted from today when the preview
-  /// could not say which day the server would stamp: a date three years out is worth asking
-  /// about whether or not that call came back (the picker counts from the same day).
   bool get _beyondHorizon {
     if (_dueDate == null) return false;
     final today = DateTime.now();
@@ -186,8 +168,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
         'customerId': _customer!.id,
         'notes': _notesCtrl.text.trim(),
         'salesPocUserId': _salesPoc!.id,
-        // A date typed by hand goes up as the date; terms go up as terms, for the server to
-        // apply to the invoice date it stamps (§2.2).
         if (_term == PaymentTerm.CUSTOM && _dueDate != null)
           'dueDate': DateFormat('yyyy-MM-dd').format(_dueDate!),
         if (_term != null && _term != PaymentTerm.CUSTOM) 'paymentTerm': _term!.name,
@@ -205,8 +185,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Invoice created')));
-        // Saved, so the spinner stops; the email is offered before leaving, because leaving first
-        // would unmount the context the compose form opens from.
         setState(() => _saving = false);
         compose = await notifyByEmailAfterSave(context,
             notify: _notify,
@@ -214,8 +192,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
             entityId: (res.data as Map)['id'] as int,
             event: EmailEvent.created);
       }
-      // The compose form's Connect is already taking the app to the Gmail page; this screen is
-      // still here until the next frame, and going to the list now would win over it.
       if (mounted && compose != EmailComposeOutcome.leftForGmail) context.go('/invoices');
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
@@ -257,7 +233,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
               const SizedBox(height: 12),
               _termsAndDueDate(),
               const SizedBox(height: 12),
-              // Mandatory: the backend rejects an invoice without one too (AC-A2).
               if (canSeePoc)
                 PocPicker(
                   type: PocType.SALES,
@@ -347,8 +322,6 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     );
   }
 
-  /// Payment terms and the due date they give, side by side, with the terms named underneath so
-  /// nobody has to do the arithmetic to trust the date (US-A2).
   Widget _termsAndDueDate() {
     final theme = Theme.of(context);
     final narrow = MediaQuery.sizeOf(context).width < 600;

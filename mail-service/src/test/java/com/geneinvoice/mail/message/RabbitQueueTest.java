@@ -30,18 +30,11 @@ import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Sending through a real RabbitMQ: the app declares its queues, the listener hands messages to the
- * worker, a passing failure waits in the delay queue and comes back, and a message nobody can read
- * ends in the dead-letter queue. The delays are shortened to one and two seconds. Skipped when
- * Docker is not available.
- */
 @SpringBootTest(properties = {
         "mail.queue=rabbit",
         "mail.send.retry-delays=PT1S,PT2S",
         "mail.send.concurrency=2",
         "mail.send.max-concurrency=4",
-        // A database of its own: the other test context's create-drop must not touch it.
         "spring.datasource.url=jdbc:h2:mem:genemail-rabbit;DB_CLOSE_DELAY=-1",
         "management.health.rabbit.enabled=true"
 })
@@ -113,7 +106,6 @@ class RabbitQueueTest {
         waitFor("both copies sent", () -> status("gi-91-1") == MessageStatus.SENT && status("gi-91-2") == MessageStatus.SENT);
 
         List<MailMessage> sent = messageRepository.findAll();
-        // One went out at once; the other failed once, waited a second in mail.send.retry.1m and went out then.
         assertThat(sent).extracting(MailMessage::getAttempts).containsExactlyInAnyOrder(1, 2);
         MailMessage retried = sent.stream().filter(m -> m.getAttempts() == 2).findFirst().orElseThrow();
         assertThat(retried.getError()).isNull();

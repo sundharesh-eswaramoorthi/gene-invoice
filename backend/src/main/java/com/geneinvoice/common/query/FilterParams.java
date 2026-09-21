@@ -5,13 +5,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.List;
 
-/**
- * Reads the repeated {@code filter} query parameter straight off the request.
- *
- * <p>Binding it as a {@code List<String>} would let Spring's default converter split a single
- * value on commas, which silently mangles the multi-value operators — {@code total:between:100,500}
- * would arrive as {@code total:between:100} plus a stray {@code 500}.
- */
 public final class FilterParams {
 
     public static final String NAME = "filter";

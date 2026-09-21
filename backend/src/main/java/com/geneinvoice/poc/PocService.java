@@ -23,10 +23,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * Assignment and lookup of the three points of contact. Assignability is driven by privileges
- * rather than role names, so one person's single role can make them assignable as several kinds.
- */
 @Service
 @RequiredArgsConstructor
 public class PocService {
@@ -43,8 +39,6 @@ public class PocService {
     private final NotificationService notificationService;
     private final CurrentUser currentUser;
 
-    // ---- assignable users ------------------------------------------------------
-
     @Transactional(readOnly = true)
     public List<User> assignable(PocType type, String query, int limit) {
         // The picker's box is a plain substring search, so the user's own % and _ match only
@@ -57,7 +51,6 @@ public class PocService {
                 PageRequest.of(0, capped));
     }
 
-    /** Resolves a user id supplied for a POC field, rejecting anyone not assignable as that kind. */
     @Transactional(readOnly = true)
     public User requireAssignable(Long userId, PocType type) {
         if (userId == null) {
@@ -78,7 +71,6 @@ public class PocService {
         return u;
     }
 
-    /** The caller, when they are themselves assignable as this kind — used to pre-select a form. */
     @Transactional(readOnly = true)
     public Optional<User> callerIfAssignable(PocType type) {
         User caller = currentUser.require();
@@ -87,8 +79,6 @@ public class PocService {
                 ? Optional.of(caller)
                 : Optional.empty();
     }
-
-    // ---- customer POC roster ---------------------------------------------------
 
     @Transactional(readOnly = true)
     public List<CustomerPoc> listFor(Long customerId) {
@@ -103,29 +93,16 @@ public class PocService {
                 .stream().findFirst().map(CustomerPoc::getUser);
     }
 
-    /**
-     * Who a new record defaults to: the primary seat holder or, once they have been deactivated,
-     * the next active holder of that kind of seat. Empty when the customer has no active one.
-     */
     @Transactional(readOnly = true)
     public Optional<User> defaultAssignee(Long customerId, PocType type) {
         return activeHolders(customerId, type).stream().findFirst();
     }
 
-    /**
-     * Everyone active in that kind of seat on the customer, the primary first and then in the order
-     * they were seated — so the first is always {@link #defaultAssignee}. Empty when nobody active is.
-     */
     @Transactional(readOnly = true)
     public List<User> activeHolders(Long customerId, PocType type) {
         return activeHoldersByType(customerId).getOrDefault(type, List.of());
     }
 
-    /**
-     * The whole book in one read: every kind of seat the customer has, each with its active holders
-     * in the order {@link #activeHolders} gives them. A caller that wants several kinds — the email
-     * form offers all three (L2) — reads the roster once instead of once per kind.
-     */
     @Transactional(readOnly = true)
     public Map<PocType, List<User>> activeHoldersByType(Long customerId) {
         Map<PocType, List<User>> byType = new EnumMap<>(PocType.class);
@@ -185,7 +162,6 @@ public class PocService {
         return poc;
     }
 
-    /** The customer already has that person in that seat; a bulk caller reports this as skipped. */
     public static class AlreadyAssignedException extends BadRequestException {
         public AlreadyAssignedException(String message) {
             super(message);
@@ -207,7 +183,6 @@ public class PocService {
         customerPocRepository.delete(poc);
         customerPocRepository.flush();
 
-        // Never leave a dangling primary: promote the oldest remaining holder of that kind (AC-A4).
         CustomerPoc promoted = null;
         if (wasPrimary) {
             List<CustomerPoc> remaining =
@@ -271,12 +246,6 @@ public class PocService {
         return saved;
     }
 
-    /**
-     * Demotes every seat of that kind currently marked primary and returns the oldest of them, so
-     * the caller can record the change (D-44). Reading the group under the write lock is what
-     * makes clear-then-set one indivisible change; demoting every match rather than one is what
-     * lets a customer that already holds two primaries be repaired instead of jamming (CP-02).
-     */
     private CustomerPoc clearPrimary(Long customerId, PocType type) {
         CustomerPoc was = null;
         for (CustomerPoc existing : customerPocRepository.findByCustomerIdAndPocTypeForUpdate(customerId, type)) {
@@ -290,17 +259,11 @@ public class PocService {
         return was;
     }
 
-    /**
-     * The customer's own row, locked until the transaction ends. Every change to who is primary
-     * takes it first: the seat group it is about to rearrange may be empty, and an empty group
-     * has no row to lock (CP-02).
-     */
     private Customer lockCustomer(Long customerId) {
         return customerRepository.findByIdForUpdate(customerId)
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
     }
 
-    /** Tells the newly assigned person, unless they assigned themselves. */
     public void notifyAssignee(User assignee, PocType type, String what, String link) {
         if (assignee == null) return;
         Long actor = currentUser.require().getId();
@@ -311,6 +274,5 @@ public class PocService {
                 link);
     }
 
-    /** Serialised into the audit trail's before/after columns. */
     public record PocAuditSnapshot(String pocType, Long userId, String username, boolean primary) {}
 }

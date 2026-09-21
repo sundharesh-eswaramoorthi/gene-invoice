@@ -13,11 +13,6 @@ import java.time.LocalDate;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-/**
- * A customer's commitment to pay a stated amount by a stated date, either in general or against
- * specific invoices. Status is recomputed from payment facts rather than set by hand, except when
- * a collections user explicitly overrides it with a reason.
- */
 @Entity
 @Table(name = "payment_promises", indexes = {
         @Index(name = "idx_promise_customer", columnList = "customer_id"),
@@ -46,7 +41,6 @@ public class PaymentPromise {
     @Column(name = "promised_date", nullable = false)
     private LocalDate promisedDate;
 
-    /** The collections person answerable for this promise. Required. */
     @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "collection_poc_user_id")
     private User collectionPoc;
@@ -59,12 +53,10 @@ public class PaymentPromise {
     @Builder.Default
     private PromiseStatus status = PromiseStatus.OPEN;
 
-    /** How much of the promise the linked payments have settled so far. */
     @Column(name = "fulfilled_amount", nullable = false, precision = 14, scale = 2)
     @Builder.Default
     private BigDecimal fulfilledAmount = BigDecimal.ZERO;
 
-    /** When true, auto-evaluation leaves {@link #status} alone (AC-B6 override wins). */
     @Column(name = "status_overridden", nullable = false)
     @Builder.Default
     private boolean statusOverridden = false;
@@ -78,11 +70,9 @@ public class PaymentPromise {
     @Column(name = "overridden_at")
     private Instant overriddenAt;
 
-    /** Set when the "promise broke" notification has gone out, so re-evaluation never re-sends it. */
     @Column(name = "broken_notified_at")
     private Instant brokenNotifiedAt;
 
-    /** The invoices this promise covers. Empty means it is a general promise against the account. */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "payment_promise_invoices",
             joinColumns = @JoinColumn(name = "promise_id"),
@@ -90,7 +80,6 @@ public class PaymentPromise {
     @Builder.Default
     private Set<Invoice> invoices = new LinkedHashSet<>();
 
-    /** The payments that fulfil it. A payment may fulfil several promises and vice versa. */
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(name = "payment_promise_payments",
             joinColumns = @JoinColumn(name = "promise_id"),
@@ -118,12 +107,6 @@ public class PaymentPromise {
         this.updatedAt = Instant.now();
     }
 
-    /**
-     * What is still owed against the promised amount. A promise that is settled or withdrawn owes
-     * nothing whatever the arithmetic says: a promise kept because the debt went away elsewhere
-     * has a fulfilled amount of zero, and a cancelled one keeps the amount it was raised for, so
-     * both used to advertise money still outstanding beside a status saying otherwise (PPD-04).
-     */
     public BigDecimal getRemainingAmount() {
         if (status == PromiseStatus.KEPT || status == PromiseStatus.CANCELLED) return BigDecimal.ZERO;
         BigDecimal remaining = amount.subtract(fulfilledAmount == null ? BigDecimal.ZERO : fulfilledAmount);

@@ -35,31 +35,20 @@ import 'unsaved_changes.dart';
 final routerProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authControllerProvider);
 
-  /// The page size this user last chose for a table, or the default.
   int sizeFor(String entity) => ref.read(pageSizeStoreProvider)[entity] ?? 20;
 
-  /// Leaving an editable detail screen asks about its unsaved edits first, however the user
-  /// leaves (AC-C3). A sign-out is never held up: the session is already gone.
   Future<bool> mayLeave(BuildContext context, GoRouterState state) async =>
       ref.read(authControllerProvider).user == null ||
       await ref.read(unsavedChangesProvider).mayLeave();
 
-  /// A screen a user may not open is one the URL cannot reach either. Holding none of
-  /// [privileges], a hand-edited or stale link lands on the dashboard rather than on a list that
-  /// offers "Add filter" and "Send email" above a 403, with a Retry that can only fail the same
-  /// way (UI-10, AC-C22). Each list route is guarded by the very privileges its sidebar entry
-  /// asks for, so the nav and the router can never disagree about who may open a screen.
   GoRouterRedirect needs(List<String> privileges) => (context, state) {
         final user = ref.read(authControllerProvider).user;
-        // Signed out, the redirect above sends them to the login screen instead.
         if (user == null) return null;
         return privileges.isEmpty || user.hasAny(privileges) ? null : '/';
       };
 
   return GoRouter(
     initialLocation: '/',
-    // An unknown path — a mistyped link, or an old notification's /admin/... link — gets the same
-    // "not found" page as a missing record, with a way home.
     errorBuilder: (context, state) {
       final page = RecordUnavailable(
         message: 'That page does not exist.',
@@ -92,11 +81,8 @@ final routerProvider = Provider<GoRouter>((ref) {
               query: RouteQuery.read(s, defaultSize: sizeFor('inbox'), defaultSort: 'occurredAt,desc'),
             ),
           ),
-          // The signed-in user's own Gmail, from the account menu (mail-service.md §6).
           GoRoute(path: '/me/gmail', builder: (c, s) => const GmailConnectionScreen()),
 
-          // List pages open unfiltered for every role; a scope the server enforces comes back
-          // with the page and is shown as a locked chip.
           GoRoute(
             path: '/customers',
             redirect: needs(navPrivilegesFor('/customers')),
@@ -104,10 +90,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               query: RouteQuery.read(s, defaultSize: sizeFor('customers'), defaultSort: 'name,asc'),
             ),
           ),
-          // Detail screens are keyed by record id. go_router keys a page by its route pattern, so
-          // without this, moving from one customer to another reuses the screen's state and its
-          // form keeps the previous record's values — which Save would then write onto this one.
-          // A tab change keeps the same id, so it still reuses the screen.
           GoRoute(
             path: '/customers/:id',
             onExit: mayLeave,
@@ -222,7 +204,6 @@ final routerProvider = Provider<GoRouter>((ref) {
                     )),
           ),
 
-          // Not a sidebar entry — the bell leads here — but gated all the same.
           GoRoute(
             path: '/notifications',
             redirect: needs(const [Privileges.notificationView]),
@@ -274,8 +255,6 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// A detail page for the record id in the URL. An id that is not a number — a mistyped or cut-off
-/// link — shows the same "not found" state as a record that does not exist, never an error box.
 Widget pageForId(GoRouterState state,
     {required String noun, required String backTo, required Widget Function(int id) build}) {
   final id = int.tryParse(state.pathParameters['id'] ?? '');
@@ -290,8 +269,6 @@ Widget pageForId(GoRouterState state,
   return build(id);
 }
 
-/// Rebuilds the routes when sign-in changes, and again once the remembered page sizes have
-/// loaded — they feed the defaults a route is built with.
 class _RouterRefresh extends ChangeNotifier {
   _RouterRefresh(Ref ref) {
     ref.listen(authControllerProvider, (_, __) => notifyListeners());

@@ -19,11 +19,6 @@ public interface MailMessageRepository extends JpaRepository<MailMessage, Long> 
 
     boolean existsByProviderMessageId(String providerMessageId);
 
-    /**
-     * Takes a queued copy for sending. Only one worker can win it, so a queue message delivered twice
-     * sends once, and nobody takes a retry before its wait is over. Clears the persistence context,
-     * which would otherwise keep serving the pre-update row.
-     */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update MailMessage m
@@ -40,7 +35,6 @@ public interface MailMessageRepository extends JpaRepository<MailMessage, Long> 
     @Query("update MailMessage m set m.enqueuedAt = :at where m.id in :ids")
     int markEnqueued(@Param("ids") Collection<Long> ids, @Param("at") Instant at);
 
-    /** Sends nobody has touched since {@code touchedBefore}: the worker died half way. */
     @Query("""
             select m.id from MailMessage m
              where m.status = com.geneinvoice.mail.message.MessageStatus.SENDING and m.updatedAt < :touchedBefore
@@ -48,7 +42,6 @@ public interface MailMessageRepository extends JpaRepository<MailMessage, Long> 
             """)
     List<Long> findStaleSending(@Param("touchedBefore") Instant touchedBefore, Pageable page);
 
-    /** Queued copies that are due and whose queue message may have been lost. */
     @Query("""
             select m.id from MailMessage m
              where m.status = com.geneinvoice.mail.message.MessageStatus.QUEUED
@@ -59,10 +52,6 @@ public interface MailMessageRepository extends JpaRepository<MailMessage, Long> 
     List<Long> findUnpublished(@Param("now") Instant now, @Param("enqueuedBefore") Instant enqueuedBefore,
                                Pageable page);
 
-    /**
-     * Copies sent recently to an address a connected mailbox has, not yet found in it (§4.6 step 1),
-     * oldest first.
-     */
     @Query("""
             select m from MailMessage m
              where m.status in (com.geneinvoice.mail.message.MessageStatus.SENT,
@@ -76,7 +65,6 @@ public interface MailMessageRepository extends JpaRepository<MailMessage, Long> 
             """)
     List<MailMessage> findToConfirm(@Param("sentSince") Instant sentSince, Pageable page);
 
-    /** Copies no bounce came back for in time (§4.6 step 2). */
     @Query("""
             select m.id from MailMessage m
              where m.status = com.geneinvoice.mail.message.MessageStatus.SENT and m.sentAt < :sentBefore
@@ -92,7 +80,6 @@ public interface MailMessageRepository extends JpaRepository<MailMessage, Long> 
     List<String> findOwnThreads(@Param("connectionId") Long connectionId,
                                 @Param("threadIds") Collection<String> threadIds);
 
-    /** A thread's copies from the connection, newest sent first. */
     @Query("""
             select m from MailMessage m
              where m.connectionId = :connectionId and m.providerThreadId = :threadId
@@ -102,11 +89,6 @@ public interface MailMessageRepository extends JpaRepository<MailMessage, Long> 
 
     Optional<MailMessage> findFirstByConnectionIdAndRfcMessageIdOrderByIdDesc(Long connectionId, String rfcMessageId);
 
-    /**
-     * The recipient-side ids of copies found in this mailbox and not yet read there, sent since
-     * {@code sentSince}, oldest first: what a sync checks by hand when Gmail no longer has the history
-     * that would say they were read.
-     */
     @Query("""
             select m.recipientMessageId from MailMessage m
              where m.recipientConnectionId = :connectionId and m.recipientMessageId is not null
@@ -118,7 +100,6 @@ public interface MailMessageRepository extends JpaRepository<MailMessage, Long> 
     List<String> findUnreadInRecipientMailbox(@Param("connectionId") Long connectionId,
                                               @Param("sentSince") Instant sentSince);
 
-    /** Copies found in a recipient's mailbox under this message id. */
     @Query("""
             select m.id from MailMessage m
              where m.recipientConnectionId = :connectionId and m.recipientMessageId = :messageId

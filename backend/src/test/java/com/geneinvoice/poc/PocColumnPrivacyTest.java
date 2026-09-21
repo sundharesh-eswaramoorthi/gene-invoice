@@ -19,11 +19,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * A customer login never learns who its reps are (AC-A8). Hiding the POC fields from the rows is
- * not enough: a filter on a POC column would still reveal them through the match count, so for a
- * customer those columns are unknown in every filter and sort.
- */
 class PocColumnPrivacyTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;

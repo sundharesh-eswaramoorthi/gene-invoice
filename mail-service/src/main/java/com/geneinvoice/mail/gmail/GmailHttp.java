@@ -11,24 +11,14 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.time.Duration;
 
-/** The HTTP client for calls to Google. */
 final class GmailHttp {
 
     private GmailHttp() {}
 
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
-    /** A worker waits on a hung call, and its mailbox and queue slot with it, so not for long. */
     private static final Duration READ_TIMEOUT = Duration.ofSeconds(30);
-    /**
-     * The longest string an answer may hold. A received message comes as one base64url string: Gmail
-     * takes mail of up to 50 MB, about 67 million characters, and Jackson stops at 20 million by default.
-     */
     static final int MAX_STRING_LENGTH = 80_000_000;
 
-    /**
-     * On the JDK client, which never repeats a POST by itself. HttpURLConnection silently resends one
-     * whose connection drops, which for a send means the customer gets the email twice.
-     */
     static RestClient restClient() {
         HttpClient http = HttpClient.newBuilder()
                 .connectTimeout(CONNECT_TIMEOUT)

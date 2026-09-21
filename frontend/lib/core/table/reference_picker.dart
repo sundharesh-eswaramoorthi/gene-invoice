@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/poc/poc_providers.dart';
 import '../api/api_client.dart';
 
-/// A row in a reference picker: an id plus how to show it.
 class ReferenceOption {
   final int id;
   final String label;
@@ -26,8 +25,6 @@ class ReferenceSearch {
   int get hashCode => Object.hash(kind, search);
 }
 
-/// Looks up the options for a REFERENCE column. The kind comes from the table schema, so a
-/// new reference column needs only a case here.
 final referenceOptionsProvider =
     FutureProvider.autoDispose.family<List<ReferenceOption>, ReferenceSearch>((ref, q) async {
   final dio = ref.watch(dioProvider);
@@ -65,7 +62,6 @@ final referenceOptionsProvider =
               subtitle: m['customerName'] as String?))
           .toList();
     case 'payment':
-      // Payments have no name to search by; a typed number finds that payment.
       final id = int.tryParse(q.search.replaceAll('#', '').trim());
       final res = await dio.get('/api/payments', queryParameters: {
         'size': 20,
@@ -90,7 +86,6 @@ final referenceOptionsProvider =
   }
 });
 
-/// Searchable picker for a reference-typed filter value.
 class ReferencePicker extends ConsumerStatefulWidget {
   final String kind;
   final String? label;

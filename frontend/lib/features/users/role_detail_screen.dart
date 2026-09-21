@@ -62,7 +62,6 @@ class RoleDetailScreen extends ConsumerWidget {
           DetailGridItem(label: 'Description', span: 2, child: ReadOnlyValue(r.description ?? '')),
           DetailGridItem(
             label: 'Privileges (${r.privileges.length})',
-            // Across the whole grid: an admin role grants dozens, and they read best as one block.
             span: 3,
             child: r.privileges.isEmpty
                 ? const ReadOnlyValue('')

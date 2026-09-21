@@ -5,7 +5,6 @@ import '../../core/api/api_client.dart';
 import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
 
-/// The three kinds of point of contact.
 enum PocType { SALES, SUCCESS, COLLECTION }
 
 String pocTypeLabel(PocType t) => switch (t) {
@@ -74,7 +73,6 @@ class CustomerPoc {
       );
 }
 
-/// The caller's own default book: which POC kinds they hold and whether the chip is clearable.
 @immutable
 class MyPocScope {
   final int userId;
@@ -102,7 +100,6 @@ class MyPocScope {
       );
 }
 
-/// True when this user may see POC fields at all. A self-service customer never does (AC-A8).
 final canSeePocProvider = Provider<bool>((ref) {
   final user = ref.watch(currentUserProvider);
   if (user == null || user.isCustomer) return false;
@@ -116,7 +113,6 @@ final canAssignPocProvider = Provider<bool>((ref) {
 });
 
 final myPocScopeProvider = FutureProvider<MyPocScope?>((ref) async {
-  // The scope is the signed-in user's own; the next user to sign in must not inherit it.
   ref.watch(currentUserProvider.select((u) => u?.id));
   if (!ref.watch(canSeePocProvider)) return null;
   final dio = ref.watch(dioProvider);
@@ -137,8 +133,6 @@ class AssignableQuery {
   int get hashCode => Object.hash(type, search);
 }
 
-/// Users offerable for a POC field. Searchable and bounded so it does not degrade on a
-/// large user table (AC-A3).
 final assignablePocsProvider =
     FutureProvider.autoDispose.family<List<PocUser>, AssignableQuery>((ref, q) async {
   final dio = ref.watch(dioProvider);

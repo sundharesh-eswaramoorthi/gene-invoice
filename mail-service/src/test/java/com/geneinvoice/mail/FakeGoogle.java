@@ -22,13 +22,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-/**
- * Google's token, tokeninfo and revoke endpoints and the Gmail API, stood in for by a real HTTP
- * server on a random local port. Accounts are registered by refresh token; the token endpoint hands
- * out {@code tok-1}, {@code tok-2}, … and remembers whose each is, so a Gmail call on {@code users/me}
- * knows its mailbox. Every request is recorded; routes answer by method and decoded path (a mailbox's
- * own route first), and anything without a route gets Gmail's 404.
- */
 public final class FakeGoogle implements AutoCloseable {
 
     public static final ObjectMapper JSON = new ObjectMapper();
@@ -54,7 +47,6 @@ public final class FakeGoogle implements AutoCloseable {
             return query.getOrDefault(name, List.of());
         }
 
-        /** An {@code application/x-www-form-urlencoded} body, one value per name. */
         public Map<String, String> form() {
             Map<String, String> form = new LinkedHashMap<>();
             decodePairs(body).forEach((name, values) -> form.put(name, values.get(0)));
@@ -72,10 +64,8 @@ public final class FakeGoogle implements AutoCloseable {
 
     public record Reply(int status, String json) {}
 
-    /** Reads the request and closes the connection without answering, like a connection dropped mid-call. */
     public static final Reply HANG_UP = new Reply(-1, null);
 
-    /** A Gmail account the token endpoint knows by its refresh token. */
     private record Account(String email, String scope, String historyId) {}
 
     private final HttpServer server;
@@ -123,27 +113,22 @@ public final class FakeGoogle implements AutoCloseable {
         return baseUrl() + "/revoke";
     }
 
-    /** A Gmail API path on the caller's own mailbox, e.g. {@code api("/messages/send")}. */
     public static String api(String rest) {
         return "/gmail/v1/users/me" + rest;
     }
 
-    /** An account that grants send and read, whose history stands at 1000. */
     public void account(String email, String refreshToken) {
         account(email, refreshToken, SEND_AND_READ);
     }
 
-    /** With {@code scope} null the token response names no scope, and tokeninfo says {@link #SEND_AND_READ}. */
     public void account(String email, String refreshToken, String scope) {
         accounts.put(refreshToken, new Account(email, scope, "1000"));
     }
 
-    /** Google no longer accepts this refresh token ({@code invalid_grant}), as when a Testing app's token expires. */
     public void expire(String refreshToken) {
         accounts.remove(refreshToken);
     }
 
-    /** Where the account's history stands, as its profile says. */
     public void historyAt(String email, String historyId) {
         accounts.replaceAll((token, a) -> a.email().equals(email) ? new Account(a.email(), a.scope(), historyId) : a);
     }
@@ -156,7 +141,6 @@ public final class FakeGoogle implements AutoCloseable {
         routes.put(method + " " + path, answer);
     }
 
-    /** A route for one mailbox only; other mailboxes get the general route. */
     public void onMailbox(String mailbox, String method, String path, Function<Exchange, Reply> answer) {
         routes.put(mailbox + "|" + method + " " + path, answer);
     }
@@ -165,7 +149,6 @@ public final class FakeGoogle implements AutoCloseable {
         onMailbox(mailbox, method, path, exchange -> new Reply(status, json));
     }
 
-    /** Answers with each reply in turn, then keeps giving the last. */
     public void onSequence(String method, String path, Reply... replies) {
         AtomicInteger next = new AtomicInteger();
         on(method, path, exchange -> replies[Math.min(next.getAndIncrement(), replies.length - 1)]);
@@ -183,7 +166,6 @@ public final class FakeGoogle implements AutoCloseable {
         return requests(method, path).stream().filter(e -> mailbox.equals(e.mailbox())).toList();
     }
 
-    /** Forgets the requests so far, keeping accounts, tokens and routes. */
     public void clearRequests() {
         exchanges.clear();
     }
@@ -218,7 +200,6 @@ public final class FakeGoogle implements AutoCloseable {
         }
     }
 
-    /** Google as it answers when all is well. */
     private void defaults() {
         on("POST", "/token", exchange -> {
             Account account = accounts.get(String.valueOf(exchange.form().get("refresh_token")));

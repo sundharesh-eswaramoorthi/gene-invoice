@@ -31,12 +31,6 @@ class RouteQuery {
     context.go(location(path, params));
   }
 
-  /// [path] with [params] as its query string, each key and value percent-encoded. A value may
-  /// be one value or a list of them, which repeats its key — `f` for each filter chip.
-  ///
-  /// `Uri.encodeComponent` rather than `Uri(queryParameters: ...)`: it escapes a space as %20 and
-  /// a '+' as %2B, so the URL contains neither character literally and nothing has to be read
-  /// back as something else.
   static String location(String path, Map<String, dynamic> params) {
     final pairs = <String>[];
     params.forEach((key, value) {
@@ -47,11 +41,6 @@ class RouteQuery {
     return pairs.isEmpty ? path : '$path?${pairs.join('&')}';
   }
 
-  /// [uri]'s query parameters, each decoded as a whole component.
-  ///
-  /// Not `Uri.queryParametersAll`, which turns a '+' into a space. Nothing writes a space that
-  /// way any more, so a '+' here is the character the user typed — whether the link still
-  /// carries it as %2B or as the '+' a browser showed and somebody copied.
   static Map<String, List<String>> queryParametersAll(Uri uri) {
     final params = <String, List<String>>{};
     for (final pair in uri.query.split('&')) {
@@ -63,8 +52,6 @@ class RouteQuery {
     return params;
   }
 
-  /// A half-written escape is somebody editing the URL by hand, not a reason to fail the screen:
-  /// it is taken as the text it is.
   static String _decode(String raw) {
     try {
       return Uri.decodeComponent(raw);

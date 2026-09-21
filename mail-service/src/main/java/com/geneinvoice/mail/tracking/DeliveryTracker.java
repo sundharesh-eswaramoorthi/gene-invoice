@@ -27,12 +27,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/**
- * Delivered, as far as Gmail lets anyone know (§4.6, M8). Gmail gives no receipts, so a copy to
- * someone whose own Gmail is connected is looked for in their mailbox (confirmed, and read when it is
- * no longer unread); any other copy counts as delivered once no bounce came back for a while
- * (estimated, and a bounce that comes later still wins).
- */
 @Component
 @Slf4j
 public class DeliveryTracker {
@@ -77,7 +71,6 @@ public class DeliveryTracker {
         estimate();
     }
 
-    /** Step 1: copies to a connected mailbox, looked for in it by their Message-ID. */
     void confirm() {
         Instant sentSince = clock.instant().minus(properties.getTracking().getConfirmWindow());
         List<MailMessage> candidates = transactions.execute(status ->
@@ -137,7 +130,6 @@ public class DeliveryTracker {
         messageService.changed(copy);
     }
 
-    /** Step 2: no bounce within {@code delivered-after}: delivered, by estimate. */
     void estimate() {
         Instant now = clock.instant();
         Instant sentBefore = now.minus(properties.getTracking().getDeliveredAfter());

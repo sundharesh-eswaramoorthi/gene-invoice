@@ -89,8 +89,6 @@ class PaymentsScreen extends ConsumerWidget {
           ],
         ),
         bulkActions: [
-          // Voiding moves money, so it stays a one-at-a-time action through the dispute flow.
-          // Bulk changes need PAYMENT_MANAGE as well as the right to assign POCs.
           if (canManage && canAssignPoc)
             BulkActionSpec(
               action: 'REASSIGN_COLLECTION_POC',
@@ -116,8 +114,6 @@ class PaymentsScreen extends ConsumerWidget {
               ],
             ),
           ),
-          // Capped like every other free-text column: a 120-character customer name must not
-          // widen the table until the columns after it are off screen (UI-01, D-20).
           TableColumnSpec(
             label: 'Customer',
             sortKey: 'customerName',

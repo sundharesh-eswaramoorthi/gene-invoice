@@ -36,18 +36,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * The mail service's webhook (mail-service.md §5.5): signed batches of events, each applied on its
- * own and in order, with nothing applied twice. A context of its own, on a database of its own, as
- * the webhook exists only with the mail service as the transport; mail still goes to the recording
- * transport, which is primary.
- */
 @TestPropertySource(properties = {
         "app.mail.transport=mail-service",
-        // create-drop on the shared database would wipe the other test context's tables. A short lock
-        // timeout lets a locked row stand for a database that cannot be used.
         "spring.datasource.url=jdbc:h2:mem:geneinvoice-mailservice-test;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=1000",
-        // Small, so a test can go over it; every other batch here is far smaller.
         "app.mail.service.webhook-max-bytes=65536"
 })
 class MailServiceWebhookTest extends EmailTestBase {
@@ -65,7 +56,6 @@ class MailServiceWebhookTest extends EmailTestBase {
     private EmailRecipient login;
     private long nextEventId = 1;
 
-    /** Collections has written to the customer; the service took both copies. */
     @BeforeEach
     void sendOne() throws Exception {
         mailTransport.mode(Mode.SUCCESS);
@@ -75,8 +65,6 @@ class MailServiceWebhookTest extends EmailTestBase {
         ap = copies.get(0);
         login = copies.get(1);
     }
-
-    // ---- sending events --------------------------------------------------------------------
 
     private Map<String, Object> event(String type, Object data) {
         Map<String, Object> event = new LinkedHashMap<>();
@@ -107,7 +95,6 @@ class MailServiceWebhookTest extends EmailTestBase {
         return read(deliver(batch(List.of(events))).andExpect(status().isOk()));
     }
 
-    /** A {@code message.status} event's data, as the service writes a copy's state. */
     private Map<String, Object> copyState(EmailRecipient copy, long seq, String status, Object... more) {
         return copyState(emailId, copy, seq, status, more);
     }
@@ -132,8 +119,6 @@ class MailServiceWebhookTest extends EmailTestBase {
         return emailRepository.findById(emailId).orElseThrow();
     }
 
-    // ---- the signature --------------------------------------------------------------------
-
     @Test
     void anUnsignedStaleOrWronglySignedCallIsRefused() throws Exception {
         String body = batch(List.of(event("message.status", copyState(ap, 2, "SENT"))));
@@ -152,8 +137,6 @@ class MailServiceWebhookTest extends EmailTestBase {
         assertThat(reload(ap).getDeliveryStatus()).isEqualTo(RecipientDeliveryStatus.QUEUED);
     }
 
-    // ---- message.status ----------------------------------------------------------------------
-
     @Test
     void eachCopysProgressIsRecordedInOrderAndTheEmailRolledUp() throws Exception {
         Instant sentAt = Instant.parse("2026-09-20T10:00:00Z");
@@ -169,12 +152,10 @@ class MailServiceWebhookTest extends EmailTestBase {
             assertThat(c.getProviderThreadId()).isEqualTo("gt-1");
             assertThat(c.getRfcMessageId()).isEqualTo("<gm-1@gmail.com>");
         });
-        // The login's copy is still on its way, so the email is too.
         assertThat(email().getStatus()).isEqualTo(EmailStatus.QUEUED);
         assertThat(email().getDeliveredFrom()).isEqualTo("cara.collects@gmail.com");
 
         deliverOk(event("message.status", copyState(login, 3, "SENT", "sentAt", sentAt.plusSeconds(1).toString())),
-                // A later report arrives first, then the one it replaced: the older is passed over.
                 event("message.status", copyState(ap, 5, "READ", "sentAt", sentAt.toString(),
                         "deliveredAt", sentAt.plusSeconds(60).toString(), "deliveredConfirmed", true,
                         "readAt", sentAt.plusSeconds(120).toString())),
@@ -203,7 +184,6 @@ class MailServiceWebhookTest extends EmailTestBase {
         assertThat(shown.at("/to/1/delivery/status").asText()).isEqualTo("BOUNCED");
         assertThat(shown.at("/to/1/delivery/bouncedAt").asText()).isEqualTo("2026-09-20T10:00:30Z");
         assertThat(shown.at("/to/1/delivery/error").asText()).isEqualTo("5.1.1 The email account does not exist");
-        // The customer sees their own people's copies, but not the mail server's words.
         JsonNode theirs = getOk("/api/emails/" + emailId, acmeLogin);
         assertThat(theirs.at("/to/1/delivery/status").asText()).isEqualTo("BOUNCED");
         assertThat(theirs.at("/to/1/delivery/error").asText()).isEqualTo("Could not be delivered");
@@ -226,7 +206,6 @@ class MailServiceWebhookTest extends EmailTestBase {
                 event("message.status", "not a copy"),
                 event("message.status", copyState(login, 2, "SENDING")));
 
-        // Everything but the unreadable one was dealt with; the last still applied after it.
         assertThat(result.get("processed").asInt()).isEqualTo(5);
         assertThat(reload(ap).getDeliveryStatus()).isEqualTo(RecipientDeliveryStatus.QUEUED);
         assertThat(reload(login).getDeliveryStatus()).isEqualTo(RecipientDeliveryStatus.SENDING);
@@ -237,7 +216,6 @@ class MailServiceWebhookTest extends EmailTestBase {
 
     @Test
     void aReportThatTheServiceHasTheCopiesSettlesAHandOffWhoseAnswerWasLost() throws Exception {
-        // The hand-off timed out after the service had taken the copies: here they wait for another go.
         mailTransport.mode(Mode.TRANSIENT_FAILURE);
         long lost = send(collections, email("INVOICE", inv.getId(), List.of(toCustomer()))).get("id").asLong();
         Email waiting = emailRepository.findById(lost).orElseThrow();
@@ -253,16 +231,11 @@ class MailServiceWebhookTest extends EmailTestBase {
         assertThat(settled.getHandedOffAt()).isNotNull();
         assertThat(settled.getNextAttemptAt()).isNull();
         assertThat(settled.getStatus()).isEqualTo(EmailStatus.SENDING);
-        // It is the service's now, so the sweeper does not hand it over again.
         int handOffs = mailTransport.submissions().size();
         dispatcher.sweep(Instant.now().plus(Duration.ofMinutes(10)));
         assertThat(mailTransport.submissions()).hasSize(handOffs);
     }
 
-    /**
-     * Collections writes to the customer again; the service sends the customer's own address a copy
-     * but not the login's, which it could not send. The first copy is then reported sent: partly sent.
-     */
     private long partlySent() throws Exception {
         mailTransport.outcome(copy -> copy.address().equals(acmeLogin.getEmail())
                 ? Outcome.notSent("Gmail refused the request (400)") : Outcome.queued());
@@ -300,10 +273,8 @@ class MailServiceWebhookTest extends EmailTestBase {
         long id = partlySent();
         EmailRecipient went = recipientsOf(id).get(0);
 
-        // Retried while the service is down: the retried copy waits here for another hand-off.
         mailTransport.mode(Mode.TRANSIENT_FAILURE);
         read(mockMvc.perform(post("/api/emails/" + id + "/retry").with(as(collections))).andExpect(status().isOk()));
-        // Meanwhile the copy that went out is estimated delivered. That says nothing of the retry.
         deliverOk(event("message.status", copyState(id, went, 4, "DELIVERED", "sentAt", "2026-09-20T10:00:00Z",
                 "deliveredAt", "2026-09-20T10:15:00Z")));
 
@@ -317,7 +288,6 @@ class MailServiceWebhookTest extends EmailTestBase {
         AtomicBoolean reported = new AtomicBoolean();
         mailTransport.beforeSubmit(submission -> {
             if (reported.getAndSet(true)) return;
-            // Applied while the dispatcher waits on the service, which then fails.
             handler.apply(new MailServiceDtos.Event(nextEventId++, "message.status", Instant.now(),
                     objectMapper.valueToTree(copyState(id, went, 4, "DELIVERED", "sentAt", "2026-09-20T10:00:00Z",
                             "deliveredAt", "2026-09-20T10:15:00Z"))));
@@ -331,8 +301,6 @@ class MailServiceWebhookTest extends EmailTestBase {
         assertTheRetriedCopyIsHandedOverAgain(id);
     }
 
-    // ---- the body ------------------------------------------------------------------------------
-
     @Test
     void aBodyOverTheLimitIsRefusedUnreadAndNothingInItApplied() throws Exception {
         Map<String, Object> huge = event("message.status", copyState(ap, 2, "SENT",
@@ -340,14 +308,11 @@ class MailServiceWebhookTest extends EmailTestBase {
 
         deliver(batch(List.of(huge))).andExpect(status().isPayloadTooLarge())
                 .andExpect(jsonPath("$.message").value("The events are too large"));
-        // Stale, it is refused before its size is even looked at.
         deliver(batch(List.of(huge)), Instant.now().minus(Duration.ofMinutes(6)), SECRET)
                 .andExpect(status().isUnauthorized());
 
         assertThat(reload(ap).getDeliveryStatus()).isEqualTo(RecipientDeliveryStatus.QUEUED);
     }
-
-    // ---- message.received ----------------------------------------------------------------------
 
     @Test
     void aReplyIsSavedOnTheRecordAndReachesTheSendersInboxOnce() throws Exception {
@@ -384,14 +349,11 @@ class MailServiceWebhookTest extends EmailTestBase {
         assertThat(inbox.at("/content/0/emailId").asLong()).isEqualTo(replies.get(0).getId());
         assertThat(inbox.at("/content/0/direction").asText()).isEqualTo("INBOUND");
 
-        // A mailbox owner that is not one of the app's users is nobody's.
         reply.put("ownerRef", "someone-else");
         reply.put("providerMessageId", "gm-reply-2");
         deliverOk(event("message.received", reply));
         assertThat(emailRepository.findAll()).filteredOn(e -> e.getDirection() == EmailDirection.INBOUND).hasSize(1);
     }
-
-    // ---- connection.status ---------------------------------------------------------------------
 
     private Map<String, Object> connection(String ownerRef, String status, String reason) {
         Map<String, Object> data = new HashMap<>();
@@ -437,19 +399,15 @@ class MailServiceWebhookTest extends EmailTestBase {
         JsonNode seen = getOk("/api/users/" + collections.getId() + "/gmail", admin);
         assertThat(seen.get("status").asText()).isEqualTo("NEEDS_RECONNECT");
 
-        // Reconnected, then broken again: told again.
         deliverOk(event("connection.status", connection(cara, "CONNECTED", null)),
                 event("connection.status", connection(cara, "NEEDS_RECONNECT", reason)));
         assertThat(reconnectNotices()).hasSize(2);
 
-        // Owners that are not users of the app are nobody's to tell.
         deliverOk(event("connection.status", connection("not-a-user", "NEEDS_RECONNECT", reason)),
                 event("connection.status", connection("999999", "NEEDS_RECONNECT", reason)));
         assertThat(gmailConnectionRepository.findById(999999L)).isEmpty();
         assertThat(notificationRepository.findAll()).filteredOn(n -> "GMAIL_RECONNECT".equals(n.getType())).hasSize(2);
     }
-
-    // ---- the database ----------------------------------------------------------------------
 
     @Test
     void aDatabaseThatCannotBeUsedStopsTheBatchSoTheServiceSendsItAgain() throws Exception {
@@ -485,11 +443,9 @@ class MailServiceWebhookTest extends EmailTestBase {
             holder.join(20_000);
         }
         assertThat(failures).isEmpty();
-        // What came before the stop was applied; what came after it was not.
         assertThat(reconnectNotices()).hasSize(1);
         assertThat(reload(login).getDeliveryStatus()).isEqualTo(RecipientDeliveryStatus.QUEUED);
 
-        // Sent again, the batch applies in full, and nothing twice.
         JsonNode again = read(deliver(body).andExpect(status().isOk()));
         assertThat(again.get("processed").asInt()).isEqualTo(3);
         assertThat(reconnectNotices()).hasSize(1);

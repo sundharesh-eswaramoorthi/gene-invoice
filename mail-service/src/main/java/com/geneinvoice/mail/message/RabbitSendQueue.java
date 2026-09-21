@@ -8,10 +8,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
-/**
- * The send queue on RabbitMQ (§4.5): persistent JSON messages on the durable {@code mail.send}, and a
- * retry through the delay queue that fits its wait.
- */
 @Component
 @ConditionalOnProperty(prefix = "mail", name = "queue", havingValue = "rabbit", matchIfMissing = true)
 public class RabbitSendQueue implements SendQueue {

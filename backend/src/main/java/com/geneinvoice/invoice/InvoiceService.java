@@ -61,7 +61,6 @@ public class InvoiceService {
         Customer customer = customerRepository.findById(req.customerId())
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
 
-        // Mandatory on create, enforced here so every caller obeys it — not just the form (AC-A2).
         User salesPoc = pocService.requireAssignable(req.salesPocUserId(), PocType.SALES);
 
         Instant invoiceDate = req.invoiceDate() == null ? Instant.now() : req.invoiceDate();
@@ -73,7 +72,6 @@ public class InvoiceService {
                 .dueDate(due.date())
                 .paymentTerm(due.term())
                 .notes(req.notes())
-                // Drawn before this transaction writes anything; see InvoiceNumbers#next.
                 .invoiceNumber(invoiceNumbers.next())
                 .salesPoc(salesPoc)
                 .build();
@@ -81,13 +79,10 @@ public class InvoiceService {
         List<InvoiceItem> items = buildLines(invoice, req.items());
         invoice.setItems(items);
         invoice.setTotal(totalOf(items));
-        // Saved before any credit is booked against it: an allocation needs the invoice's id.
         Invoice saved = invoiceRepository.save(invoice);
         List<CreditLedger.CreditMove> fromCredit = creditLedger.applyTo(saved);
         recomputeStatus(saved);
         saved = invoiceRepository.save(saved);
-        // Leftover credit is the only thing that can have paid a brand-new invoice, so a non-zero
-        // paid amount here is exactly the credit it consumed.
         BigDecimal creditUsed = saved.getPaidAmount();
         auditService.record(ENTITY, saved.getId(), "INVOICE_CREATED", null,
                 InvoiceDtos.InvoiceDto.from(saved), currentUser.idOrNull(), null,
@@ -103,7 +98,6 @@ public class InvoiceService {
         return saved;
     }
 
-    /** Inline edit from the detail screen: notes and the Sales POC. Line items stay dispute-only. */
     @Transactional
     public Invoice update(Long id, InvoiceDtos.UpdateInvoiceRequest req) {
         // Read under the row lock, so simultaneous edits queue instead of all reading the same
@@ -112,8 +106,6 @@ public class InvoiceService {
         Invoice inv = invoiceRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new NotFoundException("Invoice not found"));
         requireInBook(id);
-        // A cancelled invoice is a dead record: its terms and its collections deadline are no more
-        // editable than its lines are (INV-3, and replaceItems below).
         if (inv.getStatus() == InvoiceStatus.CANCELLED) {
             throw new BadRequestException("Cannot edit a cancelled invoice");
         }
@@ -127,8 +119,6 @@ public class InvoiceService {
         InvoiceDtos.InvoiceDto before = InvoiceDtos.InvoiceDto.from(inv);
 
         if (req.notes() != null) inv.setNotes(req.notes());
-        // The due date moves only when this request asks it to: changing the customer's terms
-        // never reaches an invoice that has already been issued (D1, AC-A2).
         Due movedTo = null;
         if (req.dueDate() != null || req.paymentTerm() != null) {
             Due due = due(inv.getCustomer(), InvoiceDates.dayOf(inv.getInvoiceDate()),
@@ -139,8 +129,6 @@ public class InvoiceService {
                 inv.setPaymentTerm(due.term());
             }
         }
-        // Only an actual change of POC is checked, so a notes edit still saves when the POC has
-        // since been deactivated or the editor may not assign POCs (AC-A5).
         Long previousId = inv.getSalesPoc() == null ? null : inv.getSalesPoc().getId();
         if (req.salesPocUserId() != null && !req.salesPocUserId().equals(previousId)) {
             if (!currentUser.canAssignPoc(userRepository)) {
@@ -155,8 +143,6 @@ public class InvoiceService {
         auditService.record(ENTITY, id, "INVOICE_UPDATED", before,
                 InvoiceDtos.InvoiceDto.from(saved),
                 currentUser.require().getId(), null, null);
-        // Moving a collections deadline gets an entry of its own, old → new, so the History tab
-        // shows it without anyone reading two snapshots side by side (AC-A8).
         if (movedTo != null) {
             auditService.record(ENTITY, id, "INVOICE_DUE_DATE_CHANGED",
                     new DueDateSnapshot(before.dueDate(), before.paymentTerm()),
@@ -166,17 +152,10 @@ public class InvoiceService {
         return saved;
     }
 
-    /** A due date and the terms it came from, for the audit trail. */
     public record DueDateSnapshot(LocalDate dueDate, PaymentTerm paymentTerm) {}
 
-    /** The outcome of working a due date out: the date, and the terms to record it under. */
     private record Due(LocalDate date, PaymentTerm term) {}
 
-    /**
-     * Where an invoice's due date comes from (§2.2). Named terms recompute it from the invoice
-     * date; a date on its own is an override, recorded as CUSTOM; neither takes the customer's
-     * terms, or the system default when they have none.
-     */
     private Due due(Customer customer, LocalDate invoiceDay, LocalDate requested, PaymentTerm term) {
         // A date the database cannot hold is a bad field, not a conflict: left to Postgres it came
         // back as 409 "This change conflicts with existing data", which names neither the field
@@ -195,8 +174,6 @@ public class InvoiceService {
                 }
                 date = requested;
             } else {
-                // Named terms are the rule the date comes from, so a date sent beside them is a
-                // request with two minds: it is refused rather than quietly thrown away (§2.2).
                 if (requested != null) {
                     throw fieldError("dueDate", "Pick Custom terms to set the due date yourself");
                 }
@@ -207,7 +184,6 @@ public class InvoiceService {
             date = requested;
         } else {
             PaymentTerm own = customer.getPaymentTerm();
-            // CUSTOM is refused on a customer, so a row carrying it is one this code never wrote.
             resolved = (own == null || own == PaymentTerm.CUSTOM)
                     ? invoiceProperties.defaultTerm()
                     : own;
@@ -227,16 +203,10 @@ public class InvoiceService {
         return new GlobalExceptionHandler.InvalidFieldsException(Map.of(field, message));
     }
 
-    /**
-     * The date the customer's terms would give, for the form to show beside the terms' name the
-     * moment a customer is picked (US-A2).
-     */
     @Transactional(readOnly = true)
     public InvoiceDtos.DueDatePreview previewDueDate(Long customerId, Instant invoiceDate) {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
-        // A customer outside the caller's book answers exactly as reading the customer itself
-        // does: this hands over their commercial terms, so it may not confirm they exist either.
         requireCustomerInBook(customerId);
         PaymentTerm own = customer.getPaymentTerm();
         boolean ownTerms = own != null && own != PaymentTerm.CUSTOM;
@@ -247,17 +217,11 @@ public class InvoiceService {
                 ownTerms ? InvoiceDtos.TermSource.CUSTOMER : InvoiceDtos.TermSource.DEFAULT);
     }
 
-    /** Reassigns just the Sales POC. Used by the inline row action and the bulk action. */
     @Transactional
     public Invoice reassignSalesPoc(Long id, Long userId) {
         return update(id, new InvoiceDtos.UpdateInvoiceRequest(null, userId));
     }
 
-    /**
-     * Prices line items against their products. Shared by create and by a dispute that replaces
-     * the items, so both refuse the same bad input: no product, a quantity below one, or a
-     * negative or sub-cent unit price.
-     */
     private List<InvoiceItem> buildLines(Invoice invoice, List<InvoiceDtos.LineInput> inputs) {
         List<InvoiceItem> lines = new ArrayList<>();
         for (InvoiceDtos.LineInput in : inputs) {
@@ -308,14 +272,12 @@ public class InvoiceService {
         return inv;
     }
 
-    /** No scope check: for disputes, which staff resolve on any customer's records. */
     @Transactional(readOnly = true)
     public Invoice getInternal(Long id) {
         return invoiceRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Invoice not found"));
     }
 
-    /** A POC limited to their own book cannot reach another rep's invoice by id either (AC-A6). */
     private void requireInBook(Long id) {
         if (!queryExecutor.inScope(Invoice.class, TableSchemas.INVOICES, id,
                 scopeResolver.forInvoices().predicates())) {
@@ -323,15 +285,12 @@ public class InvoiceService {
         }
     }
 
-    /** The same gate {@code GET /api/customers/{id}} applies, for the reads that quote a customer. */
     private void requireCustomerInBook(Long id) {
         if (!queryExecutor.inScope(Customer.class, TableSchemas.CUSTOMERS, id,
                 scopeResolver.forCustomers().predicates())) {
             throw new NotFoundException("Customer not found");
         }
     }
-
-    // ---- list, tiles ------------------------------------------------------------
 
     @Transactional(readOnly = true)
     public PageResponse<InvoiceDtos.InvoiceSummary> page(TableQuery query) {
@@ -356,7 +315,6 @@ public class InvoiceService {
                 scopeResolver.forInvoices().predicates(), List.of("customer", "salesPoc")).content();
     }
 
-    /** Tiles computed over the whole filtered set, never from the current page (AC-E1). */
     @Transactional(readOnly = true)
     public InvoiceDtos.InvoiceSummaryTiles tiles(TableQuery query) {
         ScopeResolver.Scope scope = scopeResolver.forInvoices();
@@ -416,11 +374,6 @@ public class InvoiceService {
         return saved;
     }
 
-    /**
-     * Cancel an invoice as part of a dispute resolution. Any amount already paid is refunded to
-     * the customer's credit balance, still booked to the payments it came from. Caller
-     * (DisputeService) is responsible for audit logging.
-     */
     @Transactional
     public Invoice cancelWithRefund(Long id) {
         Invoice inv = getInternal(id);
@@ -437,11 +390,6 @@ public class InvoiceService {
         return saved;
     }
 
-    /**
-     * Replace an invoice's line items and recompute the total. If the new total is less than what
-     * was already paid, the difference is refunded to the customer's credit balance. Caller
-     * (DisputeService) is responsible for audit logging.
-     */
     @Transactional
     public Invoice replaceItems(Long id, List<InvoiceDtos.LineInput> newItems, String notes) {
         if (newItems == null || newItems.isEmpty()) {

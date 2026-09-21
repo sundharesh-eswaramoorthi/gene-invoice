@@ -36,15 +36,6 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * The dashboard's charts and rankings. Each runs under the scope of the list it summarises, so a
- * card never shows money the caller could not find by opening that list (AC-E6). Months and ages
- * are counted in UTC, like every date filter in the app.
- *
- * <p>One case needs more than that. A POC whose invoices are limited to their book usually still
- * sees every payment, so "collected" would set everyone's payments against their own billing. For
- * them the payment figures count only what was paid against invoices in their book.
- */
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
@@ -71,9 +62,6 @@ public class DashboardService {
     private final ScopeResolver scopeResolver;
     private final CurrentUser currentUser;
 
-    // ---- invoices --------------------------------------------------------------
-
-    /** Invoice totals by invoice month, cancelled invoices left out. */
     @Transactional(readOnly = true)
     public DashboardDtos.MonthlySeries billedByMonth(int months, LocalDate today) {
         List<YearMonth> window = window(months, today);
@@ -92,11 +80,6 @@ public class DashboardService {
                 points(window, em.createQuery(cq).getSingleResult()));
     }
 
-    /**
-     * What is still owed, by whole days past the due date (D4). Every bucket is one pass of the
-     * same query (AC-B7), so the five numbers are of one moment and add up to the outstanding
-     * total the rest of the dashboard reports (AC-B3).
-     */
     @Transactional(readOnly = true)
     public DashboardDtos.OutstandingByAge outstandingByAge(LocalDate today) {
         ScopeResolver.Scope scope = scopeResolver.forInvoices();
@@ -119,15 +102,12 @@ public class DashboardService {
             Age age = AGES.get(i);
             buckets.add(new DashboardDtos.AgeBucket(age.label(), age.fromDays(), age.toDays(),
                     Aggregates.asMoney(row[2 * i]), Aggregates.asLong(row[2 * i + 1]),
-                    // The same bounds the other way round, as the invoice list's dueDate filter
-                    // takes them: the oldest date in the bucket comes from its largest lateness.
                     age.toDays() == null ? null : today.minusDays(age.toDays()),
                     age.fromDays() == null ? null : today.minusDays(age.fromDays())));
         }
         return new DashboardDtos.OutstandingByAge(coverage(scope), buckets);
     }
 
-    /** The customers owing the most, with how many invoices are open and the oldest of them. */
     @Transactional(readOnly = true)
     public DashboardDtos.TopOutstanding topOutstanding(int limit) {
         requireStaff();
@@ -153,9 +133,6 @@ public class DashboardService {
         return new DashboardDtos.TopOutstanding(coverage(scope), rows);
     }
 
-    // ---- payments --------------------------------------------------------------
-
-    /** Money collected by payment month, voided payments left out. */
     @Transactional(readOnly = true)
     public DashboardDtos.MonthlySeries collectedByMonth(int months, LocalDate today) {
         List<YearMonth> window = window(months, today);
@@ -171,7 +148,6 @@ public class DashboardService {
                 points(window, em.createQuery(cq).getSingleResult()));
     }
 
-    /** The customers who paid the most over the window. */
     @Transactional(readOnly = true)
     public DashboardDtos.TopPaying topPaying(int months, int limit, LocalDate today) {
         requireStaff();
@@ -198,15 +174,10 @@ public class DashboardService {
         return new DashboardDtos.TopPaying(paymentCoverage(), rows);
     }
 
-    /** The parts of a "money collected" query: what is summed, when, for whom, and the rows allowed. */
     private record Collected(Expression<BigDecimal> amount, Expression<Instant> paidAt,
                              Expression<Long> paymentId, From<?, Customer> customer,
                              List<Predicate> where) {}
 
-    /**
-     * Whole active payments in the caller's payment scope; or, for a caller whose invoices are
-     * limited to their book, the parts of active payments that landed on those invoices.
-     */
     private Collected collected(CriteriaQuery<Object[]> cq, CriteriaBuilder cb) {
         if (paidAgainstBookOnly()) {
             Root<PaymentAllocation> alloc = cq.from(PaymentAllocation.class);
@@ -214,10 +185,6 @@ public class DashboardService {
             Join<PaymentAllocation, Invoice> invoice = alloc.join("invoice");
             List<Predicate> where = new ArrayList<>();
             where.add(cb.equal(payment.get("status"), PaymentStatus.ACTIVE));
-            // What landed on the caller's own invoices, or — for someone who is a Collection POC
-            // as well — on a payment of their own. Either one is theirs to see, so the two are an
-            // or: a sales rep holds no payments book at all, and requiring both would leave them
-            // a collected figure of zero beside a billed figure of their whole book.
             Predicate onMyInvoices =
                     invoice.get("id").in(idsInScope(Invoice.class, scopeResolver.forInvoices(), cq, cb));
             ScopeResolver.Scope payments = scopeResolver.forPayments();
@@ -243,14 +210,11 @@ public class DashboardService {
                 : coverage(scopeResolver.forPayments());
     }
 
-    // ---- helpers ---------------------------------------------------------------
-
     private DashboardDtos.Coverage coverage(ScopeResolver.Scope scope) {
         if (currentUser.isCustomer()) return DashboardDtos.Coverage.OWN;
         return scope.lockedFilters().isEmpty() ? DashboardDtos.Coverage.ALL : DashboardDtos.Coverage.BOOK;
     }
 
-    /** Rankings compare customers with each other, which a customer login has no business seeing. */
     private void requireStaff() {
         if (currentUser.isCustomer()) {
             throw new AccessDeniedException("Not allowed");
@@ -263,7 +227,6 @@ public class DashboardService {
         }
     }
 
-    /** The current month and the {@code months - 1} before it, oldest first. */
     private static List<YearMonth> window(int months, LocalDate today) {
         if (months < 1 || months > MAX_MONTHS) {
             throw new BadRequestException("months must be between 1 and " + MAX_MONTHS);
@@ -290,10 +253,6 @@ public class DashboardService {
                 cb.lessThan(date, startOf(month.plusMonths(1))));
     }
 
-    /**
-     * An amount and a count per month, in one pass. The count is of distinct ids, because a payment
-     * split across several of a book's invoices is still one payment.
-     */
     private static List<Selection<?>> monthSelections(CriteriaBuilder cb, Expression<Instant> date,
                                                       Expression<BigDecimal> amount, Expression<Long> id,
                                                       List<YearMonth> window) {
@@ -316,13 +275,6 @@ public class DashboardService {
         return out;
     }
 
-    /**
-     * An invoice due on {@code today - n} is {@code n} days past due, so a bucket's days turn into
-     * a range of due dates by subtracting them from today. "Not yet due" has no lower bound on
-     * lateness, which makes it everything due today or later — an invoice due today is not late
-     * (AC-A9, AC-B1) — and the last bucket has no upper one, so every open invoice lands in
-     * exactly one bucket.
-     */
     private static Predicate overdueBy(CriteriaBuilder cb, Expression<LocalDate> dueDate, Age age,
                                        LocalDate today) {
         List<Predicate> bounds = new ArrayList<>();
@@ -333,10 +285,6 @@ public class DashboardService {
             bounds.add(cb.greaterThanOrEqualTo(dueDate, today.minusDays(age.toDays())));
         }
         Predicate within = cb.and(bounds.toArray(new Predicate[0]));
-        // An invoice with no due date is not late (Invoice#isOverdue), so it belongs with the
-        // ones that are not yet due. It has to belong somewhere: a null is unknown to every
-        // comparison above, and a row in no bucket at all would take its balance off a chart
-        // that has to add up to the outstanding total (AC-B3).
         return age.fromDays() == null ? cb.or(cb.isNull(dueDate), within) : within;
     }
 
@@ -344,7 +292,6 @@ public class DashboardService {
         return cb.diff(inv.<BigDecimal>get("total"), inv.<BigDecimal>get("paidAmount"));
     }
 
-    /** Invoices that still have something owing: not cancelled, balance above zero. */
     private static List<Predicate> open(CriteriaBuilder cb, Root<Invoice> inv, List<Predicate> where) {
         where.add(cb.notEqual(inv.get("status"), InvoiceStatus.CANCELLED));
         where.add(cb.greaterThan(balance(cb, inv), BigDecimal.ZERO));
@@ -369,7 +316,6 @@ public class DashboardService {
         return sq;
     }
 
-    /** Aggregated timestamps come back as Instant from Hibernate, but not from every driver. */
     private static Instant asInstant(Object o) {
         if (o == null) return null;
         if (o instanceof Instant i) return i;

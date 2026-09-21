@@ -29,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** The promises list filtered by invoice — what the Promises tab on Invoice Details asks for. */
 class PromiseInvoiceFilterTest extends IntegrationTestBase {
 
     @Autowired PaymentPromiseService promiseService;
@@ -96,7 +95,6 @@ class PromiseInvoiceFilterTest extends IntegrationTestBase {
 
     @Test
     void theInvoicePromisesTabListsOnlyThePromisesCoveringThatInvoice() throws Exception {
-        // The exact request the Invoice Details "Payment Promise" tab sends.
         JsonNode result = page(get("/api/promises")
                 .param("size", "50")
                 .param("customerId", acme.getId().toString())
@@ -126,12 +124,10 @@ class PromiseInvoiceFilterTest extends IntegrationTestBase {
 
     @Test
     void theInvoiceColumnSupportsEveryReferenceOperator() throws Exception {
-        // A promise covering both invoices is still one row and one count.
         JsonNode anyOf = filtered("invoiceId:in:" + a.getId() + "," + b.getId());
         assertThat(ids(anyOf)).containsExactlyInAnyOrder(onA, onBoth, onB);
         assertThat(anyOf.get("totalElements").asLong()).isEqualTo(3);
 
-        // Valueless operators keep the trailing colon of field:operator:value, as the app sends them.
         assertThat(ids(filtered("invoiceId:isEmpty:"))).containsExactly(general);
         assertThat(ids(filtered("invoiceId:isNotEmpty:"))).containsExactlyInAnyOrder(onA, onBoth, onB);
         assertThat(ids(filtered("invoiceId:neq:" + a.getId()))).containsExactlyInAnyOrder(onB, general);

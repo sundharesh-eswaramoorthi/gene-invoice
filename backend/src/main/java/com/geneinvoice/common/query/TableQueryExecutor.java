@@ -17,14 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Runs a validated {@link TableQuery} against an entity: one content query and one count query,
- * both constrained by the caller's mandatory scope predicates AND the user's filter chips.
- */
 @Component
 public class TableQueryExecutor {
 
-    /** Ceiling on ids materialised for "select all matching this filter" and CSV export. */
     public static final int BULK_ID_LIMIT = 5000;
 
     @PersistenceContext
@@ -73,17 +68,12 @@ public class TableQueryExecutor {
         return em.createQuery(countQuery).getSingleResult();
     }
 
-    /**
-     * True when the row with this id passes the caller's scope. A read or write by id checks it, so
-     * a record outside the caller's book is as unreachable by id as it is in the list (AC-A6).
-     */
     @Transactional(readOnly = true)
     public <T> boolean inScope(Class<T> type, TableSchema schema, Long id, List<PredicateFactory> scope) {
         if (scope.isEmpty()) return true;
         return count(type, schema, TableQuery.parseUnpaged(schema, null, List.of("id:eq:" + id)), scope) > 0;
     }
 
-    /** Ids of every row matching the filter, for "select all N" and export. */
     @Transactional(readOnly = true)
     public <T> List<Long> ids(Class<T> type, TableSchema schema, TableQuery query,
                               List<PredicateFactory> scope, int limit) {
@@ -96,10 +86,6 @@ public class TableQueryExecutor {
         return em.createQuery(cq).setMaxResults(limit).getResultList();
     }
 
-    /**
-     * Runs an aggregate over the full filtered set. The caller supplies the selections; the same
-     * scope and filter predicates are applied, so tiles and table can never disagree (AC-E1/E2).
-     */
     @Transactional(readOnly = true)
     public <T> Object[] aggregate(Class<T> type, TableSchema schema, TableQuery query,
                                   List<PredicateFactory> scope, AggregateSelections selections) {
@@ -133,7 +119,6 @@ public class TableQueryExecutor {
         return all;
     }
 
-    /** Left join that also fetches, so rendering a page does not fire N+1 selects. */
     @SuppressWarnings({"unchecked", "rawtypes"})
     private void leftJoinFetch(Root<?> root, String association) {
         for (Fetch<?, ?> f : root.getFetches()) {
@@ -146,7 +131,6 @@ public class TableQueryExecutor {
         return parts.isEmpty() ? cb.conjunction() : cb.and(parts.toArray(new Predicate[0]));
     }
 
-    /** Sort column plus a stable id tiebreak, so no row is skipped or repeated across pages (AC-D2). */
     private <T> List<Order> orderBy(Root<T> root, CriteriaQuery<?> cq, CriteriaBuilder cb,
                                     TableSchema schema, TableQuery query) {
         ColumnDef def = schema.requireSortable(query.sortField());

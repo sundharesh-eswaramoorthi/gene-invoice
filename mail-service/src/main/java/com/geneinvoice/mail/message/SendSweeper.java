@@ -11,17 +11,12 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
-/**
- * Keeps the queue honest (§4.5): a send whose worker died is marked failed — never sent again on its
- * own, since it may have gone out — and a queued copy whose queue message was lost is published again.
- */
 @Component
 @Slf4j
 public class SendSweeper {
 
     static final String INTERRUPTED = "Sending was interrupted; retry to send again";
     static final Duration STALE_SENDING = Duration.ofMinutes(10);
-    /** A copy put on the queue this recently is still on its way to a worker. */
     static final Duration REPUBLISH_AFTER = Duration.ofMinutes(2);
     static final int BATCH = 500;
 

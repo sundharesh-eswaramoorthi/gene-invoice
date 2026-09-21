@@ -91,7 +91,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         ],
       ),
     );
-    // Discarded edits are gone: the route's onExit, which runs next, must not ask again.
     if (ok == true) _dirty = false;
     return ok == true;
   }
@@ -145,8 +144,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete this customer?'),
-        // Named, because the button that opened this sits beside a name and nothing else, and
-        // the wrong customer is not recoverable.
         content: Text(
           '${c.name} is removed for good, and with it '
           '${c.username == null ? 'its login' : 'its login @${c.username}'}, its POC seats, and '
@@ -175,7 +172,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       await ref.read(dioProvider).delete('/api/customers/${widget.id}');
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);
-      // There is nothing left to save, so leaving must not ask about the edits on screen.
       _dirty = false;
       messenger.showSnackBar(SnackBar(content: Text('${c.name} deleted')));
       if (mounted) context.go('/customers');
@@ -186,9 +182,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     }
   }
 
-  /// A refused delete in words the user can act on. The server answers a foreign key with
-  /// "This change conflicts with existing data", which does not say which data or what to do
-  /// about it; every other refusal already carries its own sentence.
   String _deleteRefusal(Object e) =>
       (e is DioException && e.response?.statusCode == 409)
           ? 'This customer has invoices or payments on it and cannot be deleted. '
@@ -225,7 +218,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             type: EmailEntityType.customer, entityId: customer.id, entityLabel: customer.name);
         return PopScope(
           canPop: !_dirty,
-          // Unsaved edits are asked about once, by goGuarded or else by the route's onExit.
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) goGuarded(context, '/customers');
           },
@@ -299,8 +291,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       ref.invalidate(auditHistoryProvider);
     }
 
-    // Fields in columns and Save beside the figures, so on an ordinary window the whole top fits
-    // without scrolling. A phone stacks everything in one column and scrolls the page instead.
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Column(
@@ -311,8 +301,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             [
               _figure(context, 'Outstanding', formatMoney(c.outstanding),
                   accent: c.outstanding > 0 ? Theme.of(context).colorScheme.error : null,
-                  // What is owed and what is late are different facts, and collections work from
-                  // the second (AC-A6, US-A6).
                   note: c.overdueAmount > 0
                       ? 'of which ${formatMoney(c.overdueAmount)} overdue'
                       : null),
@@ -417,8 +405,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     );
   }
 
-  /// The figures on the left and, for someone who may edit, Save on the right of the same line —
-  /// a row of its own under the fields was a whole line of height spent on one button.
   Widget _figuresAndSave(List<Widget> figures, {required bool canEdit}) => Wrap(
         spacing: 12,
         runSpacing: 12,

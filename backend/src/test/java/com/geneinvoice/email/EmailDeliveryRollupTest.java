@@ -102,12 +102,10 @@ class EmailDeliveryRollupTest {
     void whatCanBeRetried() {
         assertThat(EmailDeliveryRollup.canRetry(outbound(EmailStatus.PARTIAL), copies(SENT, FAILED))).isTrue();
         assertThat(EmailDeliveryRollup.canRetry(outbound(EmailStatus.NOT_SENT), copies(NOT_SENT))).isTrue();
-        // A bounce is the recipient's server saying no; another try will not change that.
         assertThat(EmailDeliveryRollup.canRetry(outbound(EmailStatus.PARTIAL), copies(SENT, BOUNCED))).isFalse();
         assertThat(EmailDeliveryRollup.canRetry(outbound(EmailStatus.FAILED), copies(BOUNCED))).isFalse();
         assertThat(EmailDeliveryRollup.canRetry(outbound(EmailStatus.QUEUED), copies(QUEUED, FAILED))).isFalse();
         assertThat(EmailDeliveryRollup.canRetry(outbound(EmailStatus.SENT), copies(SENT))).isFalse();
-        // Sent before the mail service: no copies, so the email as a whole.
         assertThat(EmailDeliveryRollup.canRetry(outbound(EmailStatus.FAILED), List.of())).isTrue();
         assertThat(EmailDeliveryRollup.canRetry(outbound(EmailStatus.SENT), List.of())).isFalse();
         Email received = Email.builder().direction(EmailDirection.INBOUND).status(EmailStatus.FAILED).build();

@@ -26,7 +26,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Feature A: POC assignment rules, mandatory fields and the dropdown's assignability contract. */
 class PocAssignmentTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
@@ -57,8 +56,6 @@ class PocAssignmentTest extends IntegrationTestBase {
         return new InvoiceDtos.CreateInvoiceRequest(acme.getId(), null, "n", salesPocId,
                 List.of(new InvoiceDtos.LineInput(widget.getId(), 1, null)));
     }
-
-    // ---- AC-A2: mandatory on create, rejected by the backend --------------------
 
     @Test
     void creatingAnInvoiceWithoutASalesPocIsRejected() {
@@ -100,8 +97,6 @@ class PocAssignmentTest extends IntegrationTestBase {
         assertThat(created.getSalesPoc().getId()).isEqualTo(sales.getId());
     }
 
-    // ---- AC-A3: the dropdown is filtered by privilege, active-only and bounded ---
-
     @Test
     void assignableListsOnlyActiveUsersHoldingTheMatchingPrivilege() {
         List<String> names = pocService.assignable(PocType.SALES, null, 25).stream()
@@ -123,8 +118,6 @@ class PocAssignmentTest extends IntegrationTestBase {
         userRepository.save(sales);
         assertThat(pocService.assignable(PocType.SALES, "sam", 25)).isEmpty();
     }
-
-    // ---- AC-A4: many per customer, one primary, never a dangling pointer --------
 
     @Test
     void aCustomerHoldsManyPocsOfEachKindAndTheFirstBecomesPrimary() {
@@ -186,8 +179,6 @@ class PocAssignmentTest extends IntegrationTestBase {
                 .hasMessageContaining("assigned per invoice");
     }
 
-    // ---- AC-A5: deactivating or deleting an assigned user keeps records intact ---
-
     @Test
     void deletingAnAssignedUserDeactivatesThemInsteadOfOrphaningTheRecord() throws Exception {
         Invoice inv = invoiceService.create(invoiceReq(sales.getId()));
@@ -203,7 +194,6 @@ class PocAssignmentTest extends IntegrationTestBase {
         assertThat(reloaded.getSalesPoc().getId()).isEqualTo(sales.getId());
         assertThat(userRepository.findById(sales.getId()).orElseThrow().isActive()).isFalse();
 
-        // The historical assignment stays readable through the API, name and all.
         mockMvc.perform(get("/api/invoices/" + inv.getId()).with(as(admin)))
                 .andExpect(jsonPath("$.salesPoc.username").value("sam.sales"))
                 .andExpect(jsonPath("$.salesPoc.active").value(false));
@@ -217,10 +207,6 @@ class PocAssignmentTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$.deleted").value(true));
         assertThat(userRepository.findById(viewer.getId())).isEmpty();
     }
-
-    // ---- AC-A7: every assignment change is audited -------------------------------
-
-    // ---- D-44: a primary seat that changes by itself is still a change -----------
 
     @Test
     void takingOverAsPrimaryRecordsTheSeatThatWasDemoted() throws Exception {
@@ -267,8 +253,6 @@ class PocAssignmentTest extends IntegrationTestBase {
                 .andExpect(jsonPath("$[?(@.action=='POC_REMOVED')]").isNotEmpty());
     }
 
-    // ---- AC-A8: a customer-scoped account never receives POC identity ------------
-
     @Test
     void aSelfServiceCustomerSeesNoPocFieldsOnTheirOwnInvoice() throws Exception {
         Invoice inv = invoiceService.create(invoiceReq(sales.getId()));
@@ -298,8 +282,6 @@ class PocAssignmentTest extends IntegrationTestBase {
         mockMvc.perform(get("/api/table-schemas/invoices").with(as(admin)))
                 .andExpect(jsonPath("$.columns[?(@.name=='salesPocUserId')]").isNotEmpty());
     }
-
-    // ---- AC-A9: legacy rows keep working and are findable ------------------------
 
     @Test
     void aLegacyInvoiceWithNoPocIsFlaggedAndFindableByTheIsEmptyFilter() throws Exception {
@@ -331,8 +313,6 @@ class PocAssignmentTest extends IntegrationTestBase {
         assertThat(invoiceRepository.findById(legacy.getId()).orElseThrow().getBalance())
                 .isEqualByComparingTo("0.00");
     }
-
-    // ---- AC-A4 over HTTP: no page reload needed ---------------------------------
 
     @Test
     void thePocRosterEndpointsRoundTrip() throws Exception {

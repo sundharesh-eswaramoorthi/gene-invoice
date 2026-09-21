@@ -10,10 +10,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * D-41: an export is the list the user is looking at, so it comes back in the order the filter and
- * sort asked for — not in whatever order the ids happened to load.
- */
 class ExportOrderTest extends IntegrationTestBase {
 
     User admin;
@@ -35,7 +31,6 @@ class ExportOrderTest extends IntegrationTestBase {
 
     @Test
     void theProductsExportFollowsTheRequestedSort() throws Exception {
-        // Created in an order that has nothing to do with the sort asked for.
         product("Zeta export probe", "10.00");
         product("Alpha export probe", "20.00");
         product("Mu export probe", "30.00");

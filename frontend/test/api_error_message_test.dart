@@ -8,7 +8,6 @@ import 'package:gene_invoice/core/format.dart';
 
 DioException _error(Map<String, dynamic> body) => _failure(400, body);
 
-/// The same answer as a request that asked for bytes receives it.
 DioException _bytes(String body) =>
     _failure(404, Uint8List.fromList(utf8.encode(body)));
 
@@ -60,8 +59,6 @@ void main() {
           'Items[0] quantity must be greater than 0');
     });
 
-    /// A download asks for bytes, so Dio hands its error body over as bytes too rather than as
-    /// the Map every other call gets. The server's own sentence is in there all the same.
     test('reads an error body that came back as bytes', () {
       expect(apiErrorMessage(_bytes('{"message":"Document not found"}')), 'Document not found');
       expect(

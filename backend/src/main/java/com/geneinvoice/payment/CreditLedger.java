@@ -14,16 +14,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/**
- * Customer credit is money that still belongs to the payments it came from: an overpayment, or a
- * refund of money a payment had put on an invoice. Every movement into or out of credit is booked
- * against its payment, so an active payment always accounts for its whole amount —
- * {@code amount = sum(allocations) + creditApplied}, where {@code creditApplied} is the part still
- * sitting in the customer's credit balance. Voiding a payment can then take back exactly what it put
- * in, wherever the money went since.
- *
- * <p>Credit from before this ledger has no payment behind it. It is still spent, just untraced.
- */
 @Component
 @RequiredArgsConstructor
 public class CreditLedger {
@@ -33,15 +23,9 @@ public class CreditLedger {
     private final CustomerRepository customerRepository;
     private final InvoiceRepository invoiceRepository;
 
-    /** One payment's credit landing on an invoice, with the invoice's position either side. */
     public record CreditMove(PaymentService.InvoicePaymentAudit before,
                              PaymentService.InvoicePaymentAudit after) {}
 
-    /**
-     * Pays what it can of a saved invoice from its customer's credit, oldest payment's credit first,
-     * booking each part as an allocation of the payment it came from. Returns those parts for the
-     * caller to audit.
-     */
     public List<CreditMove> applyTo(Invoice invoice) {
         // Spending credit moves the customer's balance and the invoice's paid amount, so it takes
         // the same two locks in the same order as every other money path — the customer, then the
@@ -74,11 +58,6 @@ public class CreditLedger {
         return moves;
     }
 
-    /**
-     * Moves {@code amount} of what an invoice has been paid back into its customer's credit, newest
-     * payment first, keeping the money booked to the payments it came from. The caller lowers the
-     * invoice's paid amount.
-     */
     public void refund(Invoice invoice, BigDecimal amount) {
         if (amount.signum() <= 0) return;
         Customer locked = lockCustomer(invoice.getCustomer().getId());
@@ -103,18 +82,15 @@ public class CreditLedger {
         customerRepository.save(locked);
     }
 
-    /** The customer, locked for the rest of the transaction: the first lock of every money path. */
     private Customer lockCustomer(Long customerId) {
         return customerRepository.findByIdForUpdate(customerId)
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
     }
 
-    /** The invoice, locked after its customer — the one order the whole money path takes. */
     private void lockInvoice(Invoice invoice) {
         if (invoice.getId() != null) invoiceRepository.findByIdForUpdate(invoice.getId());
     }
 
-    /** Active payments of the customer that still have money sitting in credit, oldest first. */
     private List<Payment> creditHolders(Long customerId) {
         return paymentRepository.findByCustomerIdOrderByPaidAtDesc(customerId).stream()
                 .filter(p -> p.getStatus() == PaymentStatus.ACTIVE && p.getCreditApplied().signum() > 0)

@@ -11,21 +11,6 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Locale;
 
-/**
- * Makes "at most one primary seat per customer and kind" the database's own rule (CP-02).
- *
- * <p>The service serialises every change to who is primary behind the customer's row lock, which
- * is what stops a second one appearing. This is the invariant underneath: a partial unique index
- * on {@code (customer_id, poc_type) where is_primary}, so no path — a future one, a script, a
- * hand-written statement — can leave two behind. It is preceded by a one-off repair that demotes
- * all but the oldest primary of each group, so a database that already holds a pair is mended
- * rather than left unable to build the index.
- *
- * <p>The index is Postgres's; H2 has no filtered index, so there the repair runs and the rule
- * lives only in the service. It runs once the schema is up to date (which is what the entity
- * manager factory in the constructor is for) and before the app takes requests, changes nothing
- * on a database that has been through it, and never fails startup.
- */
 @Component
 @Slf4j
 class PocSchemaUpgrade implements InitializingBean {
@@ -51,11 +36,6 @@ class PocSchemaUpgrade implements InitializingBean {
         }
     }
 
-    /**
-     * Leaves at most one primary seat per customer and kind: the oldest, which is the one
-     * {@code remove()} would have promoted anyway. Returns how many it demoted, which is zero on
-     * a database that never had the race.
-     */
     static int demoteDuplicatePrimaries(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             int demoted = statement.executeUpdate("""
@@ -74,7 +54,6 @@ class PocSchemaUpgrade implements InitializingBean {
         }
     }
 
-    /** The partial unique index, on the one database that has them. */
     private static void addPrimaryIndex(Connection connection) throws SQLException {
         if (!connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT)
                 .contains("postgresql")) {

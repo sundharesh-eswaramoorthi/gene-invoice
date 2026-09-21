@@ -5,11 +5,6 @@ import lombok.*;
 
 import java.time.Instant;
 
-/**
- * One copy of an email for one recipient (M6): its own To header, its own Message-ID and its own
- * status. The queue carries only the id; this row is the truth. {@code seq} goes up by one with
- * every change the client can see, so the backend can tell a newer state from an older one.
- */
 @Entity
 @Table(name = "mail_messages", indexes = {
         @Index(name = "idx_mail_message_due", columnList = "status,next_attempt_at"),
@@ -40,15 +35,12 @@ public class MailMessage {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** The client's key, e.g. {@code gi-91-501}: a copy handed over twice is the same copy. */
     @Column(name = "external_id", nullable = false, unique = true, length = EXTERNAL_ID_MAX)
     private String externalId;
 
-    /** The client's email id, shared by the copies of one email. */
     @Column(name = "group_ref", length = GROUP_REF_MAX)
     private String groupRef;
 
-    /** The sender's connection when submitted; null when there was none. */
     @Column(name = "connection_id")
     private Long connectionId;
 
@@ -58,7 +50,6 @@ public class MailMessage {
     @Column(name = "from_name", nullable = false, length = NAME_MAX)
     private String fromName;
 
-    /** The Gmail address it went out from, once sent. */
     @Column(name = "from_address", length = ADDRESS_MAX)
     private String fromAddress;
 
@@ -68,7 +59,6 @@ public class MailMessage {
     @Column(name = "to_address", nullable = false, length = ADDRESS_MAX)
     private String toAddress;
 
-    /** {@code to_address} in lower case, to find the recipient's own connection. */
     @Column(name = "to_address_key", nullable = false, length = ADDRESS_MAX)
     private String toAddressKey;
 
@@ -78,7 +68,6 @@ public class MailMessage {
     @Column(nullable = false, length = BODY_MAX)
     private String body;
 
-    /** {@code <gm-uuid@domain>}, fixed at submit and kept across attempts, so a bounce or a reply finds the copy. */
     @Column(name = "rfc_message_id", nullable = false, length = HEADER_ID_MAX)
     private String rfcMessageId;
 
@@ -89,7 +78,6 @@ public class MailMessage {
     @Column(nullable = false)
     private long seq;
 
-    /** Why it failed, was not sent, or bounced. */
     @Column(length = ERROR_MAX)
     private String error;
 
@@ -99,27 +87,21 @@ public class MailMessage {
     @Column(name = "next_attempt_at")
     private Instant nextAttemptAt;
 
-    /** When it was last put on the queue, or, for a retry, when it comes off the delay queue. */
     @Column(name = "enqueued_at")
     private Instant enqueuedAt;
 
-    /** An attempt may have delivered it without the service hearing so: the next one looks in Sent first. */
     @Column(name = "delivery_uncertain", nullable = false)
     private boolean deliveryUncertain;
 
-    /** The sender-side Gmail message id. */
     @Column(name = "provider_message_id", unique = true, length = 100)
     private String providerMessageId;
 
-    /** The sender-side Gmail thread, where bounces and replies arrive. */
     @Column(name = "provider_thread_id", length = 100)
     private String providerThreadId;
 
-    /** The recipient's own connection, once the copy was found in it. */
     @Column(name = "recipient_connection_id")
     private Long recipientConnectionId;
 
-    /** The copy's id in the recipient's own mailbox, whose UNREAD label says whether it was read. */
     @Column(name = "recipient_message_id", length = 100)
     private String recipientMessageId;
 
@@ -135,7 +117,6 @@ public class MailMessage {
     @Column(name = "bounced_at")
     private Instant bouncedAt;
 
-    /** True when seen in the recipient's mailbox; false when delivery is only estimated. */
     @Column(name = "delivered_confirmed", nullable = false)
     private boolean deliveredConfirmed;
 

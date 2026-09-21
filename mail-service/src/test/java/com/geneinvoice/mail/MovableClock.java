@@ -6,10 +6,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 
-/**
- * A clock a test moves by hand. It follows the real time until {@link #set} stops it at an instant;
- * {@link #advance} moves it forward either way.
- */
 public final class MovableClock extends Clock {
 
     private volatile Instant fixed;
@@ -30,7 +26,6 @@ public final class MovableClock extends Clock {
         else offset = offset.plus(by);
     }
 
-    /** Back to the real time. */
     public void reset() {
         fixed = null;
         offset = Duration.ZERO;

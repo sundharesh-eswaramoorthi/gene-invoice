@@ -14,20 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Makes "one email address belongs to one customer" the database's own rule (CP-05).
- *
- * <p>Every email about a customer goes to that address, so two customers on it means two records
- * sharing one conversation and no way to tell whose reply is whose. The service refuses it on
- * both write paths; this is the invariant underneath — a unique index on {@code lower(email)},
- * skipping the rows that have none.
- *
- * <p>Where a database already holds a collision the index cannot be built. It is not something
- * this may resolve on its own — which of the two customers should keep the address is a question
- * for the people who own the data — so it reports the addresses and leaves them be. The index is
- * Postgres's; H2 has neither expression nor partial indexes, so there the rule lives only in the
- * service. Safe to re-run, and never fails startup.
- */
 @Component
 @Slf4j
 class CustomerSchemaUpgrade implements InitializingBean {
@@ -55,7 +41,6 @@ class CustomerSchemaUpgrade implements InitializingBean {
         }
     }
 
-    /** The addresses more than one customer holds, lower-cased; empty on a clean database. */
     static List<String> duplicateEmails(Connection connection) throws SQLException {
         List<String> out = new ArrayList<>();
         try (Statement statement = connection.createStatement();

@@ -31,7 +31,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Feature D and E: server-side paging, sorting, filtering, scoping and filter-aware tiles. */
 class TableQueryTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
@@ -70,10 +69,6 @@ class TableQueryTest extends IntegrationTestBase {
         return objectMapper.readTree(result.getResponse().getContentAsString());
     }
 
-    // ---- AC-D1 / AC-D2: paging never over-fetches and is stably ordered ---------
-
-    // ---- D-40: paging and sort validation ---------------------------------------
-
     @Test
     void aSortDirectionThatIsNeitherAscNorDescIsRefused() throws Exception {
         invoice(acme, "10.00", 1, sales);
@@ -90,7 +85,6 @@ class TableQueryTest extends IntegrationTestBase {
     void aPageFarPastTheEndIsEmptyRatherThanAServerError() throws Exception {
         invoice(acme, "10.00", 1, sales);
 
-        // page * size overflows int arithmetic here.
         JsonNode page = getJson(get("/api/invoices").with(as(admin))
                 .param("page", String.valueOf(Integer.MAX_VALUE)).param("size", "20"));
 
@@ -112,7 +106,6 @@ class TableQueryTest extends IntegrationTestBase {
 
     @Test
     void pagingIsStableSoNoRowIsSkippedOrRepeated() throws Exception {
-        // All 25 share an invoice date, so only the id tiebreak keeps the order deterministic.
         for (int i = 0; i < 25; i++) invoice(acme, "10.00", 1, sales);
 
         Set<Integer> seen = new HashSet<>();
@@ -134,8 +127,6 @@ class TableQueryTest extends IntegrationTestBase {
         JsonNode page = getJson(get("/api/invoices").with(as(admin)));
         assertThat(page.get("size").asInt()).isEqualTo(20);
     }
-
-    // ---- AC-D3: sorting is server-side and only on declared columns -------------
 
     @Test
     void sortingIsAppliedServerSide() throws Exception {
@@ -168,14 +159,11 @@ class TableQueryTest extends IntegrationTestBase {
 
     @Test
     void theSchemaListsColumnsInTheOrderTheyAreDeclared() throws Exception {
-        // The filter picker is built straight from this list, so the order must be the declared
-        // one rather than whatever a hash map happens to produce.
         JsonNode schema = getJson(get("/api/table-schemas/invoices").with(as(admin)));
         List<String> names = new ArrayList<>();
         for (JsonNode c : schema.get("columns")) {
             names.add(c.get("name").asText());
         }
-        // Due date reads beside the invoice date, and Overdue beside the status it qualifies.
         assertThat(names).startsWith("id", "invoiceNumber", "customerId", "customerName",
                 "invoiceDate", "dueDate", "total", "paidAmount", "balance", "status", "overdue");
     }
@@ -189,12 +177,9 @@ class TableQueryTest extends IntegrationTestBase {
         }
         assertThat(sortable).contains("invoiceNumber", "invoiceDate", "dueDate", "total",
                 "paidAmount", "balance", "status", "customerName");
-        // Overdue is worked out from the clock, so there is nothing to sort on: due date is it.
         assertThat(sortable).doesNotContain("overdue");
         assertThat(schema.get("pageSizes").toString()).isEqualTo("[10,20,50]");
     }
-
-    // ---- AC-D9: every filter input is validated server-side ---------------------
 
     @Test
     void anUnknownColumnIsRejectedCleanly() throws Exception {
@@ -248,8 +233,6 @@ class TableQueryTest extends IntegrationTestBase {
         assertThat(injection.get("totalElements").asLong()).isZero();
     }
 
-    // ---- filtering behaviour ----------------------------------------------------
-
     @Test
     void moneyRangeEnumSetAndTextFiltersCombineWithAnd() throws Exception {
         invoice(acme, "10.00", 1, sales);
@@ -271,8 +254,6 @@ class TableQueryTest extends IntegrationTestBase {
         invoice(acme, "50.00", 1, sales);
         invoice(acme, "900.00", 1, sales);
 
-        // One `filter` parameter carrying a comma: the values belong to the operator, and must
-        // not be split into two separate chips.
         JsonNode between = getJson(get("/api/invoices").with(as(admin))
                 .param("filter", "total:between:20,100"));
         assertThat(between.get("totalElements").asLong()).isEqualTo(1);
@@ -315,8 +296,6 @@ class TableQueryTest extends IntegrationTestBase {
         assertThat(missing.get("content").get(0).get("name").asText()).isEqualTo("Globex Corp");
     }
 
-    // ---- AC-D10: a customer-scoped user's scope cannot be widened ---------------
-
     @Test
     void aCustomerScopedUserSeesOnlyTheirOwnRowsWhateverFilterTheySend() throws Exception {
         invoice(acme, "10.00", 1, sales);
@@ -326,7 +305,6 @@ class TableQueryTest extends IntegrationTestBase {
         JsonNode unfiltered = getJson(get("/api/invoices").with(as(acmeUser)));
         assertThat(unfiltered.get("totalElements").asLong()).isEqualTo(1);
 
-        // Asking for the other customer explicitly returns nothing, not their rows.
         JsonNode widened = getJson(get("/api/invoices").with(as(acmeUser))
                 .param("filter", "customerId:eq:" + globex.getId()));
         assertThat(widened.get("totalElements").asLong()).isZero();
@@ -346,8 +324,6 @@ class TableQueryTest extends IntegrationTestBase {
         assertThat(tiles.get("count").asLong()).isEqualTo(1);
         assertThat(tiles.get("totalBilled").asDouble()).isEqualTo(10.0);
     }
-
-    // ---- AC-A6: a POC's default book is enforced and reported as locked ---------
 
     @Test
     void aSalesPocWithoutScopeOverrideIsLockedToTheirOwnBook() throws Exception {
@@ -391,8 +367,6 @@ class TableQueryTest extends IntegrationTestBase {
         assertThat(all.get("totalElements").asLong()).isEqualTo(2);
         assertThat(all.get("lockedFilters").size()).isZero();
     }
-
-    // ---- Feature E: tiles reflect the filter, not the page ----------------------
 
     @Test
     void tilesAreComputedOverTheWholeFilteredSetNotTheVisiblePage() throws Exception {
@@ -465,18 +439,10 @@ class TableQueryTest extends IntegrationTestBase {
         assertThat(tiles.get("totalCollected").asDouble()).isZero();
     }
 
-    // ---- TBL-01 / TBL-02: a value the database cannot hold is a 400, not a 500 ----
-
-    /**
-     * A NUL inside a filter value used to reach Postgres and come back as "Unexpected error" on
-     * the list and on its summary at once, so the page showed a failed request and no tiles, with
-     * a Retry that did it again. It is named for what it is, like every other unusable value.
-     */
     @Test
     void aNullCharacterInAFilterValueIsRefusedByName() throws Exception {
         invoice(acme, "10.00", 1, sales);
 
-        // A column each list really has, so the 400 is about the value and not the column.
         Map<String, String> listsAndColumns = Map.of(
                 "/api/customers", "name",
                 "/api/invoices", "notes",
@@ -492,15 +458,12 @@ class TableQueryTest extends IntegrationTestBase {
                     .andExpect(jsonPath("$.message",
                             org.hamcrest.Matchers.containsString("null character")));
         }
-        // The companion summary request fails the same way, rather than leaving the page with a
-        // broken list and "Summary unavailable: Unexpected error" where the tiles should be.
         mockMvc.perform(get("/api/customers/summary").with(as(admin))
                         .param("filter", "name:contains:a\u0000b"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message",
                         org.hamcrest.Matchers.containsString("null character")))
                 .andExpect(jsonPath("$.message", org.hamcrest.Matchers.containsString("name")));
-        // And the export, which parses the same filters out of a body.
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .post("/api/invoices/export").with(as(admin))
                         .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
@@ -509,7 +472,6 @@ class TableQueryTest extends IntegrationTestBase {
                 .andExpect(status().isBadRequest());
     }
 
-    /** A trailing one is refused too, rather than trimmed away into a different question. */
     @Test
     void aTrailingNullCharacterIsRefusedRatherThanQuietlyTrimmed() throws Exception {
         invoice(acme, "10.00", 1, sales);
@@ -522,11 +484,6 @@ class TableQueryTest extends IntegrationTestBase {
                 .andExpect(status().isOk());
     }
 
-    /**
-     * A number with an exponent past what the database can hold used to bind as zero, so "total
-     * greater than 10 to the 200000" matched nearly every invoice and "less than" matched none —
-     * wrong rows, with nothing to say so. Tiny exponents were a 500. Both are refused by name.
-     */
     @Test
     void aNumberTooLargeOrTooPreciseToCompareIsRefused() throws Exception {
         invoice(acme, "10.00", 1, sales);
@@ -541,7 +498,6 @@ class TableQueryTest extends IntegrationTestBase {
         }
     }
 
-    /** And an ordinary money filter still answers, in both directions. */
     @Test
     void anOrdinaryMoneyFilterStillCompares() throws Exception {
         invoice(acme, "10.00", 1, sales);
@@ -553,13 +509,6 @@ class TableQueryTest extends IntegrationTestBase {
                 .param("filter", "total:lt:1000000000000")).get("totalElements").asLong()).isEqualTo(2);
     }
 
-    // ---- AUTH-01: not being that kind of POC is an empty book, not every row ----
-
-    /**
-     * A Sales POC is nobody's Collection POC, so their payments and promises books are empty —
-     * not the company's. The lists used to come back complete, with no locked chip, including the
-     * payments of customers their own Customers list hides.
-     */
     @Test
     void aSalesPocSeesNoPaymentsOrPromisesAndIsToldWhy() throws Exception {
         Invoice mine = invoice(acme, "100.00", 1, sales);
@@ -577,18 +526,14 @@ class TableQueryTest extends IntegrationTestBase {
         assertThat(promises.get("totalElements").asLong()).isZero();
         assertThat(promises.get("lockedFilters")).isNotEmpty();
 
-        // Their own invoices list is narrowed, not emptied: they are a Sales POC.
         JsonNode invoices = getJson(get("/api/invoices").with(as(sales)).param("size", "50"));
         assertThat(invoices.get("totalElements").asLong()).isEqualTo(1);
         assertThat(invoices.get("lockedFilters")).isNotEmpty();
 
-        // And an admin still sees everything.
         assertThat(getJson(get("/api/payments").with(as(admin)).param("size", "50"))
                 .get("totalElements").asLong()).isEqualTo(2);
     }
 
-    /** The same the other way round: a collections-only role without SCOPE_OVERRIDE sees no
-     *  invoices rather than all of them. */
     @Test
     void aCollectionOnlyRoleWithoutScopeOverrideSeesNoInvoices() throws Exception {
         invoice(acme, "100.00", 1, sales);
@@ -599,8 +544,6 @@ class TableQueryTest extends IntegrationTestBase {
         assertThat(invoices.get("lockedFilters")).isNotEmpty();
     }
 
-    /** A role that is no kind of POC at all, and cannot look past its own book either, has an
-     *  empty book everywhere rather than the run of the company. */
     @Test
     void aRoleThatIsNoKindOfPocSeesNothingRatherThanEverything() throws Exception {
         invoice(acme, "100.00", 1, sales);

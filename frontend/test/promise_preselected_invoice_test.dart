@@ -42,11 +42,9 @@ Map<String, dynamic> _invoice(int id, String number,
       'status': status,
     };
 
-/// The invoice the Payment Promise tab is open on: settled, nothing left owed.
 final _settled =
     _invoice(150, 'INV-0150', status: 'FULLY_PAID', total: 1000, balance: 0);
 
-/// The customer's one still-open invoice, which is what the checklist offers.
 final _open = _invoice(151, 'INV-0151', status: 'UNPAID', total: 400, balance: 400);
 
 Map<String, dynamic> _page(List<Map<String, dynamic>> rows) =>
@@ -75,7 +73,6 @@ Future<void> _pump(WidgetTester tester, FakeBackend api, Widget home) async {
   await tester.pumpAndSettle();
 }
 
-/// Opens the dialog the way the invoices list does, on an invoice that owes nothing.
 Future<void> _openDialogOn(WidgetTester tester, FakeBackend api, Map<String, dynamic> on) async {
   await _pump(
     tester,
@@ -107,7 +104,6 @@ void main() {
     final api = _backend();
     await _openDialogOn(tester, api, _settled);
 
-    // It has a line of its own, saying what it is, beside the customer's open invoice.
     expect(find.text('INV-0150'), findsOneWidget);
     expect(find.text('INV-0151'), findsOneWidget);
     expect(find.text('Fully paid'), findsOneWidget);
@@ -116,7 +112,6 @@ void main() {
     expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'INV-0151')).value,
         isFalse);
 
-    // And the promise says so: 1,000 promised against an invoice that owes nothing.
     await tester.enterText(find.byType(TextField).first, '1000');
     await tester.pumpAndSettle();
     expect(find.text('Promised ₹1,000.00 more than those invoices owe.'), findsOneWidget);
@@ -165,7 +160,6 @@ void main() {
     });
     await _openDialogOn(tester, api, _settled);
 
-    // The fetch failed and says so, but the invoice about to be linked still has its line.
     expect(find.textContaining('Could not load invoices'), findsOneWidget);
     expect(tester.widget<CheckboxListTile>(find.widgetWithText(CheckboxListTile, 'INV-0150')).value,
         isTrue);

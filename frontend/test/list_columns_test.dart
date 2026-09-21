@@ -19,10 +19,6 @@ import 'package:go_router/go_router.dart';
 
 import 'support/roboto.dart';
 
-// What the list columns show and offer, measured as a browser shows them — mostly a 1366x900
-// desktop, once a 390x844 phone: the real screens in the real shell, its sidebar contracted as it
-// starts, desktop density, text in Roboto (see loadRoboto).
-
 const _admin = CurrentUser(
   id: 1,
   username: 'admin',
@@ -41,7 +37,6 @@ const _admin = CurrentUser(
   customerId: null,
 );
 
-// Longer than the 180px the column has, and a name a person really can have.
 const _longPoc = 'Venkataraghavan Balasubramaniam';
 
 Map<String, dynamic> _person(int id, String name, {bool active = true}) => {
@@ -70,8 +65,6 @@ Map<String, dynamic> _invoice(int id) => {
       'pocMissing': false,
     };
 
-/// A customer whose primary Success POC has since been deactivated — the seat stays, but
-/// PocService skips inactive holders, so the app would not write to them (AC-A5).
 Map<String, dynamic> _customerWithInactiveSuccessPoc(int id) => {
       'id': id,
       'name': 'Acme Ltd',
@@ -221,7 +214,6 @@ void main() {
     // one as the customer's POC without saying so (CP-07).
     expect(find.text('Anita Rao (inactive)'), findsOneWidget);
     expect(find.text('Anita Rao'), findsNothing);
-    // An active holder is named plainly.
     expect(find.text('Cleo Collections'), findsOneWidget);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 

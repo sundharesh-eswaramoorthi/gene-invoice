@@ -11,12 +11,10 @@ import '../../shared/models/customer.dart';
 import '../../shared/models/payment_term.dart';
 
 class AuditEntry {
-  /// Null for an event derived from a record older than its audit trail.
   final int? id;
   final String entityType;
   final int entityId;
 
-  /// Names the record the row is about — an invoice number, "Payment #12".
   final String? entityLabel;
   final String action;
   final String? beforeJson;
@@ -27,17 +25,12 @@ class AuditEntry {
   final String? reason;
   final DateTime? createdAt;
 
-  /// Reconstructed from the record itself because it predates the history log.
   final bool derived;
 
-  /// Who made the change is withheld from this viewer — a customer login never sees staff.
   final bool actorHidden;
 
-  /// The one figure that says what happened, worked out once when the row arrives rather than
-  /// on every rebuild.
   final String? headline;
 
-  /// For a payment moving on an invoice, the payment it was.
   final int? paymentId;
 
   const AuditEntry({
@@ -59,7 +52,6 @@ class AuditEntry {
     this.paymentId,
   });
 
-  /// Identifies the row across rebuilds, filtering and refreshes. Derived rows have no id.
   String get stableKey => '$entityType:$entityId:$action:'
       '${id ?? 'derived:${createdAt?.microsecondsSinceEpoch}'}';
 
@@ -90,7 +82,6 @@ class AuditEntry {
   }
 }
 
-/// A snapshot is usually an object, but some events store a bare value (a promise's status).
 Object? _decode(String? raw) {
   if (raw == null || raw.isEmpty) return null;
   try {
@@ -100,8 +91,6 @@ Object? _decode(String? raw) {
   }
 }
 
-/// A payment term as the app names it everywhere else, or null when the snapshot carries none.
-/// An unknown value still reads as words, so a term added to the backend later shows something.
 String? _termLabel(Object? value) =>
     value is String ? (parsePaymentTerm(value)?.label ?? humanizeEnum(value)) : null;
 
@@ -142,8 +131,6 @@ String? _headline(String action, Object? before, Object? after) {
       final to = _statusOf(after);
       if (from == null || to == null || from == to) return null;
       return '${humanizeEnum(from)} → ${humanizeEnum(to)}';
-    // The whole point of an entry of its own is the move, without reading two snapshots side by
-    // side (AC-A8): the old date, the new one, and the terms it now runs on.
     case 'INVOICE_DUE_DATE_CHANGED':
       final was = formatUtcDate(b?['dueDate']);
       final now = formatUtcDate(a?['dueDate']);
@@ -201,7 +188,6 @@ final auditHistoryProvider =
 const _actionLabels = <String, String>{
   'CUSTOMER_CREATED': 'Customer created',
   'CUSTOMER_UPDATED': 'Customer details updated',
-  // Terms decide every invoice raised from now on, so they get a row of their own (AC-A8).
   'CUSTOMER_PAYMENT_TERM_CHANGED': 'Payment terms changed',
   // Destructive writes leave a trail of their own (CP-04); the record is gone, so these read on
   // the deleted entity's own history, which staff can still open.
@@ -215,7 +201,6 @@ const _actionLabels = <String, String>{
   'INVOICE_UPDATED': 'Invoice updated',
   'INVOICE_CANCELLED': 'Invoice cancelled',
   'INVOICE_DUE_DATE_CHANGED': 'Due date changed',
-  // One entry for the whole upgrade, filed against the book rather than an invoice (§2.5).
   'INVOICE_DUE_DATES_BACKFILLED': 'Due dates backfilled',
   'PAYMENT_RECORDED': 'Payment recorded',
   'PAYMENT_UPDATED': 'Payment updated',
@@ -230,11 +215,9 @@ const _actionLabels = <String, String>{
   'DISPUTE_OPENED': 'Dispute opened',
   'DISPUTE_APPROVED': 'Dispute approved',
   'DISPUTE_DENIED': 'Dispute denied',
-  // A document's own events read on the record it hangs off (§4.4).
   'DOCUMENT_UPLOADED': 'Document uploaded',
   'DOCUMENT_UPDATED': 'Document updated',
   'DOCUMENT_DELETED': 'Document removed',
-  // The product and user pages show their own timelines.
   'PRODUCT_CREATED': 'Product created',
   'PRODUCT_UPDATED': 'Product updated',
   'PRODUCT_ACTIVATED': 'Product activated',
@@ -273,9 +256,6 @@ IconData _iconFor(String entityType) => switch (entityType) {
       _ => Icons.history,
     };
 
-/// The History tab. With [includeRelated] the timeline also covers the records hanging off
-/// this one — a customer's invoices, payments, promises and disputes; an invoice's payments,
-/// promises and disputes — and can be narrowed to one kind of record.
 class AuditHistoryPanel extends ConsumerStatefulWidget {
   final String entityType;
   final int entityId;
@@ -293,10 +273,8 @@ class AuditHistoryPanel extends ConsumerStatefulWidget {
 }
 
 class _AuditHistoryPanelState extends ConsumerState<AuditHistoryPanel> {
-  /// Rows shown at a time; a busy account's timeline can run to thousands.
   static const _pageSize = 100;
 
-  /// The kind of record the timeline is narrowed to; null shows everything.
   String? _type;
   int _visible = _pageSize;
 
@@ -383,7 +361,6 @@ class _AuditHistoryPanelState extends ConsumerState<AuditHistoryPanel> {
 class _AuditTile extends StatelessWidget {
   final AuditEntry entry;
 
-  /// Whether to name the record the row is about — only needed once other records mix in.
   final bool showRecord;
 
   const _AuditTile({super.key, required this.entry, required this.showRecord});
@@ -447,7 +424,6 @@ class _AuditTile extends StatelessWidget {
         ),
         expandedCrossAxisAlignment: CrossAxisAlignment.start,
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        // Mounted only while expanded, so the snapshots are formatted only when someone looks.
         children: [_AuditDetails(entry: entry)],
       ),
     );

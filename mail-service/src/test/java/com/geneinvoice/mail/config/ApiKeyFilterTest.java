@@ -9,7 +9,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** Only a caller with the key reaches {@code /api/v1/**}; health stays open. */
 class ApiKeyFilterTest extends IntegrationTestBase {
 
     private static final String UNAUTHORIZED =
@@ -27,7 +26,6 @@ class ApiKeyFilterTest extends IntegrationTestBase {
         mockMvc.perform(post("/api/v1/messages").header("X-Api-Key", "")
                         .contentType("application/json").content("{}"))
                 .andExpect(status().isUnauthorized());
-        // Before anything else: a path that does not exist says no more than one that does.
         mockMvc.perform(get("/api/v1/nothing-here")).andExpect(status().isUnauthorized());
 
         assertThat(messageRepository.findAll()).isEmpty();

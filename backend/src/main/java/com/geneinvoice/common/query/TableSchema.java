@@ -6,12 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The set of columns one table exposes for sorting and filtering.
- *
- * <p>Column order is the order they are declared in: the frontend builds its filter picker from
- * this list, so it must not be left to a hash map's whim.
- */
 public record TableSchema(String entity, List<ColumnDef> columns, Map<String, ColumnDef> byName,
                           String defaultSort) {
 
@@ -49,18 +43,12 @@ public record TableSchema(String entity, List<ColumnDef> columns, Map<String, Co
         return def;
     }
 
-    /**
-     * The schema as the caller may use it. A customer-scoped account never sees POC identity
-     * (AC-A8), so for them the POC columns do not exist: filtering or sorting on one is an unknown
-     * column, not a way to probe who their reps are through the match counts.
-     */
     public TableSchema visibleTo(boolean customerScoped) {
         if (!customerScoped) return this;
         return of(entity, defaultSort,
                 columns.stream().filter(c -> !c.pocRestricted()).toArray(ColumnDef[]::new));
     }
 
-    /** Columns in declaration order. */
     public List<ColumnDef> ordered() {
         return columns;
     }

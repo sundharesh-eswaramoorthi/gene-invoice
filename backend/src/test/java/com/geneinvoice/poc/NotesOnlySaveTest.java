@@ -31,11 +31,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * The detail screens send the POC back with every save. A notes edit must still save when that
- * POC has since been deactivated, or when the editor's role may not assign POCs (AC-A5); only an
- * actual change of POC is checked.
- */
 class NotesOnlySaveTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
@@ -62,11 +57,6 @@ class NotesOnlySaveTest extends IntegrationTestBase {
                 new BigDecimal("40.00"), "Cash", null, null, collector.getId(), null));
     }
 
-    /**
-     * May edit invoices and payments, but not assign POCs. SCOPE_OVERRIDE because a clerk holds no
-     * POC seat of any kind: without it their book is empty and every record is a 404 before the
-     * POC rule this test is about is ever reached (AUTH-01).
-     */
     private User clerk() {
         Role role = roleRepository.findByName("NOTES_CLERK").orElseGet(() -> roleRepository.save(
                 Role.builder()

@@ -20,7 +20,6 @@ import 'package:gene_invoice/shared/widgets/detail_scaffold.dart';
 
 import 'support/fake_backend.dart';
 
-/// A cashier: the documents privileges and the invoice's own (§4.5).
 const _staff = {
   Privileges.documentView,
   Privileges.documentManage,
@@ -28,7 +27,6 @@ const _staff = {
   Privileges.invoiceManage,
 };
 
-/// A viewer: may see documents and invoices, may change neither.
 const _viewer = {Privileges.documentView, Privileges.invoiceView};
 
 CurrentUser _user(Set<String> privileges, {int? customerId}) => CurrentUser(
@@ -87,14 +85,12 @@ PickedDocument _file(String name, {String? mimeType, int bytes = 8}) => PickedDo
       bytes: Uint8List(bytes),
     );
 
-/// The Documents tab as a details page shows it: second after History, opened by its slug.
 Future<List<String>> _pump(
   WidgetTester tester,
   FakeBackend backend, {
   required CurrentUser user,
   DocumentSaver? saver,
   String initialTab = 'documents',
-  /// False while something is still loading: a progress indicator never settles.
   bool settle = true,
   Size size = const Size(1366, 1400),
 }) async {
@@ -176,7 +172,6 @@ void main() {
     expect(find.text('photo.jpg'), findsOneWidget);
     expect(find.text('JPEG · 240 KB · Jane Doe · $when'), findsOneWidget);
     expect(find.text('Shared'), findsOneWidget);
-    // Everything this cashier may do with a row is offered on it.
     expect(find.byTooltip('Download'), findsNWidgets(2));
     expect(find.byTooltip('Edit'), findsNWidgets(2));
     expect(find.byTooltip('Remove'), findsNWidgets(2));
@@ -210,7 +205,6 @@ void main() {
 
     expect(backend.sent('GET /api/documents/count').single.queryParameters,
         {'entityType': 'INVOICE', 'entityId': 42});
-    // The count is on the tab although the tab has never been opened: nothing asked for the list.
     expect(backend.sent('GET /api/documents'), isEmpty);
     expect(find.descendant(of: find.byType(Badge), matching: find.text('3')), findsOneWidget);
   });
@@ -223,7 +217,6 @@ void main() {
     expect(find.text('Upload one to keep it with this invoice.'), findsOneWidget);
     expect(find.byType(Badge), findsNothing);
 
-    // This build has no file chooser of its own, and says so rather than offering a dead button.
     await tester.tap(find.text('Upload'));
     await tester.pumpAndSettle();
     expect(find.text('Choose file'), findsNothing);
@@ -325,8 +318,6 @@ void main() {
   });
 
   group('uploading', () {
-    /// The upload form on its own, opened with a file already chosen — as a file dropped on the
-    /// tab arrives (the browser's chooser cannot run in a test).
     Future<List<RequestOptions>> pumpForm(
       WidgetTester tester, {
       required CurrentUser user,
@@ -385,7 +376,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('The file is larger than 10 MB'), findsOneWidget);
-      // The size beside the name agrees with the refusal under it.
       expect(find.text('10 MB'), findsNothing);
       expect(find.text('10.1 MB'), findsOneWidget);
     });
@@ -397,14 +387,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('The file is larger than 10 MB'), findsOneWidget);
 
-      // The control beside the name is named for what it does: it takes the file off the form.
       expect(find.byTooltip('Choose another file'), findsNothing);
       await tester.tap(find.byTooltip('Remove file'));
       await tester.pumpAndSettle();
 
       expect(find.text('huge.pdf'), findsNothing);
       expect(find.text('PDF, PNG, JPEG, Word or Excel, up to 10 MB.'), findsOneWidget);
-      // Nothing on the form to be larger than anything now.
       expect(find.text('The file is larger than 10 MB'), findsNothing);
       expect(requests, isEmpty);
     });
@@ -489,7 +477,6 @@ void main() {
         ..interceptors.add(InterceptorsWrapper(onRequest: (options, handler) async {
           requests.add(options);
           if (options.method == 'POST') {
-            // Half the file has gone, and the rest is still on its way.
             options.onSendProgress?.call(512, 1024);
             await answer.future;
           }
@@ -508,7 +495,6 @@ void main() {
         overrides: [
           dioProvider.overrideWithValue(dio),
           currentUserProvider.overrideWithValue(_user(_staff)),
-          // Stands in for the browser's file chooser, which a test cannot open.
           documentPickerProvider.overrideWithValue(() async => _file('terms.pdf')),
         ],
         child: MaterialApp(
@@ -529,11 +515,9 @@ void main() {
       ));
       await tester.pumpAndSettle();
 
-      // The tab's own Upload button opens the form.
       await tester.tap(find.text('Upload'));
       await tester.pumpAndSettle();
 
-      // Nothing chosen yet: the server's own words, and no request.
       await tester.tap(find.widgetWithText(FilledButton, 'Upload'));
       await tester.pumpAndSettle();
       expect(find.text('Choose a file'), findsOneWidget);
@@ -544,8 +528,6 @@ void main() {
       expect(find.text('terms.pdf'), findsOneWidget);
 
       await tester.tap(find.widgetWithText(FilledButton, 'Upload'));
-      // The request goes out and the first of its bytes are reported: Dio takes a moment of the
-      // clock for each.
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 1));
       await tester.pump(const Duration(milliseconds: 1));
@@ -557,7 +539,6 @@ void main() {
       answer.complete();
       await tester.pumpAndSettle();
       expect(find.text('Document uploaded'), findsOneWidget);
-      // The list and the tab's count both ask again (AC-C1, AC-C4).
       expect(requests.where((r) => r.path == '/api/documents' && r.method == 'GET'), hasLength(2));
       expect(requests.where((r) => r.path == '/api/documents/count'), hasLength(2));
       expect(find.text('terms.pdf'), findsOneWidget);
@@ -587,8 +568,6 @@ void main() {
 
   testWidgets('a download that fails says what the server said', (tester) async {
     final backend = _backend(documents: [_document(1)]);
-    // A document someone else has just removed. The request asked for bytes, so Dio hands the
-    // error body over as bytes too — the message is in there all the same (AC-C21).
     backend.routes['GET /api/documents/1/download'] = (_) => FakeFailure(
         404, Uint8List.fromList(utf8.encode('{"message":"Document not found"}')));
     await _pump(tester, backend, user: _user(_staff));
@@ -651,12 +630,10 @@ void main() {
           'The file is larger than 10 MB');
       expect(documentRefusal(_file('notes.txt', mimeType: 'text/plain')),
           'Files of this kind cannot be attached (PDF, PNG, JPEG, Word or Excel only)');
-      // Right at the limit is still allowed.
       expect(documentRefusal(_file('big.pdf', bytes: 10485760)), isNull);
       for (final name in ['a.pdf', 'a.PNG', 'a.jpg', 'a.jpeg', 'a.docx', 'a.xlsx']) {
         expect(documentRefusal(_file(name)), isNull, reason: name);
       }
-      // A name the browser stripped of its extension still passes on the type it read.
       expect(documentRefusal(_file('scan', mimeType: 'image/png')), isNull);
     });
 
@@ -667,14 +644,11 @@ void main() {
       expect(formatBytes(1024), '1 KB');
       expect(formatBytes(1536), '1.5 KB');
       expect(formatBytes(10485760), '10 MB');
-      // A byte over the limit is a byte over: it never reads as the limit itself.
       expect(formatBytes(10485761), '10.1 MB');
-      // The unit rolls over on the figure that is shown, so nothing reads "1024.0 KB".
       expect(formatBytes(1048575), '1 MB');
       expect(formatBytes(1048576), '1 MB');
     });
   });
 }
 
-/// The tab's own list; every row inside it scrolls with it.
 final _list = find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first;

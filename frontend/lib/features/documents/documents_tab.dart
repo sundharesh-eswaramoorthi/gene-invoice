@@ -13,7 +13,6 @@ import 'document_models.dart';
 import 'document_providers.dart';
 import 'upload_document_dialog.dart';
 
-/// The icon for a kind of file: a list of documents is scanned by shape before it is read.
 IconData documentIcon(String contentType, String filename) =>
     switch (documentKindLabel(contentType, filename)) {
       'PDF' => Icons.picture_as_pdf_outlined,
@@ -23,9 +22,6 @@ IconData documentIcon(String contentType, String filename) =>
       _ => Icons.insert_drive_file_outlined,
     };
 
-/// The Documents tab on a details page: every file attached to the record, newest first, and
-/// what this caller may do with each (§4.6). A file dropped anywhere on the page opens the
-/// upload form with it already chosen (AC-C20).
 class DocumentsTab extends ConsumerStatefulWidget {
   final DocumentEntityType type;
   final int entityId;
@@ -45,14 +41,10 @@ class DocumentsTab extends ConsumerStatefulWidget {
 class _DocumentsTabState extends ConsumerState<DocumentsTab> {
   static const _pageSize = 20;
 
-  /// Pages shown so far. Each is its own request, so "Show older" never refetches what is on
-  /// screen, and an upload that invalidates the family refreshes them all at once.
   int _pages = 1;
 
-  /// A form is open, so the page must not answer a drop behind it with a second one.
   bool _formOpen = false;
 
-  /// Rows with a request of their own under way; their buttons wait for it.
   final Set<int> _busy = {};
 
   DocumentListKey _key(int page) =>
@@ -169,7 +161,6 @@ class _DocumentsTabState extends ConsumerState<DocumentsTab> {
                 icon: const Icon(Icons.refresh, size: 20),
                 onPressed: _reload,
               ),
-              // Nothing here for someone the upload endpoint would refuse (AC-C22).
               if (canUpload)
                 OutlinedButton.icon(
                   icon: const Icon(Icons.upload_file, size: 18),
@@ -181,7 +172,6 @@ class _DocumentsTabState extends ConsumerState<DocumentsTab> {
         );
 
     final body = first.when(
-      // A refresh that fails keeps the documents already on show; the next one may do better.
       skipError: true,
       loading: () => ListView(
         padding: const EdgeInsets.all(12),
@@ -234,7 +224,6 @@ class _DocumentsTabState extends ConsumerState<DocumentsTab> {
                   );
             break;
           }
-          // A file uploaded between two pages pushes a row onto the next page as well.
           for (final d in loaded.content) {
             if (seen.add(d.id)) documents.add(d);
           }
@@ -268,7 +257,6 @@ class _DocumentsTabState extends ConsumerState<DocumentsTab> {
       },
     );
 
-    // Dropping is for those who may upload, and never behind an open form.
     return documentDropTarget(
       enabled: canUpload && !_formOpen,
       onFile: (file) => _upload(file: file),
@@ -277,9 +265,6 @@ class _DocumentsTabState extends ConsumerState<DocumentsTab> {
   }
 }
 
-/// One document: what it is, who put it there, and the buttons this caller may press. What may
-/// be done is the server's answer on the row, not a guess, so nothing offered here can 403
-/// (AC-C22).
 class _DocumentRow extends StatelessWidget {
   final DocumentItem document;
   final bool busy;
@@ -332,7 +317,6 @@ class _DocumentRow extends StatelessWidget {
                       Text(document.filename,
                           style: theme.textTheme.titleSmall
                               ?.copyWith(fontWeight: FontWeight.w600)),
-                      // Shared says the customer can see it too; internal is the quiet default.
                       StatusChip(
                         label: document.visibility.shortLabel,
                         color: document.visibility == DocumentVisibility.SHARED
@@ -387,8 +371,6 @@ class _DocumentRow extends StatelessWidget {
   }
 }
 
-/// What a document says about itself, and who may see it (`PATCH /api/documents/{id}`). The file
-/// itself never changes: a new version is a new upload.
 class _EditDocumentDialog extends ConsumerStatefulWidget {
   final DocumentItem document;
   const _EditDocumentDialog({required this.document});
@@ -486,7 +468,6 @@ class _EditDocumentDialogState extends ConsumerState<_EditDocumentDialog> {
       );
 }
 
-/// A failed load with a way back from it, rather than an empty list (AC-C21).
 class _Unavailable extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;

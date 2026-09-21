@@ -19,24 +19,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * The privilege and scope matrix of §4.5, and the order the checks run in: the document privilege,
- * then the parent record's own, then the record's scope, then visibility. Every cross-scope case is
- * asked directly by document id rather than through a list, which is the only way to show a foreign
- * document is out of reach (AC-C11).
- */
 class DocumentAccessTest extends DocumentTestBase {
 
     @Autowired PrivilegeRepository privilegeRepository;
-
-    // ---- the document privileges themselves (AC-C10) ---------------------------
 
     @Test
     void readingNeedsDocumentViewAndChangingNeedsDocumentManage() throws Exception {
         JsonNode onInvoice = upload(admin, "INVOICE", acmeInvoice.getId(), "po.pdf");
         long id = onInvoice.get("id").asLong();
 
-        // VIEWER holds DOCUMENT_VIEW and not DOCUMENT_MANAGE: it looks and downloads, no more.
         mockMvc.perform(get("/api/documents").param("entityType", "INVOICE")
                         .param("entityId", String.valueOf(acmeInvoice.getId())).with(as(viewer)))
                 .andExpect(status().isOk());
@@ -67,11 +58,6 @@ class DocumentAccessTest extends DocumentTestBase {
                 .andExpect(status().isForbidden());
     }
 
-    /**
-     * The record's own manage privilege is needed as well as {@code DOCUMENT_MANAGE}: a Sales POC
-     * may attach to an invoice, which they manage, and not to the customer or to a payment, which
-     * they do not.
-     */
     @Test
     void attachingAlsoNeedsTheRecordsOwnManagePrivilege() throws Exception {
         Payment payment = payment(acme, "500.00");
@@ -87,14 +73,11 @@ class DocumentAccessTest extends DocumentTestBase {
                 .andExpect(status().isForbidden());
     }
 
-    // ---- scope (AC-C11) --------------------------------------------------------
-
     @Test
     void aPocCannotReachADocumentOnARecordOutsideTheirBook() throws Exception {
         JsonNode acmeDoc = upload(admin, "INVOICE", acmeInvoice.getId(), "po.pdf");
         long id = acmeDoc.get("id").asLong();
 
-        // sid owns globex's invoice, not acme's, so the document answers as the invoice does: 404.
         mockMvc.perform(get("/api/documents/" + id + "/download").with(as(otherSales)))
                 .andExpect(status().isNotFound());
         mockMvc.perform(patch("/api/documents/" + id).contentType(MediaType.APPLICATION_JSON)
@@ -113,7 +96,6 @@ class DocumentAccessTest extends DocumentTestBase {
                 .andExpect(status().isNotFound());
         assertThat(documentRepository.findById(id).orElseThrow().isDeleted()).isFalse();
 
-        // Their own book is untouched by any of that.
         mockMvc.perform(uploadRequest(otherSales, "INVOICE", globexInvoice.getId(),
                         part("po.pdf", pdf(), "application/pdf")))
                 .andExpect(status().isCreated());
@@ -134,8 +116,6 @@ class DocumentAccessTest extends DocumentTestBase {
         mockMvc.perform(get("/api/documents").param("entityType", "INVOICE")
                         .param("entityId", String.valueOf(acmeInvoice.getId())).with(as(globexLogin)))
                 .andExpect(status().isNotFound());
-        // A customer, unlike an invoice, answers 403 for a foreign id and for a missing one
-        // alike, so it is already consistent and is left as it is.
         mockMvc.perform(get("/api/documents/count").param("entityType", "CUSTOMER")
                         .param("entityId", String.valueOf(acme.getId())).with(as(globexLogin)))
                 .andExpect(status().isForbidden());
@@ -145,8 +125,6 @@ class DocumentAccessTest extends DocumentTestBase {
                         part("po.pdf", pdf(), "application/pdf")))
                 .andExpect(status().isNotFound());
     }
-
-    // ---- what a customer login sees (AC-C12, D7) -------------------------------
 
     @Test
     void aCustomerLoginSeesOnlySharedDocumentsOnItsOwnRecords() throws Exception {
@@ -167,7 +145,6 @@ class DocumentAccessTest extends DocumentTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.count").value(1));
 
-        // The shared one downloads; the internal one does not exist as far as they are told.
         mockMvc.perform(get("/api/documents/" + shared.get("id").asLong() + "/download").with(as(acmeLogin)))
                 .andExpect(status().isOk());
         mockMvc.perform(get("/api/documents/" + internal.get("id").asLong() + "/download").with(as(acmeLogin)))
@@ -181,7 +158,6 @@ class DocumentAccessTest extends DocumentTestBase {
                         .param("visibility", "INTERNAL"))
                 .andExpect(status().isCreated()));
 
-        // Asking for INTERNAL cannot hide it from the very person who uploaded it (§1, answer 4).
         assertThat(dto.get("visibility").asText()).isEqualTo("SHARED");
         assertThat(dto.at("/uploadedBy/userId").asLong()).isEqualTo(acmeLogin.getId());
         assertThat(dto.get("canDownload").asBoolean()).isTrue();
@@ -220,8 +196,6 @@ class DocumentAccessTest extends DocumentTestBase {
                 .andExpect(status().isCreated());
     }
 
-    // ---- what the UI is told it may do (AC-C22) --------------------------------
-
     @Test
     void theDtoSaysWhatThisCallerMayDoWithThisDocument() throws Exception {
         JsonNode asAdmin = upload(admin, "INVOICE", acmeInvoice.getId(), "po.pdf");
@@ -233,20 +207,12 @@ class DocumentAccessTest extends DocumentTestBase {
         assertThat(forViewer.get("canEdit").asBoolean()).isFalse();
         assertThat(forViewer.get("canDelete").asBoolean()).isFalse();
 
-        // The Sales POC manages the invoice, so they may edit and delete a document on it.
         JsonNode forSales = firstListed(sales);
         assertThat(forSales.get("id").asLong()).isEqualTo(asAdmin.get("id").asLong());
         assertThat(forSales.get("canEdit").asBoolean()).isTrue();
         assertThat(forSales.get("canDelete").asBoolean()).isTrue();
     }
 
-    // ---- helpers ---------------------------------------------------------------
-
-    /**
-     * A role that reads invoices and knows nothing of documents. SCOPE_OVERRIDE as well, since it
-     * holds no POC seat: without it the invoice itself is outside its (empty) book and is a 404
-     * before the document rule this is about applies (AUTH-01).
-     */
     private Role invoicesOnly() {
         return roleRepository.findByName("INVOICE_READER_NO_DOCUMENTS").orElseGet(() ->
                 roleRepository.save(Role.builder().name("INVOICE_READER_NO_DOCUMENTS")

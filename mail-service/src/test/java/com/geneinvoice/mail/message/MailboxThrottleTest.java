@@ -14,14 +14,12 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** One send per mailbox per interval, measured from when the previous one started. */
 class MailboxThrottleTest {
 
     private static final long MS = 1_000_000;
 
     private final AtomicLong now = new AtomicLong(1_000 * MS);
     private final List<Long> slept = new ArrayList<>();
-    /** Sleeping moves the fake time on, as a real sleep would. */
     private final MailboxThrottle throttle = new MailboxThrottle(500, now::get, nanos -> {
         slept.add(nanos / MS);
         now.addAndGet(nanos);
@@ -36,12 +34,10 @@ class MailboxThrottleTest {
         throttle.acquire(1);
         assertThat(slept).containsExactly(500L);
 
-        // 200 ms later the next slot is 300 ms away.
         now.addAndGet(200 * MS);
         throttle.acquire(1);
         assertThat(slept).containsExactly(500L, 300L);
 
-        // After a quiet spell, no wait.
         now.addAndGet(5_000 * MS);
         throttle.acquire(1);
         throttle.acquire(2);
@@ -52,7 +48,6 @@ class MailboxThrottleTest {
     void callersArrivingTogetherQueueUpInOrder() throws Exception {
         List<Long> waits = new CopyOnWriteArrayList<>();
         AtomicLong fixed = new AtomicLong(0);
-        // Time stands still: each caller reserves the next slot and would wait that long.
         MailboxThrottle standingStill = new MailboxThrottle(500, fixed::get, nanos -> waits.add(nanos / MS));
 
         for (int i = 0; i < 4; i++) standingStill.acquire(7);
@@ -79,11 +74,9 @@ class MailboxThrottleTest {
         } finally {
             pool.shutdownNow();
         }
-        // The last of the four slots starts three intervals after the first, whoever got which.
         long last = started.stream().mapToLong(Long::longValue).max().orElseThrow();
         assertThat(Duration.ofNanos(last - begin)).isGreaterThanOrEqualTo(Duration.ofMillis(115));
 
-        // Another mailbox is not held up.
         long other = System.nanoTime();
         real.acquire(4);
         assertThat(Duration.ofNanos(System.nanoTime() - other)).isLessThan(Duration.ofMillis(30));

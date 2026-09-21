@@ -12,7 +12,6 @@ import java.util.List;
 
 public interface MailEventRepository extends JpaRepository<MailEvent, Long> {
 
-    /** The oldest events the backend has not taken yet, in the order they happened. */
     @Query("select e from MailEvent e where e.deliveredAt is null order by e.id")
     List<MailEvent> findUndelivered(Pageable page);
 

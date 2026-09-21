@@ -5,10 +5,6 @@ import lombok.*;
 
 import java.time.Instant;
 
-/**
- * One change the backend hears about (§4.8), written in the transaction of the change itself, so an
- * event exists exactly when its change does. The id is the delivery order.
- */
 @Entity
 @Table(name = "mail_events", indexes = @Index(name = "idx_mail_event_delivery", columnList = "delivered_at,id"))
 @Getter
@@ -33,7 +29,6 @@ public class MailEvent {
     @Column(name = "external_id", length = 100)
     private String externalId;
 
-    /** The event's {@code data}, as JSON. */
     @Column(nullable = false, columnDefinition = "text")
     private String payload;
 

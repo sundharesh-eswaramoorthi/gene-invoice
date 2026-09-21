@@ -32,23 +32,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * Delivery (mail-service.md §5.4): saved first, then handed to the mail service one copy per To
- * recipient, with the hand-off retried when the service may yet take it, and the email rolled up
- * from its copies.
- */
 class EmailDeliveryTest extends EmailTestBase {
 
     @Autowired EmailDispatcher dispatcher;
     @Autowired DataSource dataSource;
     @Autowired TransactionTemplate transactions;
 
-    /** An email a restart or a bulk send left queued, as the sweeper finds it: one copy, to the customer. */
     private long queuedEmail(Invoice inv, String subject) {
         return queuedEmail(inv, subject, RecipientDeliveryStatus.QUEUED);
     }
 
-    /** With {@code copy} null, an email saved before the mail service, whose recipients have no copies. */
     private long queuedEmail(Invoice inv, String subject, RecipientDeliveryStatus copy) {
         Email queued = emailRepository.save(Email.builder()
                 .entityType(EmailEntityType.INVOICE).entityId(inv.getId()).entityLabel("Invoice " + inv.getInvoiceNumber())
@@ -81,8 +74,6 @@ class EmailDeliveryTest extends EmailTestBase {
         }
     }
 
-    // ---- handing over ------------------------------------------------------------------
-
     @Test
     void withoutTheMailServiceTheEmailIsSavedButNotSentAndSaysWhy() throws Exception {
         Invoice inv = invoice(acme, sales);
@@ -112,7 +103,6 @@ class EmailDeliveryTest extends EmailTestBase {
                 "subject", "Invoice due", "body", "Please pay"));
         long id = sent.get("id").asLong();
 
-        // The service has queued them: the email is on its way, and so is each copy.
         assertThat(sent.get("status").asText()).isEqualTo("QUEUED");
         assertThat(sent.get("attempts").asInt()).isEqualTo(1);
         assertThat(sent.get("error").isNull()).isTrue();
@@ -130,7 +120,6 @@ class EmailDeliveryTest extends EmailTestBase {
         assertThat(handedOver.body()).isEqualTo("Please pay");
         assertThat(handedOver.groupRef()).isEqualTo(String.valueOf(id));
         assertThat(handedOver.retry()).isTrue();
-        // One copy per person, each addressed to them alone; the collector once, though added twice.
         List<EmailRecipient> recipients = recipientsOf(id);
         assertThat(handedOver.copies()).extracting(CopyRequest::externalId)
                 .containsExactlyElementsOf(recipients.stream().map(r -> "gi-" + id + "-" + r.getId()).toList());
@@ -142,7 +131,6 @@ class EmailDeliveryTest extends EmailTestBase {
         Email email = stored(id);
         assertThat(email.getHandedOffAt()).isNotNull();
         assertThat(email.getNextAttemptAt()).isNull();
-        // The copies carry the ids now; the email keeps none of its own.
         assertThat(email.getRfcMessageId()).isNull();
         assertThat(email.getProviderMessageId()).isNull();
         assertThat(recipients).allSatisfy(r -> {
@@ -211,13 +199,10 @@ class EmailDeliveryTest extends EmailTestBase {
 
         JsonNode sent = send(admin, email("INVOICE", inv.getId(), List.of(toCustomer())));
 
-        // Left queued here, it would never be handed over again; failed, it can be retried.
         assertThat(sent.get("to")).extracting(p -> p.at("/delivery/status").asText()).containsExactly("QUEUED", "FAILED");
         assertThat(sent.at("/to/1/delivery/error").asText()).isEqualTo("The mail service did not accept this copy");
         assertThat(sent.get("status").asText()).isEqualTo("QUEUED");
     }
-
-    // ---- when the hand-off fails ------------------------------------------------------------
 
     @Test
     void aTransientFailureIsHandedOverAgainAndGivenUpOnTheThirdAttempt() throws Exception {
@@ -237,7 +222,6 @@ class EmailDeliveryTest extends EmailTestBase {
         assertThat(recipientsOf(id)).extracting(EmailRecipient::getDeliveryStatus)
                 .containsOnly(RecipientDeliveryStatus.QUEUED);
 
-        // Not yet due: the sweeper leaves it alone.
         dispatcher.sweep(Instant.now().plusSeconds(45));
         assertThat(stored(id).getAttempts()).isEqualTo(1);
 
@@ -253,12 +237,10 @@ class EmailDeliveryTest extends EmailTestBase {
         assertThat(third.getAttempts()).isEqualTo(3);
         assertThat(third.getNextAttemptAt()).isNull();
         assertThat(third.getError()).isEqualTo(RecordingMailTransport.UNAVAILABLE);
-        // The copies fail with it, so a retry can send them.
         assertThat(recipientsOf(id)).allSatisfy(r -> {
             assertThat(r.getDeliveryStatus()).isEqualTo(RecipientDeliveryStatus.FAILED);
             assertThat(r.getDeliveryError()).isEqualTo(RecordingMailTransport.UNAVAILABLE);
         });
-        // Every attempt handed over the same copies, so the service would have sent each once.
         assertThat(mailTransport.submissions()).hasSize(3)
                 .extracting(s -> s.copies().stream().map(CopyRequest::externalId).toList())
                 .containsOnly(mailTransport.submissions().get(0).copies().stream().map(CopyRequest::externalId).toList());
@@ -295,7 +277,6 @@ class EmailDeliveryTest extends EmailTestBase {
 
     @Test
     void aLongFailureIsCutToFitWithoutEndingInHalfACharacter() throws Exception {
-        // The service's explanation runs past the column, with an emoji across its last kept unit.
         String emoji = "😀";
         mailTransport.beforeSubmit(submission -> {
             throw new MailSendException("e".repeat(Email.ERROR_MAX - 2) + emoji + " and more", false);
@@ -321,11 +302,8 @@ class EmailDeliveryTest extends EmailTestBase {
         mailTransport.mode(Mode.SUCCESS);
         retry(id, admin);
 
-        // A slow service would otherwise keep a pooled connection from the rest of the app.
         assertThat(inUse).containsExactly(0, 0);
     }
-
-    // ---- the sweeper -----------------------------------------------------------------------
 
     @Test
     void noOneTakesARetryBeforeItsWaitIsOver() throws Exception {
@@ -373,8 +351,6 @@ class EmailDeliveryTest extends EmailTestBase {
             inBackground.dispatchAll(bulk);
             assertThat(firstHandingOver.await(10, TimeUnit.SECONDS)).isTrue();
 
-            // Older than the settle time, but still waiting on the background thread: two threads
-            // handing over at once would double the rate the service sees.
             inBackground.sweep(Instant.now().plusSeconds(31));
             carryOn.countDown();
             waitUntil(() -> bulk.stream().allMatch(id -> stored(id).getHandedOffAt() != null));
@@ -384,7 +360,6 @@ class EmailDeliveryTest extends EmailTestBase {
         }
         assertThat(handedOverOn).containsExactly("email-dispatch", "email-dispatch", "email-dispatch");
 
-        // Once handed over, an email is the service's, and the sweeper leaves it alone too.
         inBackground.sweep(Instant.now().plusSeconds(31));
         assertThat(handedOverOn).hasSize(3);
     }
@@ -409,7 +384,6 @@ class EmailDeliveryTest extends EmailTestBase {
                 .satisfies(r -> assertThat(r.getDeliveryStatus()).isEqualTo(RecipientDeliveryStatus.FAILED));
         assertThat(mailTransport.submissions()).isEmpty();
 
-        // Retried by hand, it is handed over again; the service would not send a copy it has twice.
         JsonNode retried = retry(id, admin);
         assertThat(retried.get("status").asText()).isEqualTo("QUEUED");
         assertThat(mailTransport.submissions()).singleElement().satisfies(s -> assertThat(s.retry()).isTrue());
@@ -424,7 +398,6 @@ class EmailDeliveryTest extends EmailTestBase {
         Invoice inv = invoice(acme, sales);
         long id = send(admin, email("INVOICE", inv.getId(), List.of(toCustomer()))).get("id").asLong();
         assertThat(statusOf(id)).isEqualTo(EmailStatus.PARTIAL);
-        // Retried, and the app stopped while handing the failed copy over: it was never handed off.
         transactions.executeWithoutResult(tx -> {
             Email email = stored(id);
             EmailDeliveryRollup.requeue(email, recipientsOf(id));
@@ -435,7 +408,6 @@ class EmailDeliveryTest extends EmailTestBase {
 
         dispatcher.sweep(Instant.now().plus(Duration.ofMinutes(11)));
 
-        // The copy that went out still did.
         Email swept = stored(id);
         assertThat(swept.getStatus()).isEqualTo(EmailStatus.PARTIAL);
         assertThat(swept.getError()).isEqualTo("Sending was interrupted; retry to send again");
@@ -473,8 +445,6 @@ class EmailDeliveryTest extends EmailTestBase {
         assertThat(mailTransport.copiesHandedOver()).singleElement()
                 .satisfies(c -> assertThat(c.externalId()).isEqualTo("gi-" + older + "-" + customer.getId()));
     }
-
-    // ---- retry ---------------------------------------------------------------------------
 
     @Test
     void aRetrySendsOnlyTheCopiesThatFailedOrWereNotSentAndLeavesBouncesAlone() throws Exception {
@@ -551,12 +521,9 @@ class EmailDeliveryTest extends EmailTestBase {
 
         mockMvc.perform(post("/api/emails/" + id + "/retry").with(as(user("vic.viewer", "VIEWER"))))
                 .andExpect(status().isForbidden());
-        // A recipient outside the invoice's book can read it, but not retry it.
         mockMvc.perform(post("/api/emails/" + id + "/retry").with(as(sales)))
                 .andExpect(status().isNotFound());
     }
-
-    // ---- delivery status and reading now -------------------------------------------------------
 
     @Test
     void deliveryTellsTheCallerWhetherEmailGoesOutAndHowTheirGmailStands() throws Exception {
@@ -574,7 +541,6 @@ class EmailDeliveryTest extends EmailTestBase {
         assertThat(on.at("/gmail/gmailAddress").asText()).isEqualTo("admin@gmail.com");
         assertThat(on.at("/gmail/lastSyncedAt").asText()).isEqualTo("2026-09-20T10:05:00Z");
         assertThat(on.at("/gmail/lastSyncError").asText()).isEqualTo("Gmail is unavailable (503)");
-        // A customer login learns only whether email goes out.
         JsonNode customers = getOk("/api/emails/delivery", acmeLogin);
         assertThat(customers.get("configured").asBoolean()).isTrue();
         assertThat(customers.get("gmail").isNull()).isTrue();
@@ -601,7 +567,6 @@ class EmailDeliveryTest extends EmailTestBase {
         assertThat(synced.get("imported").asInt()).isEqualTo(1);
         assertThat(synced.get("error").isNull()).isTrue();
         assertThat(mailTransport.syncCalls()).containsOnly(admin.getId());
-        // The run's outcome is on the connection, which the app's copy now has.
         assertThat(gmailConnectionRepository.findById(admin.getId())).get()
                 .satisfies(c -> assertThat(c.getLastSyncedAt()).isEqualTo(Instant.parse("2026-09-20T10:05:00Z")));
 

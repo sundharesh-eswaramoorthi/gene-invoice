@@ -32,36 +32,22 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Email as MIME: writing what the app sends, and reading whatever mail program wrote what it receives. */
 @Slf4j
 public final class GmailMime {
 
     private GmailMime() {}
 
-    /** For writing: non-ASCII headers go out as encoded words, which every mail program reads. */
     private static final Session SESSION = Session.getInstance(new Properties());
-    /**
-     * For reading: 8-bit header text is UTF-8, as RFC 6532 mail writes it. Without this a raw UTF-8
-     * subject or name is read as ISO-8859-1 and comes out garbled.
-     */
     private static final Session READING = readingSession();
     private static final String UTF_8 = "UTF-8";
     private static final Pattern MESSAGE_ID = Pattern.compile("<[^<>\\s]+>");
-    /** Where HTML asked for a line break ({@code <br>}) or a paragraph break; private-use characters. */
     private static final String LINE_BREAK = "\uE000";
     private static final String PARAGRAPH_BREAK = "\uE001";
     private static final Pattern ENTITY = Pattern.compile("&(#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[a-zA-Z]{2,8});");
-    /**
-     * How much of an HTML body is reduced to text. The saved body is cut to 20,000 characters, so more
-     * would only cost time.
-     */
     static final int HTML_MAX = 200_000;
-    /** Elements whose content is not text to read. */
     private static final Set<String> HIDDEN_ELEMENTS = Set.of("head", "script", "style", "title");
-    /** End tags after which a blank line follows. */
     private static final Set<String> PARAGRAPH_ENDS = Set.of(
             "p", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "table", "ul", "ol");
-    /** Tags at a block's edge, opening or closing: what follows starts a new line. */
     private static final Set<String> BLOCK_EDGES = Set.of("p", "div", "tr", "table", "ul", "ol",
             "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "pre", "hr", "section", "article", "header", "footer");
     private static final Map<String, String> NAMED_ENTITIES = Map.ofEntries(
@@ -77,13 +63,6 @@ public final class GmailMime {
         return Session.getInstance(properties);
     }
 
-    // ---- writing ---------------------------------------------------------------------
-
-    /**
-     * One copy for one recipient, as plain text: UTF-8 throughout (non-ASCII subjects and names become
-     * encoded words) and the Message-ID fixed when the copy was submitted, which a bounce or a reply
-     * quotes back to find the copy. The To header holds only this recipient (M6).
-     */
     public static byte[] build(MailAddress from, MailAddress to, String subject, String body, String messageId,
                                Instant date) throws MessagingException {
         MimeMessage message = new MimeMessage(SESSION) {
@@ -97,7 +76,6 @@ public final class GmailMime {
         message.setRecipient(Message.RecipientType.TO, internetAddress(to));
         message.setSubject(subject == null ? "" : subject, UTF_8);
         message.setSentDate(Date.from(date));
-        // Mail lines end in CRLF; a text area's bare LF is not a line break to every receiver.
         message.setText(body == null ? "" : body.replaceAll("\\r\\n|\\r|\\n", "\r\n"), UTF_8);
         message.saveChanges();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -109,7 +87,6 @@ public final class GmailMime {
         return out.toByteArray();
     }
 
-    /** A received message as Jakarta Mail reads it, raw 8-bit headers as UTF-8. */
     public static MimeMessage read(byte[] raw) throws MessagingException {
         return new MimeMessage(READING, new ByteArrayInputStream(raw));
     }
@@ -128,15 +105,6 @@ public final class GmailMime {
         }
     }
 
-    // ---- reading ---------------------------------------------------------------------
-
-    /**
-     * Reads a received message. Headers are parsed leniently and a body that cannot be read leaves
-     * the text empty, so one odd message still links to its record rather than being lost. No text
-     * that comes back holds a NUL, which Postgres cannot store.
-     *
-     * @param receivedAt when Gmail received it; the Date header is used only when this is null
-     */
     public static IncomingMail parse(String providerMessageId, String providerThreadId, Instant receivedAt, byte[] raw)
             throws MessagingException {
         MimeMessage message = read(raw);
@@ -165,18 +133,15 @@ public final class GmailMime {
         return value == null ? null : withoutNul(MimeUtility.unfold(value)).trim();
     }
 
-    /** A NUL comes from a mislabelled charset or an encoded word; it carries nothing to read. */
     private static String withoutNul(String text) {
         return text == null || text.indexOf('\0') < 0 ? text : text.replace("\0", "");
     }
 
-    /** The first Message-ID in a header value such as In-Reply-To, or null. */
     public static String messageId(String header) {
         List<String> ids = messageIds(header == null ? null : withoutNul(MimeUtility.unfold(header)).trim());
         return ids.isEmpty() ? null : ids.get(0);
     }
 
-    /** Bracketed Message-IDs in order; a header that has none is taken whole, as some programs write it. */
     private static List<String> messageIds(String header) {
         List<String> ids = new ArrayList<>();
         if (header == null || header.isBlank()) return ids;
@@ -188,7 +153,6 @@ public final class GmailMime {
         return ids;
     }
 
-    /** An address list with group syntax flattened; names come back decoded from encoded words. */
     private static List<MailAddress> addresses(MimeMessage message, String headerName) throws MessagingException {
         List<MailAddress> result = new ArrayList<>();
         String value = message.getHeader(headerName, ",");
@@ -214,7 +178,6 @@ public final class GmailMime {
         return result;
     }
 
-    /** The first address in a header value such as {@code Jane Doe <jane@company.com>}, or null. */
     public static String address(String header) {
         if (header == null || header.isBlank()) return null;
         try {
@@ -235,7 +198,6 @@ public final class GmailMime {
         if (email != null || name != null) list.add(new MailAddress(name, email));
     }
 
-    /** The plain text if the message has any, else its HTML reduced to text. */
     private static String body(Part message, String providerMessageId) {
         try {
             String plain = firstText(message, "text/plain");
@@ -248,7 +210,6 @@ public final class GmailMime {
         }
     }
 
-    /** Depth first through nested multiparts, passing over attachments. */
     private static String firstText(Part part, String mimeType) throws MessagingException, IOException {
         if (isAttachment(part)) return null;
         if (part.isMimeType("multipart/*")) {
@@ -270,7 +231,6 @@ public final class GmailMime {
         }
     }
 
-    /** The transfer encoding undone, then the declared charset — UTF-8 when it is missing or unknown. */
     private static String decode(Part part) throws MessagingException, IOException {
         Charset charset = StandardCharsets.UTF_8;
         try {
@@ -278,7 +238,6 @@ public final class GmailMime {
                     : new ContentType(part.getContentType()).getParameter("charset");
             if (declared != null && !declared.isBlank()) charset = Charset.forName(MimeUtility.javaCharset(declared.trim()));
         } catch (MessagingException | IllegalArgumentException e) {
-            // Garbled or unsupported: UTF-8 still reads the ASCII in it correctly.
         }
         try (InputStream in = part.getInputStream()) {
             return new String(in.readAllBytes(), charset);
@@ -289,17 +248,10 @@ public final class GmailMime {
         return text.replace("\r\n", "\n").replace('\r', '\n').strip();
     }
 
-    /**
-     * Readable text from an HTML-only message: the words and line breaks, without markup. Only the
-     * first {@link #HTML_MAX} characters are read, and the time taken grows in step with their length.
-     */
     static String htmlToText(String html) {
         String text = decodeEntities(markupReplaced(htmlPrefix(html)))
                 .replace('\u00a0', ' ')
-                // From the start of a run of spaces only, so a long run of &nbsp; is read once, not from
-                // each space in it again.
                 .replaceAll("(?<![ \\t])[ \\t]*\n\\s*", "\n")
-                // A block that starts right after a break is already on its own line.
                 .replaceAll("([" + LINE_BREAK + PARAGRAPH_BREAK + "])\n", "$1")
                 .replace(LINE_BREAK, "\n")
                 .replace(PARAGRAPH_BREAK, "\n\n");
@@ -310,21 +262,12 @@ public final class GmailMime {
         return out.toString().replaceAll("\n{3,}", "\n\n").strip();
     }
 
-    /**
-     * At most {@code length} UTF-16 units from the start, never ending between the two halves of a
-     * character outside the BMP (an emoji): the half left over is not text, and would be stored as '?'
-     * or U+FFFD. The whole character is dropped instead.
-     */
     public static String start(String text, int length) {
         if (text.length() <= length) return text;
         int end = length > 0 && Character.isHighSurrogate(text.charAt(length - 1)) ? length - 1 : length;
         return text.substring(0, end);
     }
 
-    /**
-     * At most {@link #HTML_MAX} characters, without a tag, an entity or a character the cut would leave
-     * half written. Half an entity ("&amp;nb") is not markup any more, so it would be read as text.
-     */
     private static String htmlPrefix(String html) {
         if (html.length() <= HTML_MAX) return html;
         String prefix = start(html, HTML_MAX);
@@ -338,21 +281,12 @@ public final class GmailMime {
         return prefix;
     }
 
-    /** "&amp;#x10FFFF" and the longest named entity we decode are shorter; a longer run is plain text. */
     private static final int LONGEST_ENTITY = 10;
 
-    /**
-     * The markup replaced in one pass from start to end: tags at a block's edge by line breaks, other
-     * tags and comments by nothing, and head, script, style and title together with their content.
-     * Line breaks in the source are only spaces. A search for where something ends that finds nothing
-     * is not repeated, so however many tags are left open, no part of the HTML is read more than a
-     * few times; regular expressions for the same took time growing with the square of its length.
-     */
     private static String markupReplaced(String html) {
         StringBuilder out = new StringBuilder(html.length());
         boolean tagsEnd = true;
         boolean commentsEnd = true;
-        // Hidden element name -> a position after which its end tag does not appear.
         Map<String, Integer> neverEnds = new HashMap<>();
         int i = 0;
         while (i < html.length()) {
@@ -376,7 +310,6 @@ public final class GmailMime {
             }
             int close = tagsEnd ? html.indexOf('>', i + 1) : -1;
             if (close < 0) {
-                // Nothing closes it, so it is text.
                 tagsEnd = false;
                 out.append(c);
                 i++;
@@ -410,7 +343,6 @@ public final class GmailMime {
         return out.toString();
     }
 
-    /** Just past the end tag {@code </name>} found first from {@code from}, or -1 when there is none. */
     private static int endOfElement(String html, String name, int from) {
         for (int at = html.indexOf("</", from); at >= 0; at = html.indexOf("</", at + 2)) {
             if (!html.regionMatches(true, at + 2, name, 0, name.length())) continue;
@@ -421,7 +353,6 @@ public final class GmailMime {
         return -1;
     }
 
-    /** Whitespace as a regular expression's {@code \s} means it. */
     private static boolean isHtmlSpace(char c) {
         return c == ' ' || c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r';
     }
@@ -442,13 +373,11 @@ public final class GmailMime {
                             ? Integer.parseInt(entity.substring(2), 16)
                             : Integer.parseInt(entity.substring(1));
                     if (codePoint == 0 || (codePoint >= Character.MIN_SURROGATE && codePoint <= Character.MAX_SURROGATE)) {
-                        // Not characters, as HTML reads them: NUL and half of a UTF-16 pair.
                         replacement = "\uFFFD";
                     } else if (Character.isValidCodePoint(codePoint)) {
                         replacement = new String(Character.toChars(codePoint));
                     }
                 } catch (NumberFormatException ignored) {
-                    // Left as written.
                 }
             } else {
                 replacement = NAMED_ENTITIES.get(entity);

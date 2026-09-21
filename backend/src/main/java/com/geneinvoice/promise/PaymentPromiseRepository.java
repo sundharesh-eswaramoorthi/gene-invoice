@@ -25,7 +25,6 @@ public interface PaymentPromiseRepository extends JpaRepository<PaymentPromise, 
     @Query("select distinct p from PaymentPromise p join p.payments pay where pay.id = :paymentId")
     List<PaymentPromise> findByPaymentId(@Param("paymentId") Long paymentId);
 
-    /** Promises the sweeper must look at: still open and past their date. */
     @Query("select p from PaymentPromise p where p.status = com.geneinvoice.promise.PromiseStatus.OPEN "
             + "and p.statusOverridden = false and p.promisedDate < :today")
     List<PaymentPromise> findOverdueOpen(@Param("today") LocalDate today);

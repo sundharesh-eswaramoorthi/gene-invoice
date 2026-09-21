@@ -8,8 +8,6 @@ import '../../features/auth/auth_controller.dart';
 import '../api/api_client.dart';
 import 'table_models.dart';
 
-/// Identifies one list request. Value equality keeps a single fetch per distinct view,
-/// so changing page, size, sort or filters triggers exactly one backend call (AC-D1).
 @immutable
 class TableRequest {
   final String entity;
@@ -26,9 +24,6 @@ class TableRequest {
 
   Map<String, dynamic> get apiParams => {...query.toApiParams(), ...extra};
 
-  /// The same view for the summary tiles, which count the whole filtered set: paging and sorting
-  /// cannot change them, so they must not be part of the key or every page change refetches
-  /// them (D-56, AC-D1).
   TableRequest get forSummary => TableRequest(
         entity: entity,
         path: path,
@@ -49,8 +44,6 @@ class TableRequest {
 }
 
 final tableSchemaProvider = FutureProvider.family<TableSchema, String>((ref, entity) async {
-  // Each user gets their own schema (a customer sees no POC columns), so it is fetched afresh
-  // whenever a different user signs in rather than kept from the previous one.
   final userId = ref.watch(currentUserProvider.select((u) => u?.id));
   // Signing out changes that to nobody. There is no schema to fetch then, and asking for one
   // without a token only produces a 401 in the console (D-70); the app is leaving the page anyway.
@@ -67,7 +60,6 @@ final tablePageProvider =
   return PagedResult.fromJson(res.data as Map<String, dynamic>);
 });
 
-/// Tiles come from their own aggregate over the same filter, never from the loaded page (AC-E1).
 final tableSummaryProvider =
     FutureProvider.autoDispose.family<Map<String, dynamic>, TableRequest>((ref, req) async {
   final dio = ref.watch(dioProvider);
@@ -79,16 +71,11 @@ final tableSummaryProvider =
   return (res.data as Map).cast<String, dynamic>();
 });
 
-/// Remembers the page size the user picked, per table, across sessions (D.1).
-///
-/// Held in memory as well as in preferences so the router can read it synchronously while
-/// building a route — the size has to be known before the first request goes out.
 class PageSizeStore extends StateNotifier<Map<String, int>> {
   PageSizeStore() : super(const {});
 
   static const _prefix = 'table.pageSize.';
 
-  /// Loads every remembered size once at startup.
   Future<void> hydrate() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -100,7 +87,6 @@ class PageSizeStore extends StateNotifier<Map<String, int>> {
       }
       state = loaded;
     } catch (_) {
-      // A missing preference store must never keep the tables from rendering.
     }
   }
 
@@ -116,7 +102,6 @@ class PageSizeStore extends StateNotifier<Map<String, int>> {
         await prefs.remove(key);
       }
     } catch (_) {
-      // The in-memory clear is what matters for this session.
     }
   }
 
@@ -126,7 +111,6 @@ class PageSizeStore extends StateNotifier<Map<String, int>> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('$_prefix$entity', size);
     } catch (_) {
-      // Keep the in-memory choice even when it cannot be persisted.
     }
   }
 }

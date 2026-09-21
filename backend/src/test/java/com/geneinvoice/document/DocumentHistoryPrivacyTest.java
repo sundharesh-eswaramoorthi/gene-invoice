@@ -15,14 +15,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/**
- * The History tab is not a way round what a customer login may see (DASH-01).
- *
- * <p>A customer sees only SHARED documents on its own records (AC-C12), and never a member of
- * staff by name (AC-A8). The Documents tab held both lines; the timeline beside it did not. Its
- * snapshots carried the filename, the description, the visibility and the uploader's full name of
- * every internal file, because the only thing withheld was a field whose *name* said "poc".
- */
 class DocumentHistoryPrivacyTest extends DocumentTestBase {
 
     private List<JsonNode> history(User caller, String entityType, Long entityId) throws Exception {
@@ -44,7 +36,6 @@ class DocumentHistoryPrivacyTest extends DocumentTestBase {
                 .andExpect(status().isOk());
     }
 
-    /** Uploads a file that is shared with the customer from the moment it lands. */
     private long uploadShared(User as, String entityType, Long entityId, String filename) throws Exception {
         return read(mockMvc.perform(uploadRequest(as, entityType, entityId,
                         part(filename, pdf(), "application/pdf"))
@@ -86,8 +77,6 @@ class DocumentHistoryPrivacyTest extends DocumentTestBase {
                 .doesNotContain("secret-memo.pdf");
     }
 
-    /** Sharing a file tells them about it from then on; what it was called while internal is not
-     *  something the change entry may spell out either, since it names both ends of the change. */
     @Test
     void anInternalFileThatIsLaterSharedDoesNotLeakTheChangeItself() throws Exception {
         long doc = upload(admin, "CUSTOMER", acme.getId(), "was-internal.pdf").get("id").asLong();
@@ -98,7 +87,6 @@ class DocumentHistoryPrivacyTest extends DocumentTestBase {
         assertThat(theirs.toString())
                 .as("the entry recording the change has an INTERNAL side, so it is withheld whole")
                 .doesNotContain("INTERNAL");
-        // The document itself is theirs to see now, through the Documents tab.
         mockMvc.perform(get("/api/documents").with(as(acmeLogin))
                         .param("entityType", "CUSTOMER").param("entityId", acme.getId().toString()))
                 .andExpect(status().isOk());
@@ -112,8 +100,6 @@ class DocumentHistoryPrivacyTest extends DocumentTestBase {
         String all = history(acmeLogin, "CUSTOMER", acme.getId()).toString()
                 + history(acmeLogin, "INVOICE", acmeInvoice.getId());
 
-        // Whoever attached a file to the account is usually its POC; the snapshot named them in
-        // full, which is the one identity the rest of the timeline is careful never to give up.
         assertThat(all)
                 .doesNotContain(sales.getFullName())
                 .doesNotContain(sales.getUsername())
@@ -121,7 +107,6 @@ class DocumentHistoryPrivacyTest extends DocumentTestBase {
                 .doesNotContain(admin.getUsername());
     }
 
-    /** Staff still see all of it — the rule is about who is asking, not about hiding history. */
     @Test
     void staffStillSeeTheWholeDocumentHistory() throws Exception {
         long internal = upload(admin, "CUSTOMER", acme.getId(), "internal-notes.pdf").get("id").asLong();

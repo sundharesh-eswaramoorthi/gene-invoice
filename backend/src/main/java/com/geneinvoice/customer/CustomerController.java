@@ -39,7 +39,6 @@ public class CustomerController {
     private final CurrentUser currentUser;
     private final UserRepository userRepository;
 
-    /** Customer logins cannot filter on the POC seat columns (AC-A8). */
     private TableSchema schema() {
         return TableSchemas.CUSTOMERS.visibleTo(currentUser.isCustomer());
     }
@@ -86,8 +85,6 @@ public class CustomerController {
         service.delete(id);
     }
 
-    // ---- POC roster ------------------------------------------------------------
-
     @GetMapping("/{id}/pocs")
     @PreAuthorize("hasAuthority('" + Privileges.POC_VIEW + "')")
     public List<PocDtos.CustomerPocDto> pocs(@PathVariable Long id) {
@@ -101,7 +98,7 @@ public class CustomerController {
     public PocDtos.CustomerPocDto addPoc(@PathVariable Long id,
                                          @Valid @RequestBody PocDtos.AddCustomerPocRequest req) {
         requireNonCustomerCaller();
-        service.get(id); // seats change only on customers in the caller's book
+        service.get(id);
         return PocDtos.CustomerPocDto.from(
                 pocService.add(id, req.pocType(), req.userId(), Boolean.TRUE.equals(req.primary())));
     }
@@ -121,8 +118,6 @@ public class CustomerController {
         service.get(id);
         return PocDtos.CustomerPocDto.from(pocService.setPrimary(id, pocId));
     }
-
-    // ---- bulk & export ---------------------------------------------------------
 
     public static final List<String> BULK_ACTIONS = List.of("ADD_POC");
 
@@ -156,7 +151,6 @@ public class CustomerController {
             try {
                 pocService.add(id, pocType, userId, makePrimary);
             } catch (PocService.AlreadyAssignedException e) {
-                // Already holding that seat is not a failure — report it as skipped.
                 throw new BulkExecutor.IneligibleException(e.getMessage());
             }
         });
@@ -214,7 +208,6 @@ public class CustomerController {
         return req.ids().stream().filter(permitted::contains).toList();
     }
 
-    /** POC data is never exposed to a customer-scoped account, whatever its role grants (AC-A8). */
     private void requireNonCustomerCaller() {
         if (currentUser.isCustomer()) {
             throw new org.springframework.security.access.AccessDeniedException("Not allowed");

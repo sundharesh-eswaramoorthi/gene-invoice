@@ -13,12 +13,6 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Base64;
 
-/**
- * Seals a connection's client secret and refresh token for the database: AES-256-GCM under
- * {@code mail.secrets-key}, a fresh 12-byte IV each time, stored as {@code base64(iv ‖ ciphertext+tag)}.
- * GCM also proves the value was sealed with this key, so a changed key or a damaged value is found
- * rather than decrypted into garbage.
- */
 @Component
 public class SecretBox {
 
@@ -39,7 +33,6 @@ public class SecretBox {
         this.key = new SecretKeySpec(key, "AES");
     }
 
-    /** The value was not sealed with this key, or has been changed since. */
     public static class UnreadableSecretException extends RuntimeException {
         UnreadableSecretException(Throwable cause) {
             super("The stored secret cannot be read with this key", cause);

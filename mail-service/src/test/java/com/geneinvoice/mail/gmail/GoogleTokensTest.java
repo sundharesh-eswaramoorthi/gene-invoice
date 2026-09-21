@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Access tokens from each connection's refresh token, over real HTTP to a stand-in for Google. */
 class GoogleTokensTest {
 
     private static final Instant START = Instant.parse("2026-09-20T09:00:00Z");
@@ -76,7 +75,6 @@ class GoogleTokensTest {
                     "refresh_token", "1//refresh-1"));
         });
 
-        // Google gave 3599 seconds.
         clock.set(START.plusSeconds(3599 - 61));
         assertThat(tokens.accessToken(jane)).isEqualTo("tok-1");
         clock.set(START.plusSeconds(3599 - 60));
@@ -90,7 +88,6 @@ class GoogleTokensTest {
         google.account("jane@gmail.com", "1//refresh-2");
 
         assertThat(tokens.accessToken(connection(1, 0, "1//refresh-1"))).isEqualTo("tok-1");
-        // Reconnected: a new version of the same connection.
         assertThat(tokens.accessToken(connection(1, 1, "1//refresh-2"))).isEqualTo("tok-2");
         assertThat(google.requests("POST", "/token").get(1).form().get("refresh_token")).isEqualTo("1//refresh-2");
 
@@ -168,7 +165,6 @@ class GoogleTokensTest {
 
     @Test
     void anOAuthClientDeletedOrDisabledNeedsAReconnect() {
-        // Google deletes OAuth clients nobody used for a while; an owner can also delete or disable one.
         google.onSequence("POST", "/token",
                 new Reply(401, FakeGoogle.tokenError("deleted_client", "The OAuth client was deleted.")),
                 new Reply(401, FakeGoogle.tokenError("disabled_client", "The OAuth client was disabled.")));

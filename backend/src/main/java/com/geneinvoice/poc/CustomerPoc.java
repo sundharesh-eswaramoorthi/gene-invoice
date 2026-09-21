@@ -7,10 +7,6 @@ import lombok.*;
 
 import java.time.Instant;
 
-/**
- * A Customer Success or Collection POC attached to a customer. A customer may hold many of each
- * kind; at most one of each kind is marked primary.
- */
 @Entity
 @Table(name = "customer_pocs",
         uniqueConstraints = @UniqueConstraint(

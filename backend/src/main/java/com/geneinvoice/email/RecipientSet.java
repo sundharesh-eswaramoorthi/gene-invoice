@@ -5,11 +5,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * The recipients of one email, one entry per person (E5). Two candidates are the same person when
- * they share a user id or an address, ignoring case. The entry keeps every way the person was
- * added, and someone in both To and Cc is To.
- */
 final class RecipientSet {
 
     record Entry(RecipientField field, Long userId, Long customerId, String name, String address,
@@ -31,7 +26,6 @@ final class RecipientSet {
 
         void absorb(Draft other) {
             if (userId == null && other.userId != null) {
-                // An address seen on its own turns out to be a known person: who they are wins.
                 userId = other.userId;
                 customerId = other.customerId;
                 name = other.name;
@@ -61,7 +55,6 @@ final class RecipientSet {
         incoming.internal = internal;
         incoming.sources.add(source);
 
-        // The newcomer can be the missing link between two entries (one known by id, one by address).
         List<Draft> same = drafts.stream().filter(d -> d.samePerson(incoming)).toList();
         if (same.isEmpty()) {
             drafts.add(incoming);

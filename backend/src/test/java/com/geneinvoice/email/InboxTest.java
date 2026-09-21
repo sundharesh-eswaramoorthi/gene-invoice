@@ -19,7 +19,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** The Inbox: the emails a user is a To recipient of, read and unread (§6 Inbox). */
 class InboxTest extends EmailTestBase {
 
     @Autowired InboxService inboxService;
@@ -28,7 +27,6 @@ class InboxTest extends EmailTestBase {
 
     private final Instant base = Instant.parse("2026-09-01T09:00:00Z");
 
-    /** An email received at a known time, with one row per recipient. */
     private Email emailTo(String subject, int minutesAfterBase, Map<User, RecipientField> recipients) {
         Email email = emailRepository.save(Email.builder()
                 .entityType(EmailEntityType.CUSTOMER).entityId(acme.getId()).entityLabel("Customer Acme Ltd")
@@ -76,7 +74,6 @@ class InboxTest extends EmailTestBase {
     @Test
     void aSnippetNeverEndsInHalfACharacter() throws Exception {
         Email email = emailTo("Emoji", 1, Map.of(collections, RecipientField.TO));
-        // An emoji is two UTF-16 units, and this one straddles the 160th.
         email.setBody("a".repeat(159) + "\uD83D\uDE00" + " and more");
         emailRepository.save(email);
 
@@ -97,7 +94,6 @@ class InboxTest extends EmailTestBase {
                 .get("totalElements").asLong()).isEqualTo(4);
         assertThat(getOk("/api/inbox", collections, "filter", "entityType:eq:INVOICE")
                 .get("totalElements").asLong()).isZero();
-        // A partly sent email is one of the statuses to filter on.
         Email partly = emailRepository.findAll().get(0);
         partly.setStatus(EmailStatus.PARTIAL);
         emailRepository.save(partly);
@@ -160,7 +156,6 @@ class InboxTest extends EmailTestBase {
         TransactionTemplate meanwhile = new TransactionTemplate(transactionManager);
         meanwhile.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
-        // A report on the copy has read the row when the recipient opens the email.
         transactions.executeWithoutResult(tx -> {
             EmailRecipient reported = emailRecipientRepository.findById(row).orElseThrow();
             meanwhile.executeWithoutResult(inner -> inboxService.setRead(row, collections.getId(), true));
@@ -173,7 +168,6 @@ class InboxTest extends EmailTestBase {
             assertThat(r.getDeliveryStatus()).isEqualTo(RecipientDeliveryStatus.SENT);
         });
 
-        // The other way round: whoever holds the row loaded writes only what they changed.
         transactions.executeWithoutResult(tx -> {
             EmailRecipient loaded = emailRecipientRepository.findById(row).orElseThrow();
             meanwhile.executeWithoutResult(inner -> {

@@ -17,11 +17,6 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Map;
 
-/**
- * Every error as {@code {"status", "error", "message", "fieldErrors"}}, the last only for validation.
- * The message is written for a person: the backend shows it as it is. A genuine fault is a 500 that
- * says nothing about the internals; the detail stays in the log.
- */
 @RestControllerAdvice
 @Slf4j
 public class ApiErrors {
@@ -39,7 +34,6 @@ public class ApiErrors {
         return respond(ex.status(), ex.getMessage());
     }
 
-    /** The message joins the field messages, so a caller that shows only the message still says what to fix. */
     @ExceptionHandler(InvalidFieldsException.class)
     public ResponseEntity<Body> invalid(InvalidFieldsException ex) {
         return ResponseEntity.badRequest().body(new Body(400, HttpStatus.BAD_REQUEST.getReasonPhrase(),
@@ -74,7 +68,6 @@ public class ApiErrors {
         return respond(HttpStatus.NOT_FOUND, "No such endpoint");
     }
 
-    /** Two requests changed the same row at once; the second can simply be made again. */
     @ExceptionHandler({DataIntegrityViolationException.class, OptimisticLockingFailureException.class})
     public ResponseEntity<Body> conflict(RuntimeException ex, HttpServletRequest req) {
         log.info("Conflicting change on {} {}: {}", req.getMethod(), req.getRequestURI(), ex.getMessage());

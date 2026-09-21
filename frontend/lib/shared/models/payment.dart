@@ -49,7 +49,6 @@ class PaymentRecord {
   final List<PaidInvoice> invoices;
   final double customerCreditBalance;
 
-  /// Null for a self-service customer, who never receives POC identity (AC-A8).
   final PocUser? collectionPoc;
   final bool pocMissing;
 

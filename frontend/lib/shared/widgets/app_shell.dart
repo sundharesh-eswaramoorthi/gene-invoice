@@ -16,7 +16,6 @@ class NavEntry {
   final List<String> requiredAnyOf;
   final bool hideForCustomer;
 
-  /// Carries the Inbox's unread count on its icon.
   final bool unreadBadge;
   const NavEntry(this.label, this.icon, this.path, this.requiredAnyOf,
       {this.hideForCustomer = false, this.unreadBadge = false});
@@ -70,12 +69,9 @@ class AppShell extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final width = MediaQuery.sizeOf(context).width;
     final isWide = width >= 900;
-    // On a phone the account label crowds out the title and pushes the actions over the menu
-    // button, so only the icon shows there; the name and role head the account menu instead.
     final showAccountLabel = width >= 600;
 
     final isCustomer = user?.isCustomer ?? false;
-    // Staff who send email send it from their own Gmail; customer logins do not connect one.
     final canConnectGmail = ref.watch(canConnectGmailProvider);
     final visible = navEntries.where((e) {
       if (isCustomer && e.hideForCustomer) return false;
@@ -170,7 +166,6 @@ class AppShell extends ConsumerWidget {
           : _DrawerNav(
               entries: visible,
               selectedIndex: selected,
-              // The shell's context, which outlives the drawer that closes before navigating.
               onSelect: (path) => goGuarded(context, path),
             ),
       body: Row(
@@ -230,8 +225,6 @@ class _NotificationsBell extends ConsumerWidget {
   }
 }
 
-/// A sidebar icon, with the Inbox's unread count on it. The count is watched only here, so a user
-/// without the Inbox never polls for it, and a new count repaints the badge rather than the shell.
 class _NavIcon extends ConsumerWidget {
   final NavEntry entry;
   const _NavIcon({required this.entry});
@@ -249,9 +242,6 @@ class _NavIcon extends ConsumerWidget {
   }
 }
 
-/// The desktop sidebar. Contracted by default — icons only — and it widens to show the labels
-/// while the pointer is over it, so a name is one hover away without costing the page that width
-/// all the time. The button at the top pins it open for anyone who would rather keep the labels.
 class _HoverRail extends StatefulWidget {
   final List<NavEntry> entries;
 
@@ -280,9 +270,7 @@ class _HoverRailState extends State<_HoverRail> {
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: NavigationRail(
-        // NavigationRail animates between the two widths itself.
         extended: expanded,
-        // Contracted means icons alone: the labels arrive with the expansion.
         labelType: expanded ? null : NavigationRailLabelType.none,
         selectedIndex: widget.selectedIndex,
         onDestinationSelected: (i) => widget.onSelect(widget.entries[i].path),

@@ -5,10 +5,6 @@ import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
 
-/**
- * Storage when {@code DOCUMENT_STORAGE=none}: uploading answers 503 and everything else in the app
- * keeps working, the way {@code MAIL_TRANSPORT=none} leaves email saved but unsent (§4.4).
- */
 @Component
 @ConditionalOnProperty(name = "app.documents.storage", havingValue = DocumentProperties.NONE)
 public class NoDocumentStorage implements DocumentStorage {
@@ -32,6 +28,5 @@ public class NoDocumentStorage implements DocumentStorage {
 
     @Override
     public void delete(String key) {
-        // Nothing was ever stored.
     }
 }

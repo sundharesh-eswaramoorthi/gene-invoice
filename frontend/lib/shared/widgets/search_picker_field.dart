@@ -4,16 +4,12 @@ import 'package:flutter/material.dart';
 
 import '../../core/api/api_client.dart';
 
-/// A form field that picks one record through a server-side search, for lists too long to load
-/// whole into a dropdown — every customer, every active product. Tapping it opens a dialog that
-/// searches as the user types.
 class SearchPickerField<T> extends StatelessWidget {
   final String label;
   final T? value;
   final String Function(T item) labelOf;
   final String? Function(T item)? subtitleOf;
 
-  /// Fetches the records matching what was typed; an empty search lists the first page.
   final Future<List<T>> Function(String search) search;
   final ValueChanged<T> onChanged;
   final bool required;
@@ -93,8 +89,6 @@ class _SearchPickerDialogState<T> extends State<_SearchPickerDialog<T>> {
     super.dispose();
   }
 
-  // The dialog owns the search, so the list always answers what is in the box now rather than
-  // the keystroke before it.
   void _onSearchChanged(String text) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {

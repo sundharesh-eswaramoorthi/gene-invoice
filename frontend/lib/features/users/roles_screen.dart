@@ -28,9 +28,6 @@ final roleDetailProvider = FutureProvider.autoDispose.family<AppRole, int>((ref,
   return AppRole.fromJson(res.data as Map<String, dynamic>);
 });
 
-/// Opens the role form, for a new role or [existing], from the list or the details page. Once it
-/// saves, whatever shows the role is refreshed, and a new role the admin asked to notify about
-/// gets the compose dialog — opened on [context], since the form's own is gone.
 Future<void> openRoleForm(BuildContext context, WidgetRef ref, {AppRole? existing}) async {
   final saved = await showDialog<({int id, bool notify})>(
     context: context,
@@ -40,7 +37,6 @@ Future<void> openRoleForm(BuildContext context, WidgetRef ref, {AppRole? existin
   ref.invalidate(rolesProvider);
   ref.invalidate(tablePageProvider);
   ref.invalidate(roleDetailProvider(saved.id));
-  // A user's page names their role, so a rename must reach it too.
   ref.invalidate(userDetailProvider);
   if (!context.mounted) return;
   await notifyByEmailAfterSave(context,
@@ -100,7 +96,6 @@ class RolesScreen extends ConsumerWidget {
             numeric: true,
           ),
         ],
-        // Someone who may neither edit nor send email gets no empty action column.
         rowActions: canManage || canSendEmail
             ? (context, r) => [
                   if (canManage)
@@ -120,9 +115,6 @@ class RolesScreen extends ConsumerWidget {
   }
 }
 
-/// Create / edit form for a role and its privileges. Pops the saved role's id, and whether to
-/// write an email about it, so the caller can follow up once this dialog is gone; open it with
-/// [openRoleForm].
 class RoleFormDialog extends ConsumerStatefulWidget {
   final AppRole? existing;
   const RoleFormDialog({super.key, this.existing});
@@ -238,13 +230,11 @@ class _RoleFormDialogState extends ConsumerState<RoleFormDialog> {
                   ),
                 ),
               ),
-              // Kept in view below the privilege list, however long that list scrolls.
               if (widget.existing == null)
                 NotifyByEmailCheckbox(
                   value: _notify,
                   onChanged: (v) => setState(() => _notify = v),
                 ),
-              // Outside the scrolling privilege list, so an error shows by Save, not below it.
               if (_error != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

@@ -16,7 +16,6 @@ class PocNameCell extends StatelessWidget {
 
   const PocNameCell({super.key, required this.user});
 
-  /// The text this cell shows, for a caller that needs the string rather than the widget.
   static String describe(PocUser? user) =>
       user == null ? '—' : user.display + (user.active ? '' : ' (inactive)');
 

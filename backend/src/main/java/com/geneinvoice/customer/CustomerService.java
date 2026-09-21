@@ -63,8 +63,6 @@ public class CustomerService {
     private final DocumentCascade documentCascade;
     private final EmailCascade emailCascade;
 
-    // ---- reads -----------------------------------------------------------------
-
     @Transactional(readOnly = true)
     public PageResponse<CustomerDtos.CustomerDto> page(TableQuery query) {
         ScopeResolver.Scope scope = scopeResolver.forCustomers();
@@ -139,7 +137,6 @@ public class CustomerService {
         return c;
     }
 
-    /** A POC limited to their own book cannot reach, edit or re-seat other customers by id (AC-A6). */
     private void requireInBook(Long id) {
         if (!queryExecutor.inScope(Customer.class, TableSchemas.CUSTOMERS, id,
                 scopeResolver.forCustomers().predicates())) {
@@ -152,7 +149,6 @@ public class CustomerService {
         return toDtos(List.of(c)).get(0);
     }
 
-    /** Builds DTOs for a page in a fixed number of queries rather than one per row. */
     @Transactional(readOnly = true)
     public List<CustomerDtos.CustomerDto> toDtos(List<Customer> customers) {
         if (customers.isEmpty()) return List.of();
@@ -204,8 +200,6 @@ public class CustomerService {
                     c.getCreatedAt());
         }).toList();
     }
-
-    // ---- writes ----------------------------------------------------------------
 
     @Transactional
     public Customer create(CustomerDtos.CustomerCreateRequest in) {
@@ -293,8 +287,6 @@ public class CustomerService {
         }
         auditService.record(ENTITY, id, "CUSTOMER_UPDATED", before, snapshot(saved),
                 currentUser.require().getId(), null, null);
-        // Terms decide the due date of every invoice raised from now on, so the change gets an
-        // entry of its own, old → new, rather than only a line in the snapshot (AC-A8).
         if (previousTerm != saved.getPaymentTerm()) {
             auditService.record(ENTITY, id, "CUSTOMER_PAYMENT_TERM_CHANGED",
                     previousTerm == null ? null : previousTerm.name(),
@@ -311,7 +303,6 @@ public class CustomerService {
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
         // What is about to go, read before the cascade takes it (CP-04).
         Object before = snapshot(c);
-        // Its documents go with it, in this transaction, so none is left downloadable (AC-C5).
         documentCascade.onCustomerDeleted(id);
         // The emails recorded against it stay — they are a record of something that was said —
         // but stop claiming the customer is still there to link to (CP-13).
@@ -328,10 +319,6 @@ public class CustomerService {
                 currentUser.require().getId(), null, "Customer deleted");
     }
 
-    /**
-     * Terms a customer may be set to. CUSTOM means "somebody typed a date on one invoice", which
-     * is not something a customer can be permanently on (§2.1).
-     */
     private static PaymentTerm settableTerm(PaymentTerm term) {
         if (term == PaymentTerm.CUSTOM) {
             throw new GlobalExceptionHandler.InvalidFieldsException(Map.of("paymentTerm",

@@ -17,18 +17,6 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Works out the predicates a list query must always carry for the calling user.
- *
- * <p>Two different things live here. A customer-scoped account is <em>restricted</em>: it can only
- * ever see its own rows and no filter can widen that (AC-D10). A POC without
- * {@link Privileges#SCOPE_OVERRIDE} is <em>defaulted</em> to their own book: the same predicate is
- * applied, and reported back as a locked filter chip so the UI can say so out loud (AC-A6).
- *
- * <p>Only {@code SCOPE_OVERRIDE} lifts the restriction. A caller without it who is not that kind
- * of POC has an <em>empty</em> book of that kind, not an unrestricted one: a sales rep is nobody's
- * Collection POC, so their payments and promises books are empty rather than the company's.
- */
 @Component
 @RequiredArgsConstructor
 public class ScopeResolver {
@@ -42,17 +30,12 @@ public class ScopeResolver {
         }
     }
 
-    /**
-     * True when POC identity may be shown to the caller. A customer-scoped account never sees it,
-     * whatever privileges its role happens to carry (AC-A8).
-     */
     public boolean canSeePoc() {
         User u = currentUser.require();
         return u.getCustomerId() == null
                 && userRepository.hasPrivilege(u.getId(), Privileges.POC_VIEW);
     }
 
-    /** True when the caller may look beyond their own book. */
     public boolean canSeeEverything() {
         User u = currentUser.require();
         return u.getCustomerId() == null
@@ -80,10 +63,6 @@ public class ScopeResolver {
                 (root, q, cb, me) -> cb.equal(root.get("collectionPoc").get("id"), me));
     }
 
-    /**
-     * A customer belongs to a POC's book when they hold a POC seat on it, or — for a sales
-     * person, who has no seat on the customer itself — when they own one of its invoices.
-     */
     public Scope forCustomers() {
         List<PredicateFactory> predicates = new ArrayList<>();
         List<String> locked = new ArrayList<>();
@@ -98,8 +77,6 @@ public class ScopeResolver {
             return Scope.empty();
         }
         Long meId = me.getId();
-        // Holding no POC seat of any kind is an empty book, not the whole company: the caller has
-        // no way past their own scope, so the list is empty and the chip still says why (AC-A6).
         if (!isAnyPoc()) {
             return nothing("myBook:eq:" + meId);
         }
@@ -109,7 +86,6 @@ public class ScopeResolver {
         return new Scope(predicates, locked);
     }
 
-    /** Disputes carry no POC of their own; only the customer restriction applies. */
     public Scope forDisputes() {
         User me = currentUser.require();
         if (me.getCustomerId() != null) {
@@ -144,9 +120,6 @@ public class ScopeResolver {
             return Scope.empty();
         }
         Long meId = me.getId();
-        // Not being this kind of POC is an empty book, never permission to see every row of it: a
-        // sales rep's payments book is the payments where they are the Collection POC — none —
-        // and not the company's (§7). The by-id reads that hang off these rows follow suit.
         if (!isAssignableAs(type)) {
             return nothing(lockedColumn + ":eq:" + meId);
         }
@@ -155,7 +128,6 @@ public class ScopeResolver {
                 List.of(lockedColumn + ":eq:" + meId));
     }
 
-    /** A book with nothing in it: matches no row, and still reports the chip that explains it. */
     private static Scope nothing(String lockedFilter) {
         return new Scope(List.of((root, q, cb) -> cb.disjunction()), List.of(lockedFilter));
     }

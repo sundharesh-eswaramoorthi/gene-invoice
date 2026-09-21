@@ -38,7 +38,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** The History tab: a customer's and an invoice's timeline cover the records hanging off them. */
 class AuditTimelineTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
@@ -84,7 +83,6 @@ class AuditTimelineTest extends IntegrationTestBase {
                 acme.getId(), new BigDecimal("50.00"), TOMORROW, null, "will pay", invoiceIds));
     }
 
-    /** Opened by the customer's own login, as the dispute flow requires; returns the dispute id. */
     private Long dispute(Long invoiceId, String reason, String proposedChangeJson) {
         actAs(acmeLogin);
         Long id = disputeService.open(new DisputeDtos.CreateDisputeRequest(
@@ -189,7 +187,6 @@ class AuditTimelineTest extends IntegrationTestBase {
         List<JsonNode> rows = timeline("INVOICE", inv.getId(), true, admin);
         JsonNode opened = first(rows, "DISPUTE_OPENED");
         assertThat(opened.get("reason").asText()).hasSizeLessThanOrEqualTo(AuditService.REASON_MAX);
-        // The full text is still in the snapshot.
         assertThat(objectMapper.readTree(opened.get("afterJson").asText()).get("reason").asText())
                 .isEqualTo(reason);
         assertThat(first(rows, "DISPUTE_DENIED").get("reason").asText())
@@ -200,7 +197,6 @@ class AuditTimelineTest extends IntegrationTestBase {
     void recordsOlderThanTheirAuditTrailGetTheirEventsDerived() throws Exception {
         Invoice inv = invoice(acme);
         Payment p = pay("30.00", null);
-        // Simulate rows written before these events were audited.
         auditLogRepository.deleteAll(auditLogRepository.findAll().stream()
                 .filter(a -> (a.getEntityType().equals("INVOICE") && a.getEntityId().equals(inv.getId()))
                         || (a.getEntityType().equals("PAYMENT") && a.getEntityId().equals(p.getId())))
@@ -211,7 +207,6 @@ class AuditTimelineTest extends IntegrationTestBase {
                 "CUSTOMER:CUSTOMER_CREATED", "INVOICE:INVOICE_CREATED", "PAYMENT:PAYMENT_RECORDED",
                 "INVOICE:PAYMENT_APPLIED");
         assertThat(derived).allMatch(r -> r.get("id").isNull());
-        // A payment's later state is not passed off as how it was recorded.
         JsonNode recorded = objectMapper.readTree(first(derived, "PAYMENT_RECORDED").get("afterJson").asText());
         assertThat(recorded.has("status")).isFalse();
         assertThat(recorded.get("amount").decimalValue()).isEqualByComparingTo("30.00");
@@ -248,7 +243,6 @@ class AuditTimelineTest extends IntegrationTestBase {
         assertThat(events(rows)).containsOnlyOnce("INVOICE:INVOICE_CREATED", "INVOICE:PAYMENT_APPLIED");
         assertThat(rows).noneMatch(r -> r.get("derived").asBoolean());
 
-        // The customer itself was created straight through the repository, so only that is derived.
         assertThat(events(derivedOnly(timeline("CUSTOMER", acme.getId(), true, admin))))
                 .containsExactly("CUSTOMER:CUSTOMER_CREATED");
     }
@@ -272,13 +266,11 @@ class AuditTimelineTest extends IntegrationTestBase {
                 .contains("INVOICE:INVOICE_CREATED", "PAYMENT:PAYMENT_RECORDED",
                         "PROMISE:PROMISE_CREATED", "DISPUTE:DISPUTE_OPENED")
                 .noneMatch(e -> e.contains("POC"))
-                // The reassignment changed nothing but the POC, so there is nothing left to show.
                 .doesNotContain("INVOICE:INVOICE_UPDATED");
         Set<Long> staff = Set.of(sales.getId(), collections.getId(), admin.getId());
         assertThat(rows).allSatisfy(r -> {
             assertThat(r.path("beforeJson").asText("").toLowerCase(Locale.ROOT)).doesNotContain("poc");
             assertThat(r.path("afterJson").asText("").toLowerCase(Locale.ROOT)).doesNotContain("poc");
-            // Whoever raised the invoice or took the payment is the account's POC: never named.
             assertThat(r.path("changedByUsername").asText("acme.login")).isEqualTo("acme.login");
             assertThat(r.get("changedByUserId").isNull()
                     || !staff.contains(r.get("changedByUserId").asLong())).isTrue();

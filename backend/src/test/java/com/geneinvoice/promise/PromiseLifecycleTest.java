@@ -25,7 +25,6 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** Feature B: promise status is recomputed from facts, so it survives voids, edits and cancellations. */
 class PromiseLifecycleTest extends IntegrationTestBase {
 
     @Autowired PaymentPromiseService promiseService;
@@ -73,13 +72,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         return promiseRepository.findById(id).orElseThrow().getStatus();
     }
 
-    // ---- PPD-02: a promise kept is kept, whatever the date says ----------------
-
-    /**
-     * A promise of part of a larger invoice, paid in full and on time, is kept from the moment the
-     * money lands. It used to read "Partially kept" with nothing left to pay until the promised
-     * date went by, and then turn into "Kept" on the same facts (PPD-02).
-     */
     @Test
     void anInvoiceScopedPromisePaidInFullBeforeItsDateIsKept() {
         Invoice big = invoice("1000.00", 1);
@@ -93,7 +85,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(kept.remainingAmount()).isEqualByComparingTo("0.00");
     }
 
-    /** And it is still kept once the date has gone: the same facts cannot mean two things. */
     @Test
     void thatPromiseIsStillKeptOnceThePromisedDateHasPassed() {
         Invoice big = invoice("1000.00", 1);
@@ -108,7 +99,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(statusOf(part.id())).isEqualTo(PromiseStatus.KEPT);
     }
 
-    /** Short of the promise, it is still only partly kept — the fix is not "everything is kept". */
     @Test
     void anInvoiceScopedPromisePaidShortBeforeItsDateIsOnlyPartlyKept() {
         Invoice big = invoice("1000.00", 1);
@@ -118,8 +108,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
 
         assertThat(statusOf(part.id())).isEqualTo(PromiseStatus.PARTIALLY_KEPT);
     }
-
-    // ---- AC-B1 / AC-B2: validation ---------------------------------------------
 
     @Test
     void amountMustBeGreaterThanZero() {
@@ -156,8 +144,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(over.status()).isEqualTo(PromiseStatus.OPEN);
     }
 
-    // ---- AC-B8: a Collection POC is required, defaulting to the customer's primary
-
     @Test
     void creationDefaultsToTheCustomersPrimaryCollectionPoc() {
         PromiseDtos.PromiseDto p = promise("100.00", TOMORROW, null);
@@ -172,8 +158,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
                 .hasMessageContaining("Collection POC is required");
     }
 
-    // ---- AC-B3: a settling payment links itself and marks KEPT -------------------
-
     @Test
     void aPaymentThatFullySettlesThePromisedInvoicesMarksItKeptWithoutHumanAction() {
         Invoice inv = invoice("100.00", 1);
@@ -185,8 +169,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(reloaded.getStatus()).isEqualTo(PromiseStatus.KEPT);
         assertThat(reloaded.getFulfilledAmount()).isEqualByComparingTo("100.00");
     }
-
-    // ---- AC-B4: a partial payment marks PARTIALLY_KEPT and records the remainder --
 
     @Test
     void aPartialPaymentMarksPartiallyKeptAndRecordsWhatIsLeft() {
@@ -201,15 +183,12 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(reloaded.getRemainingAmount()).isEqualByComparingTo("60.00");
     }
 
-    // ---- AC-B5: the date passing turns an untouched promise BROKEN by itself -----
-
     @Test
     void theSweepBreaksAnOverduePromiseNobodyEverOpened() {
         Invoice inv = invoice("100.00", 1);
         PromiseDtos.PromiseDto p = promise("100.00", YESTERDAY, List.of(inv.getId()));
-        assertThat(p.status()).isEqualTo(PromiseStatus.BROKEN); // evaluated on create too
+        assertThat(p.status()).isEqualTo(PromiseStatus.BROKEN);
 
-        // Force it back to OPEN as if it had been created before the date passed.
         PaymentPromise stored = promiseRepository.findById(p.id()).orElseThrow();
         stored.setStatus(PromiseStatus.OPEN);
         stored.setBrokenNotifiedAt(null);
@@ -246,7 +225,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
 
         pay("100.00", List.of(inv.getId()));
 
-        // The customer did break their word; the late money is still recorded against it.
         PaymentPromise reloaded = promiseRepository.findById(p.id()).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(PromiseStatus.BROKEN);
         assertThat(reloaded.getFulfilledAmount()).isEqualByComparingTo("100.00");
@@ -274,13 +252,10 @@ class PromiseLifecycleTest extends IntegrationTestBase {
     @Test
     void payingLessThanPromisedButSettlingTheInvoicesInTimeStillCountsAsKept() {
         Invoice inv = invoice("100.00", 1);
-        // They promised more than the invoices actually owe (AC-B2).
         PromiseDtos.PromiseDto p = promise("500.00", TODAY, List.of(inv.getId()));
         pay("100.00", List.of(inv.getId()));
         assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.KEPT);
     }
-
-    // ---- AC-B10: the Collection POC is told once, not every sweep ----------------
 
     @Test
     void breakingNotifiesTheCollectionPocExactlyOnce() {
@@ -295,8 +270,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(broken).hasSize(1);
         assertThat(broken.get(0).getLink()).startsWith("/promises/");
     }
-
-    // ---- AC-B6: re-entrancy — a void, a cancel and an edit all re-evaluate -------
 
     @Test
     void voidingTheLinkedPaymentTakesTheKeptStatusBackAgain() {
@@ -321,7 +294,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
 
         invoiceService.cancelWithRefund(inv.getId());
 
-        // Nothing is owed on what was promised, so the promise is no longer broken.
         assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.KEPT);
     }
 
@@ -332,7 +304,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         pay("40.00", List.of(inv.getId()));
         assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.PARTIALLY_KEPT);
 
-        // The dispute reduces the invoice to what was already paid.
         invoiceService.replaceItems(inv.getId(),
                 List.of(new InvoiceDtos.LineInput(widget.getId(), 1, new BigDecimal("40.00"))), null);
 
@@ -365,8 +336,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(reloaded.getFulfilledAmount()).isEqualByComparingTo("100.00");
     }
 
-    // ---- AC-B7: a customer-level promise tracks the account balance --------------
-
     @Test
     void aCustomerLevelPromiseIsKeptOnceThePromisedAmountIsPaid() {
         invoice("300.00", 1);
@@ -392,8 +361,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.KEPT);
     }
 
-    // ---- AC-B6 / AC-B9: manual override wins and is audited ---------------------
-
     @Test
     void aManualOverridePinsTheStatusAgainstFurtherRecomputation() {
         Invoice inv = invoice("100.00", 1);
@@ -407,7 +374,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(reloaded.isStatusOverridden()).isTrue();
         assertThat(reloaded.getOverrideReason()).isEqualTo("Paid in cash off-system");
         assertThat(reloaded.getOverriddenByUserId()).isEqualTo(admin.getId());
-        // Fulfilment is still tracked underneath the override.
         assertThat(reloaded.getFulfilledAmount()).isEqualByComparingTo("10.00");
     }
 
@@ -428,8 +394,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
 
         assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.OPEN);
     }
-
-    // ---- AC-B11: cancelling unlinks payments without touching them ---------------
 
     @Test
     void cancellingAPromiseUnlinksItsPaymentsWithoutAlteringThem() {
@@ -462,8 +426,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.CANCELLED);
     }
 
-    // ---- AC-B12: many-to-many between payments and promises ---------------------
-
     @Test
     void onePaymentMayFulfilSeveralPromisesWithoutDoubleCounting() {
         Invoice a = invoice("100.00", 1);
@@ -477,7 +439,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         PaymentPromise reloadedSecond = promiseRepository.findById(second.id()).orElseThrow();
         assertThat(reloadedFirst.getStatus()).isEqualTo(PromiseStatus.KEPT);
         assertThat(reloadedSecond.getStatus()).isEqualTo(PromiseStatus.KEPT);
-        // Each promise counts only the part of the payment that landed on its own invoice.
         assertThat(reloadedFirst.getFulfilledAmount()).isEqualByComparingTo("100.00");
         assertThat(reloadedSecond.getFulfilledAmount()).isEqualByComparingTo("100.00");
     }
@@ -498,8 +459,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(promiseRepository.countLinkedPayments(p.id())).isEqualTo(2);
     }
 
-    // ---- US-B3: a cashier may link a payment to a promise by hand ---------------
-
     @Test
     void aCashierCanLinkAPaymentToAnOpenPromiseExplicitly() {
         PromiseDtos.PromiseDto p = promise("100.00", TOMORROW, null);
@@ -510,8 +469,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(promiseRepository.countLinkedPayments(p.id())).isEqualTo(1);
         assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.KEPT);
     }
-
-    // ---- AC-B7: a general promise answers only for the debt it was made against --
 
     @Test
     void aKeptGeneralPromiseStaysKeptWhenALaterInvoiceIsRaised() {
@@ -534,8 +491,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
 
         assertThat(statusOf(p.id())).isEqualTo(PromiseStatus.OPEN);
     }
-
-    // ---- editing after the facts have moved on ------------------------------------
 
     @Test
     void aPromiseStaysEditableAfterOneOfItsInvoicesIsCancelled() {
@@ -577,8 +532,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(edited.notes()).isEqualTo("still theirs");
     }
 
-    // ---- a withdrawn promise stays withdrawn; defaults skip deactivated POCs ----------
-
     @Test
     void aCancelledPromiseCannotBeOverriddenOrHaveAnOverrideCleared() {
         Invoice inv = invoice("100.00", 1);
@@ -609,8 +562,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         assertThat(p.collectionPoc().id()).isEqualTo(cole.getId());
     }
 
-    // ---- AC-B12: one payment is shared out once across the promises it could serve ------
-
     private BigDecimal fulfilledOf(Long id) {
         return promiseRepository.findById(id).orElseThrow().getFulfilledAmount();
     }
@@ -628,7 +579,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
 
         pay("100.00", List.of(inv.getId()));
 
-        // Both are kept, since the invoice they cover is settled (AC-B3), but the money counts once.
         assertThat(statusOf(first.id())).isEqualTo(PromiseStatus.KEPT);
         assertThat(statusOf(second.id())).isEqualTo(PromiseStatus.KEPT);
         assertThat(fulfilledOf(first.id())).isEqualByComparingTo("100.00");
@@ -672,10 +622,8 @@ class PromiseLifecycleTest extends IntegrationTestBase {
 
         pay("100.00", List.of(inv.getId()));
 
-        // The money cannot keep yesterday's promise, so it counts for the one it can still keep.
         assertThat(statusOf(current.id())).isEqualTo(PromiseStatus.KEPT);
         assertThat(fulfilledOf(current.id())).isEqualByComparingTo("100.00");
-        // The invoice is settled, but only after yesterday: that promise was still broken.
         assertThat(statusOf(missed.id())).isEqualTo(PromiseStatus.BROKEN);
         assertThat(fulfilledOf(missed.id())).isEqualByComparingTo("0");
     }
@@ -692,8 +640,6 @@ class PromiseLifecycleTest extends IntegrationTestBase {
 
         assertThat(fulfilledOf(second.id())).isEqualByComparingTo("100.00");
     }
-
-    // ---- D-35: a ticked promise gets the money ------------------------------------------
 
     @Test
     void aPaymentTickedToAPromisePaysThatPromisesInvoicesFirst() {
@@ -723,15 +669,12 @@ class PromiseLifecycleTest extends IntegrationTestBase {
                 .hasMessageContaining("covers none of the chosen invoices");
     }
 
-    // ---- recomputing existing promises under the new rules --------------------------------
-
     @Test
     void aRecomputePreviewReportsChangesAndOnlyApplyingKeepsThem() {
         Invoice inv = invoice("100.00", 1);
         promise("100.00", TOMORROW, List.of(inv.getId()));
         PromiseDtos.PromiseDto second = promise("100.00", TOMORROW.plusDays(1), List.of(inv.getId()));
         pay("100.00", List.of(inv.getId()));
-        // As the old rule left it: the one payment counted in full by both promises.
         PaymentPromise stored = promiseRepository.findById(second.id()).orElseThrow();
         stored.setFulfilledAmount(new BigDecimal("100.00"));
         promiseRepository.save(stored);

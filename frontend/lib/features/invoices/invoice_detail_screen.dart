@@ -73,16 +73,10 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     _savedDueDate = inv.dueDate;
   }
 
-  /// The day the current terms were counted from, worked back from the due date the server
-  /// stored. Read that way rather than from the invoice timestamp, so a recomputed date is the
-  /// one the save will come back with. Custom terms and an invoice with no due date leave
-  /// nothing to work back from, and then it is the invoice's UTC day — the day the server counts
-  /// from (§2.1) — never this browser's reading of the instant.
   DateTime _termsCountedFrom(InvoiceDetail inv) =>
       (inv.dueDate == null ? null : inv.paymentTerm?.basisOf(inv.dueDate!)) ??
       utcDay(inv.invoiceDate)!;
 
-  /// Named terms recompute the date; Custom keeps whatever is showing (§2.2, US-A3).
   void _termChanged(PaymentTerm? term, InvoiceDetail inv) {
     if (term == null) return;
     setState(() {
@@ -98,12 +92,10 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: _dueDate ?? basis,
-      // Earlier than the invoice date is a 400 from the server, so it cannot be picked (AC-A5).
       firstDate: DateTime(basis.year, basis.month, basis.day),
       lastDate: DateTime(basis.year + 5, basis.month, basis.day),
     );
     if (picked == null) return;
-    // A date chosen by hand is an override, whatever the terms were (US-A3).
     setState(() {
       _dueDate = DateTime(picked.year, picked.month, picked.day);
       _term = PaymentTerm.CUSTOM;
@@ -128,7 +120,6 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         ],
       ),
     );
-    // Discarded edits are gone: the route's onExit, which runs next, must not ask again.
     if (ok == true) _dirty = false;
     return ok == true;
   }
@@ -143,11 +134,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       final termsChanged = _term != _savedTerm || _dueDate != _savedDueDate;
       await ref.read(dioProvider).patch('/api/invoices/${widget.id}', data: {
         'notes': _notes.text.trim(),
-        // Sent only when changed: an unchanged POC may since have been deactivated, or this user
-        // may not assign POCs, and neither should block a notes edit (AC-A5).
         if (pocChanged) 'salesPocUserId': _salesPoc!.id,
-        // One or the other, never both: a named term is the rule the server recomputes the date
-        // from, a date of its own is the override it records as Custom (§2.2).
         if (termsChanged && _term == PaymentTerm.CUSTOM && _dueDate != null)
           'dueDate': formatDate(_dueDate),
         if (termsChanged && _term != null && _term != PaymentTerm.CUSTOM)
@@ -156,7 +143,6 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       _savedSalesPocId = _salesPoc?.id;
       _savedTerm = _term;
       _savedDueDate = _dueDate;
-      // Top section, tabs and the list the user came from all pick up the new values (AC-C5).
       ref.invalidate(invoiceDetailProvider(widget.id));
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);
@@ -202,7 +188,6 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
         return PopScope(
           canPop: !_dirty,
-          // Unsaved edits are asked about once, by goGuarded or else by the route's onExit.
           onPopInvokedWithResult: (didPop, _) {
             if (!didPop) goGuarded(context, '/invoices');
           },
@@ -210,8 +195,6 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             title: inv.invoiceNumber,
             subtitle: [
               inv.customerName,
-              // The UTC day, because the due date beside it was counted from that day: read in
-              // the browser's zone the pair would not add up to the stated terms (§2.1).
               formatUtcDate(inv.invoiceDate),
               if (inv.dueDate != null) 'due ${formatDate(inv.dueDate)}',
             ].join(' • '),
@@ -219,8 +202,6 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             titleTrailing: [
               if (canSeePoc && inv.pocMissing) const PocMissingBadge(),
               InvoiceStatusChip(status: inv.status),
-              // Not a status of its own: it is true of an unpaid invoice whose date has passed,
-              // and says by how long (US-A4).
               if (inv.overdue) OverdueBadge(daysOverdue: inv.daysOverdue),
               if (canSeeDisputes && user!.canRaiseDispute)
                 TextButton.icon(
@@ -288,8 +269,6 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     required bool canAssignPoc,
     required bool canSeePoc,
   }) {
-    // Fields in columns, Save beside the figures and the line items as a compact table, so the
-    // top of an ordinary invoice fits without scrolling. A phone stacks and scrolls the page.
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Column(
@@ -322,9 +301,6 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                   }),
                 ),
               ),
-            // Where the due date came from — "Custom" when it was typed (US-A3). Anyone who may
-            // change the invoice may move the deadline the customer renegotiated, and every
-            // move is written to the History tab (AC-A8).
             DetailGridItem(
               label: 'Payment terms',
               child: canEdit
@@ -401,8 +377,6 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     );
   }
 
-  /// The figures on the left and, for someone who may edit, Save on the right of the same line —
-  /// a row of its own under the fields was a whole line of height spent on one button.
   Widget _figuresAndSave(List<Widget> figures, {required bool canEdit}) => Wrap(
         spacing: 12,
         runSpacing: 12,
@@ -430,7 +404,6 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         ],
       );
 
-  /// The line items as a compact table: one short row each, instead of a two-line list tile per item.
   Widget _lineItems(InvoiceDetail inv) {
     final theme = Theme.of(context);
     final head = theme.textTheme.labelMedium;

@@ -5,7 +5,6 @@ import com.geneinvoice.common.BadRequestException;
 import java.util.Arrays;
 import java.util.Locale;
 
-/** Operators a filter chip may use. Parsed from the wire form (`field:op:value`). */
 public enum FilterOperator {
     EQ("eq", 1),
     NEQ("neq", 1),
@@ -19,11 +18,9 @@ public enum FilterOperator {
     BETWEEN("between", 2),
     IS_EMPTY("isEmpty", 0),
     IS_NOT_EMPTY("isNotEmpty", 0),
-    /** Date presets: today, last7Days, last30Days, thisMonth, lastMonth, thisYear, overdue. */
     RELATIVE("relative", 1);
 
     private final String wire;
-    /** Expected value count; -1 means "one or more". */
     private final int arity;
 
     FilterOperator(String wire, int arity) {
@@ -39,7 +36,6 @@ public enum FilterOperator {
         return arity;
     }
 
-    /** True when this operator takes a list of values rather than a single verbatim string. */
     public boolean multiValued() {
         return arity != 1;
     }

@@ -5,16 +5,6 @@ import '../models/invoice.dart';
 import '../models/payment.dart';
 import '../models/promise.dart';
 
-/// Colour-coded status chips for invoices, payments and disputes, in the same shape payment
-/// promises have always used (`PromiseStatusChip` in features/promises/promises_tab.dart).
-///
-/// One palette across all four, so a colour means the same thing wherever it appears:
-///
-/// * primary (blue) — still open, waiting on someone
-/// * orange — under way, partly done
-/// * green — settled, the good ending
-/// * error (red) — went wrong: refused or broken
-/// * outline (grey) — inert: cancelled or voided, nothing owed and nothing to do
 Color invoiceStatusColor(BuildContext context, InvoiceStatus s) {
   final scheme = Theme.of(context).colorScheme;
   return switch (s) {
@@ -33,8 +23,6 @@ Color paymentStatusColor(BuildContext context, PaymentStatus s) {
   };
 }
 
-/// Lives here rather than with the promise widgets, so every screen can reach it. The chip that
-/// uses it, `PromiseStatusChip`, stays in features/promises/promises_tab.dart.
 Color promiseStatusColor(BuildContext context, PromiseStatus s) {
   final scheme = Theme.of(context).colorScheme;
   return switch (s) {
@@ -46,8 +34,6 @@ Color promiseStatusColor(BuildContext context, PromiseStatus s) {
   };
 }
 
-/// For the places that only have the raw wire value ("PARTIALLY_PAID") rather than the enum.
-/// An unknown value takes the neutral colour instead of guessing.
 Color invoiceStatusColorFromWire(BuildContext context, String? wire) {
   final parsed = InvoiceStatus.values.asNameMap()[wire];
   return parsed == null
@@ -64,13 +50,10 @@ Color disputeStatusColor(BuildContext context, DisputeStatus s) {
   };
 }
 
-/// The chip itself: a tinted pill with the status in its own colour. Same padding, radius and
-/// weight as the promise chip, so a row that shows both reads as one design.
 class StatusChip extends StatelessWidget {
   final String label;
   final Color color;
 
-  /// Shown after the label, e.g. the promise chip's "set by hand" note.
   final Widget? trailing;
 
   const StatusChip({super.key, required this.label, required this.color, this.trailing});
@@ -107,8 +90,6 @@ class InvoiceStatusChip extends StatelessWidget {
 class OverdueBadge extends StatelessWidget {
   final int daysOverdue;
 
-  /// On a list row the due date is in the next column, so the badge there says only "Overdue"
-  /// and keeps the day count in its tooltip.
   final bool compact;
 
   const OverdueBadge({super.key, required this.daysOverdue, this.compact = false});

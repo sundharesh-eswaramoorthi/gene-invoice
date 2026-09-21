@@ -23,7 +23,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Invoices created at the same moment each get their own number, still in sequence. */
 class InvoiceNumberTest extends IntegrationTestBase {
 
     @Autowired InvoiceService invoiceService;
