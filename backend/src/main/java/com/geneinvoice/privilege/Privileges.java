@@ -56,6 +56,21 @@ public final class Privileges {
     public static final String PROMISE_MANAGE = "PROMISE_MANAGE";
     public static final String PROMISE_OVERRIDE = "PROMISE_OVERRIDE";
 
+    // ---- Tasks -----------------------------------------------------------------
+    /** May read the Tasks tab of records they can see, and their own tasks. */
+    public static final String TASK_VIEW = "TASK_VIEW";
+    /** May raise a task, retitle it, move its due date, reassign it and close it. */
+    public static final String TASK_MANAGE = "TASK_MANAGE";
+
+    // ---- Automation ------------------------------------------------------------
+    /** May read the automation rules and what each one has done. */
+    public static final String AUTOMATION_VIEW = "AUTOMATION_VIEW";
+    /**
+     * May write a rule, and so cause tasks, promises, disputes and email to be made without a
+     * person in the loop. Held apart from {@link #AUTOMATION_VIEW} because a rule acts for everyone.
+     */
+    public static final String AUTOMATION_MANAGE = "AUTOMATION_MANAGE";
+
     // ---- Email -----------------------------------------------------------------
     /** May read the Email tab of records they can see, and their own Inbox. */
     public static final String EMAIL_VIEW = "EMAIL_VIEW";
@@ -86,6 +101,8 @@ public final class Privileges {
             POC_ASSIGNABLE_SALES, POC_ASSIGNABLE_SUCCESS, POC_ASSIGNABLE_COLLECTION,
             SCOPE_OVERRIDE,
             PROMISE_VIEW, PROMISE_MANAGE, PROMISE_OVERRIDE,
+            TASK_VIEW, TASK_MANAGE,
+            AUTOMATION_VIEW, AUTOMATION_MANAGE,
             EMAIL_VIEW, EMAIL_SEND,
             DOCUMENT_VIEW, DOCUMENT_MANAGE,
             EXPORT_DATA

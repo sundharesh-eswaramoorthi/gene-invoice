@@ -5,6 +5,7 @@ import com.geneinvoice.mail.config.MailProperties;
 import com.geneinvoice.mail.connection.ConnectionService;
 import com.geneinvoice.mail.connection.ConnectionStatus;
 import com.geneinvoice.mail.connection.MailConnection;
+import com.geneinvoice.mail.gmail.Attachment;
 import com.geneinvoice.mail.gmail.GmailApiException;
 import com.geneinvoice.mail.gmail.GmailClient;
 import com.geneinvoice.mail.gmail.GmailMime;
@@ -39,6 +40,8 @@ public class SendWorker {
 
     static final String NO_ID = "Gmail accepted the message but did not return its id";
     static final String CHECK_FAILED = "Could not check whether the email was already sent: ";
+    /** Never sent silently without them: the sender attached files and the recipient must get them. */
+    static final String ATTACHMENTS_LOST = "The attached files are no longer stored; the email was not sent";
     /** A copy already past sending: a late success has nothing to add. */
     private static final Set<MessageStatus> SETTLED = EnumSet.of(MessageStatus.SENT, MessageStatus.DELIVERED,
             MessageStatus.READ, MessageStatus.BOUNCED);
@@ -51,13 +54,15 @@ public class SendWorker {
     private final MailboxThrottle throttle;
     private final MailboxSync mailboxSync;
     private final SendQueue queue;
+    private final AttachmentSets attachmentSets;
     private final MailProperties properties;
     private final TransactionTemplate transactions;
     private final Clock clock;
 
     public SendWorker(MailMessageRepository messages, MessageService messageService, ConnectionService connections,
                       GoogleTokens tokens, GmailClient gmail, MailboxThrottle throttle, MailboxSync mailboxSync,
-                      SendQueue queue, MailProperties properties, TransactionTemplate transactions, Clock clock) {
+                      SendQueue queue, AttachmentSets attachmentSets, MailProperties properties,
+                      TransactionTemplate transactions, Clock clock) {
         this.messages = messages;
         this.messageService = messageService;
         this.connections = connections;
@@ -66,6 +71,7 @@ public class SendWorker {
         this.throttle = throttle;
         this.mailboxSync = mailboxSync;
         this.queue = queue;
+        this.attachmentSets = attachmentSets;
         this.properties = properties;
         this.transactions = transactions;
         this.clock = clock;
@@ -152,12 +158,26 @@ public class SendWorker {
                 }
             }
 
-            // Step 6: the message itself.
+            // Step 6: the message itself, files and all. They are read in their own short transaction
+            // rather than carried from the claim: a copy may wait on the mailbox rate and on two Google
+            // calls before this, and 17 MiB should not sit in memory for all of it.
+            List<Attachment> files = List.of();
+            if (copy.getAttachmentSetId() != null) {
+                files = transactions.execute(status -> attachmentSets.load(copy.getAttachmentSetId()));
+                if (files == null || files.isEmpty()) {
+                    // Only possible if the rows were removed by hand; sending the email without the files
+                    // the sender attached would be worse than not sending it.
+                    log.error("Copy {} points at attachment set {}, which holds nothing",
+                            copy.getExternalId(), copy.getAttachmentSetId());
+                    failed(id, ATTACHMENTS_LOST, false, false, sender);
+                    return;
+                }
+            }
             byte[] mime;
             try {
                 mime = GmailMime.build(new MailAddress(copy.getFromName(), sender.getGmailAddress()),
                         new MailAddress(copy.getToName(), copy.getToAddress()), copy.getSubject(), copy.getBody(),
-                        copy.getRfcMessageId(), clock.instant());
+                        copy.getRfcMessageId(), clock.instant(), files);
             } catch (MessagingException e) {
                 // A bad address or the like: the same message fails the same way every time.
                 failed(id, e.getMessage(), false, false, sender);

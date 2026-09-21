@@ -319,7 +319,7 @@ class EmailContextTest extends EmailTestBase {
         var payment = paymentService.record(new PaymentDtos.CreatePaymentRequest(acme.getId(),
                 new BigDecimal("150000.50"), "Bank transfer", null, null, collections.getId(), null));
         PromiseDtos.PromiseDto promise = promiseService.create(new PromiseDtos.CreatePromiseRequest(
-                acme.getId(), new BigDecimal("500.00"), LocalDate.of(2026, 10, 1), collections.getId(), null, null));
+                acme.getId(), new BigDecimal("500.00"), LocalDate.of(2026, 10, 1), collections.getId(), null, null, null));
         actAs(acmeLogin);
         Dispute dispute = disputeService.open(new DisputeDtos.CreateDisputeRequest(
                 DisputeTargetType.INVOICE, inv.getId(), "Wrong quantity", null));

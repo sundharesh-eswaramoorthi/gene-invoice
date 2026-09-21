@@ -1,5 +1,6 @@
 package com.geneinvoice.mail.gmail;
 
+import jakarta.activation.DataHandler;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
 import jakarta.mail.Multipart;
@@ -8,9 +9,12 @@ import jakarta.mail.Session;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.ContentType;
 import jakarta.mail.internet.InternetAddress;
+import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
 import jakarta.mail.internet.MimeUtility;
+import jakarta.mail.internet.ParseException;
+import jakarta.mail.util.ByteArrayDataSource;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayInputStream;
@@ -80,12 +84,32 @@ public final class GmailMime {
     // ---- writing ---------------------------------------------------------------------
 
     /**
-     * One copy for one recipient, as plain text: UTF-8 throughout (non-ASCII subjects and names become
-     * encoded words) and the Message-ID fixed when the copy was submitted, which a bounce or a reply
-     * quotes back to find the copy. The To header holds only this recipient (M6).
+     * One copy for one recipient with nothing attached: a single text/plain part, byte for byte as
+     * this service has always written it.
      */
     public static byte[] build(MailAddress from, MailAddress to, String subject, String body, String messageId,
                                Instant date) throws MessagingException {
+        return build(from, to, subject, body, messageId, date, List.of());
+    }
+
+    /**
+     * One copy for one recipient: UTF-8 throughout (non-ASCII subjects and names become encoded
+     * words) and the Message-ID fixed when the copy was submitted, which a bounce or a reply quotes
+     * back to find the copy. The To header holds only this recipient (M6).
+     *
+     * <p>With no attachments the message is one text/plain part and the bytes are exactly what the
+     * six-argument {@code build} has always produced — the same {@code setText} call on the message
+     * itself, not a body part wrapped in a multipart. With attachments it becomes
+     * {@code multipart/mixed}: the same text as the first part, then one part per file carrying its
+     * own name and type and marked {@code Content-Disposition: attachment}, which is what every
+     * mail program shows as a paperclip. Jakarta Mail picks base64 for the file parts itself when
+     * the headers are written, and picks the multipart boundary, so two builds of the same message
+     * differ in that boundary alone.
+     *
+     * @param attachments in the order they should appear; never null, may be empty
+     */
+    public static byte[] build(MailAddress from, MailAddress to, String subject, String body, String messageId,
+                               Instant date, List<Attachment> attachments) throws MessagingException {
         MimeMessage message = new MimeMessage(SESSION) {
             @Override
             protected void updateMessageID() throws MessagingException {
@@ -98,7 +122,19 @@ public final class GmailMime {
         message.setSubject(subject == null ? "" : subject, UTF_8);
         message.setSentDate(Date.from(date));
         // Mail lines end in CRLF; a text area's bare LF is not a line break to every receiver.
-        message.setText(body == null ? "" : body.replaceAll("\\r\\n|\\r|\\n", "\r\n"), UTF_8);
+        String text = body == null ? "" : body.replaceAll("\\r\\n|\\r|\\n", "\r\n");
+        if (attachments == null || attachments.isEmpty()) {
+            message.setText(text, UTF_8);
+        } else {
+            MimeMultipart mixed = new MimeMultipart("mixed");
+            MimeBodyPart said = new MimeBodyPart();
+            said.setText(text, UTF_8);
+            mixed.addBodyPart(said);
+            for (Attachment attachment : attachments) {
+                mixed.addBodyPart(filePart(attachment));
+            }
+            message.setContent(mixed);
+        }
         message.saveChanges();
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try {
@@ -107,6 +143,61 @@ public final class GmailMime {
             throw new MessagingException("The message could not be written", e);
         }
         return out.toByteArray();
+    }
+
+    /**
+     * One file as a MIME part. The type is set from the data handler and again as a header, so the
+     * {@code name} parameter that older mail programs read lands on it as well; the name itself is
+     * an encoded word when it is not ASCII, which is what Gmail and Outlook both write and read.
+     *
+     * <p>base64 is asked for rather than left to Jakarta Mail, which would send a file whose bytes
+     * happen to be 7-bit clean as-is. A file is not text: it may hold a line longer than the 998
+     * characters a mail line may be, or a bare CR that a gateway would rewrite, and either would
+     * reach the recipient as a corrupted file. base64 costs a third of the size and no surprises.
+     */
+    private static MimeBodyPart filePart(Attachment attachment) throws MessagingException {
+        MimeBodyPart part = new MimeBodyPart();
+        String type = contentType(attachment.contentType());
+        part.setDataHandler(new DataHandler(new ByteArrayDataSource(attachment.content(), type)));
+        part.setHeader("Content-Type", type);
+        part.setHeader("Content-Transfer-Encoding", "base64");
+        part.setDisposition(Part.ATTACHMENT);
+        String name = cleanFileName(attachment.filename());
+        try {
+            part.setFileName(MimeUtility.encodeText(name.isEmpty() ? "attachment" : name, UTF_8, null));
+        } catch (UnsupportedEncodingException e) {
+            throw new MessagingException("UTF-8 is not available", e);
+        }
+        return part;
+    }
+
+    /**
+     * A name that is safe in a header and readable in a mail program: no line breaks or other
+     * control characters — one of those could end the header and start another of the sender's
+     * choosing — no run of blanks, and no directory part, which is not the recipient's business
+     * and is how a name reaches a path it should not. Empty when nothing usable is left; the
+     * submit then refuses the file, and {@link #filePart} falls back to a plain name.
+     */
+    public static String cleanFileName(String filename) {
+        if (filename == null) return "";
+        String name = filename.replaceAll("[\\p{Cntrl}]", " ").replaceAll("\\s+", " ").trim();
+        int slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        return slash < 0 ? name : name.substring(slash + 1).trim();
+    }
+
+    /** The given type when it is a type at all, and {@code application/octet-stream} when it is not. */
+    static String contentType(String given) {
+        if (given == null || given.isBlank()) return Attachment.DEFAULT_CONTENT_TYPE;
+        String type = given.trim();
+        try {
+            ContentType parsed = new ContentType(type);
+            if (parsed.getPrimaryType() == null || parsed.getSubType() == null) {
+                return Attachment.DEFAULT_CONTENT_TYPE;
+            }
+            return type;
+        } catch (ParseException e) {
+            return Attachment.DEFAULT_CONTENT_TYPE;
+        }
     }
 
     /** A received message as Jakarta Mail reads it, raw 8-bit headers as UTF-8. */

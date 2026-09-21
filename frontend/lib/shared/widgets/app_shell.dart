@@ -31,6 +31,11 @@ const navEntries = <NavEntry>[
   NavEntry('Payments', Icons.payments_outlined, '/payments',
       [Privileges.paymentView, Privileges.paymentManage]),
   NavEntry('Promises', Icons.handshake_outlined, '/promises', [Privileges.promiseView]),
+  // Chasing work is internal: a customer login is never assigned any, so the entry is hidden
+  // from them rather than shown leading to an empty list (T6).
+  NavEntry('Tasks', Icons.task_alt_outlined, '/tasks',
+      [Privileges.taskView, Privileges.taskManage],
+      hideForCustomer: true),
   NavEntry('Disputes', Icons.flag_outlined, '/disputes',
       [Privileges.disputeView, Privileges.disputeCreate, Privileges.disputeManage]),
   NavEntry('Customers', Icons.people_outline, '/customers',
@@ -43,6 +48,11 @@ const navEntries = <NavEntry>[
       [Privileges.userView, Privileges.userManage]),
   NavEntry('Roles', Icons.admin_panel_settings_outlined, '/roles',
       [Privileges.roleView, Privileges.roleManage]),
+  // A rule acts for everybody, so it sits with the administration screens rather than beside the
+  // records it watches; a customer login can hold neither privilege (R6).
+  NavEntry('Automation', Icons.bolt_outlined, '/automation',
+      [Privileges.automationView, Privileges.automationManage],
+      hideForCustomer: true),
 ];
 
 /// What a user needs to hold for the screen at [path] — the sidebar's own rule, which the router

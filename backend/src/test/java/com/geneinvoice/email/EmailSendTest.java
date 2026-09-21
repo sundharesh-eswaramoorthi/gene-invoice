@@ -270,7 +270,7 @@ class EmailSendTest extends EmailTestBase {
         var payment = paymentService.record(new PaymentDtos.CreatePaymentRequest(acme.getId(),
                 new BigDecimal("10.00"), "Cash", null, null, cole.getId(), null));
         PromiseDtos.PromiseDto promise = promiseService.create(new PromiseDtos.CreatePromiseRequest(
-                acme.getId(), new BigDecimal("500.00"), LocalDate.of(2026, 10, 1), cole.getId(), null, null));
+                acme.getId(), new BigDecimal("500.00"), LocalDate.of(2026, 10, 1), cole.getId(), null, null, null));
 
         // Not every Sales POC on the customer's invoices: this invoice's.
         JsonNode aboutInvoice = send(admin, email("INVOICE", samsInvoice.getId(),
@@ -299,7 +299,7 @@ class EmailSendTest extends EmailTestBase {
         var payment = paymentService.record(new PaymentDtos.CreatePaymentRequest(acme.getId(),
                 new BigDecimal("10.00"), "Cash", null, null, cole.getId(), null));
         PromiseDtos.PromiseDto promise = promiseService.create(new PromiseDtos.CreatePromiseRequest(
-                acme.getId(), new BigDecimal("500.00"), LocalDate.of(2026, 10, 1), cole.getId(), null, null));
+                acme.getId(), new BigDecimal("500.00"), LocalDate.of(2026, 10, 1), cole.getId(), null, null, null));
 
         // An invoice offers the customer's two seats and its own Sales POC. The Sales POC is the
         // record's alone: a customer cannot hold that seat, so the customer level never had one

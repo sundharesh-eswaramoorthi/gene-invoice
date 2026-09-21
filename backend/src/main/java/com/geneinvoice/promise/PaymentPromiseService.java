@@ -1,5 +1,10 @@
 package com.geneinvoice.promise;
 
+import com.geneinvoice.assignee.Assignee;
+import com.geneinvoice.assignee.AssigneeDtos;
+import com.geneinvoice.assignee.AssigneeKind;
+import com.geneinvoice.assignee.AssigneeOwnerType;
+import com.geneinvoice.assignee.AssigneeService;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
@@ -12,6 +17,9 @@ import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.email.EmailDtos;
+import com.geneinvoice.email.EmailEntityType;
+import com.geneinvoice.email.EmailTargets;
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceDates;
 import com.geneinvoice.invoice.InvoiceRepository;
@@ -29,6 +37,7 @@ import com.geneinvoice.user.User;
 import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,6 +83,16 @@ public class PaymentPromiseService {
     private final CurrentUser currentUser;
     private final UserRepository userRepository;
 
+    /**
+     * Assignees, and the role holders they read through, are taken lazily on purpose (A5).
+     * {@code EmailTargets} loads a promise through this very service, and {@code AssigneeService}
+     * reads its role holders from {@code EmailTargets}, so injecting either of them outright would
+     * close a bean cycle that Spring refuses to start with. An {@code ObjectProvider} defers the
+     * lookup to the moment a promise is written or rendered, by which time every bean exists.
+     */
+    private final ObjectProvider<AssigneeService> assignees;
+    private final ObjectProvider<EmailTargets> emailTargets;
+
     // ---- lifecycle -------------------------------------------------------------
 
     @Transactional
@@ -102,6 +121,14 @@ public class PaymentPromiseService {
                 .createdByUserId(currentUser.require().getId())
                 .build();
         promise = promiseRepository.save(promise);
+
+        // A promise nobody was named on is answerable to its Collection POC: seeding the list from
+        // the POC means the two can never start out disagreeing, while a later edit is free to move
+        // them apart (A6). The seed goes through the same parse a picked assignee does, so what is
+        // written is always something the picker would have offered.
+        promise = setAssignees(promise, req.assignees() == null || req.assignees().isEmpty()
+                ? List.of(EmailDtos.EmailToken.user(poc.getId()))
+                : req.assignees());
 
         auditService.record(ENTITY, promise.getId(), "PROMISE_CREATED", null, snapshot(promise),
                 currentUser.require().getId(), null, req.notes());
@@ -148,17 +175,26 @@ public class PaymentPromiseService {
 
         evaluate(promise);
         PaymentPromise saved = promiseRepository.save(promise);
+        // Last, because replacing the assignees clears the persistence context: every change to the
+        // promise itself must already be flushed, and what follows works from the instance this
+        // hands back (A5).
+        if (req.assignees() != null) saved = setAssignees(saved, req.assignees());
         auditService.record(ENTITY, id, "PROMISE_UPDATED", before, snapshot(saved),
                 currentUser.require().getId(), null, null);
         return toDto(saved);
     }
 
-    /** Reassigns only the Collection POC. Used by the inline row action and the bulk action. */
+    /**
+     * Reassigns only the Collection POC. Used by the inline row action and the bulk action. The
+     * trailing nulls say "leave the invoices and the assignees as they are": moving a POC is not a
+     * statement about either, and a bulk reassign that emptied every promise's assignee list would
+     * be a silent loss of the work's owners (A7).
+     */
     @Transactional
     public PromiseDtos.PromiseDto reassignCollectionPoc(Long id, Long userId) {
         PaymentPromise promise = get(id);
         return update(id, new PromiseDtos.UpdatePromiseRequest(promise.getAmount(),
-                promise.getPromisedDate(), userId, promise.getNotes(), null));
+                promise.getPromisedDate(), userId, promise.getNotes(), null, null));
     }
 
     /** Withdraws a promise raised in error. Linked payments are unlinked but never touched (AC-B11). */
@@ -635,7 +671,11 @@ public class PaymentPromiseService {
         ScopeResolver.Scope scope = scopeResolver.forPromises();
         var page = queryExecutor.run(PaymentPromise.class, TableSchemas.PROMISES, query,
                 scope.predicates(), List.of("customer", "collectionPoc"));
-        return PageResponse.of(page.content().stream().map(this::toDto).toList(),
+        // One read for the whole page's assignees, rather than one per row (A9).
+        Map<Long, List<Assignee>> rows = assignees.getObject().byOwner(AssigneeOwnerType.PROMISE,
+                page.content().stream().map(PaymentPromise::getId).toList());
+        return PageResponse.of(page.content().stream()
+                        .map(p -> toDto(p, rows.getOrDefault(p.getId(), List.of()))).toList(),
                 query, page.total(), scope.lockedFilters());
     }
 
@@ -688,6 +728,15 @@ public class PaymentPromiseService {
 
     @Transactional(readOnly = true)
     public PromiseDtos.PromiseDto toDto(PaymentPromise p) {
+        return toDto(p, assignees.getObject().of(AssigneeOwnerType.PROMISE, p.getId()));
+    }
+
+    /**
+     * One promise as this caller may see it. The assignee rows are passed in so that a page can
+     * read every row's at once instead of once per promise (A9); {@link #toDto(PaymentPromise)}
+     * reads the one promise's for every other caller.
+     */
+    private PromiseDtos.PromiseDto toDto(PaymentPromise p, List<Assignee> assigneeRows) {
         boolean showPoc = scopeResolver.canSeePoc();
         // Who created or overrode a promise is staff identity, often the POC's own id (AC-A8).
         boolean showStaff = !currentUser.isCustomer();
@@ -697,6 +746,12 @@ public class PaymentPromiseService {
                 p.getPromisedDate(), p.getStatus(), p.isStatusOverridden(),
                 p.getOverrideReason(), showStaff ? p.getOverriddenByUserId() : null, p.getOverriddenAt(),
                 showPoc ? PocDtos.PocUserDto.from(p.getCollectionPoc()) : null,
+                // Who internally owns a promise is staff identity exactly as the Collection POC
+                // beside it is, so a customer login is told nothing about it — not even that a seat
+                // is unheld (AC-A8). A staff caller who may not see POC identity sees the seats
+                // themselves but nobody in them.
+                showStaff ? assignees.getObject().describe(assigneeRows, roleTarget(p, assigneeRows), showPoc)
+                        : List.<AssigneeDtos.AssigneeDto>of(),
                 p.getNotes(),
                 p.getInvoices().stream()
                         .map(i -> new PromiseDtos.PromiseInvoiceDto(i.getId(), i.getInvoiceNumber(),
@@ -712,6 +767,34 @@ public class PaymentPromiseService {
     }
 
     // ---- helpers ---------------------------------------------------------------
+
+    /**
+     * Makes the promise's assignees exactly these, and hands back a promise that is managed again
+     * (A5). Replacing them runs a delete that clears the persistence context, which detaches the
+     * promise the caller was holding — so every caller goes on from what this returns and never
+     * from the instance it handed in, and an edit does this only once its own changes to the
+     * promise have been made, since the same delete flushes them on its way past. The tokens are
+     * read before anything is deleted, so a list the picker could not have produced is a 400 that
+     * changes nothing.
+     */
+    private PaymentPromise setAssignees(PaymentPromise promise, List<EmailDtos.EmailToken> tokens) {
+        AssigneeService service = assignees.getObject();
+        service.replace(AssigneeOwnerType.PROMISE, promise.getId(),
+                service.parse(EmailEntityType.PROMISE, promise.getCustomer().getId(), tokens));
+        return promiseRepository.findById(promise.getId())
+                .orElseThrow(() -> new NotFoundException("Payment promise not found"));
+    }
+
+    /**
+     * The record a role assignee is read against (A2). Only a role needs it — a named person is
+     * themselves — so a promise assigned to people costs no lookup at all. It is loaded under the
+     * caller's own privilege and book, which a promise DTO always has: rendering one asks whether
+     * the caller is a customer, and that question has no answer without a caller.
+     */
+    private EmailTargets.Target roleTarget(PaymentPromise promise, List<Assignee> assigneeRows) {
+        if (assigneeRows.stream().noneMatch(a -> a.getKind() == AssigneeKind.ROLE)) return null;
+        return emailTargets.getObject().load(EmailEntityType.PROMISE, promise.getId());
+    }
 
     private User resolveCollectionPoc(Long requested, Long customerId) {
         if (requested != null) {
@@ -772,12 +855,19 @@ public class PaymentPromiseService {
                 p.getCollectionPoc() == null ? null : p.getCollectionPoc().getId(),
                 p.getNotes(),
                 p.getInvoices().stream().map(Invoice::getId).sorted().toList(),
-                p.isStatusOverridden(), p.getOverrideReason());
+                p.isStatusOverridden(), p.getOverrideReason(),
+                AssigneeService.tokens(assignees.getObject().of(AssigneeOwnerType.PROMISE, p.getId())));
     }
 
+    /**
+     * {@code assigneeTokens} is the picks themselves, not who they reach: a role is written down as
+     * the seat it names, so History shows the day the promise changed hands and not every day
+     * somebody joined or left the POC book (A8).
+     */
     public record PromiseAuditSnapshot(Long id, Long customerId, BigDecimal amount,
                                        LocalDate promisedDate, PromiseStatus status,
                                        BigDecimal fulfilledAmount, Long collectionPocUserId,
                                        String notes, List<Long> invoiceIds,
-                                       boolean statusOverridden, String overrideReason) {}
+                                       boolean statusOverridden, String overrideReason,
+                                       List<String> assigneeTokens) {}
 }

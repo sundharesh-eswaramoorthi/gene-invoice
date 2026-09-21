@@ -77,6 +77,8 @@ public class DataSeeder implements CommandLineRunner {
                 SCOPE_OVERRIDE,
                 EMAIL_VIEW, EMAIL_SEND,
                 DOCUMENT_VIEW, DOCUMENT_MANAGE,
+                // Chasing is their job, so they raise and close the work as well as seeing it.
+                TASK_VIEW, TASK_MANAGE,
                 EXPORT_DATA
         ));
         upsertRole("VIEWER", "Read-only access", pickByNames(
@@ -86,7 +88,8 @@ public class DataSeeder implements CommandLineRunner {
                 PROMISE_VIEW,
                 SCOPE_OVERRIDE,
                 EMAIL_VIEW,
-                DOCUMENT_VIEW
+                DOCUMENT_VIEW,
+                TASK_VIEW
         ));
         // A customer account never receives POC_VIEW: POC identity is invisible to them (AC-A8).
         Set<Privilege> customerPrivileges = pickByNames(
@@ -119,6 +122,8 @@ public class DataSeeder implements CommandLineRunner {
                 AUDIT_VIEW,
                 POC_VIEW, POC_ASSIGN,
                 POC_ASSIGNABLE_SALES,
+                // A POC is who work is assigned to, so they see their tasks and can close them.
+                TASK_VIEW, TASK_MANAGE,
                 PROMISE_VIEW,
                 EMAIL_VIEW, EMAIL_SEND,
                 DOCUMENT_VIEW, DOCUMENT_MANAGE,
@@ -134,6 +139,8 @@ public class DataSeeder implements CommandLineRunner {
                 AUDIT_VIEW,
                 POC_VIEW, POC_ASSIGN,
                 POC_ASSIGNABLE_SUCCESS,
+                // A POC is who work is assigned to, so they see their tasks and can close them.
+                TASK_VIEW, TASK_MANAGE,
                 PROMISE_VIEW,
                 SCOPE_OVERRIDE,
                 EMAIL_VIEW, EMAIL_SEND,
@@ -149,6 +156,8 @@ public class DataSeeder implements CommandLineRunner {
                 AUDIT_VIEW,
                 POC_VIEW, POC_ASSIGN,
                 POC_ASSIGNABLE_COLLECTION,
+                // A POC is who work is assigned to, so they see their tasks and can close them.
+                TASK_VIEW, TASK_MANAGE,
                 PROMISE_VIEW, PROMISE_MANAGE, PROMISE_OVERRIDE,
                 SCOPE_OVERRIDE,
                 EMAIL_VIEW, EMAIL_SEND,

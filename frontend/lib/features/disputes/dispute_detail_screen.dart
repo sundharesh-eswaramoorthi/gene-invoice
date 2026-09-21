@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../core/unsaved_changes.dart';
+import '../../shared/models/assignee.dart';
 import '../../shared/models/dispute.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
@@ -15,6 +16,8 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../../core/table/table_providers.dart';
 import '../email/email_actions.dart';
+import '../tasks/tasks_tab.dart' show TaskAssignees;
+import 'dispute_assignees_dialog.dart';
 import 'disputes_providers.dart';
 
 class DisputeDetailScreen extends ConsumerWidget {
@@ -126,6 +129,14 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
     final d = widget.dispute;
     final canResolve = (user?.isAdmin ?? false) && d.status == DisputeStatus.PENDING;
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
+    final isCustomer = user?.isCustomer ?? true;
+    // Who is answerable is staff identity, and a customer login is sent an empty list for exactly
+    // that reason (AC-A8) — which is not the same as nobody being on it, so that reader is shown
+    // no row rather than one that says "Unassigned" about staff they may not know exist.
+    final canSeeAssignees = !isCustomer;
+    // Assigning is the server's own act, held at DISPUTE_MANAGE: a dispute arrives from the
+    // customer's side and is picked up from this page or from nowhere (A1).
+    final canAssign = !isCustomer && (user?.has(Privileges.disputeManage) ?? false);
     final title = 'Dispute #${d.id}';
     final send = sendEmailHeaderButton(context, ref,
         type: EmailEntityType.dispute, entityId: d.id, entityLabel: title);
@@ -138,11 +149,17 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
       onBack: () => goGuarded(context, '/disputes'),
       titleTrailing: [
         DisputeStatusChip(status: d.status),
+        if (canAssign)
+          TextButton.icon(
+            icon: const Icon(Icons.person_add_alt, size: 18),
+            label: Text(d.assignees.isEmpty ? 'Assign' : 'Reassign'),
+            onPressed: () => showDisputeAssigneesDialog(context: context, dispute: d),
+          ),
         if (send != null) send,
       ],
       initialTabSlug: widget.initialTab,
       onTabChanged: (slug) => context.go('/disputes/${d.id}?tab=$slug'),
-      top: _top(d, canResolve: canResolve),
+      top: _top(d, canResolve: canResolve, canSeeAssignees: canSeeAssignees),
       tabs: [
         // The resolve form is the dispute's edit form. In the top pane, which takes at most about
         // half the page, it left Approve below the fold on a laptop screen; as the first tab it
@@ -186,7 +203,7 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
 
   /// The dispute's facts. The proposed change moves to the Resolve tab while that tab is shown,
   /// beside the applied change that starts as a copy of it.
-  Widget _top(Dispute d, {required bool canResolve}) {
+  Widget _top(Dispute d, {required bool canResolve, required bool canSeeAssignees}) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
@@ -203,6 +220,19 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
           const SizedBox(height: 12),
           DetailGrid(items: [
             DetailGridItem(label: 'Reason', child: Text(d.reason)),
+            // The whole list, and each role showing who it reaches right now (A2): a dispute
+            // nobody has picked up is exactly what this page is opened to find out.
+            if (canSeeAssignees)
+              DetailGridItem(
+                label: 'Assigned to',
+                child: d.assignees.isEmpty
+                    ? const Text('Unassigned')
+                    : Wrap(
+                        spacing: 12,
+                        runSpacing: 4,
+                        children: [for (final a in d.assignees) _assignee(a)],
+                      ),
+              ),
             if (!canResolve)
               DetailGridItem(
                 label: 'Proposed change',
@@ -214,6 +244,32 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
             if (d.adminNotes != null && d.adminNotes!.isNotEmpty)
               DetailGridItem(label: 'Admin notes', child: Text(d.adminNotes!)),
           ]),
+        ],
+      ),
+    );
+  }
+
+  /// One assignee: the seat or the person, and who it reaches now. A seat nobody holds says so,
+  /// in the error colour — a dispute that looks assigned but reaches nobody is the thing worth
+  /// noticing on this page. The same row a task's and a promise's own page show (A2).
+  Widget _assignee(Assignee a) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: TaskAssignees.describe(a),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(a.isUser ? Icons.person_outline : Icons.badge_outlined,
+              size: 16, color: a.resolved ? scheme.onSurfaceVariant : scheme.error),
+          const SizedBox(width: 4),
+          // Cut to the cell rather than out of it: a role that reaches three people is a long
+          // line, and the tooltip has all of it whatever the column leaves room for (D-20).
+          Flexible(
+            child: Text(a.display,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: a.resolved ? null : scheme.error)),
+          ),
         ],
       ),
     );

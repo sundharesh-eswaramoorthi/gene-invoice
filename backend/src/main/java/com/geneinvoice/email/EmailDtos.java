@@ -38,7 +38,13 @@ public class EmailDtos {
             List<EmailToken> to,
             String subject,
             /** Optional. */
-            String body
+            String body,
+            /**
+             * Optional: documents already on this record or on its customer, attached without
+             * uploading them again (E17). Ids of {@link com.geneinvoice.document.Document} rows,
+             * as {@code GET /api/emails/attachable} offers them; anything else is refused by name.
+             */
+            List<Long> documentIds
     ) {}
 
     /**
@@ -112,15 +118,46 @@ public class EmailDtos {
             /** The caller can open the record the email is about; a recipient may read an email whose record they cannot see. */
             boolean canOpenRecord,
             /** Null when the caller is not a To recipient. */
-            Boolean readByMe
+            Boolean readByMe,
+            /** What the sender attached, in the order they chose it; empty for most email (E17). */
+            List<AttachmentDto> attachments
     ) {}
 
     /**
+     * A document that went out with an email, as it was when it was sent (E17). {@code documentId}
+     * is the document it was taken from, so the tab can link to the Documents tab's own download,
+     * which applies the document's visibility itself (D7); the file may have been deleted since,
+     * which is why the name, type and size are the email's own snapshot.
+     */
+    public record AttachmentDto(Long id, Long documentId, String filename, String contentType,
+                                long sizeBytes) {}
+
+    /**
+     * A document the compose form may offer: {@code id} is what goes into
+     * {@link SendEmailRequest#documentIds()}, and {@code source} says whether it was found on the
+     * record itself or on its customer (E17).
+     */
+    public record AttachableDto(Long id, String filename, String contentType, long sizeBytes,
+                                AttachmentSource source, String sourceLabel) {}
+
+    /**
      * {@code problems} would make Send fail; {@code warnings} do not stop it, but say the email will
-     * be saved in the app and not sent.
+     * be saved in the app and not sent. {@code subject} and {@code body} are the text with this
+     * record's placeholders already filled in — exactly what would be stored and read (M3).
      */
     public record PreviewDto(Participant from, List<Participant> to, List<Unresolved> unresolved,
-                             List<String> problems, List<String> warnings) {}
+                             List<String> problems, List<String> warnings,
+                             String subject, String body) {}
+
+    /**
+     * One placeholder the compose form may offer. {@code key} is written {@code {{Customer.Name}}},
+     * and {@code sample} is what it fills in on <em>this</em> record, so the writer reads what it
+     * will say before sending (M4). An empty sample means the record has nothing there.
+     */
+    public record PlaceholderDto(String key, String label, String sample) {}
+
+    /** The placeholders of one level, e.g. "Customer" and then "Invoice" on an invoice (M1). */
+    public record PlaceholderGroup(String label, List<PlaceholderDto> placeholders) {}
 
     // ---- compose context -------------------------------------------------------
 

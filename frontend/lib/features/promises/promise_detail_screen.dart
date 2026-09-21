@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
+import '../../shared/models/assignee.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
 import '../../shared/widgets/detail_scaffold.dart';
@@ -12,6 +13,7 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_providers.dart';
+import '../tasks/tasks_tab.dart' show TaskAssignees;
 import 'promise_form_dialog.dart';
 import 'promise_providers.dart';
 import 'promises_tab.dart';
@@ -31,6 +33,10 @@ class PromiseDetailScreen extends ConsumerWidget {
     final canOverride = user?.has(Privileges.promiseOverride) ?? false;
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
+    // Who is answerable is staff identity, and a customer login is sent an empty list for exactly
+    // that reason (AC-A8) — which is not the same as nobody being on it, so the row is left out
+    // rather than made to say "Unassigned" about people this reader may not know exist.
+    final canSeeAssignees = !(user?.isCustomer ?? true);
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -88,7 +94,7 @@ class PromiseDetailScreen extends ConsumerWidget {
           ],
           initialTabSlug: initialTab,
           onTabChanged: (slug) => context.go('/promises/$id?tab=$slug'),
-          top: _top(context, p, canSeePoc: canSeePoc),
+          top: _top(context, p, canSeePoc: canSeePoc, canSeeAssignees: canSeeAssignees),
           tabs: [
             if (canViewAudit)
               DetailTab(
@@ -116,7 +122,8 @@ class PromiseDetailScreen extends ConsumerWidget {
     ref.invalidate(auditHistoryProvider);
   }
 
-  Widget _top(BuildContext context, PaymentPromise p, {required bool canSeePoc}) {
+  Widget _top(BuildContext context, PaymentPromise p,
+      {required bool canSeePoc, required bool canSeeAssignees}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Column(
@@ -144,6 +151,22 @@ class PromiseDetailScreen extends ConsumerWidget {
               DetailGridItem(
                 label: 'Collection POC',
                 child: Text(p.collectionPoc?.display ?? '—'),
+              ),
+            // The whole list, not the table's compacted two: this is the page somebody opens to
+            // find out who is on it, and a role says who it reaches right now (A2).
+            if (canSeeAssignees)
+              DetailGridItem(
+                label: 'Assigned to',
+                span: 2,
+                child: p.assignees.isEmpty
+                    // Not "—": a promise nobody is answerable for is a promise nobody is
+                    // chasing, which is a thing to say rather than a blank.
+                    ? const Text('Unassigned')
+                    : Wrap(
+                        spacing: 12,
+                        runSpacing: 4,
+                        children: [for (final a in p.assignees) _assignee(context, a)],
+                      ),
               ),
             DetailGridItem(
               label: 'Invoices',
@@ -183,6 +206,32 @@ class PromiseDetailScreen extends ConsumerWidget {
                 ),
               ),
           ]),
+        ],
+      ),
+    );
+  }
+
+  /// One assignee: the seat or the person, and who it reaches now. A seat nobody holds says so,
+  /// in the error colour — a promise that looks assigned but reaches nobody is the thing worth
+  /// noticing on this page. The same row a task's own page shows (A2).
+  Widget _assignee(BuildContext context, Assignee a) {
+    final scheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: TaskAssignees.describe(a),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(a.isUser ? Icons.person_outline : Icons.badge_outlined,
+              size: 16, color: a.resolved ? scheme.onSurfaceVariant : scheme.error),
+          const SizedBox(width: 4),
+          // Cut to the cell rather than out of it: a role that reaches three people is a long
+          // line, and the tooltip has all of it whatever the column leaves room for (D-20).
+          Flexible(
+            child: Text(a.display,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: a.resolved ? null : scheme.error)),
+          ),
         ],
       ),
     );

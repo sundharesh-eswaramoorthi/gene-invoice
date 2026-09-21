@@ -15,6 +15,7 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/disputes_tab.dart';
 import '../documents/document_actions.dart';
+import '../tasks/task_actions.dart';
 import '../email/email_actions.dart';
 import '../poc/customer_poc_editor.dart';
 import '../poc/poc_picker.dart';
@@ -219,6 +220,8 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         // A customer login reaches its own customer here, and may write about it too (E13).
         final sendEmail = sendEmailHeaderButton(context, ref,
             type: EmailEntityType.customer, entityId: customer.id, entityLabel: customer.name);
+        final tasksTab = tasksDetailTab(ref,
+            type: TaskEntityType.customer, entityId: customer.id, entityLabel: customer.name);
         final documentsTab = documentsDetailTab(ref,
             type: DocumentEntityType.customer, entityId: customer.id, entityLabel: customer.name);
         final emailTab = emailDetailTab(ref,
@@ -278,6 +281,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                   ),
                 ),
               if (documentsTab != null) documentsTab,
+              if (tasksTab != null) tasksTab,
               if (emailTab != null) emailTab,
             ],
           ),

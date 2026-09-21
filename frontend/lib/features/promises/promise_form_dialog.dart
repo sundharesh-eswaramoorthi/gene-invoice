@@ -6,12 +6,16 @@ import 'package:intl/intl.dart';
 import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
 import '../../core/format.dart';
+import '../../shared/models/assignee.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/promise.dart';
+import '../../shared/widgets/assignee_picker_field.dart';
 import '../../shared/widgets/status_chip.dart';
 import '../email/email_actions.dart';
+import '../email/email_providers.dart';
 import '../poc/poc_providers.dart';
 import '../poc/poc_picker.dart';
+import '../tasks/task_providers.dart';
 import 'promise_providers.dart';
 
 /// Raises or edits a payment promise, pre-scoped to a customer and optionally to
@@ -78,6 +82,10 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
   final _notes = TextEditingController();
   DateTime? _date;
   PocUser? _poc;
+
+  /// Who is answerable for the promise — the same tokens the email To field produces, so one
+  /// widget serves the task form, the rule editor and this (A1).
+  List<EmailToken> _assignees = const [];
   final Set<int> _invoiceIds = {};
   bool _saving = false;
   bool _pocResolved = false;
@@ -96,6 +104,9 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
       _date = e.promisedDate;
       _poc = e.collectionPoc;
       _pocResolved = true;
+      // The tokens that would name these people again, so an edit that only moves the date hands
+      // the same list back rather than clearing it (A7).
+      _assignees = e.assigneeTokens;
       _invoiceIds.addAll(e.invoices.map((i) => i.id));
     } else {
       _date = DateTime.now().add(const Duration(days: 7));
@@ -123,6 +134,13 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
       });
     }
   }
+
+  /// Names for the people the promise is already assigned to. They were picked before this form
+  /// opened, so the field cannot name them itself — only the promise knows what they are called.
+  Map<int, String> _knownNames() => {
+        for (final a in widget.existing?.assignees ?? const <Assignee>[])
+          if (a.isUser && a.userId != null) a.userId!: a.label,
+      };
 
   /// Every outstanding invoice, plus every invoice this promise is already scoped to that the
   /// outstanding list does not carry: one the screen preselected, or — when editing — a linked
@@ -154,6 +172,7 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
       setState(() => _error = 'Pick the date the customer promised to pay by');
       return;
     }
+    final canPick = ref.read(canPickAssigneesProvider);
     setState(() {
       _saving = true;
       _error = null;
@@ -167,6 +186,11 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
         if (_poc != null) 'collectionPocUserId': _poc!.id,
         'notes': _notes.text.trim(),
         'invoiceIds': _invoiceIds.toList(),
+        // Left out entirely for a caller who was not shown the picker: on an edit a null list
+        // leaves the assignees as they are, where an empty one would quietly unassign everybody
+        // (A7). On a new promise an empty list is the ordinary case and seeds it from the
+        // Collection POC, which is what the empty box says it will do (A6).
+        if (canPick) 'assignees': [for (final t in _assignees) t.toJson()],
       };
       final res = _isEdit
           ? await dio.put('/api/promises/${widget.existing!.id}', data: body)
@@ -188,6 +212,15 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
   Widget build(BuildContext context) {
     final pocsAsync = ref.watch(customerPocsProvider(widget.customerId));
     pocsAsync.whenData(_resolveDefaultPoc);
+    final canPick = ref.watch(canPickAssigneesProvider);
+    // The seats a promise offers, and who holds each one on this one. Asked for by record where
+    // there is one and by kind where there is not — a promise being raised has no id yet, so the
+    // roles come back unresolved and the chips name the seat without claiming who is in it, just
+    // as they do in the rule editor. Only asked for where there is a picker to fill.
+    final rolesAsync = canPick
+        ? ref.watch(emailContextProvider(
+            (type: EmailEntityType.promise, entityId: widget.existing?.id, event: null)))
+        : null;
     final invoicesAsync = ref.watch(_outstandingInvoicesProvider(widget.customerId));
     final promisedAmount = double.tryParse(_amount.text.trim()) ?? 0;
 
@@ -248,6 +281,38 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                 required: true,
                 onChanged: (u) => setState(() => _poc = u),
               ),
+              // A caller who may neither search people nor read a record's roles is given a form
+              // without a picker rather than one that could only fail; the promise is then
+              // answerable to its Collection POC alone, which is what it was before (A6).
+              if (canPick) ...[
+                const SizedBox(height: 12),
+                AssigneePickerField(
+                  label: 'Assigned to',
+                  value: _assignees,
+                  onChanged: (tokens) => setState(() => _assignees = tokens),
+                  roleGroups: rolesAsync?.valueOrNull?.roleGroups ?? const [],
+                  // An existing promise's own assignees were not picked here, so their names come
+                  // with the promise; anyone picked now is remembered by the field itself.
+                  personNames: _knownNames(),
+                  searchPeople: (q) => searchAssigneePeople(ref.read(dioProvider), q),
+                  enabled: !_saving,
+                  // Empty means two different things, and each is said where it is true: a new
+                  // promise falls back to its Collection POC (A6), an edited one is left to
+                  // nobody.
+                  emptyHint: _isEdit
+                      ? 'Nobody — add people or roles below'
+                      : 'The Collection POC, unless you add people or roles below',
+                ),
+                if (rolesAsync?.hasError ?? false)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Could not load who this promise\'s roles reach: '
+                      '${apiErrorMessage(rolesAsync!.error!)}',
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ),
+              ],
               const SizedBox(height: 12),
               Text('Invoices this covers (optional)',
                   style: Theme.of(context).textTheme.titleSmall),

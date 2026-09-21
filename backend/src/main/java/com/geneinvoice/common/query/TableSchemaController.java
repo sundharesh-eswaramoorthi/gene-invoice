@@ -27,18 +27,25 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TableSchemaController {
 
-    /** The privilege that lets a caller read each table's rows, and so its shape. */
-    private static final Map<String, String> VIEW_PRIVILEGE = Map.of(
-            "invoices", Privileges.INVOICE_VIEW,
-            "payments", Privileges.PAYMENT_VIEW,
-            "customers", Privileges.CUSTOMER_VIEW,
-            "promises", Privileges.PROMISE_VIEW,
-            "products", Privileges.PRODUCT_VIEW,
-            "users", Privileges.USER_VIEW,
-            "roles", Privileges.ROLE_VIEW,
-            "disputes", Privileges.DISPUTE_VIEW,
-            "notifications", Privileges.NOTIFICATION_VIEW,
-            "inbox", Privileges.EMAIL_VIEW);
+    /**
+     * The privilege that lets a caller read each table's rows, and so its shape.
+     *
+     * <p>{@code Map.ofEntries} rather than {@code Map.of}: the latter's largest overload takes ten
+     * pairs, which this map had reached exactly, so the eleventh table would not have compiled.
+     */
+    private static final Map<String, String> VIEW_PRIVILEGE = Map.ofEntries(
+            Map.entry("invoices", Privileges.INVOICE_VIEW),
+            Map.entry("payments", Privileges.PAYMENT_VIEW),
+            Map.entry("customers", Privileges.CUSTOMER_VIEW),
+            Map.entry("promises", Privileges.PROMISE_VIEW),
+            Map.entry("products", Privileges.PRODUCT_VIEW),
+            Map.entry("users", Privileges.USER_VIEW),
+            Map.entry("roles", Privileges.ROLE_VIEW),
+            Map.entry("disputes", Privileges.DISPUTE_VIEW),
+            Map.entry("notifications", Privileges.NOTIFICATION_VIEW),
+            Map.entry("inbox", Privileges.EMAIL_VIEW),
+            Map.entry("tasks", Privileges.TASK_VIEW),
+            Map.entry("automation", Privileges.AUTOMATION_VIEW));
 
     private final CurrentUser currentUser;
 

@@ -30,6 +30,8 @@ import java.util.function.Function;
 public class GmailClient {
 
     private static final String SERVICE = "Gmail";
+    /** What a whole email is, as Gmail's upload URI wants it labelled. */
+    private static final MediaType RFC822 = MediaType.parseMediaType("message/rfc822");
 
     private final MailProperties properties;
     private final GoogleTokens tokens;
@@ -87,14 +89,36 @@ public class GmailClient {
     @JsonIgnoreProperties(ignoreUnknown = true)
     record MetadataMessage(Payload payload) {}
 
-    /** {@code users.messages.send} with the message as written, headers and all. */
+    /**
+     * {@code users.messages.send} with the message as written, headers and all.
+     *
+     * <p>A small message goes as JSON with the bytes base64url'd into {@code raw}, which is how
+     * this service has always sent. A message with files on it is another matter: base64 inside the
+     * message has already made it a third bigger, the JSON body makes it a third bigger again, and
+     * Google refuses an ordinary request of about 5 MB or more. Over
+     * {@code mail.send.max-json-send-bytes} the message therefore goes to the upload URI instead,
+     * as {@code message/rfc822} bytes with nothing wrapped around them — the same call Gmail's own
+     * documentation points at for anything sizeable, and good for 35 MB.
+     */
     public SendResult send(MailConnection mailbox, byte[] mime) {
+        if (mime.length > properties.getSend().getMaxJsonSendBytes()) return sendAsMedia(mailbox, mime);
         String raw = Base64.getUrlEncoder().withoutPadding().encodeToString(mime);
         return call(mailbox, token -> http.post()
                 .uri(uri("/messages/send", Map.of()))
                 .headers(h -> h.setBearerAuth(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(Map.of("raw", raw))
+                .retrieve()
+                .body(SendResult.class));
+    }
+
+    /** The same send, through the upload URI: the message itself is the body. */
+    private SendResult sendAsMedia(MailConnection mailbox, byte[] mime) {
+        return call(mailbox, token -> http.post()
+                .uri(uploadUri())
+                .headers(h -> h.setBearerAuth(token))
+                .contentType(RFC822)
+                .body(mime)
                 .retrieve()
                 .body(SendResult.class));
     }
@@ -219,6 +243,15 @@ public class GmailClient {
 
     private URI uri(String path, Map<String, String> query) {
         return uri(path, query, Map.of());
+    }
+
+    /** Gmail's media-upload address, which lives under {@code /upload} rather than beside the rest. */
+    private URI uploadUri() {
+        String base = properties.getGoogle().getApiBaseUrl().trim().replaceAll("/+$", "");
+        return UriComponentsBuilder.fromUriString(base)
+                .path("/upload/gmail/v1/users/me/messages/send")
+                .queryParam("uploadType", "media")
+                .encode().build().toUri();
     }
 
     /** A query parameter that is null is left out. */

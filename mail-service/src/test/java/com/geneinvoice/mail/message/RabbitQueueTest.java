@@ -107,7 +107,7 @@ class RabbitQueueTest {
         List<CopyState> states = messages.submit(new SubmitRequest(new SubmitRequest.Sender("7", "Jane Doe"),
                 "Invoice INV-0042", "Please pay.", "91", false, List.of(
                 new SubmitRequest.Copy("gi-91-1", new SubmitRequest.Recipient("Bob", "bob@acme.com")),
-                new SubmitRequest.Copy("gi-91-2", new SubmitRequest.Recipient("Ravi", "ravi@acme.com")))));
+                new SubmitRequest.Copy("gi-91-2", new SubmitRequest.Recipient("Ravi", "ravi@acme.com"))), List.of()));
         assertThat(states).extracting(CopyState::status).containsOnly(MessageStatus.QUEUED);
 
         waitFor("both copies sent", () -> status("gi-91-1") == MessageStatus.SENT && status("gi-91-2") == MessageStatus.SENT);

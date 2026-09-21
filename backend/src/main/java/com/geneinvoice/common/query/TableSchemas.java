@@ -1,5 +1,8 @@
 package com.geneinvoice.common.query;
 
+import com.geneinvoice.automation.ActionType;
+import com.geneinvoice.automation.AutomationEntityType;
+import com.geneinvoice.automation.TriggerKind;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.dispute.DisputeStatus;
 import com.geneinvoice.dispute.DisputeTargetType;
@@ -14,6 +17,8 @@ import com.geneinvoice.poc.CustomerPoc;
 import com.geneinvoice.poc.PocType;
 import com.geneinvoice.promise.PaymentPromise;
 import com.geneinvoice.promise.PromiseStatus;
+import com.geneinvoice.task.TaskEntityType;
+import com.geneinvoice.task.TaskStatus;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -389,12 +394,66 @@ public final class TableSchemas {
             ColumnDef.of("occurredAt", "Received", ColumnType.DATE)
                     .path(ColumnDef.nested("email", "occurredAt")).build());
 
+    // ---- tasks ---------------------------------------------------------------------
+
+    /**
+     * What the task list may be sorted and filtered by (T2). Newest first rather than by due date:
+     * a task with no due date at all is ordinary, and where a null sorts is the database's opinion
+     * rather than ours.
+     *
+     * <p>There is no assignee column here. An assignee is a seat as often as it is a person, so
+     * "assigned to me" cannot be a value to compare against — it is the three-way subquery
+     * {@code TaskService.scope} builds, offered as the {@code mine} parameter instead (T5).
+     */
+    public static final TableSchema TASKS = TableSchema.of("tasks", "createdAt,desc",
+            ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
+            ColumnDef.of("entityType", "About", ColumnType.ENUM)
+                    .enumValues(names(TaskEntityType.class)).build(),
+            ColumnDef.of("entityId", "Record id", ColumnType.NUMBER).build(),
+            ColumnDef.of("entityLabel", "Record", ColumnType.TEXT).build(),
+            ColumnDef.of("customerId", "Customer", ColumnType.REFERENCE)
+                    .reference("customer").notSortable().build(),
+            ColumnDef.of("title", "Title", ColumnType.TEXT).build(),
+            ColumnDef.of("dueDate", "Due", ColumnType.DATE).build(),
+            ColumnDef.of("status", "Status", ColumnType.ENUM)
+                    .enumValues(names(TaskStatus.class)).build(),
+            ColumnDef.of("notes", "Notes", ColumnType.TEXT).notSortable().build(),
+            ColumnDef.of("createdAt", "Raised", ColumnType.DATE).build());
+
+    // ---- automation rules ----------------------------------------------------------
+
+    /**
+     * What the rules list may be sorted and filtered by (R2). Nothing on it is POC-restricted: a
+     * rule belongs to the app rather than to a customer, and a customer login never holds
+     * AUTOMATION_VIEW at all.
+     */
+    public static final TableSchema AUTOMATION_RULES = TableSchema.of("automation", "id,desc",
+            ColumnDef.of("id", "Id", ColumnType.NUMBER).build(),
+            ColumnDef.of("name", "Name", ColumnType.TEXT).build(),
+            ColumnDef.of("description", "Description", ColumnType.TEXT).notSortable().build(),
+            ColumnDef.of("enabled", "Enabled", ColumnType.BOOLEAN).build(),
+            ColumnDef.of("entityType", "Record", ColumnType.ENUM)
+                    .enumValues(names(AutomationEntityType.class)).build(),
+            // The attribute is `trigger`; the column behind it is `trigger_kind`, because TRIGGER is
+            // a reserved word in Postgres and H2. Filtering speaks the attribute, as the criteria
+            // API does, so the reserved word never reaches a query the user can write.
+            ColumnDef.of("trigger", "When", ColumnType.ENUM)
+                    .enumValues(names(TriggerKind.class)).build(),
+            ColumnDef.of("action", "Then", ColumnType.ENUM)
+                    .enumValues(names(ActionType.class)).build(),
+            ColumnDef.of("createdByUserId", "Written by", ColumnType.REFERENCE)
+                    .reference("user").notSortable().build(),
+            ColumnDef.of("runCount", "Runs", ColumnType.NUMBER).build(),
+            ColumnDef.of("lastRunAt", "Last run", ColumnType.DATE).build(),
+            ColumnDef.of("createdAt", "Created", ColumnType.DATE).build(),
+            ColumnDef.of("updatedAt", "Updated", ColumnType.DATE).build());
+
     private static final Map<String, TableSchema> BY_ENTITY = buildIndex();
 
     private static Map<String, TableSchema> buildIndex() {
         Map<String, TableSchema> m = new LinkedHashMap<>();
         for (TableSchema s : List.of(INVOICES, PAYMENTS, CUSTOMERS, PROMISES, PRODUCTS,
-                USERS, ROLES, DISPUTES, NOTIFICATIONS, INBOX)) {
+                USERS, ROLES, DISPUTES, NOTIFICATIONS, INBOX, TASKS, AUTOMATION_RULES)) {
             m.put(s.entity(), s);
         }
         return Map.copyOf(m);

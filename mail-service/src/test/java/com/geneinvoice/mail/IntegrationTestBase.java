@@ -10,7 +10,10 @@ import com.geneinvoice.mail.connection.MailConnectionRepository;
 import com.geneinvoice.mail.events.MailEvent;
 import com.geneinvoice.mail.events.MailEventRepository;
 import com.geneinvoice.mail.events.WebhookDispatcher;
+import com.geneinvoice.mail.message.AttachmentSets;
 import com.geneinvoice.mail.message.CopyState;
+import com.geneinvoice.mail.message.MailAttachmentRepository;
+import com.geneinvoice.mail.message.MailAttachmentSetRepository;
 import com.geneinvoice.mail.message.MailMessage;
 import com.geneinvoice.mail.message.MailMessageRepository;
 import com.geneinvoice.mail.message.MessageService;
@@ -88,6 +91,9 @@ public abstract class IntegrationTestBase {
     @Autowired protected RecordingSendQueue queue;
     @Autowired protected MailConnectionRepository connectionRepository;
     @Autowired protected MailMessageRepository messageRepository;
+    @Autowired protected MailAttachmentRepository attachmentRepository;
+    @Autowired protected MailAttachmentSetRepository attachmentSetRepository;
+    @Autowired protected AttachmentSets attachmentSets;
     @Autowired protected MailInboundRepository inboundRepository;
     @Autowired protected MailEventRepository eventRepository;
     @Autowired protected ConnectionService connectionService;
@@ -100,6 +106,9 @@ public abstract class IntegrationTestBase {
         eventRepository.deleteAll();
         inboundRepository.deleteAll();
         messageRepository.deleteAll();
+        // The sets outlive their copies by design (another email may share one); a test starts clean.
+        attachmentRepository.deleteAll();
+        attachmentSetRepository.deleteAll();
         connectionRepository.deleteAll();
         google.reset();
         queue.reset();
@@ -148,7 +157,7 @@ public abstract class IntegrationTestBase {
     protected static SubmitRequest submission(String senderRef, String senderName, String groupRef, boolean retry,
                                               SubmitRequest.Copy... copies) {
         return new SubmitRequest(new SubmitRequest.Sender(senderRef, senderName), "Invoice INV-0042",
-                "Please find the invoice below.\nThanks", groupRef, retry, Arrays.asList(copies));
+                "Please find the invoice below.\nThanks", groupRef, retry, Arrays.asList(copies), List.of());
     }
 
     protected static SubmitRequest.Copy copy(String externalId, String name, String address) {

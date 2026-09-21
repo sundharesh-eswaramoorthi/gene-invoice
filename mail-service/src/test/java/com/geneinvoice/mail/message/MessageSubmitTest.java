@@ -125,7 +125,7 @@ class MessageSubmitTest extends IntegrationTestBase {
 
         submit(new SubmitRequest(new SubmitRequest.Sender(" 7 ", "N".repeat(250)),
                 "  Re:\r\nInvoice" + NUL + " INV-0042\n ", null, "91", false,
-                List.of(copy("gi-91-501", " ", " bob@acme.com "), copy("gi-91-502", "Zo" + LONE_SURROGATE + "ë", "zoe@acme.com"))));
+                List.of(copy("gi-91-501", " ", " bob@acme.com "), copy("gi-91-502", "Zo" + LONE_SURROGATE + "ë", "zoe@acme.com")), List.of()));
 
         MailMessage bob = message("gi-91-501");
         assertThat(bob.getSubject()).isEqualTo("Re: Invoice INV-0042");
@@ -209,7 +209,7 @@ class MessageSubmitTest extends IntegrationTestBase {
                 .singleElement().extracting(CopyState::status).isEqualTo(MessageStatus.NOT_SENT);
 
         SubmitRequest retry = new SubmitRequest(new SubmitRequest.Sender("7", "Jane Doe"), "Invoice INV-0042 (again)",
-                "New body", "91", true, List.of(copy("gi-91-1", "Bob Smith", "bob@acme.com")));
+                "New body", "91", true, List.of(copy("gi-91-1", "Bob Smith", "bob@acme.com")), List.of());
         CopyState requeued = submit(retry).get(0);
 
         assertThat(requeued.status()).isEqualTo(MessageStatus.QUEUED);

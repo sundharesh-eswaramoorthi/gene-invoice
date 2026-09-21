@@ -1,6 +1,8 @@
 package com.geneinvoice.payment;
 
 import com.geneinvoice.audit.AuditService;
+import com.geneinvoice.automation.AutomationEntityType;
+import com.geneinvoice.automation.AutomationEvents;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Money;
@@ -31,7 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -47,6 +51,7 @@ public class PaymentService {
     private final ScopeResolver scopeResolver;
     private final TableQueryExecutor queryExecutor;
     private final AuditService auditService;
+    private final AutomationEvents automationEvents;
     private final CurrentUser currentUser;
     private final PaymentPromiseService promiseService;
     private final UserRepository userRepository;
@@ -99,6 +104,7 @@ public class PaymentService {
                 .status(PaymentStatus.ACTIVE)
                 .build();
 
+        BigDecimal creditBefore = customer.getCreditBalance();
         List<Movement> applied = applyTo(payment, targets, req.amount());
         Payment saved = paymentRepository.save(payment);
         auditService.record(ENTITY, saved.getId(), "PAYMENT_RECORDED", null,
@@ -108,6 +114,12 @@ public class PaymentService {
         pocService.notifyAssignee(collectionPoc, PocType.COLLECTION,
                 "payment #" + saved.getId(), "/payments/" + saved.getId());
         promiseService.reevaluateForCustomer(customer.getId());
+        // One insert, inside this transaction, so a rule sees a record that exists and
+        // nothing is lost if the consumer is down. No rule is read here (R3).
+        automationEvents.recordCreated(AutomationEntityType.PAYMENT, saved.getId());
+        // And one for each invoice the money landed on, and for the customer if any of it became
+        // credit: the payment is not the only record this save changed (D-73).
+        announce(customer, creditBefore, applied);
         return saved;
     }
 
@@ -135,6 +147,7 @@ public class PaymentService {
         Payment saved = paymentRepository.save(p);
         auditService.record(ENTITY, id, "PAYMENT_UPDATED", before, PaymentDtos.PaymentDto.from(saved),
                 currentUser.require().getId(), null, null);
+        automationEvents.recordUpdated(AutomationEntityType.PAYMENT, saved.getId());
         return saved;
     }
 
@@ -165,6 +178,44 @@ public class PaymentService {
                     new InvoicePaymentAudit(payment.getId(), m.amount(), inv.getPaidAmount(),
                             inv.getBalance(), inv.getStatus()),
                     actor, null, null);
+        }
+    }
+
+    /**
+     * One UPDATED event for each record the payment actually left different, written inside the
+     * payment's own transaction exactly as the PAYMENT event is (R1, R3).
+     *
+     * <p>A payment is the most important thing that happens to an invoice — UNPAID to
+     * PARTIALLY_PAID to FULLY_PAID, and back again on a void — and {@code status} is a column the
+     * rule editor offers in its WHERE. None of it reached the engine: the invoice rows are written
+     * here rather than through {@code InvoiceService}, which is where every other invoice event
+     * comes from, so "this invoice has just been paid off" was the one transition no rule could
+     * see (D-73). The customer is told for the same reason: its credit balance is a filterable
+     * column and a payment moves it.
+     *
+     * <p>"Actually left different" is the whole of the check, because with the day bucket a record
+     * gets one slot per rule per day (R4) and a payment must not spend it on nothing.
+     * {@code updateAmount} takes a payment off its invoices and puts it back on; an invoice that
+     * ends the transaction where it began was not changed by it, and the first movement recorded
+     * against that invoice is what the comparison is made from — not the last, so a reversal and a
+     * re-application read as the one net move they are. The credit balance is read the same way,
+     * from the figure the customer had before the money was touched: a reversal that floors at
+     * zero can land on the balance that was already there, and that is not a change.
+     *
+     * @param customer the locked customer, still managed, so its balance now is the balance written
+     * @param touched  every movement either half made, in the order they were made
+     */
+    private void announce(Customer customer, BigDecimal creditBefore, List<Movement> touched) {
+        Map<Long, Movement> firstTouch = new LinkedHashMap<>();
+        for (Movement m : touched) firstTouch.putIfAbsent(m.invoice().getId(), m);
+        for (Movement m : firstTouch.values()) {
+            Invoice inv = m.invoice();
+            if (inv.getPaidAmount().compareTo(m.paidBefore()) != 0 || inv.getStatus() != m.statusBefore()) {
+                automationEvents.recordUpdated(AutomationEntityType.INVOICE, inv.getId());
+            }
+        }
+        if (creditBefore.compareTo(customer.getCreditBalance()) != 0) {
+            automationEvents.recordUpdated(AutomationEntityType.CUSTOMER, customer.getId());
         }
     }
 
@@ -236,12 +287,17 @@ public class PaymentService {
         if (p.getStatus() == PaymentStatus.VOIDED) {
             throw new BadRequestException("Payment already voided");
         }
-        lockCustomer(p.getCustomer().getId());
-        reverseAllocations(p);
+        Customer customer = lockCustomer(p.getCustomer().getId());
+        BigDecimal creditBefore = customer.getCreditBalance();
+        List<Movement> reversed = reverseAllocations(p);
         p.setStatus(PaymentStatus.VOIDED);
         Payment saved = paymentRepository.save(p);
         // A voided payment can no longer keep a promise (AC-B6).
         promiseService.reevaluateForCustomer(p.getCustomer().getId());
+        automationEvents.recordUpdated(AutomationEntityType.PAYMENT, saved.getId());
+        // Every invoice the money came back off, and the customer if credit went with it: a void
+        // changes an invoice's status as surely as the payment did (D-73).
+        announce(customer, creditBefore, reversed);
         return saved;
     }
 
@@ -251,14 +307,16 @@ public class PaymentService {
      * through credit, so this takes back exactly what the payment put in. The floor at zero only
      * matters for credit older than the ledger.
      */
-    private void reverseAllocations(Payment p) {
+    private List<Movement> reverseAllocations(Payment p) {
         // Taking money back off an invoice is the same read-modify-write as putting it on, and
         // needs the same locks, in the same order (PPD-01).
         lockCustomer(p.getCustomer().getId());
         lockInvoices(p.getAllocations().stream().map(PaymentAllocation::getInvoice).toList());
+        List<Movement> moves = new ArrayList<>();
         for (PaymentAllocation alloc : new ArrayList<>(p.getAllocations())) {
             Invoice inv = alloc.getInvoice();
             Movement reversed = new Movement(inv, alloc.getAmount(), inv.getPaidAmount(), inv.getStatus());
+            moves.add(reversed);
             inv.setPaidAmount(inv.getPaidAmount().subtract(alloc.getAmount()));
             if (inv.getPaidAmount().signum() < 0) inv.setPaidAmount(BigDecimal.ZERO);
             InvoiceService.recomputeStatus(inv);
@@ -275,6 +333,7 @@ public class PaymentService {
             customerRepository.save(c);
         }
         p.setCreditApplied(BigDecimal.ZERO);
+        return moves;
     }
 
     /**
@@ -294,8 +353,9 @@ public class PaymentService {
         Money.requireCents(newAmount, "Amount");
         // The customer's lock before either half of the move, so an approval and a payment on the
         // same customer cannot interleave between the reversal and the re-application (PPD-01).
-        lockCustomer(p.getCustomer().getId());
-        reverseAllocations(p);
+        Customer customer = lockCustomer(p.getCustomer().getId());
+        BigDecimal creditBefore = customer.getCreditBalance();
+        List<Movement> reversed = reverseAllocations(p);
         p.setAmount(newAmount);
         if (method != null) p.setMethod(method);
         if (notes != null) p.setNotes(notes);
@@ -306,6 +366,12 @@ public class PaymentService {
         Payment saved = paymentRepository.save(p);
         auditMovements(saved, applied, "PAYMENT_APPLIED");
         promiseService.reevaluateForCustomer(p.getCustomer().getId());
+        automationEvents.recordUpdated(AutomationEntityType.PAYMENT, saved.getId());
+        // Both halves in one list, so an invoice the reversal and the re-application both touched
+        // is judged on where it ended up rather than told about twice (D-73).
+        List<Movement> both = new ArrayList<>(reversed);
+        both.addAll(applied);
+        announce(customer, creditBefore, both);
         return saved;
     }
 

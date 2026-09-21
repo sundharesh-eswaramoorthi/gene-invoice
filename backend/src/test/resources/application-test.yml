@@ -22,6 +22,14 @@ app:
   promises:
     # Long enough that the background sweeper never races a test; tests call sweepOverdue directly.
     sweep-interval-ms: 3600000
+  automation:
+    # Work runs on the calling thread, so a test sees what a rule did as soon as the call returns.
+    async: false
+    # Long enough that the background sweeper never races a test; tests call sweep(Instant) directly.
+    sweep-interval-ms: 3600000
+    # Scheduled.CRON_DISABLED: a suite that happened to run at 07:00 UTC must not fire real rules.
+    daily-cron: "-"
+    weekly-cron: "-"
   documents:
     # A scratch directory of the machine's own, made at startup; never the repository's ./data.
     local:

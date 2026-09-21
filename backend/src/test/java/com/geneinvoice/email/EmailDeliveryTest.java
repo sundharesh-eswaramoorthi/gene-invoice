@@ -1,6 +1,7 @@
 package com.geneinvoice.email;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.geneinvoice.document.DocumentStorage;
 import com.geneinvoice.email.RecordingMailTransport.Mode;
 import com.geneinvoice.email.RecordingMailTransport.Outcome;
 import com.geneinvoice.email.connection.GmailConnection;
@@ -40,6 +41,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class EmailDeliveryTest extends EmailTestBase {
 
     @Autowired EmailDispatcher dispatcher;
+    @Autowired EmailAttachmentRepository emailAttachmentRepository;
+    @Autowired DocumentStorage documentStorage;
     @Autowired DataSource dataSource;
     @Autowired TransactionTemplate transactions;
 
@@ -354,8 +357,8 @@ class EmailDeliveryTest extends EmailTestBase {
         mailTransport.mode(Mode.SUCCESS);
         Invoice inv = invoice(acme, sales);
         List<Long> bulk = List.of(queuedEmail(inv, "One"), queuedEmail(inv, "Two"), queuedEmail(inv, "Three"));
-        EmailDispatcher inBackground = new EmailDispatcher(emailRepository, emailRecipientRepository, mailTransport,
-                transactions, true);
+        EmailDispatcher inBackground = new EmailDispatcher(emailRepository, emailRecipientRepository,
+                emailAttachmentRepository, documentRepository, documentStorage, mailTransport, transactions, true);
         CountDownLatch firstHandingOver = new CountDownLatch(1);
         CountDownLatch carryOn = new CountDownLatch(1);
         List<String> handedOverOn = new CopyOnWriteArrayList<>();

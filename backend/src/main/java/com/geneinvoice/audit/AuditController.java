@@ -35,7 +35,7 @@ public class AuditController {
 
     /** Entity types the history panel can be anchored to. */
     public static final Set<String> SUPPORTED = Set.of(
-            "INVOICE", "PAYMENT", "CUSTOMER", "PROMISE", "USER", "PRODUCT");
+            "INVOICE", "PAYMENT", "CUSTOMER", "PROMISE", "USER", "PRODUCT", "TASK", "AUTOMATION_RULE");
 
     /** Of those, the ones a customer-scoped account may ever read — and only their own rows. */
     private static final Set<String> CUSTOMER_READABLE = Set.of("INVOICE", "PAYMENT", "CUSTOMER", "PROMISE");
@@ -47,7 +47,11 @@ public class AuditController {
             "CUSTOMER", Privileges.CUSTOMER_VIEW,
             "PROMISE", Privileges.PROMISE_VIEW,
             "USER", Privileges.USER_VIEW,
-            "PRODUCT", Privileges.PRODUCT_VIEW);
+            "PRODUCT", Privileges.PRODUCT_VIEW,
+            "TASK", Privileges.TASK_VIEW,
+            // A rule is read under the privilege that lets a caller read rules at all; a customer
+            // login never holds it, which is also why AUTOMATION_RULE is not customer-readable.
+            "AUTOMATION_RULE", Privileges.AUTOMATION_VIEW);
 
     private final AuditTimelineService timelineService;
     private final InvoiceService invoiceService;

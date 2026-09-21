@@ -17,6 +17,7 @@ import com.geneinvoice.common.query.PredicateFactory;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
+import com.geneinvoice.document.Document;
 import com.geneinvoice.email.EmailDtos.EmailToken;
 import com.geneinvoice.email.connection.GmailConnectionService;
 import com.geneinvoice.email.connection.GmailStatus;
@@ -74,6 +75,9 @@ public class EmailService {
     private final EmailRecipientRepository recipientRepository;
     private final EmailTargets targets;
     private final EmailAddressing addressing;
+    private final EmailBackgroundAddressing backgroundAddressing;
+    private final EmailAttachments attachments;
+    private final EmailPlaceholders placeholders;
     private final EmailViews views;
     private final EmailDispatcher dispatcher;
     private final EmailDirectory directory;
@@ -89,24 +93,55 @@ public class EmailService {
     /** Subject and body as they will be saved (E16), checked the same way for one email and for a bulk send. */
     private record Content(String subject, String body) {
 
+        /** The text as it would be stored, without judging it: a preview lists problems, it does not refuse. */
+        static Content of(String rawSubject, String rawBody) {
+            return new Content(EmailText.oneLine(EmailText.storable(rawSubject)),
+                    rawBody == null ? "" : EmailText.storable(rawBody));
+        }
+
         static Content check(String rawSubject, String rawBody, List<EmailToken> to) {
             Map<String, String> errors = new LinkedHashMap<>();
-            String subject = EmailText.oneLine(EmailText.storable(rawSubject));
-            if (subject.isEmpty()) {
+            Content content = of(rawSubject, rawBody);
+            if (content.subject().isEmpty()) {
                 errors.put("subject", "must not be blank");
-            } else if (subject.length() > FieldLimits.EMAIL_SUBJECT) {
+            } else if (content.subject().length() > FieldLimits.EMAIL_SUBJECT) {
                 errors.put("subject", "must be at most " + FieldLimits.EMAIL_SUBJECT + " characters");
             }
-            String body = rawBody == null ? "" : EmailText.storable(rawBody);
-            if (body.length() > FieldLimits.EMAIL_BODY) {
+            if (content.body().length() > FieldLimits.EMAIL_BODY) {
                 errors.put("body", "must be at most " + FieldLimits.EMAIL_BODY + " characters");
             }
             if (to == null || to.isEmpty()) {
                 errors.put("to", "Add at least one recipient");
             }
             if (!errors.isEmpty()) throw new GlobalExceptionHandler.InvalidFieldsException(errors);
-            return new Content(subject, body);
+            return content;
         }
+
+        /**
+         * The same text with this record's placeholders filled in — which is what is stored, so the
+         * Email tab and the Inbox show what the customer actually read rather than what was typed
+         * (M3). What was typed has already been measured against the column; a filled-in value can
+         * push it past that, and a bulk send must not fail on the one row whose customer has a long
+         * name, so the stored text is cut to fit with the cut marked, as every other snapshot in
+         * this table is. A value can carry a line break, so the subject is flattened again.
+         */
+        Content filled(EmailPlaceholders placeholders, Map<String, String> values) {
+            if (values.isEmpty()) return this;
+            return new Content(
+                    EmailText.fit(EmailText.oneLine(placeholders.fill(subject, values)), FieldLimits.EMAIL_SUBJECT),
+                    EmailText.fit(placeholders.fill(body, values), FieldLimits.EMAIL_BODY));
+        }
+    }
+
+    /**
+     * The zone a placeholder dates a record in. A suggestion is written for whoever is reading the
+     * compose form and is dated where they are ({@link #context} is told their offset), but a send
+     * carries no offset, and a sample that read a day apart from what was then sent would be worse
+     * than either: the offered samples and the send both use the app's own zone, so a writer is
+     * shown exactly what goes out (M6).
+     */
+    private static ZoneId sendingZone() {
+        return ZoneId.systemDefault();
     }
 
     // ---- composing ---------------------------------------------------------------------
@@ -206,17 +241,51 @@ public class EmailService {
                 .toList();
     }
 
-    /** Who a send would reach, what would stop it, and why it might be saved but not sent, without saving anything. */
+    /**
+     * Who a send would reach, what would stop it, and why it might be saved but not sent, without
+     * saving anything — and the subject and body with this record's placeholders already filled in,
+     * because a preview of an email nobody has read the words of is half a preview (M3). The chosen
+     * documents are checked here too, so a bad id is refused before Send rather than by it.
+     */
     public EmailDtos.PreviewDto preview(EmailDtos.SendEmailRequest req) {
         EmailTargets.Target target = targets.load(EmailEntityType.parse(req.entityType()), requireId(req.entityId()));
         EmailAddressing.Resolution resolution = addressing.resolve(
                 addressing.plan(target, req.from(), req.to()), target);
         EmailViews.Viewer viewer = views.viewer();
+        Content content = Content.of(req.subject(), req.body())
+                .filled(placeholders, placeholders.values(target, sendingZone()));
+        // The documents are still resolved here, not only at send: a preview that silently accepted
+        // a file the send would refuse would be worse than no preview (E18).
+        attachments.resolve(target, req.documentIds());
+        List<String> warnings = new ArrayList<>(warnings(resolution.from()));
         return new EmailDtos.PreviewDto(
                 resolution.from() == null ? null
                         : views.sender(resolution.from(), resolution.fromRole(), viewer, target.type()),
                 views.recipients(resolution.recipients(), viewer, target.type()),
-                resolution.unresolved(), resolution.problems(), warnings(resolution.from()));
+                resolution.unresolved(), resolution.problems(), warnings,
+                content.subject(), content.body());
+    }
+
+    // ---- what a record offers the compose form -------------------------------------------
+
+    /**
+     * The documents this record can attach without uploading them again: its own, then its
+     * customer's (E17). The record is loaded the way a send loads it, so a caller who cannot see the
+     * record is refused here exactly as they would be there.
+     */
+    public List<EmailDtos.AttachableDto> attachable(String entityType, Long entityId) {
+        EmailTargets.Target target = targets.load(EmailEntityType.parse(entityType), requireId(entityId));
+        return attachments.offered(target);
+    }
+
+    /**
+     * The placeholders this record offers, grouped by level, each with what it would say on this
+     * record (M4): on an invoice the customer's fields and the invoice's, on a payment the
+     * customer's and the payment's, on a customer the customer's alone.
+     */
+    public List<EmailDtos.PlaceholderGroup> placeholders(String entityType, Long entityId) {
+        EmailTargets.Target target = targets.load(EmailEntityType.parse(entityType), requireId(entityId));
+        return placeholders.offered(target, sendingZone());
     }
 
     /**
@@ -246,15 +315,50 @@ public class EmailService {
      */
     public EmailDtos.EmailDto send(EmailDtos.SendEmailRequest req) {
         EmailTargets.Target target = targets.load(EmailEntityType.parse(req.entityType()), requireId(req.entityId()));
-        Content content = Content.check(req.subject(), req.body(), req.to());
+        Content content = Content.check(req.subject(), req.body(), req.to())
+                .filled(placeholders, placeholders.values(target, sendingZone()));
         EmailAddressing.Resolution resolution = addressing.resolve(
                 addressing.plan(target, req.from(), req.to()), target);
         resolution.problem().ifPresent(problem -> {
             throw new BadRequestException(problem);
         });
-        Long id = transactions.execute(status -> save(target, content, resolution, null));
+        List<Document> documents = attachments.resolve(target, req.documentIds());
+        Long id = transactions.execute(status -> save(target, content, resolution, null, documents));
         dispatcher.dispatch(id);
         return get(id);
+    }
+
+    /**
+     * The same send for work with nobody logged in: an automation rule that fired, on a background
+     * thread with no security context (R1). It is the automation module's one way in, so everything
+     * a request's send does happens here too — the tokens are resolved on the record as it stands,
+     * this record's placeholders are filled in, the email is saved in its own short transaction and
+     * handed to the mail service after it commits — with the two things a caller would have
+     * supplied left out: no privilege or customer restriction is applied ({@link
+     * EmailTargets#loadInBackground}), and the email is stored with nobody as the person who
+     * pressed Send, because nobody did.
+     *
+     * <p>Must not be called with a transaction open: the hand-off refuses to run inside one.
+     *
+     * @return the new email's id
+     * @throws NotFoundException   the record has gone since the rule was written
+     * @throws BadRequestException the tokens reach nobody on this record, or say nothing about the sender
+     */
+    public Long sendInBackground(EmailEntityType type, Long entityId, EmailToken from, List<EmailToken> to,
+                                 String subject, String body, List<Long> documentIds) {
+        EmailTargets.Target target = targets.loadInBackground(type, entityId)
+                .orElseThrow(() -> new NotFoundException(type.title() + " not found"));
+        EmailAddressing.Resolution resolution = addressing.resolve(
+                backgroundAddressing.plan(target, from, to), target);
+        resolution.problem().ifPresent(problem -> {
+            throw new BadRequestException(problem);
+        });
+        Content content = Content.check(subject, body, to)
+                .filled(placeholders, placeholders.values(target, sendingZone()));
+        List<Document> documents = attachments.resolveInBackground(target, documentIds);
+        Long id = transactions.execute(status -> save(target, content, resolution, null, documents));
+        dispatcher.dispatch(id);
+        return id;
     }
 
     /**
@@ -277,6 +381,7 @@ public class EmailService {
         List<Long> ids = targets.bulkIds(type, req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
         String batchId = UUID.randomUUID().toString();
+        ZoneId zone = sendingZone();
         Map<Long, Long> emailByRecord = new HashMap<>();
         BulkDtos.BulkResult result = bulkExecutor.run(req, ids, truncated, id -> {
             EmailTargets.Target target = targets.load(type, id);
@@ -284,15 +389,25 @@ public class EmailService {
             resolution.problem().ifPresent(problem -> {
                 throw new BulkExecutor.IneligibleException(problem);
             });
-            emailByRecord.put(id, save(target, content, resolution, batchId));
+            // Each record fills in its own placeholders, which is the whole point of writing one
+            // text for many: every customer is greeted by their own name and told their own figures
+            // (M2). Nothing is attached, as a document belongs to one record and this is many.
+            emailByRecord.put(id, save(target, content.filled(placeholders, placeholders.values(target, zone)),
+                    resolution, batchId, List.of()));
         });
         // Only rows whose transaction committed are handed on.
         dispatcher.dispatchAll(result.succeeded().stream().map(emailByRecord::get).filter(Objects::nonNull).toList());
         return result;
     }
 
+    /**
+     * Writes the email, its recipients and what it carries, in the caller's transaction. The person
+     * who pressed Send is read with {@link CurrentUser#idOrNull()}, not {@code require()}: the same
+     * save runs for {@link #sendInBackground}, where there is no security context and nobody pressed
+     * anything (R1).
+     */
     private Long save(EmailTargets.Target target, Content content, EmailAddressing.Resolution resolution,
-                      String batchId) {
+                      String batchId, List<Document> documents) {
         EmailTargets.Person from = resolution.from();
         Email email = emailRepository.save(Email.builder()
                 .entityType(target.type())
@@ -309,7 +424,7 @@ public class EmailService {
                 .fromAddress(from.address())
                 .fromCustomerId(from.customerId())
                 .fromInternal(from.internal())
-                .sentByUserId(currentUser.require().getId())
+                .sentByUserId(currentUser.idOrNull())
                 .unresolved(EmailText.fit(resolution.unresolvedTokens(), Email.UNRESOLVED_MAX))
                 .batchId(batchId)
                 .build());
@@ -326,6 +441,7 @@ public class EmailService {
                 .deliveryStatus(r.field() == RecipientField.TO && r.address() != null
                         ? RecipientDeliveryStatus.QUEUED : null)
                 .build()).toList());
+        attachments.save(email.getId(), documents);
         return email.getId();
     }
 

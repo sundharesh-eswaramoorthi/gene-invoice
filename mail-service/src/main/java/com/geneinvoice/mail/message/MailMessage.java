@@ -78,6 +78,14 @@ public class MailMessage {
     @Column(nullable = false, length = BODY_MAX)
     private String body;
 
+    /**
+     * The files this copy carries ({@link MailAttachmentSet}), or null when it carries none, which
+     * is most copies. Nullable on purpose: the column is added to a table that already holds rows,
+     * and {@code hbm2ddl.halt_on_error} would stop the service dead on a NOT NULL one.
+     */
+    @Column(name = "attachment_set_id")
+    private Long attachmentSetId;
+
     /** {@code <gm-uuid@domain>}, fixed at submit and kept across attempts, so a bounce or a reply finds the copy. */
     @Column(name = "rfc_message_id", nullable = false, length = HEADER_ID_MAX)
     private String rfcMessageId;

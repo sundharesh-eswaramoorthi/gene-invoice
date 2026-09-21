@@ -27,6 +27,37 @@ final emailContextProvider =
   return EmailContext.fromJson((res.data as Map).cast<String, dynamic>());
 });
 
+/// One record, for the things the compose form asks about only once a record is known.
+typedef EmailRecordKey = ({EmailEntityType type, int entityId});
+
+/// The documents already on this record or on its customer, for attaching without uploading them
+/// again (E17). Watched by the attach picker alone rather than by the form: a compose form is
+/// opened far more often than a file is attached, and an autoDispose family drops the answer as
+/// soon as that picker closes, so the next one sees anything uploaded meanwhile.
+final emailAttachableProvider =
+    FutureProvider.autoDispose.family<List<EmailAttachable>, EmailRecordKey>((ref, key) async {
+  final dio = ref.watch(dioProvider);
+  final res = await dio.get('/api/emails/attachable',
+      queryParameters: {'entityType': key.type.wire, 'entityId': key.entityId});
+  return (res.data as List)
+      .cast<Map>()
+      .map((m) => EmailAttachable.fromJson(m.cast<String, dynamic>()))
+      .toList();
+});
+
+/// The placeholders this record offers, each with what it says on this very record (M4). Loaded
+/// when the "Insert field" list is opened, for the same reason as [emailAttachableProvider].
+final emailPlaceholdersProvider =
+    FutureProvider.autoDispose.family<List<EmailPlaceholderGroup>, EmailRecordKey>((ref, key) async {
+  final dio = ref.watch(dioProvider);
+  final res = await dio.get('/api/emails/placeholders',
+      queryParameters: {'entityType': key.type.wire, 'entityId': key.entityId});
+  return (res.data as List)
+      .cast<Map>()
+      .map((m) => EmailPlaceholderGroup.fromJson(m.cast<String, dynamic>()))
+      .toList();
+});
+
 typedef EntityEmailsKey = ({EmailEntityType type, int entityId, int page, int size});
 
 /// One page of a record's emails, newest first. The Email tab watches as many pages as it has

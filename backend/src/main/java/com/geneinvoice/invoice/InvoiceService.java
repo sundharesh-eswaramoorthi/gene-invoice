@@ -1,6 +1,8 @@
 package com.geneinvoice.invoice;
 
 import com.geneinvoice.audit.AuditService;
+import com.geneinvoice.automation.AutomationEntityType;
+import com.geneinvoice.automation.AutomationEvents;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.GlobalExceptionHandler;
@@ -50,6 +52,7 @@ public class InvoiceService {
     private final ScopeResolver scopeResolver;
     private final TableQueryExecutor queryExecutor;
     private final AuditService auditService;
+    private final AutomationEvents automationEvents;
     private final PaymentPromiseService promiseService;
     private final CreditLedger creditLedger;
     private final InvoiceNumbers invoiceNumbers;
@@ -100,6 +103,9 @@ public class InvoiceService {
         pocService.notifyAssignee(salesPoc, PocType.SALES,
                 "invoice " + saved.getInvoiceNumber(), "/invoices/" + saved.getId());
         promiseService.reevaluateForCustomer(customer.getId());
+        // One insert, inside this transaction, so a rule sees a record that exists and
+        // nothing is lost if the consumer is down. No rule is read here (R3).
+        automationEvents.recordCreated(AutomationEntityType.INVOICE, saved.getId());
         return saved;
     }
 
@@ -163,6 +169,7 @@ public class InvoiceService {
                     new DueDateSnapshot(movedTo.date(), movedTo.term()),
                     currentUser.require().getId(), null, null);
         }
+        automationEvents.recordUpdated(AutomationEntityType.INVOICE, saved.getId());
         return saved;
     }
 
@@ -413,6 +420,7 @@ public class InvoiceService {
         auditService.record(ENTITY, id, "INVOICE_CANCELLED", before,
                 InvoiceDtos.InvoiceDto.from(saved), currentUser.require().getId(), null, null);
         promiseService.reevaluateForCustomer(inv.getCustomer().getId());
+        automationEvents.recordUpdated(AutomationEntityType.INVOICE, saved.getId());
         return saved;
     }
 
@@ -434,6 +442,7 @@ public class InvoiceService {
         inv.setStatus(InvoiceStatus.CANCELLED);
         Invoice saved = invoiceRepository.save(inv);
         promiseService.reevaluateForCustomer(inv.getCustomer().getId());
+        automationEvents.recordUpdated(AutomationEntityType.INVOICE, saved.getId());
         return saved;
     }
 
@@ -466,6 +475,7 @@ public class InvoiceService {
         recomputeStatus(inv);
         Invoice saved = invoiceRepository.save(inv);
         promiseService.reevaluateForCustomer(inv.getCustomer().getId());
+        automationEvents.recordUpdated(AutomationEntityType.INVOICE, saved.getId());
         return saved;
     }
 }

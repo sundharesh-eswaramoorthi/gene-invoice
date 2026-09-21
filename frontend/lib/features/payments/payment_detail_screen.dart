@@ -18,6 +18,7 @@ import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
 import '../disputes/disputes_tab.dart';
 import '../documents/document_actions.dart';
+import '../tasks/task_actions.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
@@ -140,6 +141,8 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
         final label = 'Payment #${payment.id}';
         final sendEmail = sendEmailHeaderButton(context, ref,
             type: EmailEntityType.payment, entityId: payment.id, entityLabel: label);
+        final tasksTab = tasksDetailTab(ref,
+            type: TaskEntityType.payment, entityId: payment.id, entityLabel: label);
         final documentsTab = documentsDetailTab(ref,
             type: DocumentEntityType.payment, entityId: payment.id, entityLabel: label);
         final emailTab = emailDetailTab(ref,
@@ -211,6 +214,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                   ),
                 ),
               if (documentsTab != null) documentsTab,
+              if (tasksTab != null) tasksTab,
               if (emailTab != null) emailTab,
             ],
           ),

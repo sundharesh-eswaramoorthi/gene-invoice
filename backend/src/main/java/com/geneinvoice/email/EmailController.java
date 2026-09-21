@@ -32,6 +32,22 @@ public class EmailController {
         return service.people(q);
     }
 
+    /** The documents already on this record or its customer, for attaching without uploading again (E17). */
+    @GetMapping("/attachable")
+    @PreAuthorize("hasAuthority('" + Privileges.EMAIL_SEND + "')")
+    public List<EmailDtos.AttachableDto> attachable(@RequestParam String entityType,
+                                                    @RequestParam Long entityId) {
+        return service.attachable(entityType, entityId);
+    }
+
+    /** The placeholders this record offers, with what each says on it, for the compose form's list (M4). */
+    @GetMapping("/placeholders")
+    @PreAuthorize("hasAuthority('" + Privileges.EMAIL_SEND + "')")
+    public List<EmailDtos.PlaceholderGroup> placeholders(@RequestParam String entityType,
+                                                         @RequestParam Long entityId) {
+        return service.placeholders(entityType, entityId);
+    }
+
     @PostMapping("/preview")
     @PreAuthorize("hasAuthority('" + Privileges.EMAIL_SEND + "')")
     public EmailDtos.PreviewDto preview(@RequestBody EmailDtos.SendEmailRequest req) {

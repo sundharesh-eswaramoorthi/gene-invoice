@@ -6,7 +6,12 @@ import com.geneinvoice.auth.AppUserDetailsService;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.document.DocumentRepository;
+import com.geneinvoice.assignee.AssigneeRepository;
+import com.geneinvoice.automation.AutomationEventRepository;
+import com.geneinvoice.automation.AutomationRuleRepository;
+import com.geneinvoice.email.EmailAttachmentRepository;
 import com.geneinvoice.email.EmailRecipientRepository;
+import com.geneinvoice.task.TaskRepository;
 import com.geneinvoice.email.EmailRepository;
 import com.geneinvoice.email.RecordingMailTransport;
 import com.geneinvoice.email.connection.GmailConnectionRepository;
@@ -64,6 +69,11 @@ public abstract class IntegrationTestBase {
     @Autowired protected DocumentRepository documentRepository;
     @Autowired protected EmailRepository emailRepository;
     @Autowired protected EmailRecipientRepository emailRecipientRepository;
+    @Autowired protected EmailAttachmentRepository emailAttachmentRepository;
+    @Autowired protected TaskRepository taskRepository;
+    @Autowired protected AssigneeRepository assigneeRepository;
+    @Autowired protected AutomationRuleRepository automationRuleRepository;
+    @Autowired protected AutomationEventRepository automationEventRepository;
     @Autowired protected RecordingMailTransport mailTransport;
     @Autowired protected GmailConnectionRepository gmailConnectionRepository;
     @Autowired protected PasswordEncoder passwordEncoder;
@@ -74,8 +84,16 @@ public abstract class IntegrationTestBase {
         mailTransport.reset();
         gmailConnectionRepository.deleteAll();
         documentRepository.deleteAll();
+        emailAttachmentRepository.deleteAll();
         emailRecipientRepository.deleteAll();
         emailRepository.deleteAll();
+        // The outbox and its rules first: an event points at a record about to go, and a rule that
+        // survived a test would fire against the next one's rows.
+        automationEventRepository.deleteAll();
+        automationRuleRepository.deleteAll();
+        // Assignees before the records they hang off, tasks before the customers they point at.
+        assigneeRepository.deleteAll();
+        taskRepository.deleteAll();
         promiseRepository.deleteAll();
         paymentRepository.deleteAll();
         invoiceRepository.deleteAll();

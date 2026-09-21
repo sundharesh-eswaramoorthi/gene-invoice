@@ -34,6 +34,14 @@ mail:
     # The waits before a second and a later attempt; also the TTLs of mail.send.retry.1m / .5m. RabbitMQ
     # refuses to redeclare a queue with other arguments, so delete those two queues after changing them.
     retry-delays: PT1M, PT5M
+    max-attachments: 10
+    # 17 MiB of files per email. Base64 makes them a third bigger on the way out and Gmail refuses a
+    # message over 25 MB, so the raw ceiling is 25 MB x 3/4 = 18.75 MB less room for the headers and
+    # the body: 17 MiB becomes about 24.4 MB sent. See MailProperties.Send#maxAttachmentBytes.
+    max-attachment-bytes: 17825792
+    # Messages bigger than this go to Gmail's upload URI (message/rfc822) instead of as JSON, which
+    # would base64 them a second time and pass Google's ~5 MB request limit. See MailProperties.
+    max-json-send-bytes: 3145728
   tracking:
     interval-ms: 60000
     delivered-after: PT15M

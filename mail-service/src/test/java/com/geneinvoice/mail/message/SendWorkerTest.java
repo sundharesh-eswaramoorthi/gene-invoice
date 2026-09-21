@@ -51,7 +51,7 @@ class SendWorkerTest extends IntegrationTestBase {
 
     private void submitToBob() {
         submit(new SubmitRequest(new SubmitRequest.Sender("7", "Jane Doe"), SUBJECT, BODY, "91", false,
-                List.of(copy("gi-91-501", "Bob Smith", "bob@acme.com"))));
+                List.of(copy("gi-91-501", "Bob Smith", "bob@acme.com")), List.of()));
     }
 
     /** The message Gmail was asked to send, decoded the way Gmail would. */
@@ -65,7 +65,7 @@ class SendWorkerTest extends IntegrationTestBase {
     @Test
     void eachRecipientGetsTheirOwnCopyFromTheSendersGmail() throws Exception {
         submit(new SubmitRequest(new SubmitRequest.Sender("7", "Jürgen Müller"), SUBJECT, BODY, "91", false,
-                List.of(copy("gi-91-501", "Bob Smith", "bob@acme.com"), copy("gi-91-502", "Zoë O'Brien", "zoe@acme.com"))));
+                List.of(copy("gi-91-501", "Bob Smith", "bob@acme.com"), copy("gi-91-502", "Zoë O'Brien", "zoe@acme.com")), List.of()));
 
         work();
 

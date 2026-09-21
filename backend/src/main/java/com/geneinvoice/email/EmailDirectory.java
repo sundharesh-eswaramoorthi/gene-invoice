@@ -8,11 +8,14 @@ import jakarta.persistence.TypedQuery;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Finds people and customers the way email needs them: by search text, by the customer they log in
@@ -54,6 +57,21 @@ public class EmailDirectory {
                         + " order by u.id", User.class)
                 .setParameter("customerId", customerId)
                 .getResultList();
+    }
+
+    /**
+     * The same for a page of customers, in one read rather than one per customer (A9). Each
+     * customer's logins come back in the same order the single read gives them, and a customer with
+     * no login is simply absent — the caller reads that as no addresses, which is what it is.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, List<User>> activeLoginsOf(Collection<Long> customerIds) {
+        if (customerIds.isEmpty()) return Map.of();
+        return em.createQuery("select u from User u where u.customerId in :customerIds and u.active = true"
+                        + " order by u.id", User.class)
+                .setParameter("customerIds", customerIds)
+                .getResultList().stream()
+                .collect(Collectors.groupingBy(User::getCustomerId));
     }
 
     /** The account an address belongs to; an active one first, should two differ only in case. */

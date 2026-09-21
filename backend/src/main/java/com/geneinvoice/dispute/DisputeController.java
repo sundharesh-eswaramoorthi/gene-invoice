@@ -47,7 +47,7 @@ public class DisputeController {
         ScopeResolver.Scope scope = scopeResolver.forDisputes();
         var result = queryExecutor.run(Dispute.class, TableSchemas.DISPUTES, query,
                 scope.predicates(), List.of());
-        return PageResponse.of(result.content().stream().map(service::toDto).toList(),
+        return PageResponse.of(service.toDtos(result.content()),
                 query, result.total(), scope.lockedFilters());
     }
 
@@ -61,6 +61,19 @@ public class DisputeController {
     @PreAuthorize("hasAuthority('" + Privileges.DISPUTE_CREATE + "')")
     public DisputeDtos.DisputeDto create(@Valid @RequestBody DisputeDtos.CreateDisputeRequest req) {
         return service.toDto(service.open(req));
+    }
+
+    /**
+     * Names who is answerable for a dispute. It is a staff-side setter rather than a field on the
+     * form that opens one, because disputes are opened from the customer's side and a customer
+     * never sees staff to pick them (AC-A8, A1). PATCH because it changes one thing about a dispute
+     * and leaves the rest of it alone.
+     */
+    @PatchMapping("/{id}/assignees")
+    @PreAuthorize("hasAuthority('" + Privileges.DISPUTE_MANAGE + "')")
+    public DisputeDtos.DisputeDto setAssignees(@PathVariable Long id,
+                                               @Valid @RequestBody DisputeDtos.SetAssigneesRequest req) {
+        return service.toDto(service.setAssignees(id, req.assignees()));
     }
 
     @PostMapping("/{id}/approve")
@@ -91,7 +104,7 @@ public class DisputeController {
         }
         String csv = Csv.of(
                 List.of("Id", "Customer", "Target", "Target id", "Status", "Opened", "Resolved", "Reason"),
-                repository.findAllById(ids).stream().map(service::toDto).map(d -> List.<Object>of(
+                service.toDtos(repository.findAllById(ids)).stream().map(d -> List.<Object>of(
                         d.id(), d.customerName() == null ? "" : d.customerName(),
                         d.targetType(), d.targetId(), d.status(), d.createdAt(),
                         d.resolvedAt() == null ? "" : d.resolvedAt(), d.reason())).toList());

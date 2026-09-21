@@ -81,7 +81,7 @@ class AuditTimelineTest extends IntegrationTestBase {
 
     private void promise(List<Long> invoiceIds) {
         promiseService.create(new PromiseDtos.CreatePromiseRequest(
-                acme.getId(), new BigDecimal("50.00"), TOMORROW, null, "will pay", invoiceIds));
+                acme.getId(), new BigDecimal("50.00"), TOMORROW, null, "will pay", invoiceIds, null));
     }
 
     /** Opened by the customer's own login, as the dispute flow requires; returns the dispute id. */

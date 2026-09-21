@@ -4,11 +4,12 @@ import '../models/dispute.dart';
 import '../models/invoice.dart';
 import '../models/payment.dart';
 import '../models/promise.dart';
+import '../models/task.dart';
 
-/// Colour-coded status chips for invoices, payments and disputes, in the same shape payment
-/// promises have always used (`PromiseStatusChip` in features/promises/promises_tab.dart).
+/// Colour-coded status chips for invoices, payments, disputes and tasks, in the same shape
+/// payment promises have always used (`PromiseStatusChip` in features/promises/promises_tab.dart).
 ///
-/// One palette across all four, so a colour means the same thing wherever it appears:
+/// One palette across all of them, so a colour means the same thing wherever it appears:
 ///
 /// * primary (blue) — still open, waiting on someone
 /// * orange — under way, partly done
@@ -61,6 +62,21 @@ Color disputeStatusColor(BuildContext context, DisputeStatus s) {
     DisputeStatus.PENDING => scheme.primary,
     DisputeStatus.APPROVED => Colors.green.shade700,
     DisputeStatus.DENIED => scheme.error,
+  };
+}
+
+/// A task's status takes the same palette as everything else, which it fits without stretching:
+/// open work is waiting on someone, work under way is orange, done is the good ending, and a
+/// cancelled task is inert — the work never needed doing. Nothing here is red: a task is never
+/// wrong, only late, and lateness is [OverdueBadge]'s to say beside the chip rather than inside
+/// it, exactly as an overdue invoice keeps its own status (T9).
+Color taskStatusColor(BuildContext context, TaskStatus s) {
+  final scheme = Theme.of(context).colorScheme;
+  return switch (s) {
+    TaskStatus.OPEN => scheme.primary,
+    TaskStatus.IN_PROGRESS => Colors.orange.shade800,
+    TaskStatus.DONE => Colors.green.shade700,
+    TaskStatus.CANCELLED => scheme.outline,
   };
 }
 
@@ -145,5 +161,20 @@ class DisputeStatusChip extends StatelessWidget {
   Widget build(BuildContext context) => StatusChip(
         label: disputeStatusLabel(status),
         color: disputeStatusColor(context, status),
+      );
+}
+
+/// A task's status. [label] is the server's own wording where there is a task to hand
+/// (`Task.statusLabel`), so a status this build has not heard of still reads as whatever the
+/// server calls it; a form choosing a status has only the enum, and takes the app's word.
+class TaskStatusChip extends StatelessWidget {
+  final TaskStatus status;
+  final String? label;
+  const TaskStatusChip({super.key, required this.status, this.label});
+
+  @override
+  Widget build(BuildContext context) => StatusChip(
+        label: label ?? taskStatusLabel(status),
+        color: taskStatusColor(context, status),
       );
 }

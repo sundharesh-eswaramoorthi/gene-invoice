@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../../core/format.dart';
+import '../documents/document_models.dart' show documentKindLabel, formatBytes;
 import 'email_entity.dart';
 
 /// Why the compose dialog opened after a save: it pre-fills a suggestion for that event (E12).
@@ -481,6 +482,122 @@ class EmailSuggestion {
       );
 }
 
+// ---- attachments and placeholders ----------------------------------------------------
+
+/// How many documents one email may carry (`EmailAttachments.MAX_ATTACHMENTS`). Mirrored here so
+/// the picker stops offering more at the same count the server refuses at, in its own words.
+const int maxEmailAttachments = 10;
+
+/// A document the compose form may offer for attaching (AttachableDto, E17): one already on the
+/// record, or on its customer. [id] is what goes out in the send request's `documentIds`.
+@immutable
+class EmailAttachable {
+  final int id;
+  final String filename;
+  final String contentType;
+  final int sizeBytes;
+
+  /// RECORD or CUSTOMER — where the document was found.
+  final String source;
+
+  /// The heading the form groups it under, in the server's words: "This invoice", "Customer".
+  final String sourceLabel;
+
+  const EmailAttachable({
+    required this.id,
+    required this.filename,
+    this.contentType = '',
+    this.sizeBytes = 0,
+    this.source = 'RECORD',
+    this.sourceLabel = '',
+  });
+
+  factory EmailAttachable.fromJson(Map<String, dynamic> json) => EmailAttachable(
+        id: (json['id'] as num).toInt(),
+        filename: json['filename'] as String? ?? '',
+        contentType: json['contentType'] as String? ?? '',
+        sizeBytes: (json['sizeBytes'] as num?)?.toInt() ?? 0,
+        source: json['source'] as String? ?? 'RECORD',
+        sourceLabel: json['sourceLabel'] as String? ?? '',
+      );
+
+  /// "PDF", "PNG", … — the documents feature's own wording, so a file reads the same in the
+  /// attach picker as it does on the Documents tab.
+  String get kindLabel => documentKindLabel(contentType, filename);
+
+  /// "1.5 MB", in the units the Documents tab writes a size in.
+  String get size => formatBytes(sizeBytes);
+
+  /// "PDF · 1.5 MB", the line under a filename in the picker.
+  String get details => '$kindLabel · $size';
+}
+
+/// A document that went out with an email (AttachmentDto, E17). It is the email's own snapshot of
+/// the file: [documentId] may point at a document that has since been deleted, which is why the
+/// name, type and size are kept here rather than read back off it.
+@immutable
+class EmailAttachment {
+  final int id;
+  final int? documentId;
+  final String filename;
+  final String contentType;
+  final int sizeBytes;
+
+  const EmailAttachment({
+    required this.id,
+    this.documentId,
+    required this.filename,
+    this.contentType = '',
+    this.sizeBytes = 0,
+  });
+
+  factory EmailAttachment.fromJson(Map<String, dynamic> json) => EmailAttachment(
+        id: (json['id'] as num).toInt(),
+        documentId: (json['documentId'] as num?)?.toInt(),
+        filename: json['filename'] as String? ?? '',
+        contentType: json['contentType'] as String? ?? '',
+        sizeBytes: (json['sizeBytes'] as num?)?.toInt() ?? 0,
+      );
+
+  String get kindLabel => documentKindLabel(contentType, filename);
+  String get size => formatBytes(sizeBytes);
+  String get details => '$kindLabel · $size';
+}
+
+/// One placeholder a subject or body may carry (PlaceholderDto, M4). [key] is the whole token,
+/// braces and all — `{{Customer.Name}}` — so inserting it is a plain paste of what the server
+/// said. [sample] is what it fills in on *this* record, which is the reason to offer it at all:
+/// the writer reads what the email will say before sending it. An empty sample means the record
+/// has nothing there, and the email will read with a gap in that place.
+@immutable
+class EmailPlaceholder {
+  final String key;
+  final String label;
+  final String sample;
+
+  const EmailPlaceholder({required this.key, required this.label, this.sample = ''});
+
+  factory EmailPlaceholder.fromJson(Map<String, dynamic> json) => EmailPlaceholder(
+        key: json['key'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        sample: json['sample'] as String? ?? '',
+      );
+}
+
+/// The placeholders of one level — "Customer", then "Invoice" on an invoice (M1).
+@immutable
+class EmailPlaceholderGroup {
+  final String label;
+  final List<EmailPlaceholder> placeholders;
+
+  const EmailPlaceholderGroup({required this.label, this.placeholders = const []});
+
+  factory EmailPlaceholderGroup.fromJson(Map<String, dynamic> json) => EmailPlaceholderGroup(
+        label: json['label'] as String? ?? '',
+        placeholders: _maps(json['placeholders']).map(EmailPlaceholder.fromJson).toList(),
+      );
+}
+
 /// Everything the compose form needs about one record, or about a type when no record is chosen
 /// yet (GET /api/emails/context).
 @immutable
@@ -587,9 +704,16 @@ class EmailPreview {
   /// What would make Send fail. Send stays disabled while any is listed.
   final List<String> problems;
 
-  /// Why the email would be saved but not sent — no mail service, or a sender without a
-  /// working Gmail. Send stays enabled: the email is still worth keeping.
+  /// Why the email would be saved but not sent — no mail service, a sender without a working
+  /// Gmail, or attachments the mail service cannot carry. Send stays enabled: the email is still
+  /// worth keeping. They are shown exactly as the server words them, never rewritten here: the
+  /// server is the one that knows what will really happen to the email.
   final List<String> warnings;
+
+  /// The subject and body with this record's placeholders filled in — what would actually be
+  /// stored and read (M3). Null on an older server, and on a preview that never got that far.
+  final String? subject;
+  final String? body;
 
   const EmailPreview({
     required this.from,
@@ -597,6 +721,8 @@ class EmailPreview {
     required this.unresolved,
     required this.problems,
     this.warnings = const [],
+    this.subject,
+    this.body,
   });
 
   factory EmailPreview.fromJson(Map<String, dynamic> json) => EmailPreview(
@@ -605,7 +731,15 @@ class EmailPreview {
         unresolved: _maps(json['unresolved']).map(EmailUnresolved.fromJson).toList(),
         problems: ((json['problems'] as List?) ?? const []).map((e) => '$e').toList(),
         warnings: ((json['warnings'] as List?) ?? const []).map((e) => '$e').toList(),
+        subject: json['subject'] as String?,
+        body: json['body'] as String?,
       );
+
+  /// Whether filling the placeholders in changed anything against what was typed. When it did
+  /// not, the filled-in text is the very text on the form a few lines above, and showing it
+  /// again says nothing; when it did, it is the whole point of the preview (M3).
+  bool differsFrom({required String typedSubject, required String typedBody}) =>
+      (subject != null && subject != typedSubject) || (body != null && body != typedBody);
 }
 
 // ---- saved emails -------------------------------------------------------------------
@@ -656,6 +790,9 @@ class EmailMessage {
   /// Null when this viewer is not one of its To recipients.
   final bool? readByMe;
 
+  /// What the sender attached, in the order they chose it; empty for most email (E17).
+  final List<EmailAttachment> attachments;
+
   const EmailMessage({
     required this.id,
     required this.entityType,
@@ -682,6 +819,7 @@ class EmailMessage {
     this.canRetry = false,
     this.canOpenRecord = false,
     this.readByMe,
+    this.attachments = const [],
   });
 
   bool get isInbound => direction == 'INBOUND';
@@ -720,6 +858,7 @@ class EmailMessage {
       canRetry: json['canRetry'] as bool? ?? false,
       canOpenRecord: json['canOpenRecord'] as bool? ?? false,
       readByMe: json['readByMe'] as bool?,
+      attachments: _maps(json['attachments']).map(EmailAttachment.fromJson).toList(),
     );
   }
 }

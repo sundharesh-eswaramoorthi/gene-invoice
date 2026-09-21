@@ -100,7 +100,7 @@ class RecordVisibilityTest extends IntegrationTestBase {
     void aCustomerCannotTellAForeignPromiseFromAMissingOne() throws Exception {
         PromiseDtos.PromiseDto foreign = promiseService.create(new PromiseDtos.CreatePromiseRequest(
                 acme.getId(), new BigDecimal("100.00"),
-                LocalDate.now(ZoneOffset.UTC).plusDays(1), null, null, List.of()));
+                LocalDate.now(ZoneOffset.UTC).plusDays(1), null, null, List.of(), null));
 
         mockMvc.perform(get("/api/promises/" + foreign.id()).with(as(globexLogin)))
                 .andExpect(status().isNotFound());

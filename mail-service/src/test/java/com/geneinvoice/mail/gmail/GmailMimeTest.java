@@ -1,10 +1,14 @@
 package com.geneinvoice.mail.gmail;
 
+import jakarta.mail.BodyPart;
 import jakarta.mail.Message;
 import jakarta.mail.MessagingException;
+import jakarta.mail.Part;
 import jakarta.mail.Session;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
+import jakarta.mail.internet.MimeMultipart;
+import jakarta.mail.internet.MimeUtility;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -63,6 +67,155 @@ class GmailMimeTest {
         assertThat(copy.getHeader("MIME-Version", null)).isEqualTo("1.0");
         assertThat(copy.getContentType()).isEqualToIgnoringCase("text/plain; charset=UTF-8");
         assertThat(copy.getContent()).isEqualTo("Line one\r\nLine two\r\nLine three");
+    }
+
+    // ---- attachments -----------------------------------------------------------------
+
+    private static final MailAddress JANE = new MailAddress("Jane Doe", "jane@gmail.com");
+    private static final MailAddress ACME = new MailAddress("Acme Ltd", "ap@acme.test");
+    private static final Instant SENT = Instant.parse("2026-09-20T10:00:00Z");
+    private static final byte[] PDF = "%PDF-1.4 invoice".getBytes(StandardCharsets.US_ASCII);
+
+    private static Attachment file(String name, String type, String content) {
+        return new Attachment(name, type, content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /** The body of one part, decoded as its own Content-Transfer-Encoding says. */
+    private static byte[] partBytes(MimeMultipart parts, int index) throws Exception {
+        BodyPart part = parts.getBodyPart(index);
+        return part.getInputStream().readAllBytes();
+    }
+
+    private static MimeMultipart partsOf(byte[] mime) throws Exception {
+        MimeMessage message = message(mime);
+        assertThat(message.getContentType()).startsWith("multipart/mixed");
+        return (MimeMultipart) message.getContent();
+    }
+
+    @Test
+    void withNothingAttachedTheBytesAreExactlyWhatTheyHaveAlwaysBeen() throws Exception {
+        byte[] mime = GmailMime.build(JANE, ACME, "Invoice", "Line one\nLine two", "<gm-1@gmail.com>", SENT);
+
+        String written = new String(mime, StandardCharsets.UTF_8);
+        // The Date header is written in the machine's own zone, so only its instant is fixed.
+        int firstBreak = written.indexOf("\r\n");
+        assertThat(written.substring(0, firstBreak)).startsWith("Date: Sun, 20 Sep 2026 ");
+        assertThat(written.substring(firstBreak + 2)).isEqualTo(crlf(
+                "From: Jane Doe <jane@gmail.com>",
+                "To: Acme Ltd <ap@acme.test>",
+                "Message-ID: <gm-1@gmail.com>",
+                "Subject: Invoice",
+                "MIME-Version: 1.0",
+                "Content-Type: text/plain; charset=UTF-8",
+                "Content-Transfer-Encoding: 7bit",
+                "",
+                "Line one",
+                "Line two"));
+        // Asking for attachments and giving none writes the same single-part message, byte for byte.
+        assertThat(GmailMime.build(JANE, ACME, "Invoice", "Line one\nLine two", "<gm-1@gmail.com>", SENT, List.of()))
+                .isEqualTo(mime);
+    }
+
+    @Test
+    void oneFileMakesTheMessageMultipartWithTheTextFirstAndTheFileBehindIt() throws Exception {
+        byte[] mime = GmailMime.build(JANE, ACME, "Invoice INV-0042", "Please find it attached.\nThanks",
+                "<gm-1@gmail.com>", SENT, List.of(new Attachment("INV-0042.pdf", "application/pdf", PDF)));
+
+        MimeMessage message = message(mime);
+        // Everything the single-part message says, it still says.
+        assertThat(message.getHeader("To", ",")).isEqualTo("Acme Ltd <ap@acme.test>");
+        assertThat(message.getMessageID()).isEqualTo("<gm-1@gmail.com>");
+        assertThat(message.getSubject()).isEqualTo("Invoice INV-0042");
+        assertThat(message.getSentDate().toInstant()).isEqualTo(SENT);
+
+        MimeMultipart parts = partsOf(mime);
+        assertThat(parts.getCount()).isEqualTo(2);
+        assertThat(parts.getBodyPart(0).getContentType()).isEqualToIgnoringCase("text/plain; charset=UTF-8");
+        assertThat(parts.getBodyPart(0).getContent()).isEqualTo("Please find it attached.\r\nThanks");
+        BodyPart attached = parts.getBodyPart(1);
+        assertThat(attached.getContentType()).startsWith("application/pdf");
+        assertThat(attached.getFileName()).isEqualTo("INV-0042.pdf");
+        assertThat(attached.getDisposition()).isEqualToIgnoringCase(Part.ATTACHMENT);
+        assertThat(attached.getHeader("Content-Transfer-Encoding")).containsExactly("base64");
+        assertThat(partBytes(parts, 1)).isEqualTo(PDF);
+    }
+
+    @Test
+    void twoFilesEachBecomeTheirOwnPartInTheOrderGiven() throws Exception {
+        byte[] mime = GmailMime.build(JANE, ACME, "Statement", "Two files.", "<gm-2@gmail.com>", SENT,
+                List.of(new Attachment("INV-0042.pdf", "application/pdf", PDF),
+                        file("notes.txt", "text/plain; charset=UTF-8", "Zoë's notes")));
+
+        MimeMultipart parts = partsOf(mime);
+        assertThat(parts.getCount()).isEqualTo(3);
+        assertThat(parts.getBodyPart(0).getContent()).isEqualTo("Two files.");
+        assertThat(parts.getBodyPart(1).getFileName()).isEqualTo("INV-0042.pdf");
+        assertThat(partBytes(parts, 1)).isEqualTo(PDF);
+        assertThat(parts.getBodyPart(2).getFileName()).isEqualTo("notes.txt");
+        assertThat(parts.getBodyPart(2).getContentType()).startsWith("text/plain");
+        assertThat(partBytes(parts, 2)).isEqualTo("Zoë's notes".getBytes(StandardCharsets.UTF_8));
+        // One boundary, chosen by Jakarta Mail, and both files inside it.
+        assertThat(message(mime).getContentType()).contains("boundary=");
+    }
+
+    @Test
+    void bytesThatAreNotTextSurviveTheRoundTrip() throws Exception {
+        byte[] raw = new byte[512];
+        for (int i = 0; i < raw.length; i++) raw[i] = (byte) i;
+
+        byte[] mime = GmailMime.build(JANE, ACME, "Scan", "", "<gm-3@gmail.com>", SENT,
+                List.of(new Attachment("scan.bin", "application/octet-stream", raw)));
+
+        assertThat(partBytes(partsOf(mime), 1)).isEqualTo(raw);
+    }
+
+    @Test
+    void aNonAsciiFileNameGoesOutAsAnEncodedWordAndComesBackWhole() throws Exception {
+        byte[] mime = GmailMime.build(JANE, ACME, "Rechnung", "", "<gm-4@gmail.com>", SENT,
+                List.of(file("Rechnung Jürgen.pdf", "application/pdf", "x")));
+
+        // On the wire it is an encoded word, which is what every mail program writes and reads back.
+        String onTheWire = partsOf(mime).getBodyPart(1).getFileName();
+        assertThat(onTheWire).isEqualTo("=?UTF-8?Q?Rechnung_J=C3=BCrgen.pdf?=");
+        assertThat(MimeUtility.decodeText(onTheWire)).isEqualTo("Rechnung Jürgen.pdf");
+    }
+
+    @Test
+    void aFileNameThatCouldForgeHeadersIsCutBackToAName() throws Exception {
+        byte[] mime = GmailMime.build(JANE, ACME, "Odd", "", "<gm-5@gmail.com>", SENT,
+                List.of(file("../../etc/pass\r\nBcc: someone@elsewhere.test", "text/plain", "x"),
+                        file("   ", "text/plain", "y")));
+
+        MimeMultipart parts = partsOf(mime);
+        assertThat(parts.getBodyPart(1).getFileName()).isEqualTo("pass Bcc: someone@elsewhere.test");
+        assertThat(message(mime).getHeader("Bcc")).isNull();
+        assertThat(message(mime).getRecipients(Message.RecipientType.BCC)).isNull();
+        // Nothing usable left: it still goes out, under a plain name.
+        assertThat(parts.getBodyPart(2).getFileName()).isEqualTo("attachment");
+    }
+
+    @Test
+    void aTypeThatIsNotATypeIsSentAsOctetStream() throws Exception {
+        byte[] mime = GmailMime.build(JANE, ACME, "Odd", "", "<gm-6@gmail.com>", SENT,
+                List.of(file("a.bin", "not a media type", "x"), file("b.bin", " ", "y"),
+                        file("c.bin", null, "z")));
+
+        MimeMultipart parts = partsOf(mime);
+        for (int i = 1; i <= 3; i++) {
+            assertThat(parts.getBodyPart(i).getContentType()).startsWith("application/octet-stream");
+        }
+    }
+
+    @Test
+    void aReplyToAMessageWithFilesStillReadsBackAsTheTextThatWasWritten() throws Exception {
+        byte[] mime = GmailMime.build(JANE, ACME, "Statement", "Line one\nLine two", "<gm-7@gmail.com>", SENT,
+                List.of(new Attachment("INV-0042.pdf", "application/pdf", PDF)));
+
+        IncomingMail read = GmailMime.parse("m-1", "t-1", Instant.EPOCH, mime);
+
+        assertThat(read.subject()).isEqualTo("Statement");
+        assertThat(read.body()).isEqualTo("Line one\nLine two");
+        assertThat(read.rfcMessageId()).isEqualTo("<gm-7@gmail.com>");
     }
 
     @Test

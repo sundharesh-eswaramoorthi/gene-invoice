@@ -19,6 +19,7 @@ import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
 import '../disputes/disputes_tab.dart';
 import '../documents/document_actions.dart';
+import '../tasks/task_actions.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
@@ -196,6 +197,8 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         _seed(inv);
         final sendEmail = sendEmailHeaderButton(context, ref,
             type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
+        final tasksTab = tasksDetailTab(ref,
+            type: TaskEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
         final documentsTab = documentsDetailTab(ref,
             type: DocumentEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
         final emailTab = emailDetailTab(ref,
@@ -274,6 +277,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                   ),
                 ),
               if (documentsTab != null) documentsTab,
+              if (tasksTab != null) tasksTab,
               if (emailTab != null) emailTab,
             ],
           ),

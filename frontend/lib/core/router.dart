@@ -20,8 +20,11 @@ import '../features/payments/payments_screen.dart';
 import '../features/products/product_detail_screen.dart';
 import '../features/products/products_screen.dart';
 import '../features/promises/promise_detail_screen.dart';
+import '../features/automation/automation_rules_screen.dart';
 import '../features/promises/promises_screen.dart';
 import '../features/users/role_detail_screen.dart';
+import '../features/tasks/task_detail_screen.dart';
+import '../features/tasks/tasks_screen.dart';
 import '../features/users/roles_screen.dart';
 import '../features/users/user_detail_screen.dart';
 import '../features/users/users_screen.dart';
@@ -180,6 +183,45 @@ final routerProvider = Provider<GoRouter>((ref) {
                       id: id,
                       initialTab: s.uri.queryParameters['tab'],
                     )),
+          ),
+
+          // /tasks/mine before /tasks/:id, exactly as /invoices/new is before /invoices/:id:
+          // otherwise go_router reads "mine" as an id and the page says the task does not exist.
+          GoRoute(
+            path: '/tasks/mine',
+            redirect: needs(navPrivilegesFor('/tasks')),
+            builder: (c, s) => TasksScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('tasks'), defaultSort: 'dueDate,asc'),
+              mine: true,
+            ),
+          ),
+          GoRoute(
+            path: '/tasks',
+            redirect: needs(navPrivilegesFor('/tasks')),
+            builder: (c, s) => TasksScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('tasks'), defaultSort: 'dueDate,asc'),
+            ),
+          ),
+          GoRoute(
+            path: '/tasks/:id',
+            builder: (c, s) => pageForId(s,
+                noun: 'task',
+                backTo: '/tasks',
+                build: (id) => TaskDetailScreen(
+                      key: ValueKey('task-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
+          ),
+
+          // The rules list is the whole feature: a rule is written in a dialog over it, so there
+          // is no detail route to deep-link to.
+          GoRoute(
+            path: '/automation',
+            redirect: needs(navPrivilegesFor('/automation')),
+            builder: (c, s) => AutomationRulesScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('automation'), defaultSort: 'id,desc'),
+            ),
           ),
 
           GoRoute(

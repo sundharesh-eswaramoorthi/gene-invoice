@@ -66,7 +66,7 @@ class PromiseLifecycleTest extends IntegrationTestBase {
 
     private PromiseDtos.PromiseDto promise(String amount, LocalDate date, List<Long> invoiceIds) {
         return promiseService.create(new PromiseDtos.CreatePromiseRequest(
-                acme.getId(), new BigDecimal(amount), date, null, "note", invoiceIds));
+                acme.getId(), new BigDecimal(amount), date, null, "note", invoiceIds, null));
     }
 
     private PromiseStatus statusOf(Long id) {
@@ -168,7 +168,7 @@ class PromiseLifecycleTest extends IntegrationTestBase {
     void creationFailsWhenNoCollectionPocIsGivenOrDerivable() {
         Customer bare = customer("Bare Ltd");
         assertThatThrownBy(() -> promiseService.create(new PromiseDtos.CreatePromiseRequest(
-                bare.getId(), new BigDecimal("10"), TOMORROW, null, null, null)))
+                bare.getId(), new BigDecimal("10"), TOMORROW, null, null, null, null)))
                 .hasMessageContaining("Collection POC is required");
     }
 
@@ -545,11 +545,11 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         invoiceService.cancel(b.getId());
 
         PromiseDtos.PromiseDto edited = promiseService.update(p.id(), new PromiseDtos.UpdatePromiseRequest(
-                new BigDecimal("200.00"), TOMORROW, null, "edited", List.of(a.getId(), b.getId())));
+                new BigDecimal("200.00"), TOMORROW, null, "edited", List.of(a.getId(), b.getId()), null));
         assertThat(edited.notes()).isEqualTo("edited");
 
         PromiseDtos.PromiseDto unticked = promiseService.update(p.id(), new PromiseDtos.UpdatePromiseRequest(
-                new BigDecimal("100.00"), TOMORROW, null, "edited", List.of(a.getId())));
+                new BigDecimal("100.00"), TOMORROW, null, "edited", List.of(a.getId()), null));
         assertThat(unticked.invoices()).extracting(PromiseDtos.PromiseInvoiceDto::id)
                 .containsExactly(a.getId());
     }
@@ -562,7 +562,7 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         PromiseDtos.PromiseDto p = promise("100.00", TOMORROW, List.of(a.getId()));
 
         assertThatThrownBy(() -> promiseService.update(p.id(), new PromiseDtos.UpdatePromiseRequest(
-                new BigDecimal("100.00"), TOMORROW, null, "n", List.of(a.getId(), c.getId()))))
+                new BigDecimal("100.00"), TOMORROW, null, "n", List.of(a.getId(), c.getId()), null)))
                 .hasMessageContaining("cancelled");
     }
 
@@ -573,7 +573,7 @@ class PromiseLifecycleTest extends IntegrationTestBase {
         userRepository.save(collections);
 
         PromiseDtos.PromiseDto edited = promiseService.update(p.id(), new PromiseDtos.UpdatePromiseRequest(
-                new BigDecimal("100.00"), TOMORROW, collections.getId(), "still theirs", null));
+                new BigDecimal("100.00"), TOMORROW, collections.getId(), "still theirs", null, null));
         assertThat(edited.notes()).isEqualTo("still theirs");
     }
 

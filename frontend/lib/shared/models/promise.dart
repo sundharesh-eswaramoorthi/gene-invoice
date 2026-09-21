@@ -1,4 +1,5 @@
 import '../../features/poc/poc_providers.dart';
+import 'assignee.dart';
 
 enum PromiseStatus { OPEN, KEPT, PARTIALLY_KEPT, BROKEN, CANCELLED }
 
@@ -77,6 +78,11 @@ class PaymentPromise {
 
   /// Null for a self-service customer, who never receives POC identity (AC-A8).
   final PocUser? collectionPoc;
+
+  /// Everyone answerable for the promise, resolved as of this read (A1). Empty for a customer
+  /// login, which never learns staff identity — so it means "not shown here", not "nobody", and
+  /// is only ever rendered for a viewer who may see staff at all (AC-A8).
+  final List<Assignee> assignees;
   final String? notes;
   final List<PromiseInvoiceRef> invoices;
   final List<PromisePaymentRef> payments;
@@ -97,6 +103,7 @@ class PaymentPromise {
     this.overriddenByUserId,
     this.overriddenAt,
     this.collectionPoc,
+    this.assignees = const [],
     this.notes,
     this.invoices = const [],
     this.payments = const [],
@@ -110,6 +117,14 @@ class PaymentPromise {
   /// How the promised amount compares with what the referenced invoices actually owe.
   double get referencedBalance =>
       invoices.fold<double>(0, (sum, i) => sum + i.balance);
+
+  /// The tokens that would name these people again: what the edit form starts from (A1). A row
+  /// that names neither a person nor a role has no token and is dropped, rather than saved back
+  /// as something the server would refuse.
+  List<EmailToken> get assigneeTokens => [
+        for (final a in assignees)
+          if (a.token != null) a.token!,
+      ];
 
   factory PaymentPromise.fromJson(Map<String, dynamic> json) => PaymentPromise(
         id: (json['id'] as num).toInt(),
@@ -129,6 +144,10 @@ class PaymentPromise {
         collectionPoc: json['collectionPoc'] == null
             ? null
             : PocUser.fromJson(json['collectionPoc'] as Map<String, dynamic>),
+        assignees: ((json['assignees'] as List?) ?? const [])
+            .cast<Map>()
+            .map((m) => Assignee.fromJson(m.cast<String, dynamic>()))
+            .toList(),
         notes: json['notes'] as String?,
         invoices: ((json['invoices'] as List?) ?? const [])
             .cast<Map<String, dynamic>>()

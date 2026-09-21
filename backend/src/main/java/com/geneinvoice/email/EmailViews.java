@@ -27,6 +27,11 @@ import java.util.stream.Stream;
 /**
  * Turns stored emails into what the caller may see. A customer login sees staff only as the role
  * they hold here, or as the team, never by name or address (E13, AC-A8).
+ *
+ * <p>What was attached is not masked from anybody who may see the email: attaching a document to an
+ * email addressed to someone is an act of sending it to them, so the name of the file belongs with
+ * the email in everyone's copy. The file itself is not here — the list carries the document's id,
+ * and downloading it goes through the documents feature, which applies its own visibility (D7).
  */
 @Component
 @RequiredArgsConstructor
@@ -38,6 +43,7 @@ public class EmailViews {
 
     private final EmailRecipientRepository recipientRepository;
     private final UserRepository userRepository;
+    private final EmailAttachments attachments;
     private final CurrentUser currentUser;
 
     /** The caller, as masking and retry need them. */
@@ -76,21 +82,25 @@ public class EmailViews {
     /** Renders a page of emails in a fixed number of queries rather than a few per email. */
     public List<EmailDtos.EmailDto> toDtos(List<Email> emails, Viewer viewer, boolean canSeeRecord) {
         if (emails.isEmpty()) return List.of();
+        List<Long> ids = emails.stream().map(Email::getId).toList();
         Map<Long, List<EmailRecipient>> recipients = recipientRepository
-                .findByEmailIdInOrderByIdAsc(emails.stream().map(Email::getId).toList()).stream()
+                .findByEmailIdInOrderByIdAsc(ids).stream()
                 .collect(Collectors.groupingBy(r -> r.getEmail().getId()));
+        Map<Long, List<EmailDtos.AttachmentDto>> attached = attachments.byEmail(ids);
         Map<Long, User> senders = senders(emails);
         return emails.stream().map(e -> toDto(e, recipients.getOrDefault(e.getId(), List.of()),
-                viewer, canSeeRecord, senders)).toList();
+                viewer, canSeeRecord, senders, attached.getOrDefault(e.getId(), List.of()))).toList();
     }
 
     public EmailDtos.EmailDto toDto(Email email, List<EmailRecipient> recipients, Viewer viewer,
                                     boolean canSeeRecord) {
-        return toDto(email, recipients, viewer, canSeeRecord, senders(List.of(email)));
+        return toDto(email, recipients, viewer, canSeeRecord, senders(List.of(email)),
+                attachments.of(email.getId()));
     }
 
     private EmailDtos.EmailDto toDto(Email e, List<EmailRecipient> recipients, Viewer viewer,
-                                     boolean canSeeRecord, Map<Long, User> senders) {
+                                     boolean canSeeRecord, Map<Long, User> senders,
+                                     List<EmailDtos.AttachmentDto> attached) {
         Boolean readByMe = recipients.stream()
                 .filter(r -> r.getField() == RecipientField.TO && viewer.userId().equals(r.getUserId()))
                 .findFirst().map(EmailRecipient::isRead).orElse(null);
@@ -110,7 +120,7 @@ public class EmailViews {
                 participants(e, recipients, RecipientField.TO, viewer),
                 participants(e, recipients, RecipientField.CC, viewer),
                 unresolved, sentBy(e, senders, viewer), deliveredFrom(e, viewer), outcome.error(), e.getAttempts(),
-                e.getOccurredAt(), outcome.sentAt(), canRetry, canSeeRecord, readByMe);
+                e.getOccurredAt(), outcome.sentAt(), canRetry, canSeeRecord, readByMe, attached);
     }
 
     /** The email's status, error and sent time as the viewer is told them. */

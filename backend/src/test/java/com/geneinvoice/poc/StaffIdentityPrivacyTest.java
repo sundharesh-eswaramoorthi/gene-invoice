@@ -58,7 +58,7 @@ class StaffIdentityPrivacyTest extends IntegrationTestBase {
     void aCustomerSeesNoStaffIdsOnItsPromises() throws Exception {
         PromiseDtos.PromiseDto p = promiseService.create(new PromiseDtos.CreatePromiseRequest(
                 acme.getId(), new BigDecimal("50.00"), LocalDate.now().plusDays(5),
-                collections.getId(), "n", null));
+                collections.getId(), "n", null, null));
         promiseService.override(p.id(), PromiseStatus.KEPT, "paid in cash");
 
         mockMvc.perform(get("/api/promises/" + p.id()).with(as(customerLogin)))

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -116,6 +117,11 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   /// Names for people added through the search; a token carries only the id.
   final Map<int, EmailPerson> _people = {};
 
+  /// The documents chosen for this email, in the order they were chosen — which is the order the
+  /// server keeps them in (E17). The whole record is held, not just the id, so a chip can name
+  /// the file and its size without asking for the list again.
+  final List<EmailAttachable> _attached = [];
+
   /// The last context loaded. Choosing another record reloads it, and the form keeps showing
   /// this one meanwhile rather than collapsing to a spinner.
   EmailContext? _context;
@@ -140,8 +146,14 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   /// no longer exists.
   int _previewSeq = 0;
   String _previewedSubject = '';
+  String _previewedBody = '';
 
   bool get _bulk => widget.mode == SendEmailMode.bulk;
+
+  /// The record the compose form's own lists — attachable documents, placeholders — are about.
+  /// Null in bulk mode and before a record is picked, where there is no one record to ask about.
+  EmailRecordKey? get _recordKey =>
+      _bulk || _entityId == null ? null : (type: widget.type, entityId: _entityId!);
 
   @override
   void initState() {
@@ -151,6 +163,13 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
       // The listener also fires for cursor moves; only a changed subject is worth a request.
       if (_subject.text == _previewedSubject) return;
       _previewedSubject = _subject.text;
+      _schedulePreview();
+    });
+    // The body is previewed for the same reason the subject is: the preview shows it with this
+    // record's placeholders filled in (M3), so an edit to it changes what the preview says.
+    _body.addListener(() {
+      if (_body.text == _previewedBody) return;
+      _previewedBody = _body.text;
       _schedulePreview();
     });
   }
@@ -176,7 +195,14 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
         if (_body.text.isNotEmpty) 'body': _body.text,
       };
 
-  Map<String, dynamic> _request(int entityId) => {..._fields(), 'entityId': entityId};
+  /// The request about one record. The chosen documents go out here rather than in [_fields],
+  /// because a bulk send is one email per row and a document belongs to one record: nothing
+  /// offered on the form the parameters were written on is on any of the rows it runs over.
+  Map<String, dynamic> _request(int entityId) => {
+        ..._fields(),
+        'entityId': entityId,
+        if (_attached.isNotEmpty) 'documentIds': [for (final d in _attached) d.id],
+      };
 
   // ---- preview ----------------------------------------------------------------------
 
@@ -263,22 +289,48 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     _schedulePreview();
   }
 
-  Future<EmailPerson?> _pickPerson(String title) {
-    final dio = ref.read(dioProvider);
-    return showDialog<EmailPerson>(
+  Future<EmailPerson?> _pickPerson(String title) =>
+      pickEmailPerson(context, ref.read(dioProvider), title: title);
+
+  // ---- attachments and placeholders --------------------------------------------------
+
+  /// Offers the documents already on this record or its customer, seeded with what is already
+  /// chosen, so the picker is one list to tick rather than a dialog per file (E17).
+  Future<void> _chooseAttachments() async {
+    final key = _recordKey;
+    if (key == null) return;
+    final chosen = await showDialog<List<EmailAttachable>>(
       context: context,
-      builder: (_) => _SearchDialog<EmailPerson>(
-        title: title,
-        hint: 'Search by name, username or email',
-        search: (q) => searchEmailPeople(dio, q),
-        labelOf: (p) => p.name,
-        subtitleOf: (p) {
-          final text = [if (p.username != null) '@${p.username}', if (p.email != null) p.email!]
-              .join(' · ');
-          return text.isEmpty ? null : text;
-        },
-      ),
+      builder: (_) => _AttachDialog(record: key, chosen: List.of(_attached)),
     );
+    if (chosen == null || !mounted) return;
+    setState(() {
+      _attached
+        ..clear()
+        ..addAll(chosen);
+    });
+    // The server warns on the preview that attachments are kept but not delivered yet (E18), so
+    // choosing one has to ask for a new preview to hear it.
+    _schedulePreview();
+  }
+
+  void _detach(EmailAttachable document) {
+    setState(() => _attached.remove(document));
+    _schedulePreview();
+  }
+
+  /// Offers this record's placeholders with what each says on it, and puts the chosen one where
+  /// the cursor is (M4). Which field it goes into is the caller's: both the subject and the body
+  /// carry the same list, and a controller's own selection is the only thing that says where.
+  Future<void> _insertPlaceholder(TextEditingController field) async {
+    final key = _recordKey;
+    if (key == null) return;
+    final chosen = await showDialog<EmailPlaceholder>(
+      context: context,
+      builder: (_) => _PlaceholderDialog(record: key),
+    );
+    if (chosen == null || !mounted) return;
+    insertAtCursor(field, chosen.key);
   }
 
   Future<void> _addPerson() async {
@@ -309,6 +361,9 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
       // The last preview described another record.
       _preview = null;
       _previewError = null;
+      // So did the documents: they were that record's or its customer's, and this record cannot
+      // send them. Dropped here rather than refused by the server after Send.
+      _attached.clear();
     });
     _schedulePreview();
   }
@@ -633,6 +688,7 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
             autovalidateMode: _subjectValidation,
             validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a subject' : null,
           ),
+          _insertFieldRow(_subject),
           const SizedBox(height: 12),
           TextFormField(
             controller: _body,
@@ -642,6 +698,11 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
             decoration: const InputDecoration(labelText: 'Message', alignLabelWithHint: true),
             inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.emailBody)],
           ),
+          _insertFieldRow(_body),
+          if (_recordKey != null) ...[
+            const SizedBox(height: 12),
+            _attachmentsField(),
+          ],
           if (!_bulk && _entityId != null && _to.isNotEmpty) ...[
             const SizedBox(height: 12),
             _previewPanel(),
@@ -779,6 +840,75 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     );
   }
 
+  /// A row of chips under a field, the way To offers its roles: a small heading and the chips
+  /// that add to the field above.
+  Widget _chipRow(List<Widget> children) => Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: children,
+        ),
+      );
+
+  /// "Insert field" under the subject and under the message (M4). It sits under its own field
+  /// rather than inside it, because what it inserts goes where the cursor is: a control the field
+  /// owns would take the focus, and with it the cursor, before it could be used.
+  ///
+  /// Only where there is a record. A placeholder's whole point is the value it takes on one
+  /// record, and in bulk — where every row is its own record — there is none to read it from;
+  /// the form would be offering a list of samples belonging to nobody.
+  Widget _insertFieldRow(TextEditingController field) {
+    if (_recordKey == null) return const SizedBox.shrink();
+    return _chipRow([
+      ActionChip(
+        avatar: const Icon(Icons.data_object, size: 18),
+        label: const Text('Insert field'),
+        onPressed: _sending ? null : () => _insertPlaceholder(field),
+      ),
+    ]);
+  }
+
+  /// The documents going out with the email: one chip each, and the way to add more (E17).
+  Widget _attachmentsField() {
+    final theme = Theme.of(context);
+    final attach = ActionChip(
+      avatar: const Icon(Icons.attach_file, size: 18),
+      label: const Text('Attach…'),
+      onPressed: _sending ? null : _chooseAttachments,
+    );
+    // With nothing chosen there is no list to label, so the row says what it is itself; with
+    // something chosen the box's own label does, as the To field's does.
+    if (_attached.isEmpty) {
+      return _chipRow([Text('Attachments', style: theme.textTheme.labelLarge), attach]);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InputDecorator(
+          decoration: const InputDecoration(labelText: 'Attachments'),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final document in _attached)
+                InputChip(
+                  avatar: const Icon(Icons.description_outlined, size: 18),
+                  label: Text('${document.filename} · ${document.size}',
+                      overflow: TextOverflow.ellipsis),
+                  deleteButtonTooltipMessage: 'Remove',
+                  onDeleted: _sending ? null : () => _detach(document),
+                ),
+            ],
+          ),
+        ),
+        _chipRow([attach]),
+      ],
+    );
+  }
+
   Widget _toField(EmailContext ctx) {
     final theme = Theme.of(context);
     IconData iconOf(EmailToken t) => t.isUser
@@ -800,16 +930,6 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
         ),
     ];
     const customer = EmailToken.customer();
-
-    Widget addRow(List<Widget> children) => Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: children,
-          ),
-        );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -839,7 +959,7 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
                   ],
                 ),
         ),
-        addRow([
+        _chipRow([
           Text('Add', style: theme.textTheme.labelLarge),
           // Only staff may address other staff by name (E13).
           if (!ctx.restricted)
@@ -851,7 +971,7 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
         ]),
         for (final group in groups)
           if (group.roles.isNotEmpty)
-            addRow([
+            _chipRow([
               _groupLabel(group.label),
               for (final r in group.roles)
                 ActionChip(
@@ -862,7 +982,7 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
                 ),
             ]),
         if (!_to.contains(customer))
-          addRow([
+          _chipRow([
             ActionChip(
               avatar: const Icon(Icons.business_outlined, size: 18),
               label: Text(_customerEmailsText(ctx), overflow: TextOverflow.ellipsis),
@@ -942,9 +1062,270 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
               for (final problem in preview.problems)
                 bullet(problem, color: scheme.error, icon: Icons.error_outline),
             ],
+            // The words themselves, with this record's placeholders filled in — which is what
+            // will be stored and read (M3). Shown only once filling them in has changed
+            // something: otherwise it is the very text on the form a few lines above.
+            if (preview.differsFrom(typedSubject: _cleanSubject, typedBody: _body.text)) ...[
+              const SizedBox(height: 8),
+              Text('As it will read', style: heading),
+              const SizedBox(height: 2),
+              SelectableText(preview.subject ?? '',
+                  style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600)),
+              if ((preview.body ?? '').isNotEmpty)
+                ConstrainedBox(
+                  // A long body must not push the preview past the dialog and take Send's warnings
+                  // off the screen with it; it scrolls inside this box instead.
+                  constraints: const BoxConstraints(maxHeight: 140),
+                  child: SingleChildScrollView(
+                    child: SelectableText(preview.body!, style: theme.textTheme.bodySmall),
+                  ),
+                ),
+            ],
           ],
         ],
       ),
+    );
+  }
+}
+
+/// Puts [text] where the cursor is in [controller], replacing anything selected, and leaves the
+/// cursor just after it — how "Insert field" gets a placeholder into the subject or the body (M4).
+///
+/// A field that has never been focused reports no selection at all (offset -1). There the text
+/// goes on the end: somebody who has not put a cursor anywhere is adding to what they have
+/// written, and prefixing it would be the one place they did not mean.
+void insertAtCursor(TextEditingController controller, String text) {
+  final value = controller.value;
+  final selection = value.selection;
+  if (!selection.isValid) {
+    controller.value = TextEditingValue(
+      text: value.text + text,
+      selection: TextSelection.collapsed(offset: value.text.length + text.length),
+    );
+    return;
+  }
+  controller.value = TextEditingValue(
+    text: value.text.replaceRange(selection.start, selection.end, text),
+    selection: TextSelection.collapsed(offset: selection.start + text.length),
+  );
+}
+
+/// Searches internal users and resolves with the one picked, or null when the search was closed.
+///
+/// Public because the compose form is not the only place that names a person the app will write
+/// as: an automation rule's email names its sender the same way, and both have to offer the same
+/// people described in the same words.
+Future<EmailPerson?> pickEmailPerson(BuildContext context, Dio dio, {required String title}) {
+  return showDialog<EmailPerson>(
+    context: context,
+    builder: (_) => _SearchDialog<EmailPerson>(
+      title: title,
+      hint: 'Search by name, username or email',
+      search: (q) => searchEmailPeople(dio, q),
+      labelOf: (p) => p.name,
+      subtitleOf: (p) {
+        final text =
+            [if (p.username != null) '@${p.username}', if (p.email != null) p.email!].join(' · ');
+        return text.isEmpty ? null : text;
+      },
+    ),
+  );
+}
+
+/// The documents this record can send, grouped as the server offers them — the record's own
+/// first, then its customer's (E17). It is a list to tick rather than a dialog per file, because
+/// choosing three files should not mean opening the same list three times.
+///
+/// It pops the whole chosen list, in the order it was chosen, or null when it was closed: a
+/// picker that applied each tick as it happened would leave Cancel meaning nothing.
+class _AttachDialog extends ConsumerStatefulWidget {
+  final EmailRecordKey record;
+  final List<EmailAttachable> chosen;
+
+  const _AttachDialog({required this.record, required this.chosen});
+
+  @override
+  ConsumerState<_AttachDialog> createState() => _AttachDialogState();
+}
+
+class _AttachDialogState extends ConsumerState<_AttachDialog> {
+  /// A list rather than a set of ids: the server keeps the documents in the order they were
+  /// chosen, so the form has to as well.
+  late final List<EmailAttachable> _selected = List.of(widget.chosen);
+
+  bool _isSelected(EmailAttachable document) =>
+      _selected.any((chosen) => chosen.id == document.id);
+
+  void _toggle(EmailAttachable document, bool on) {
+    setState(() {
+      if (on) {
+        _selected.add(document);
+      } else {
+        _selected.removeWhere((chosen) => chosen.id == document.id);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final async = ref.watch(emailAttachableProvider(widget.record));
+    // The server refuses more than this, so the picker stops offering them rather than letting
+    // Send be the thing that says no.
+    final full = _selected.length >= maxEmailAttachments;
+
+    return AlertDialog(
+      title: const Text('Attach documents'),
+      content: SizedBox(
+        width: 460,
+        height: 380,
+        child: async.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => _LoadError(
+            message: apiErrorMessage(e),
+            onRetry: () => ref.invalidate(emailAttachableProvider(widget.record)),
+          ),
+          data: (documents) {
+            if (documents.isEmpty) {
+              return const Center(
+                  child: Text('There are no documents on this record or its customer.'));
+            }
+            return ListView(
+              children: [
+                if (full)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'At most $maxEmailAttachments documents can be attached to one email.',
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                  ),
+                for (final group in _grouped(documents)) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 8, 4, 2),
+                    child: Text(group.label,
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  ),
+                  for (final document in group.documents)
+                    CheckboxListTile(
+                      dense: true,
+                      value: _isSelected(document),
+                      title: Text(document.filename, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(document.details),
+                      // A full selection can still be undone, only not added to.
+                      onChanged: full && !_isSelected(document)
+                          ? null
+                          : (on) => _toggle(document, on == true),
+                    ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: async.hasValue ? () => Navigator.of(context).pop(_selected) : null,
+          child: Text(_selected.isEmpty ? 'Attach nothing' : 'Attach ${_selected.length}'),
+        ),
+      ],
+    );
+  }
+
+  /// The documents under the headings the server named, in the order it sent them: "This invoice"
+  /// before "Customer", because the record's own files are what a sender reaches for first.
+  List<({String label, List<EmailAttachable> documents})> _grouped(
+      List<EmailAttachable> documents) {
+    final order = <String>[];
+    final byLabel = <String, List<EmailAttachable>>{};
+    for (final document in documents) {
+      final label = document.sourceLabel.isEmpty ? 'Documents' : document.sourceLabel;
+      if (byLabel[label] == null) {
+        order.add(label);
+        byLabel[label] = [];
+      }
+      byLabel[label]!.add(document);
+    }
+    return [for (final label in order) (label: label, documents: byLabel[label]!)];
+  }
+}
+
+/// The placeholders this record offers, each with what it says on this very record (M4). Grouped
+/// by level, as the server groups them: the customer's fields, then the record's own.
+class _PlaceholderDialog extends ConsumerWidget {
+  final EmailRecordKey record;
+
+  const _PlaceholderDialog({required this.record});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final async = ref.watch(emailPlaceholdersProvider(record));
+
+    return AlertDialog(
+      title: const Text('Insert a field'),
+      content: SizedBox(
+        width: 460,
+        height: 380,
+        child: async.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => _LoadError(
+            message: apiErrorMessage(e),
+            onRetry: () => ref.invalidate(emailPlaceholdersProvider(record)),
+          ),
+          data: (groups) {
+            if (groups.isEmpty) {
+              return const Center(child: Text('This record has no fields to insert.'));
+            }
+            return ListView(
+              children: [
+                for (final group in groups) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 8, 4, 2),
+                    child: Text(group.label,
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+                  ),
+                  for (final placeholder in group.placeholders)
+                    ListTile(
+                      dense: true,
+                      isThreeLine: true,
+                      title: Text(placeholder.label),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(placeholder.key,
+                              style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                          // An empty sample is not a rendering quirk: the record has nothing
+                          // there, and the email will read with a gap in that place (M4).
+                          Text(
+                            placeholder.sample.isEmpty
+                                ? 'Nothing on this record'
+                                : placeholder.sample,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: placeholder.sample.isEmpty
+                                  ? theme.colorScheme.error
+                                  : theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                      onTap: () => Navigator.of(context).pop(placeholder),
+                    ),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+      ],
     );
   }
 }

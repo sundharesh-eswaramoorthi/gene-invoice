@@ -81,7 +81,7 @@ class PromiseFiguresAndPocTest extends IntegrationTestBase {
 
     private PromiseDtos.PromiseDto promise(String amount, LocalDate date, List<Long> invoiceIds) {
         return promiseService.create(new PromiseDtos.CreatePromiseRequest(
-                acme.getId(), new BigDecimal(amount), date, null, "note", invoiceIds));
+                acme.getId(), new BigDecimal(amount), date, null, "note", invoiceIds, null));
     }
 
     // ---- PPD-04: a promise's "remaining" agrees with its status --------------------

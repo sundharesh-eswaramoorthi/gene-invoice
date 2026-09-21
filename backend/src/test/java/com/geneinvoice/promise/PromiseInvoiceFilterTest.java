@@ -74,7 +74,7 @@ class PromiseInvoiceFilterTest extends IntegrationTestBase {
     private Long promise(List<Long> invoiceIds) {
         return promiseService.create(new PromiseDtos.CreatePromiseRequest(
                 acme.getId(), new BigDecimal("50.00"), LocalDate.now(ZoneOffset.UTC).plusDays(1),
-                null, null, invoiceIds)).id();
+                null, null, invoiceIds, null)).id();
     }
 
     private JsonNode page(MockHttpServletRequestBuilder request) throws Exception {

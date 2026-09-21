@@ -15,6 +15,7 @@ import 'package:gene_invoice/features/email/email_tab.dart';
 import 'package:gene_invoice/shared/models/auth_models.dart';
 import 'package:gene_invoice/shared/models/privileges.dart';
 import 'package:gene_invoice/shared/widgets/detail_scaffold.dart';
+import 'package:go_router/go_router.dart';
 
 CurrentUser _user(Set<String> privileges, {int? customerId}) => CurrentUser(
       id: 3,
@@ -304,6 +305,113 @@ void main() {
   testWidgets('an empty record says so', (tester) async {
     await _pump(tester, user: _user({Privileges.emailView}), pages: (_) => _page([]));
     expect(find.text('No emails about this invoice yet.'), findsOneWidget);
+  });
+
+  // An email sent to carry a file is the one email where the record of what went out is the
+  // point of it (E17). The name, kind and size are the email's own snapshot, so they read the
+  // same after the document itself has been deleted.
+  group('what went out with an email', () {
+    Map<String, dynamic> withFiles(Map<String, dynamic> email, {bool canOpenRecord = true}) => {
+          ...email,
+          'canOpenRecord': canOpenRecord,
+          'attachments': [
+            {
+              'id': 1,
+              'documentId': 9,
+              'filename': 'statement.pdf',
+              'contentType': 'application/pdf',
+              'sizeBytes': 1536,
+            },
+            // Attached from a document since deleted: there is nowhere to send a reader, and the
+            // email still says what it carried.
+            {
+              'id': 2,
+              'documentId': null,
+              'filename': 'photo.png',
+              'contentType': 'image/png',
+              'sizeBytes': 2048,
+            },
+          ],
+        };
+
+    testWidgets('each file is named, with its kind and size', (tester) async {
+      await _pump(
+        tester,
+        user: _user({Privileges.emailView}),
+        pages: (_) => _page([withFiles(_staffEmail(1))]),
+      );
+
+      expect(find.text('Attached'), findsOneWidget);
+      expect(find.text('statement.pdf'), findsOneWidget);
+      // The Documents tab's own words for a kind and a size, so a file reads the same in both.
+      expect(find.text('· PDF · 1.5 KB'), findsOneWidget);
+      expect(find.text('photo.png'), findsOneWidget);
+      expect(find.text('· PNG · 2 KB'), findsOneWidget);
+      // Only the one whose document is still there is a way back to it.
+      expect(find.byTooltip('Open the Documents tab'), findsOneWidget);
+    });
+
+    testWidgets('an email that carried nothing says nothing about it', (tester) async {
+      await _pump(
+        tester,
+        user: _user({Privileges.emailView}),
+        pages: (_) => _page([_staffEmail(1)]),
+      );
+      expect(find.text('Attached'), findsNothing);
+    });
+
+    testWidgets('a record this reader may not open is no link at all', (tester) async {
+      await _pump(
+        tester,
+        user: _user({Privileges.emailView}),
+        // A recipient may read an email about a record they cannot see; a link would only lead
+        // to a refusal.
+        pages: (_) => _page([withFiles(_staffEmail(1), canOpenRecord: false)]),
+      );
+
+      expect(find.text('statement.pdf'), findsOneWidget);
+      expect(find.byTooltip('Open the Documents tab'), findsNothing);
+    });
+
+    testWidgets('the filename leads to the Documents tab, where the download lives',
+        (tester) async {
+      tester.view.physicalSize = const Size(1366, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      final router = GoRouter(
+        initialLocation: '/emails',
+        routes: [
+          GoRoute(
+            path: '/emails',
+            builder: (_, __) => Scaffold(
+              body: SingleChildScrollView(
+                child: EmailCard(email: EmailMessage.fromJson(withFiles(_staffEmail(1)))),
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/invoices/:id',
+            builder: (_, s) => Text(
+                'invoice ${s.pathParameters['id']} tab=${s.uri.queryParameters['tab']}'),
+          ),
+        ],
+      );
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          dioProvider.overrideWithValue(Dio()),
+          currentUserProvider.overrideWithValue(_user({Privileges.emailView})),
+        ],
+        child: MaterialApp.router(theme: AppTheme.light(), routerConfig: router),
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('statement.pdf'));
+      await tester.pumpAndSettle();
+      // The document's own visibility is applied by the tab that downloads it (D7); nothing on
+      // the email decides who may have the bytes.
+      expect(find.text('invoice 42 tab=documents'), findsOneWidget);
+    });
   });
 
   group('an email a customer login wrote is never offered a retry (QMX-4)', () {

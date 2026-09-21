@@ -1,7 +1,9 @@
 package com.geneinvoice.promise;
 
+import com.geneinvoice.assignee.AssigneeDtos;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.Money;
+import com.geneinvoice.email.EmailDtos;
 import com.geneinvoice.poc.PocDtos;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
@@ -24,7 +26,14 @@ public class PromiseDtos {
             Long collectionPocUserId,
             @Size(max = FieldLimits.PROMISE_NOTES) String notes,
             /** Optional: empty means a general promise against the account. */
-            List<Long> invoiceIds
+            List<Long> invoiceIds,
+            /**
+             * Who is answerable for the promise (A1) — people, or roles at a level, picked with
+             * the same tokens the email To field uses. Absent or empty seeds the list from the
+             * Collection POC (A6). The count is checked by AssigneeService, which owns that limit
+             * for every kind of record that has assignees.
+             */
+            List<EmailDtos.EmailToken> assignees
     ) {}
 
     public record UpdatePromiseRequest(
@@ -33,7 +42,14 @@ public class PromiseDtos {
             @NotNull LocalDate promisedDate,
             Long collectionPocUserId,
             @Size(max = FieldLimits.PROMISE_NOTES) String notes,
-            List<Long> invoiceIds
+            List<Long> invoiceIds,
+            /**
+             * The whole list, replacing what is there; an empty list clears it. Null leaves the
+             * assignees alone, which is what an edit that is only about the Collection POC — the
+             * inline row action and the bulk reassign — must do, or reassigning a POC would empty
+             * the list beside it (A7).
+             */
+            List<EmailDtos.EmailToken> assignees
     ) {}
 
     public record OverrideStatusRequest(
@@ -64,6 +80,12 @@ public class PromiseDtos {
             Instant overriddenAt,
             /** Null for a customer-scoped caller, who never sees POC identity (AC-A8). */
             PocDtos.PocUserDto collectionPoc,
+            /**
+             * Everyone answerable for the promise, resolved as of this read (A1). Empty for a
+             * customer-scoped caller: who internally owns a piece of work is staff identity, and
+             * the list names people (AC-A8).
+             */
+            List<AssigneeDtos.AssigneeDto> assignees,
             String notes,
             List<PromiseInvoiceDto> invoices,
             List<PromisePaymentDto> payments,

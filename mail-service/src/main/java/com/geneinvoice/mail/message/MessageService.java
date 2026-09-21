@@ -3,10 +3,13 @@ package com.geneinvoice.mail.message;
 import com.geneinvoice.mail.MailText;
 import com.geneinvoice.mail.config.ApiException;
 import com.geneinvoice.mail.config.InvalidFieldsException;
+import com.geneinvoice.mail.config.MailProperties;
 import com.geneinvoice.mail.connection.ConnectionStatus;
 import com.geneinvoice.mail.connection.MailConnection;
 import com.geneinvoice.mail.connection.MailConnectionRepository;
 import com.geneinvoice.mail.events.EventRecorder;
+import com.geneinvoice.mail.gmail.Attachment;
+import com.geneinvoice.mail.gmail.GmailMime;
 import jakarta.mail.internet.AddressException;
 import jakarta.mail.internet.InternetAddress;
 import jakarta.persistence.EntityManager;
@@ -19,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -45,24 +49,29 @@ public class MessageService {
     private final MailConnectionRepository connections;
     private final EventRecorder events;
     private final SendQueue queue;
+    private final AttachmentSets attachmentSets;
+    private final MailProperties properties;
     private final TransactionTemplate transactions;
     private final EntityManager entityManager;
     private final Clock clock;
 
     public MessageService(MailMessageRepository messages, MailConnectionRepository connections, EventRecorder events,
-                          SendQueue queue, TransactionTemplate transactions, EntityManager entityManager, Clock clock) {
+                          SendQueue queue, AttachmentSets attachmentSets, MailProperties properties,
+                          TransactionTemplate transactions, EntityManager entityManager, Clock clock) {
         this.messages = messages;
         this.connections = connections;
         this.events = events;
         this.queue = queue;
+        this.attachmentSets = attachmentSets;
+        this.properties = properties;
         this.transactions = transactions;
         this.entityManager = entityManager;
         this.clock = clock;
     }
 
-    /** A submit after validation: every text storable, trimmed and cut as §4.3 says. */
+    /** A submit after validation: every text storable, trimmed and cut as §4.3 says, the files decoded. */
     private record Submission(String senderRef, String senderName, String subject, String body, String groupRef,
-                              boolean retry, List<CopyInput> copies) {}
+                              boolean retry, List<CopyInput> copies, List<Attachment> attachments) {}
 
     private record CopyInput(String externalId, String toName, String toAddress) {}
 
@@ -74,14 +83,15 @@ public class MessageService {
      * a failed or unsent one to be sent again.
      */
     public List<CopyState> submit(SubmitRequest request) {
-        Submission submission = validated(request);
+        Submission submission = validated(request, properties.getSend());
         Saved saved;
         try {
             saved = transactions.execute(status -> save(submission));
         } catch (DataIntegrityViolationException e) {
-            // Another request saved some of the same copies at the same moment. They exist now, and the
-            // second pass returns them as they stand.
-            log.info("Copies of group {} were submitted twice at once; reading them back", submission.groupRef());
+            // Another request saved some of the same copies, or stored the same files, at the same
+            // moment. Both exist now, and the second pass reads them back and returns them as they stand.
+            log.info("Group {} was submitted twice at once; saving it again reads back what the other saved",
+                    submission.groupRef());
             saved = transactions.execute(status -> save(submission));
         }
         publish(saved.queued());
@@ -144,6 +154,8 @@ public class MessageService {
     private Saved save(Submission s) {
         Instant now = clock.instant();
         MailConnection sender = connections.findByOwnerRef(s.senderRef()).orElse(null);
+        // The files once for the whole email, before the copies that point at them (§4.3).
+        Long attachmentSetId = attachmentSets.store(s.attachments());
         Map<String, MailMessage> existing = messages.findByExternalIdIn(
                         s.copies().stream().map(CopyInput::externalId).toList()).stream()
                 .collect(Collectors.toMap(MailMessage::getExternalId, Function.identity()));
@@ -173,6 +185,7 @@ public class MessageService {
             m.setToAddressKey(copy.toAddress().toLowerCase(Locale.ROOT));
             m.setSubject(s.subject());
             m.setBody(s.body());
+            m.setAttachmentSetId(attachmentSetId);
             m.setConnectionId(sender == null ? null : sender.getId());
             m.setFromAddress(null);
             m.setAttempts(0);
@@ -229,7 +242,7 @@ public class MessageService {
 
     // ---- validation (§4.3) -------------------------------------------------------------
 
-    private static Submission validated(SubmitRequest request) {
+    private static Submission validated(SubmitRequest request, MailProperties.Send send) {
         if (request == null) throw ApiException.badRequest("A request body is required");
         Map<String, String> invalid = new LinkedHashMap<>();
 
@@ -275,9 +288,104 @@ public class MessageService {
                 copies.add(new CopyInput(externalId, MailText.fit(name == null ? address : name, MailMessage.NAME_MAX), address));
             }
         }
+        List<Attachment> attachments = attachments(request.attachments(), send, invalid);
+
         if (!invalid.isEmpty()) throw new InvalidFieldsException(invalid);
         return new Submission(senderRef, senderName, subject, body, groupRef, Boolean.TRUE.equals(request.retry()),
-                copies);
+                copies, attachments);
+    }
+
+    /**
+     * The files, decoded and checked against {@code mail.send.max-attachments} and
+     * {@code mail.send.max-attachment-bytes}. Every refusal says the number it was measured
+     * against, because the person who sees it is the one who chose the files.
+     *
+     * <p>The total is measured twice: once on the base64 as it arrived, which is a third larger
+     * than the file and costs nothing to add up, and again on the decoded bytes. The first is what
+     * stops the service from decoding a body that is obviously too big — the decoded copy would
+     * otherwise sit in memory beside the encoded one for no reason — and the second is the real
+     * check, since base64 can be padded or split.
+     */
+    private static List<Attachment> attachments(List<SubmitRequest.Attachment> given, MailProperties.Send send,
+                                                Map<String, String> invalid) {
+        if (given == null || given.isEmpty()) return List.of();
+        long limit = send.getMaxAttachmentBytes();
+        if (given.size() > send.getMaxAttachments()) {
+            invalid.put("attachments", "At most " + send.getMaxAttachments() + " files can be attached to one email");
+            return List.of();
+        }
+        long atLeast = given.stream().filter(a -> a != null && a.content() != null)
+                .mapToLong(a -> atLeastDecoded(a.content().length())).sum();
+        if (atLeast > limit) {
+            invalid.put("attachments", tooLarge(atLeast, limit));
+            return List.of();
+        }
+
+        List<Attachment> decoded = new ArrayList<>(given.size());
+        long total = 0;
+        for (int i = 0; i < given.size(); i++) {
+            SubmitRequest.Attachment file = given.get(i) == null
+                    ? new SubmitRequest.Attachment(null, null, null) : given.get(i);
+            String field = "attachments[" + i + "].";
+            String filename = fileName(clean(file.filename()));
+            if (filename == null) invalid.put(field + "filename", "Enter the file name");
+            String contentType = clean(file.contentType());
+            if (contentType != null && contentType.length() > MailAttachment.CONTENT_TYPE_MAX) {
+                invalid.put(field + "contentType", "The content type is too long");
+                contentType = null;
+            }
+            byte[] content;
+            try {
+                // The lenient decoder: base64 in mail is often wrapped, and a line break is not an error.
+                content = Base64.getMimeDecoder().decode(file.content() == null ? "" : file.content());
+            } catch (IllegalArgumentException e) {
+                invalid.put(field + "content", "The file is not base64");
+                continue;
+            }
+            if (content.length == 0) {
+                invalid.put(field + "content", "The file is empty");
+                continue;
+            }
+            total += content.length;
+            decoded.add(new Attachment(filename, contentType == null ? Attachment.DEFAULT_CONTENT_TYPE : contentType,
+                    content));
+        }
+        if (total > limit) invalid.put("attachments", tooLarge(total, limit));
+        // The caller throws when anything was put in `invalid`, so a half-decoded list never reaches a save.
+        return List.copyOf(decoded);
+    }
+
+    /**
+     * The fewest bytes this many base64 characters can decode to: four characters carry three
+     * bytes, and the last group may be two of them padding. Deliberately the floor and not the
+     * ceiling — the point is to refuse a body that cannot possibly fit before decoding doubles it
+     * in memory, never to refuse one that would have fitted. (Base64 broken across lines decodes
+     * to less than this, so a client that wraps its files very hard could be refused a few bytes
+     * early; the backend sends one unbroken string.)
+     */
+    private static long atLeastDecoded(int encodedLength) {
+        return Math.max(0, (long) encodedLength / 4 * 3 - 2);
+    }
+
+    /** Says how big it is, how big it may be, and why the ceiling is where it is. */
+    static String tooLarge(long total, long limit) {
+        return "The attachments are too large: " + megabytes(total) + " in all, and at most "
+                + megabytes(limit) + " (" + limit + " bytes) can be sent — base64 makes files a third"
+                + " larger as they go out, and Gmail refuses a message over "
+                + megabytes(MailProperties.PROVIDER_MESSAGE_LIMIT_BYTES);
+    }
+
+    private static String megabytes(long bytes) {
+        return String.format(Locale.ROOT, "%.1f MB", bytes / 1_000_000d);
+    }
+
+    /**
+     * The name as it will go into the message — {@link GmailMime#cleanFileName} decides that, so
+     * what is stored is what is sent — cut to its column. Null when nothing usable is left.
+     */
+    private static String fileName(String given) {
+        String name = MailText.fit(GmailMime.cleanFileName(given), MailAttachment.FILENAME_MAX);
+        return name.isBlank() ? null : name;
     }
 
     /** Storable and trimmed; blank is null. */

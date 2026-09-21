@@ -40,6 +40,14 @@ class Privileges {
   static const promiseManage = 'PROMISE_MANAGE';
   static const promiseOverride = 'PROMISE_OVERRIDE';
 
+  // Tasks
+  static const taskView = 'TASK_VIEW';
+  static const taskManage = 'TASK_MANAGE';
+
+  // Automation
+  static const automationView = 'AUTOMATION_VIEW';
+  static const automationManage = 'AUTOMATION_MANAGE';
+
   // Tables
   static const exportData = 'EXPORT_DATA';
 

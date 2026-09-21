@@ -223,6 +223,14 @@ List<String> _tabLabels(WidgetTester tester) =>
 
 Map<String, dynamic> _query(RequestOptions r) => r.queryParameters;
 
+/// The compose form's own context requests: the ones that ask what to suggest for an event.
+///
+/// A form that can assign work asks `GET /api/emails/context` for that record too — it is where
+/// the roles its assignee picker offers come from (A1, A4) — so the path alone no longer says
+/// whether a compose form opened. The event does: only the compose form asks with one.
+List<RequestOptions> _composeContexts(_Backend api) =>
+    api.sent('GET /api/emails/context').where((r) => _query(r)['event'] != null).toList();
+
 void main() {
   group('promise form', () {
     _Backend backend() => _Backend({
@@ -281,7 +289,7 @@ void main() {
         // The form has closed and the compose form is open for the saved promise.
         expect(find.text('Notify through email'), findsNothing);
         expect(find.text('Send email'), findsOneWidget);
-        final ctx = api.sent('GET /api/emails/context').single;
+        final ctx = _composeContexts(api).single;
         expect(_query(ctx)['entityType'], 'PROMISE');
         expect(_query(ctx)['entityId'], 77);
         expect(_query(ctx)['event'], editing ? 'UPDATED' : 'CREATED');
@@ -312,7 +320,9 @@ void main() {
 
       expect(result, isTrue);
       expect(find.text('Send email'), findsNothing);
-      expect(api.sent('GET /api/emails/context'), isEmpty);
+      // The form asked for the promise's roles, for its own assignee picker; what it never did
+      // is open a compose form, which is the request that carries an event.
+      expect(_composeContexts(api), isEmpty);
     });
   });
 

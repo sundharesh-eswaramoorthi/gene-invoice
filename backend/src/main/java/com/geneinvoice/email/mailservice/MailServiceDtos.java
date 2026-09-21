@@ -5,6 +5,7 @@ import com.geneinvoice.email.transport.CopyState;
 import com.geneinvoice.email.transport.Submission;
 
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -19,14 +20,30 @@ public class MailServiceDtos {
 
     public record Copy(String externalId, Party to) {}
 
+    /**
+     * One file for every copy of the email to carry (§4.3). JSON has no way to hold bytes, so
+     * {@code content} is the file base64-encoded; the service decodes it, stores it and encodes it
+     * again into the MIME message it sends.
+     */
+    public record Attachment(String filename, String contentType, String content) {
+
+        /** A customer's file is not ours to print, and a 17 MiB string would drown any log. */
+        @Override
+        public String toString() {
+            return "Attachment[filename=" + filename + ", contentType=" + contentType + ", content hidden]";
+        }
+    }
+
     /** {@code POST /api/v1/messages}. */
     public record SubmitRequest(Sender sender, String subject, String body, String groupRef, boolean retry,
-                                List<Copy> copies) {
+                                List<Copy> copies, List<Attachment> attachments) {
 
         static SubmitRequest of(Submission s) {
             return new SubmitRequest(new Sender(String.valueOf(s.senderUserId()), s.senderName()),
                     s.subject(), s.body(), s.groupRef(), s.retry(),
-                    s.copies().stream().map(c -> new Copy(c.externalId(), new Party(c.name(), c.address()))).toList());
+                    s.copies().stream().map(c -> new Copy(c.externalId(), new Party(c.name(), c.address()))).toList(),
+                    s.attachments().stream().map(a -> new Attachment(a.filename(), a.contentType(),
+                            Base64.getEncoder().encodeToString(a.content()))).toList());
         }
     }
 

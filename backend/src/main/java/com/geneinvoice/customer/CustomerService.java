@@ -1,6 +1,9 @@
 package com.geneinvoice.customer;
 
+import com.geneinvoice.assignee.AssigneeRepository;
 import com.geneinvoice.audit.AuditService;
+import com.geneinvoice.automation.AutomationEntityType;
+import com.geneinvoice.automation.AutomationEvents;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Emails;
@@ -15,6 +18,7 @@ import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.common.GlobalExceptionHandler;
 import com.geneinvoice.document.DocumentCascade;
 import com.geneinvoice.email.EmailCascade;
+import com.geneinvoice.task.TaskCascade;
 import com.geneinvoice.invoice.InvoiceDates;
 import com.geneinvoice.invoice.InvoiceProperties;
 import com.geneinvoice.invoice.InvoiceRepository;
@@ -62,6 +66,9 @@ public class CustomerService {
     private final InvoiceProperties invoiceProperties;
     private final DocumentCascade documentCascade;
     private final EmailCascade emailCascade;
+    private final TaskCascade taskCascade;
+    private final AssigneeRepository assigneeRepository;
+    private final AutomationEvents automationEvents;
 
     // ---- reads -----------------------------------------------------------------
 
@@ -250,6 +257,10 @@ public class CustomerService {
 
         auditService.record(ENTITY, c.getId(), "CUSTOMER_CREATED", null, snapshot(c),
                 currentUser.require().getId(), null, null);
+        // One insert, inside this transaction, so an automation rule sees a customer that exists
+        // and nothing is lost if the consumer is down. No rule is read and no filter is evaluated
+        // here: that is the consumer's job, off this thread, so a rule can never slow this save (R3).
+        automationEvents.recordCreated(AutomationEntityType.CUSTOMER, c.getId());
         return c;
     }
 
@@ -301,6 +312,7 @@ public class CustomerService {
                     saved.getPaymentTerm() == null ? null : saved.getPaymentTerm().name(),
                     currentUser.require().getId(), null, null);
         }
+        automationEvents.recordUpdated(AutomationEntityType.CUSTOMER, saved.getId());
         return saved;
     }
 
@@ -316,6 +328,12 @@ public class CustomerService {
         // The emails recorded against it stay — they are a record of something that was said —
         // but stop claiming the customer is still there to link to (CP-13).
         emailCascade.onCustomerDeleted(id);
+        // The work raised against it goes too: a task on a customer nobody can open is nobody's
+        // job, and its rows would hold the customer's own row down (T8).
+        taskCascade.onCustomerDeleted(id);
+        // Every assignee row of every kind — the tasks just deleted, and the promises and disputes
+        // about to be — in one statement, so none outlives the customer it was written against.
+        assigneeRepository.deleteForCustomer(id);
         for (CustomerPoc seat : customerPocRepository.findByCustomerIdOrderByPocTypeAscPrimaryDescIdAsc(id)) {
             customerPocRepository.delete(seat);
         }

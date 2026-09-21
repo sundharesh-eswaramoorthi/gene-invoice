@@ -2,6 +2,11 @@ package com.geneinvoice.dispute;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.geneinvoice.assignee.Assignee;
+import com.geneinvoice.assignee.AssigneeDtos;
+import com.geneinvoice.assignee.AssigneeKind;
+import com.geneinvoice.assignee.AssigneeOwnerType;
+import com.geneinvoice.assignee.AssigneeService;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
@@ -9,6 +14,11 @@ import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.email.EmailDtos;
+import com.geneinvoice.email.EmailEntityType;
+import com.geneinvoice.email.EmailRole;
+import com.geneinvoice.email.EmailTargets;
+import com.geneinvoice.email.RoleRef;
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceDtos;
 import com.geneinvoice.invoice.InvoiceRepository;
@@ -18,15 +28,24 @@ import com.geneinvoice.payment.Payment;
 import com.geneinvoice.payment.PaymentDtos;
 import com.geneinvoice.payment.PaymentRepository;
 import com.geneinvoice.payment.PaymentService;
+import com.geneinvoice.poc.PocService;
+import com.geneinvoice.poc.PocType;
+import com.geneinvoice.poc.ScopeResolver;
 import com.geneinvoice.user.User;
+import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -48,6 +67,19 @@ public class DisputeService {
     private final NotificationService notificationService;
     private final CurrentUser currentUser;
     private final ObjectMapper objectMapper;
+    private final UserRepository userRepository;
+    private final PocService pocService;
+    private final ScopeResolver scopeResolver;
+
+    /**
+     * Assignees, and the role holders they read through, are taken lazily on purpose (A5).
+     * {@code EmailTargets} loads a dispute through this very service, and {@code AssigneeService}
+     * reads its role holders from {@code EmailTargets}, so injecting either of them outright would
+     * close a bean cycle that Spring refuses to start with. An {@code ObjectProvider} defers the
+     * lookup to the moment a dispute is written or rendered, by which time every bean exists.
+     */
+    private final ObjectProvider<AssigneeService> assignees;
+    private final ObjectProvider<EmailTargets> emailTargets;
 
     @Transactional
     public Dispute open(DisputeDtos.CreateDisputeRequest req) {
@@ -74,17 +106,84 @@ public class DisputeService {
                 .status(DisputeStatus.PENDING)
                 .build();
         d = disputeRepository.save(d);
+        // The customer opening it cannot see staff, so they cannot name one: the dispute starts
+        // assigned to the seat on the record it is about, and staff move it from there (A6).
+        writeAssignees(d, defaultAssignees(req.targetType()));
         auditService.record(ENTITY, d.getId(), "DISPUTE_OPENED", null, toDto(d),
                 caller.getId(), d.getId(), req.reason());
 
-        Customer cust = customerRepository.findById(callerCustomer).orElse(null);
-        String custName = cust == null ? "customer" : cust.getName();
-        notificationService.notifyAdmins(NOTIF_OPENED,
-                "New dispute from " + custName,
-                req.reason(),
-                // The app has no /admin/disputes route; link where the dispute actually opens (D-53).
-                "/disputes/" + d.getId());
+        notifyAdminsOfNewDispute(d);
+        return d;
+    }
 
+    /**
+     * Opens a dispute with nobody logged in, which is how an automation rule raises one (A3). It is
+     * the same act as {@link #open} without the two things that need a caller: there is no customer
+     * login to take the customer from, so it is read from the record the dispute is about, and
+     * there is no picker on screen, so the rule hands the assignees in. Everything else — one
+     * pending dispute per record, the audit row, the notice to admins — is deliberately identical,
+     * because a rule's dispute is an ordinary dispute from the moment it exists.
+     */
+    @Transactional
+    public Dispute createInBackground(DisputeDtos.CreateDisputeRequest req,
+                                      List<EmailDtos.EmailToken> assigneeTokens) {
+        if (req == null || req.targetType() == null || req.targetId() == null) {
+            throw new BadRequestException("A dispute must say what it is about");
+        }
+        // Nothing validates the request here: a rule's text is not a form submission, so the
+        // limits the form applies are applied by hand rather than by the column refusing the row.
+        if (req.reason() == null || req.reason().isBlank()) {
+            throw new BadRequestException("A dispute needs a reason");
+        }
+        if (req.reason().length() > FieldLimits.DISPUTE_TEXT) {
+            throw new BadRequestException("A dispute reason must be at most "
+                    + FieldLimits.DISPUTE_TEXT + " characters");
+        }
+        Long customerId = customerOfTarget(req.targetType(), req.targetId());
+        if (disputeRepository.existsByCustomerIdAndTargetTypeAndTargetIdAndStatus(
+                customerId, req.targetType(), req.targetId(), DisputeStatus.PENDING)) {
+            throw new BadRequestException("An open dispute already exists for this " +
+                    req.targetType().name().toLowerCase());
+        }
+
+        Dispute d = Dispute.builder()
+                .customerId(customerId)
+                .openedByUserId(backgroundOpener(customerId))
+                .targetType(req.targetType())
+                .targetId(req.targetId())
+                .reason(req.reason())
+                .proposedChangeJson(req.proposedChangeJson())
+                .status(DisputeStatus.PENDING)
+                .build();
+        d = disputeRepository.save(d);
+        writeAssignees(d, assigneeTokens == null || assigneeTokens.isEmpty()
+                ? defaultAssignees(req.targetType())
+                : assigneeTokens);
+        auditService.record(ENTITY, d.getId(), "DISPUTE_OPENED", null, toDto(d),
+                currentUser.idOrNull(), d.getId(), req.reason());
+
+        notifyAdminsOfNewDispute(d);
+        return d;
+    }
+
+    /**
+     * Names who is answerable for a dispute (A1). Assigning is a staff act of its own rather than a
+     * field on the form that raises one: a dispute arrives from the customer's side, where staff
+     * cannot be seen at all, let alone picked (AC-A8). Doing it here rather than on approve or deny
+     * also means a dispute can be handed on while it is still open, which is the only time anybody
+     * needs to pick it up.
+     */
+    @Transactional
+    public Dispute setAssignees(Long id, List<EmailDtos.EmailToken> tokens) {
+        Dispute d = get(id);
+        if (currentUser.isCustomer()) {
+            throw new AccessDeniedException("Only staff may assign a dispute");
+        }
+        List<String> before = AssigneeService.tokens(
+                assignees.getObject().of(AssigneeOwnerType.DISPUTE, id));
+        List<Assignee> after = writeAssignees(d, tokens == null ? List.of() : tokens);
+        auditService.record(ENTITY, id, "DISPUTE_ASSIGNEES_SET", before,
+                AssigneeService.tokens(after), currentUser.idOrNull(), id, null);
         return d;
     }
 
@@ -153,18 +252,201 @@ public class DisputeService {
         return d;
     }
 
+    @Transactional(readOnly = true)
     public DisputeDtos.DisputeDto toDto(Dispute d) {
-        Target target = describeTarget(d);
-        String customerName = customerRepository.findById(d.getCustomerId())
-                .map(Customer::getName).orElse(null);
+        return toDtos(List.of(d)).get(0);
+    }
+
+    /**
+     * Every listed dispute at once, so a page costs a fixed number of queries rather than several
+     * per row (A9). Three things are read together: every row's assignees in one go, every record
+     * the rows are about in one read of each table, and each customer's POC book and addresses once
+     * however many rows share that customer.
+     *
+     * <p>It used to be one dispute at a time, and a role assignee — which every dispute has from
+     * the moment it is opened (A6) — sent each row off to re-read the dispute, its invoice or
+     * payment, the customer, that customer's logins and that customer's POC book. A page of fifty
+     * therefore ran a few hundred queries to say what the rows already knew, and the CSV export,
+     * which renders every matching row, ran that many again.
+     */
+    @Transactional(readOnly = true)
+    public List<DisputeDtos.DisputeDto> toDtos(List<Dispute> rows) {
+        if (rows.isEmpty()) return List.of();
+        Map<Long, List<Assignee>> byOwner = assignees.getObject()
+                .byOwner(AssigneeOwnerType.DISPUTE, rows.stream().map(Dispute::getId).toList());
+        Page page = page(rows, byOwner);
+        return rows.stream().map(d -> toDto(d, byOwner.getOrDefault(d.getId(), List.of()), page)).toList();
+    }
+
+    /**
+     * Everything a page of disputes needs beyond the rows themselves, read once for the page: the
+     * invoices and payments they are about, the customers they belong to, and the record each role
+     * assignee is resolved against. Nothing here depends on which row is being rendered, which is
+     * precisely why it used to be read again for every one of them.
+     */
+    private record Page(boolean showStaff, boolean showPoc,
+                        Map<Long, Invoice> invoices, Map<Long, Payment> payments,
+                        Map<Long, String> customerNames,
+                        Map<Long, EmailTargets.Target> roleTargets) {}
+
+    private Page page(List<Dispute> rows, Map<Long, List<Assignee>> byOwner) {
+        // Both are the same answer for every row — who is asking does not change between them —
+        // and canSeePoc() reads the caller's privileges from the database, so they are asked once.
+        boolean showStaff = showStaff();
+        boolean showPoc = showPoc();
+        Map<Long, Invoice> invoices = new HashMap<>();
+        for (Invoice i : invoiceRepository.findAllById(targetIds(rows, DisputeTargetType.INVOICE))) {
+            invoices.put(i.getId(), i);
+        }
+        Map<Long, Payment> payments = new HashMap<>();
+        for (Payment p : paymentRepository.findAllById(targetIds(rows, DisputeTargetType.PAYMENT))) {
+            payments.put(p.getId(), p);
+        }
+        Map<Long, String> names = new HashMap<>();
+        for (Customer c : customerRepository.findAllById(rows.stream()
+                .map(Dispute::getCustomerId).filter(Objects::nonNull).distinct().toList())) {
+            names.put(c.getId(), c.getName());
+        }
+        // Nothing about the assignees is shown to a customer login, so nothing is looked up for
+        // one either: the seats and the people in them are staff identity (AC-A8).
+        return new Page(showStaff, showPoc, invoices, payments, names,
+                showStaff ? roleTargets(rows, byOwner) : Map.of());
+    }
+
+    private static List<Long> targetIds(List<Dispute> rows, DisputeTargetType targetType) {
+        return rows.stream().filter(d -> d.getTargetType() == targetType)
+                .map(Dispute::getTargetId).filter(Objects::nonNull).distinct().toList();
+    }
+
+    private DisputeDtos.DisputeDto toDto(Dispute d, List<Assignee> assigneeRows, Page page) {
+        boolean showStaff = page.showStaff();
+        Target target = describeTarget(d, page);
+        String customerName = page.customerNames().get(d.getCustomerId());
         return new DisputeDtos.DisputeDto(
                 d.getId(), d.getCustomerId(), customerName, d.getOpenedByUserId(),
                 d.getTargetType(), d.getTargetId(), target.summary(), target.number(), target.amount(),
                 d.getReason(), d.getProposedChangeJson(),
                 d.getStatus(), d.getAdminNotes(),
+                // Who internally owns the dispute is staff identity like the resolver below it, so
+                // a customer login is told nothing about it — not even that a seat is unheld (AC-A8).
+                // A staff caller who may not see POC identity sees the seats themselves but nobody
+                // in them, exactly as a promise's assignees read for them (AC-A6).
+                showStaff ? assignees.getObject().describe(assigneeRows,
+                        page.roleTargets().get(d.getId()), page.showPoc())
+                        : List.<AssigneeDtos.AssigneeDto>of(),
                 // The staff member who resolved it is not the customer's to see (AC-A8).
-                currentUser.isCustomer() ? null : d.getResolvedByUserId(), d.getResolvedAt(),
+                showStaff ? d.getResolvedByUserId() : null, d.getResolvedAt(),
                 d.getCreatedAt(), d.getUpdatedAt());
+    }
+
+    /**
+     * Whether staff identity may be shown. A customer login never sees it (AC-A8); work running
+     * with nobody logged in has no customer to hide it from, and asking whether the caller is one
+     * would throw rather than answer there, so it reads the record whole (A3).
+     */
+    private boolean showStaff() {
+        return currentUser.idOrNull() == null || !currentUser.isCustomer();
+    }
+
+    /**
+     * Whether a dispute's assignees may name the people they reach. A role assignee reaches the
+     * holders of the customer's POC seats and the seat on the record the dispute is about, which
+     * is POC identity and is {@code POC_VIEW}'s to give — the same check the invoice list, the
+     * payment list and a promise's assignees make, rather than a second rule that lets a dispute
+     * hand out by name what those three withhold (AC-A6, AC-A8). Work with nobody logged in reads
+     * the record whole for the reason {@link #showStaff} gives (A3).
+     */
+    private boolean showPoc() {
+        return currentUser.idOrNull() == null || scopeResolver.canSeePoc();
+    }
+
+    /**
+     * The record each role assignee is read against, for a whole page at once (A2). Only a role
+     * needs one — a named person is themselves — so a page of disputes assigned to people by name
+     * costs no lookup at all, and one with roles on it costs a fixed number however many rows carry
+     * them.
+     *
+     * <p>Read without the caller's privilege and book, as a page of tasks reads its records (T2):
+     * these rows have already been scoped by the query that produced them — a customer login to its
+     * own customer, staff to everything — so loading each one again under that same scope would
+     * only ask a question already answered, and would turn a dispute the caller may see but whose
+     * invoice sits outside their book into a failure that rolled the whole page back. A dispute
+     * whose record has gone is absent, which reads as a seat nobody holds — exactly how an unheld
+     * seat reads anyway.
+     */
+    private Map<Long, EmailTargets.Target> roleTargets(List<Dispute> rows,
+                                                       Map<Long, List<Assignee>> byOwner) {
+        List<Long> needRecord = rows.stream()
+                .filter(d -> byOwner.getOrDefault(d.getId(), List.of()).stream()
+                        .anyMatch(a -> a.getKind() == AssigneeKind.ROLE))
+                .map(Dispute::getId).toList();
+        if (needRecord.isEmpty()) return Map.of();
+        return emailTargets.getObject().loadAllInBackground(EmailEntityType.DISPUTE, needRecord);
+    }
+
+    /**
+     * Makes the dispute's assignees exactly these. Unlike a promise, a dispute holds nothing lazy,
+     * so the persistence context that replacing them clears costs the caller nothing: the row it
+     * is holding reads the same detached as it did attached. The tokens are read before anything
+     * is deleted, so a list the picker could not have produced is a 400 that changes nothing.
+     */
+    private List<Assignee> writeAssignees(Dispute d, List<EmailDtos.EmailToken> tokens) {
+        AssigneeService service = assignees.getObject();
+        return service.replace(AssigneeOwnerType.DISPUTE, d.getId(),
+                service.parse(EmailEntityType.DISPUTE, d.getCustomerId(), tokens));
+    }
+
+    /**
+     * Who a dispute answers to when nobody said (A6). A dispute is always about one invoice or one
+     * payment, and the person who owns that record is the one who has to deal with it, so the seat
+     * on the record itself is the default. It is stored as the seat and not as the person sitting
+     * in it, so the dispute follows a reassignment of the invoice or payment without being touched
+     * (A2), and a record with nobody on it reads as an unresolved assignee — something to fix —
+     * rather than as no assignee at all.
+     */
+    private static List<EmailDtos.EmailToken> defaultAssignees(DisputeTargetType type) {
+        EmailRole role = type == DisputeTargetType.INVOICE
+                ? EmailRole.SALES_POC
+                : EmailRole.COLLECTION_POC;
+        return List.of(EmailDtos.EmailToken.role(RoleRef.record(role)));
+    }
+
+    /** The customer a dispute's target belongs to, for work with no caller to take it from (A3). */
+    private Long customerOfTarget(DisputeTargetType type, Long id) {
+        return switch (type) {
+            case INVOICE -> invoiceRepository.findById(id)
+                    .orElseThrow(() -> new NotFoundException("Invoice not found"))
+                    .getCustomer().getId();
+            case PAYMENT -> paymentRepository.findById(id)
+                    .orElseThrow(() -> new NotFoundException("Payment not found"))
+                    .getCustomer().getId();
+        };
+    }
+
+    /**
+     * Who a dispute raised with nobody logged in is recorded as opened by (A3). The column has
+     * never been nullable, and the notice that the dispute was approved or denied goes to whoever
+     * is named here, so it has to be a real person who will read it: the customer's own login where
+     * they have one, else the collections person who answers for them. A customer with neither has
+     * nobody to tell, so the rule is refused rather than leaving behind a dispute that answers to
+     * no one.
+     */
+    private Long backgroundOpener(Long customerId) {
+        return userRepository.findByCustomerId(customerId).map(User::getId)
+                .or(() -> pocService.defaultAssignee(customerId, PocType.COLLECTION).map(User::getId))
+                .orElseThrow(() -> new BadRequestException(
+                        "This customer has no login and no active Collection POC, so there is "
+                                + "nobody to open a dispute on their behalf"));
+    }
+
+    private void notifyAdminsOfNewDispute(Dispute d) {
+        Customer cust = customerRepository.findById(d.getCustomerId()).orElse(null);
+        String custName = cust == null ? "customer" : cust.getName();
+        notificationService.notifyAdmins(NOTIF_OPENED,
+                "New dispute from " + custName,
+                d.getReason(),
+                // The app has no /admin/disputes route; link where the dispute actually opens (D-53).
+                "/disputes/" + d.getId());
     }
 
     /**
@@ -217,13 +499,13 @@ public class DisputeService {
      */
     private record Target(String number, BigDecimal amount, String summary) {}
 
-    private Target describeTarget(Dispute d) {
+    private Target describeTarget(Dispute d, Page page) {
         return switch (d.getTargetType()) {
-            case INVOICE -> invoiceRepository.findById(d.getTargetId())
+            case INVOICE -> Optional.ofNullable(page.invoices().get(d.getTargetId()))
                     .map(i -> new Target(i.getInvoiceNumber(), i.getTotal(),
                             i.getInvoiceNumber() + " — " + i.getTotal()))
                     .orElse(new Target(null, null, "Invoice #" + d.getTargetId()));
-            case PAYMENT -> paymentRepository.findById(d.getTargetId())
+            case PAYMENT -> Optional.ofNullable(page.payments().get(d.getTargetId()))
                     .map(p -> new Target("#" + p.getId(), p.getAmount(),
                             "Payment #" + p.getId() + " — " + p.getAmount()))
                     .orElse(new Target(null, null, "Payment #" + d.getTargetId()));

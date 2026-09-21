@@ -1,5 +1,10 @@
 package com.geneinvoice.email;
 
+import com.geneinvoice.document.Document;
+import com.geneinvoice.document.DocumentRepository;
+import com.geneinvoice.document.DocumentStorage;
+import com.geneinvoice.document.DocumentStorageException;
+import com.geneinvoice.email.transport.AttachmentPart;
 import com.geneinvoice.email.transport.CopyRequest;
 import com.geneinvoice.email.transport.CopyState;
 import com.geneinvoice.email.transport.MailSendException;
@@ -14,8 +19,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +49,8 @@ public class EmailDispatcher {
     static final String CUSTOMER_SENDER = "Email from a customer login is not sent through Gmail";
     static final String INTERRUPTED = "Sending was interrupted; retry to send again";
     static final String NOT_ACCEPTED = "The mail service did not accept this copy";
+    /** An attached file could not be read back, so nothing is sent: an email missing its files is worse. */
+    static final String ATTACHMENT_UNREADABLE = "An attached file could not be read: ";
     static final int MAX_ATTEMPTS = 3;
 
     /** How long a SENDING row may go untouched before the hand-off is taken to have died. */
@@ -51,6 +61,9 @@ public class EmailDispatcher {
 
     private final EmailRepository emailRepository;
     private final EmailRecipientRepository recipientRepository;
+    private final EmailAttachmentRepository attachmentRepository;
+    private final DocumentRepository documentRepository;
+    private final DocumentStorage documentStorage;
     private final MailTransport transport;
     private final TransactionTemplate transactions;
     private final boolean async;
@@ -68,10 +81,14 @@ public class EmailDispatcher {
     private final Set<Long> backgroundOwned = ConcurrentHashMap.newKeySet();
 
     public EmailDispatcher(EmailRepository emailRepository, EmailRecipientRepository recipientRepository,
-                           MailTransport transport, TransactionTemplate transactions,
+                           EmailAttachmentRepository attachmentRepository, DocumentRepository documentRepository,
+                           DocumentStorage documentStorage, MailTransport transport, TransactionTemplate transactions,
                            @Value("${app.mail.dispatch.async:true}") boolean async) {
         this.emailRepository = emailRepository;
         this.recipientRepository = recipientRepository;
+        this.attachmentRepository = attachmentRepository;
+        this.documentRepository = documentRepository;
+        this.documentStorage = documentStorage;
         this.transport = transport;
         this.transactions = transactions;
         this.async = async;
@@ -97,11 +114,16 @@ public class EmailDispatcher {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             throw new IllegalStateException("Email must be dispatched outside a transaction");
         }
-        Submission submission = transactions.execute(status -> claim(emailId, now));
-        if (submission == null) return;
+        Claimed claimed = transactions.execute(status -> claim(emailId, now));
+        if (claimed == null) return;
 
+        Submission submission;
         List<CopyState> states;
         try {
+            // The bytes are read here, with no transaction open: storage may be a disk or an object
+            // store, and neither should be waited on while a pooled connection is held. Nothing lazy
+            // is touched — the rows the claim read are plain columns, copied into AttachmentRefs.
+            submission = claimed.submission().withAttachments(read(claimed.attachments()));
             states = transport.submit(submission);
         } catch (MailSendException e) {
             transactions.executeWithoutResult(status -> failed(emailId, e.getMessage(), e.isTransientFailure()));
@@ -184,10 +206,23 @@ public class EmailDispatcher {
     }
 
     /**
+     * A claimed email: the copies to hand over, and what has to be read out of document storage
+     * before they can go. The two are kept apart because the first is built with a transaction
+     * open and the second must be read with none.
+     */
+    private record Claimed(Submission submission, List<AttachmentRef> attachments) {}
+
+    /**
+     * One file to read: what the email recorded it was sending (E17), and the key storage holds it
+     * under. A null {@code storageKey} means the document row itself has gone.
+     */
+    private record AttachmentRef(Long documentId, String filename, String contentType, String storageKey) {}
+
+    /**
      * Claims the email and settles whatever needs no mail service (steps 1–3). Returns the copies
      * to hand over, or null when there is nothing to hand over.
      */
-    private Submission claim(Long emailId, Instant due) {
+    private Claimed claim(Long emailId, Instant due) {
         if (emailRepository.claim(emailId, due, Instant.now()) == 0) return null;
         Email email = emailRepository.findById(emailId).orElseThrow();
         List<EmailRecipient> recipients = recipientRepository.findByEmailIdOrderByIdAsc(emailId);
@@ -221,10 +256,55 @@ public class EmailDispatcher {
         recipientRepository.saveAll(recipients);
         // Only copies still queued here go: new ones, and failed or unsent ones the user retried. The
         // service never sends a copy it has twice, so asking it to retry is safe whichever this is (§7).
-        return new Submission(email.getFromUserId(), email.getFromName(), email.getSubject(), email.getBody(),
-                String.valueOf(emailId), true,
+        Submission submission = new Submission(email.getFromUserId(), email.getFromName(), email.getSubject(),
+                email.getBody(), String.valueOf(emailId), true,
                 queued.stream().map(r -> new CopyRequest(CopyRef.externalId(emailId, r.getId()),
                         r.getName(), r.getAddress())).toList());
+        return new Claimed(submission, attachmentRefs(emailId));
+    }
+
+    /**
+     * What the email recorded it was attaching, with each document's storage key looked up now. The
+     * name, the type and the order come from the attachment rows, which are the snapshot taken when
+     * the email was sent — so a document renamed since still goes out under the name the sender saw.
+     * A document deleted since still goes out too: deleting is soft and the bytes are retained, and
+     * an email already queued was decided before the deletion.
+     */
+    private List<AttachmentRef> attachmentRefs(Long emailId) {
+        List<EmailAttachment> attached = attachmentRepository.findByEmailIdOrderByIdAsc(emailId);
+        if (attached.isEmpty()) return List.of();
+        Map<Long, String> keys = documentRepository.findAllById(
+                        attached.stream().map(EmailAttachment::getDocumentId).distinct().toList()).stream()
+                .collect(Collectors.toMap(Document::getId, Document::getStorageKey));
+        return attached.stream()
+                .map(a -> new AttachmentRef(a.getDocumentId(), a.getFilename(), a.getContentType(),
+                        keys.get(a.getDocumentId())))
+                .toList();
+    }
+
+    /**
+     * The files themselves, read out of storage with no transaction open. A file that cannot be
+     * read stops the whole email: sending it with some of its attachments, or none, would tell the
+     * recipient the invoice was attached when it was not. The failure is final rather than retried
+     * — a missing row and an unreadable file do not cure themselves — and a retry by hand will try
+     * again once whoever owns the storage has put it right.
+     */
+    private List<AttachmentPart> read(List<AttachmentRef> refs) {
+        if (refs.isEmpty()) return List.of();
+        List<AttachmentPart> parts = new ArrayList<>(refs.size());
+        for (AttachmentRef ref : refs) {
+            if (ref.storageKey() == null) {
+                throw new MailSendException(ATTACHMENT_UNREADABLE + ref.filename()
+                        + " (document #" + ref.documentId() + " is no longer there)", false);
+            }
+            try (InputStream bytes = documentStorage.open(ref.storageKey())) {
+                parts.add(new AttachmentPart(ref.filename(), ref.contentType(), bytes.readAllBytes()));
+            } catch (IOException | DocumentStorageException e) {
+                throw new MailSendException(ATTACHMENT_UNREADABLE + ref.filename()
+                        + " (" + e.getMessage() + ")", false, e);
+            }
+        }
+        return parts;
     }
 
     /** Every queued copy is not sent, for the same reason; an email with no copies is not sent either. */

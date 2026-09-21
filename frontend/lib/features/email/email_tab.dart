@@ -7,7 +7,9 @@ import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
+import '../../core/unsaved_changes.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../documents/document_models.dart' show DocumentEntityType;
 import 'email_actions.dart' show canSendEmailProvider;
 import 'email_entity.dart';
 import 'email_models.dart';
@@ -372,6 +374,10 @@ class _EmailCardState extends ConsumerState<EmailCard> {
                 ],
               ),
             ),
+            // What went with it, under the people it went to: an email whose whole point was the
+            // file it carried says nothing at all without this (E17).
+            if (email.attachments.isNotEmpty)
+              _Field(label: 'Attached', child: _Attachments(email: email)),
             if (email.deliveredFrom != null)
               _Field(label: 'Delivered from', child: SelectableText(email.deliveredFrom!)),
             if (email.error != null && email.error!.isNotEmpty)
@@ -431,6 +437,71 @@ class _Field extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// The documents that went out with an email, each with the filename, kind and size the sender
+/// saw when they attached it.
+///
+/// Those three are the email's own snapshot, not the document's: the file may have been deleted
+/// since, and a record of what was sent that changed afterwards would not be a record. The
+/// filename links to the record's Documents tab where there is one to land on, which is what
+/// `AttachmentDto.documentId` is for — the download lives there and applies the document's own
+/// visibility itself (D7), so nothing here has to decide who may have the bytes.
+class _Attachments extends StatelessWidget {
+  final EmailMessage email;
+  const _Attachments({required this.email});
+
+  /// The Documents tab of the record this email is about, or null when there is none to send a
+  /// reader to: the viewer may not open the record at all, or it is a kind — a promise, a
+  /// dispute — that keeps no documents of its own.
+  String? get _documentsTab {
+    final link = email.entityLink;
+    if (link == null || !email.canOpenRecord) return null;
+    if (DocumentEntityType.fromWire(email.entityType?.wire) == null) return null;
+    return '$link?tab=documents';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.textTheme.bodySmall;
+    final location = _documentsTab;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final a in email.attachments)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 2),
+            child: Wrap(
+              spacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Icon(Icons.attach_file, size: 16, color: theme.colorScheme.onSurfaceVariant),
+                // Linked only where the document is still one the reader could be taken to. An
+                // attachment sent from a file since deleted keeps its name here either way.
+                if (location != null && a.documentId != null)
+                  Tooltip(
+                    message: 'Open the Documents tab',
+                    child: InkWell(
+                      onTap: () => goGuarded(context, location),
+                      child: Text(
+                        a.filename.isEmpty ? '(unnamed file)' : a.filename,
+                        style: TextStyle(
+                            color: theme.colorScheme.primary, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  )
+                else
+                  Text(a.filename.isEmpty ? '(unnamed file)' : a.filename),
+                // "PDF · 1.5 MB", in the Documents tab's own words for a kind and a size.
+                Text('· ${a.details}', style: muted),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _Recipients extends StatelessWidget {

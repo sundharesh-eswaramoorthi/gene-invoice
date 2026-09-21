@@ -47,11 +47,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -280,6 +283,49 @@ public class EmailTargets {
         return describe(type, loadScoped(type, id));
     }
 
+    /**
+     * The same, for work that runs with nobody logged in — an automation rule's consumer, or a
+     * scheduled run (A3). No privilege and no customer restriction is applied, because there is no
+     * caller to apply them to, so this is only ever reached from a background thread acting on a
+     * rule a person already wrote and was allowed to write. Anything serving a request must use
+     * {@link #load}. Empty when the record has since gone.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Target> loadInBackground(EmailEntityType type, Long id) {
+        return loadUnscoped(type, id).map(entity -> describe(type, entity));
+    }
+
+    /**
+     * A whole page of records of one kind, keyed by id: the same answer {@link #loadInBackground}
+     * gives for one, for many, at a cost that does not grow with the number of rows (A9). A record
+     * that has since gone is simply absent, exactly as it is there.
+     *
+     * <p>Unscoped for the reason {@link #loadInBackground} is: a caller reaches this with rows the
+     * read that produced them has already scoped, so re-loading each one under their own book both
+     * re-asks a question already answered and turns one row outside that book into a failure that
+     * would roll the whole page back. Anything that has <em>not</em> already scoped its rows must
+     * use {@link #load} per record.
+     *
+     * <p>What it saves is the several queries a row used to cost: the records the rows point at are
+     * read one table at a time, each customer's addresses once for the page, and each customer's
+     * POC book once however many rows share it.
+     */
+    @Transactional(readOnly = true)
+    public Map<Long, Target> loadAllInBackground(EmailEntityType type, Collection<Long> ids) {
+        List<Long> wanted = ids.stream().filter(Objects::nonNull).distinct().toList();
+        if (wanted.isEmpty()) return Map.of();
+        List<?> entities = loadAllUnscoped(type, wanted);
+        Shared shared = new Shared();
+        shared.readRecordsBehind(type, entities);
+        List<Facts> facts = entities.stream().map(entity -> facts(type, entity, shared)).toList();
+        shared.readCustomers(facts.stream().map(Facts::customerId).toList());
+        Map<Long, Target> targets = new LinkedHashMap<>();
+        for (Facts f : facts) {
+            targets.put(f.id(), target(type, f, shared));
+        }
+        return targets;
+    }
+
     private Optional<?> loadUnscoped(EmailEntityType type, Long id) {
         return switch (type) {
             case CUSTOMER -> customerRepository.findById(id);
@@ -290,6 +336,20 @@ public class EmailTargets {
             case PRODUCT -> productRepository.findById(id);
             case USER -> userRepository.findById(id);
             case ROLE -> roleRepository.findById(id);
+        };
+    }
+
+    /** The same by the handful, in one read of the table the kind lives in; ids no longer there are absent. */
+    private List<?> loadAllUnscoped(EmailEntityType type, Collection<Long> ids) {
+        return switch (type) {
+            case CUSTOMER -> customerRepository.findAllById(ids);
+            case INVOICE -> invoiceRepository.findAllById(ids);
+            case PAYMENT -> paymentRepository.findAllById(ids);
+            case PROMISE -> promiseRepository.findAllById(ids);
+            case DISPUTE -> disputeRepository.findAllById(ids);
+            case PRODUCT -> productRepository.findAllById(ids);
+            case USER -> userRepository.findAllById(ids);
+            case ROLE -> roleRepository.findAllById(ids);
         };
     }
 
@@ -311,61 +371,59 @@ public class EmailTargets {
     }
 
     private Target describe(EmailEntityType type, Object entity) {
+        Shared shared = new Shared();
+        return target(type, facts(type, entity, shared), shared);
+    }
+
+    /** What one record says about itself, before anybody has been looked up against it. */
+    private record Facts(Long id, String label, Long customerId,
+                         Map<EmailRole, Optional<User>> ownFields) {}
+
+    private Facts facts(EmailEntityType type, Object entity, Shared shared) {
         return switch (type) {
             case CUSTOMER -> {
                 Customer c = (Customer) entity;
-                yield target(type, c.getId(), "Customer " + c.getName(), c.getId(), Map.of());
+                yield new Facts(c.getId(), "Customer " + c.getName(), c.getId(), Map.of());
             }
             case INVOICE -> {
                 Invoice i = (Invoice) entity;
-                yield target(type, i.getId(), "Invoice " + i.getInvoiceNumber(), i.getCustomer().getId(),
+                yield new Facts(i.getId(), "Invoice " + i.getInvoiceNumber(), i.getCustomer().getId(),
                         Map.of(SALES_POC, Optional.ofNullable(i.getSalesPoc())));
             }
             case PAYMENT -> {
                 Payment p = (Payment) entity;
-                yield target(type, p.getId(), "Payment #" + p.getId(), p.getCustomer().getId(),
+                yield new Facts(p.getId(), "Payment #" + p.getId(), p.getCustomer().getId(),
                         Map.of(COLLECTION_POC, Optional.ofNullable(p.getCollectionPoc())));
             }
             case PROMISE -> {
                 PaymentPromise p = (PaymentPromise) entity;
-                yield target(type, p.getId(), "Promise #" + p.getId(), p.getCustomer().getId(),
+                yield new Facts(p.getId(), "Promise #" + p.getId(), p.getCustomer().getId(),
                         Map.of(COLLECTION_POC, Optional.ofNullable(p.getCollectionPoc())));
             }
             case DISPUTE -> {
                 Dispute d = (Dispute) entity;
-                yield target(type, d.getId(), "Dispute #" + d.getId(), d.getCustomerId(), disputeOwnFields(d));
+                yield new Facts(d.getId(), "Dispute #" + d.getId(), d.getCustomerId(), shared.disputeFields(d));
             }
             case PRODUCT -> {
                 Product p = (Product) entity;
-                yield target(type, p.getId(), "Product " + p.getName(), null, Map.of());
+                yield new Facts(p.getId(), "Product " + p.getName(), null, Map.of());
             }
             case USER -> {
                 // Only a customer login belongs to a customer, and only then do its seats apply.
                 User u = (User) entity;
-                yield target(type, u.getId(), "User " + u.getUsername(), u.getCustomerId(), Map.of());
+                yield new Facts(u.getId(), "User " + u.getUsername(), u.getCustomerId(), Map.of());
             }
             case ROLE -> {
                 Role r = (Role) entity;
-                yield target(type, r.getId(), "Role " + r.getName(), null, Map.of());
+                yield new Facts(r.getId(), "Role " + r.getName(), null, Map.of());
             }
         };
     }
 
-    /**
-     * A dispute has no POC of its own; its record level is its target's (L3): an invoice target's
-     * Sales POC, a payment target's Collection POC. The other is offered all the same, with nobody
-     * holding it (L4), which is what leaving it out of this map means.
-     */
-    private Map<EmailRole, Optional<User>> disputeOwnFields(Dispute d) {
-        return d.getTargetType() == DisputeTargetType.INVOICE
-                ? Map.of(SALES_POC, invoiceRepository.findById(d.getTargetId()).map(Invoice::getSalesPoc))
-                : Map.of(COLLECTION_POC, paymentRepository.findById(d.getTargetId()).map(Payment::getCollectionPoc));
-    }
-
-    private Target target(EmailEntityType type, Long id, String label, Long customerId,
-                          Map<EmailRole, Optional<User>> ownFields) {
-        return new Target(type, id, EmailText.fit(label, Email.LABEL_MAX), customerId,
-                holders(type, customerId, ownFields), customerEmails(customerId));
+    private Target target(EmailEntityType type, Facts facts, Shared shared) {
+        return new Target(type, facts.id(), EmailText.fit(facts.label(), Email.LABEL_MAX), facts.customerId(),
+                holders(type, facts.customerId(), facts.ownFields(), shared),
+                shared.addressesOf(facts.customerId()));
     }
 
     /**
@@ -373,13 +431,13 @@ public class EmailTargets {
      * seat on the customer — the primary first, so the first holder is also who new records default
      * to (L2) — and at record level the one person the record's own POC field names (L3). Inactive
      * people hold nothing: a record whose own POC is inactive leaves the role unresolved rather than
-     * silently reassigned. The customer's book answers for all three seats, so it is read once per
-     * record rather than once per role.
+     * silently reassigned. The customer's book answers for all three seats, so {@link Shared} reads
+     * it once per customer rather than once per role — or, on a page, once for every row that shares
+     * that customer.
      */
     private Map<RoleRef, List<Person>> holders(EmailEntityType type, Long customerId,
-                                               Map<EmailRole, Optional<User>> ownFields) {
+                                               Map<EmailRole, Optional<User>> ownFields, Shared shared) {
         Map<RoleRef, List<Person>> holders = new LinkedHashMap<>();
-        Map<PocType, List<User>> book = null;
         for (RoleRef ref : ROLES_OFFERED.get(type)) {
             List<User> people;
             if (ref.level() == RoleLevel.RECORD) {
@@ -387,8 +445,7 @@ public class EmailTargets {
             } else if (customerId == null) {
                 people = List.of();
             } else {
-                if (book == null) book = pocService.activeHoldersByType(customerId);
-                people = book.getOrDefault(ref.role().pocType(), List.of());
+                people = shared.seatsOf(customerId).getOrDefault(ref.role().pocType(), List.of());
             }
             List<Person> active = people.stream().filter(User::isActive).map(Person::of).toList();
             if (!active.isEmpty()) holders.put(ref, active);
@@ -398,20 +455,119 @@ public class EmailTargets {
 
     /**
      * The customer's own email and the email of each active login (which usually repeats it; the
-     * recipient list merges the two). People without an address are left out.
+     * recipient list merges the two). People without an address are left out, and a customer no
+     * longer on file has none. Handed back unmodifiable because one page's rows about the same
+     * customer are given the same list.
      */
-    private List<Person> customerEmails(Long customerId) {
-        if (customerId == null) return List.of();
+    private static List<Person> emailsOf(Customer customer, List<User> logins) {
         List<Person> emails = new ArrayList<>();
-        customerRepository.findById(customerId).ifPresent(c -> {
-            String address = Emails.normalize(c.getEmail());
-            if (address != null) emails.add(new Person(null, c.getName(), address, c.getId(), false));
-        });
-        for (User login : directory.activeLoginsOf(customerId)) {
+        if (customer != null) {
+            String address = Emails.normalize(customer.getEmail());
+            if (address != null) {
+                emails.add(new Person(null, customer.getName(), address, customer.getId(), false));
+            }
+        }
+        for (User login : logins) {
             Person p = Person.of(login);
             if (p.address() != null) emails.add(p);
         }
-        return emails;
+        return List.copyOf(emails);
+    }
+
+    /**
+     * What one rendering has already read, so that describing many records does not read it again
+     * for every one of them (A9). Three of the reads behind a {@link Target} are shared between
+     * rows and cost a query each: the customer's POC book, the customer's own addresses, and — for
+     * a dispute, whose POC is the POC of the record it is about (L3) — that invoice or payment.
+     *
+     * <p>One of these belongs to a single rendering and goes with it, so nothing it remembers can
+     * be stale by the time the next request asks; within that one rendering every row sees the same
+     * seats, which is what a page ought to show anyway. Describing a single record makes one and
+     * throws it away, which costs exactly what it used to.
+     */
+    private final class Shared {
+
+        private final Map<Long, Map<PocType, List<User>>> seats = new HashMap<>();
+        private final Map<Long, List<Person>> addresses = new HashMap<>();
+        /** Null values are deliberate: a record asked for and no longer there is remembered as gone. */
+        private final Map<Long, Invoice> invoices = new HashMap<>();
+        private final Map<Long, Payment> payments = new HashMap<>();
+
+        /**
+         * The invoices and payments a page of disputes is about, one read of each table. No other
+         * kind keeps its POC anywhere but on the record already in hand, so there is nothing to
+         * read ahead for them.
+         */
+        void readRecordsBehind(EmailEntityType type, List<?> entities) {
+            if (type != DISPUTE) return;
+            List<Dispute> disputes = entities.stream().map(Dispute.class::cast).toList();
+            List<Long> invoiceIds = targetIds(disputes, DisputeTargetType.INVOICE);
+            List<Long> paymentIds = targetIds(disputes, DisputeTargetType.PAYMENT);
+            invoiceIds.forEach(id -> invoices.put(id, null));
+            paymentIds.forEach(id -> payments.put(id, null));
+            invoiceRepository.findAllById(invoiceIds).forEach(i -> invoices.put(i.getId(), i));
+            paymentRepository.findAllById(paymentIds).forEach(p -> payments.put(p.getId(), p));
+        }
+
+        private List<Long> targetIds(List<Dispute> disputes, DisputeTargetType targetType) {
+            return disputes.stream().filter(d -> d.getTargetType() == targetType)
+                    .map(Dispute::getTargetId).filter(Objects::nonNull).distinct().toList();
+        }
+
+        /**
+         * A dispute has no POC of its own; its record level is its target's (L3): an invoice
+         * target's Sales POC, a payment target's Collection POC. The other is offered all the same,
+         * with nobody holding it (L4), which is what leaving it out of this map means.
+         */
+        Map<EmailRole, Optional<User>> disputeFields(Dispute d) {
+            return d.getTargetType() == DisputeTargetType.INVOICE
+                    ? Map.of(SALES_POC, Optional.ofNullable(invoice(d.getTargetId())).map(Invoice::getSalesPoc))
+                    : Map.of(COLLECTION_POC,
+                            Optional.ofNullable(payment(d.getTargetId())).map(Payment::getCollectionPoc));
+        }
+
+        private Invoice invoice(Long id) {
+            if (id == null) return null;
+            if (invoices.containsKey(id)) return invoices.get(id);
+            Invoice found = invoiceRepository.findById(id).orElse(null);
+            invoices.put(id, found);
+            return found;
+        }
+
+        private Payment payment(Long id) {
+            if (id == null) return null;
+            if (payments.containsKey(id)) return payments.get(id);
+            Payment found = paymentRepository.findById(id).orElse(null);
+            payments.put(id, found);
+            return found;
+        }
+
+        /** The whole POC book of one customer, read once however many records share them (L2). */
+        Map<PocType, List<User>> seatsOf(Long customerId) {
+            return seats.computeIfAbsent(customerId, pocService::activeHoldersByType);
+        }
+
+        /** Every customer's own address and its logins', in one read of each table. */
+        void readCustomers(Collection<Long> customerIds) {
+            List<Long> ids = customerIds.stream().filter(Objects::nonNull).distinct().toList();
+            if (ids.isEmpty()) return;
+            Map<Long, List<User>> logins = directory.activeLoginsOf(ids);
+            Map<Long, Customer> customers = customerRepository.findAllById(ids).stream()
+                    .collect(Collectors.toMap(Customer::getId, customer -> customer));
+            for (Long id : ids) {
+                addresses.put(id, emailsOf(customers.get(id), logins.getOrDefault(id, List.of())));
+            }
+        }
+
+        List<Person> addressesOf(Long customerId) {
+            if (customerId == null) return List.of();
+            List<Person> known = addresses.get(customerId);
+            if (known != null) return known;
+            List<Person> read = emailsOf(customerRepository.findById(customerId).orElse(null),
+                    directory.activeLoginsOf(customerId));
+            addresses.put(customerId, read);
+            return read;
+        }
     }
 
     // ---- bulk selection ---------------------------------------------------------------

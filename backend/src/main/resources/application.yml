@@ -25,9 +25,10 @@ spring:
   task:
     scheduling:
       pool:
-        # The email sweeper and the promise sweeper each get a thread, so a slow mail service call
-        # (up to 40 s) never holds up the other.
-        size: 3
+        # The email sweeper, the promise sweeper and automation's three jobs — the outbox sweep and
+        # the daily and weekly runs — each get a thread, so a slow mail service call (up to 40 s)
+        # never holds up the others, and a daily run over a wide rule cannot starve the sweepers.
+        size: 5
   servlet:
     multipart:
       # The same setting as app.documents.max-size-bytes below, not a copy of today's value of
@@ -47,6 +48,27 @@ app:
   invoice:
     default-payment-term: ${INVOICE_DEFAULT_TERM:NET_30}  # a customer with no terms, and the backfill
     due-date-horizon-days: ${INVOICE_DUE_DATE_HORIZON_DAYS:365}  # the form warns past this; the API accepts it
+  automation:
+    # in-process runs the consumer on a background thread of this service, and it is the only
+    # transport this build has. The automation_events row written inside the user's own transaction
+    # is what makes the work durable, and the sweep below is what re-drives it — the queue only
+    # decides how quickly a consumer hears about it (R3) — so nothing is lost by it being the only
+    # one. A broker-backed transport is a follow-up, and AutomationQueue is the seam it would be
+    # written against; when one exists, its value is named here and not before.
+    #
+    # This line used to offer `rabbit` as well. Nothing implements it, and the in-process bean is
+    # conditional on this very value, so setting it left no AutomationQueue bean and the service
+    # died at startup on "no qualifying bean of type AutomationQueue" — a message about Spring
+    # wiring, for an operator who had done nothing but believe the comment above it (D-75,
+    # regression 2026-09-21). AutomationQueueCheck now refuses an unknown value by name, at startup:
+    # rules raise the tasks people are counting on, so a deployment that asks for a transport nobody
+    # can supply must stop while somebody is watching rather than start with its rules never firing.
+    queue: ${AUTOMATION_QUEUE:in-process}     # in-process — the only transport this build has
+    async: true                               # false runs the work on the calling thread
+    sweep-interval-ms: 60000                  # re-drives anything the queue lost, and settles the stale
+    retain-days: 30                           # settled rows are purged past this; failed ones are kept
+    daily-cron: "0 0 7 * * *"                 # UTC, like every date the app judges by
+    weekly-cron: "0 0 7 * * MON"
   documents:
     storage: ${DOCUMENT_STORAGE:local}                # local | none
     max-size-bytes: ${DOCUMENT_MAX_BYTES:10485760}    # 10 MB; the multipart limits above read the same variable

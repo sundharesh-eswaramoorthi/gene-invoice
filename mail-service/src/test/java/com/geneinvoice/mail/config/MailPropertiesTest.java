@@ -80,6 +80,13 @@ class MailPropertiesTest {
             assertThat(p.getSend().getSweepIntervalMs()).isEqualTo(30000);
             assertThat(p.getSend().retryDelay(1)).isEqualTo(Duration.ofMinutes(1));
             assertThat(p.getSend().retryDelay(2)).isEqualTo(Duration.ofMinutes(5));
+            assertThat(p.getSend().getMaxAttachments()).isEqualTo(10);
+            // 17 MiB, which base64 turns into about 24.4 MB — under Gmail's 25 MB message limit.
+            assertThat(p.getSend().getMaxAttachmentBytes()).isEqualTo(17_825_792L);
+            assertThat(p.getSend().getMaxAttachmentBytes() * 4 / 3)
+                    .isLessThan(MailProperties.PROVIDER_MESSAGE_LIMIT_BYTES);
+            // Over this a message goes to Gmail's upload URI instead of into a JSON request.
+            assertThat(p.getSend().getMaxJsonSendBytes()).isEqualTo(3_145_728L);
             assertThat(p.getTracking().getDeliveredAfter()).isEqualTo(Duration.ofMinutes(15));
             assertThat(p.getTracking().getConfirmWindow()).isEqualTo(Duration.ofHours(24));
             assertThat(p.getSync().isEnabled()).isTrue();
@@ -90,6 +97,24 @@ class MailPropertiesTest {
             assertThat(p.getGoogle().getRevokeUrl()).isEqualTo("https://oauth2.googleapis.com/revoke");
             assertThat(p.secretsKeyBytes()).hasSize(32);
         });
+    }
+
+    @Test
+    void anAttachmentCeilingGmailWouldRefuseAnywayIsRefusedAtStartup() {
+        // Anything whose base64 could pass 25 MB: the service would accept emails Gmail then throws out.
+        runner.withPropertyValues(API_KEY, SECRETS_KEY, "mail.send.max-attachment-bytes=20000000")
+                .run(context -> {
+                    assertThat(context).hasFailed();
+                    assertThat(messages(context.getStartupFailure()))
+                            .contains("send.maxAttachmentBytes")
+                            .contains(String.valueOf(MailProperties.MAX_ATTACHMENT_BYTES_LIMIT))
+                            .contains("25000000");
+                });
+        runner.withPropertyValues(API_KEY, SECRETS_KEY, "mail.send.max-attachment-bytes=-1")
+                .run(context -> assertThat(context).hasFailed());
+        // Zero is allowed: it turns attachments off without turning email off.
+        runner.withPropertyValues(API_KEY, SECRETS_KEY, "mail.send.max-attachment-bytes=0")
+                .run(context -> assertThat(context).hasNotFailed());
     }
 
     @Test

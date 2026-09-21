@@ -1,4 +1,5 @@
 import '../../core/format.dart';
+import 'assignee.dart';
 
 enum DisputeTargetType { INVOICE, PAYMENT }
 
@@ -44,6 +45,13 @@ class Dispute {
   final String? proposedChangeJson;
   final DisputeStatus status;
   final String? adminNotes;
+
+  /// Everyone answerable for the dispute, resolved as of this read (A1). Empty for a customer
+  /// login, which never learns staff identity — so it means "not shown here", not "nobody"
+  /// (AC-A8). It is never set on the form that opens a dispute: that form is worked from the
+  /// customer's side, where there is no staff to pick, so assigning is a staff act of its own
+  /// (`PATCH /api/disputes/{id}/assignees`).
+  final List<Assignee> assignees;
   final int? resolvedByUserId;
   final DateTime? resolvedAt;
   final DateTime createdAt;
@@ -63,6 +71,7 @@ class Dispute {
     required this.proposedChangeJson,
     required this.status,
     required this.adminNotes,
+    this.assignees = const [],
     required this.resolvedByUserId,
     required this.resolvedAt,
     required this.createdAt,
@@ -83,9 +92,21 @@ class Dispute {
         proposedChangeJson: json['proposedChangeJson'] as String?,
         status: parseDisputeStatus(json['status'] as String?),
         adminNotes: json['adminNotes'] as String?,
+        assignees: ((json['assignees'] as List?) ?? const [])
+            .cast<Map>()
+            .map((m) => Assignee.fromJson(m.cast<String, dynamic>()))
+            .toList(),
         resolvedByUserId: (json['resolvedByUserId'] as num?)?.toInt(),
         resolvedAt: json['resolvedAt'] == null ? null : DateTime.parse(json['resolvedAt'] as String),
         createdAt: DateTime.parse(json['createdAt'] as String),
         updatedAt: json['updatedAt'] == null ? null : DateTime.parse(json['updatedAt'] as String),
       );
+
+  /// The tokens that would name these people again: what the assign dialog opens on (A1). A row
+  /// that names neither a person nor a role has no token and is dropped, rather than sent back as
+  /// something the server would refuse.
+  List<EmailToken> get assigneeTokens => [
+        for (final a in assignees)
+          if (a.token != null) a.token!,
+      ];
 }
