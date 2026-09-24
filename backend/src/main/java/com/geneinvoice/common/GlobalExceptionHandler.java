@@ -2,6 +2,10 @@ package com.geneinvoice.common;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
+import com.geneinvoice.approval.ApprovalDtos;
+import com.geneinvoice.approval.ApprovalService;
+import com.geneinvoice.approval.PendingApprovalException;
+import com.geneinvoice.approval.StaleChangeException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.ConcurrencyFailureException;
@@ -12,6 +16,9 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -30,6 +37,54 @@ import java.util.Map;
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+
+    private final ApprovalService approvals;
+
+    /** A transaction of its own for the park, because by the time a handler runs the mutator's
+     *  transaction has already rolled back and ApprovalService.park is MANDATORY. The
+     *  BulkExecutor:22 idiom rather than @RequiredArgsConstructor, which cannot build one (B2). */
+    private final TransactionTemplate parkTx;
+
+    public GlobalExceptionHandler(ApprovalService approvals, PlatformTransactionManager txManager) {
+        this.approvals = approvals;
+        this.parkTx = new TransactionTemplate(txManager);
+        this.parkTx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    /**
+     * A save held for approval is not an error: it was accepted, it just has not happened (B2).
+     *
+     * <p>202 and never 200 — a client that reads 200 as "done" will tell somebody their payment
+     * was recorded — never 409, because nothing conflicted, and never 403, because the maker was
+     * entitled to ask. The error contract fixes this and it is not negotiable.
+     *
+     * <p>Spring's ExceptionHandlerMethodResolver picks the most specific handler within one
+     * advice, so the @ExceptionHandler(Exception.class) below is not a hazard and this does not
+     * need an advice of its own (B2).
+     */
+    @ExceptionHandler(PendingApprovalException.class)
+    public ResponseEntity<Object> pendingApproval(PendingApprovalException ex, HttpServletRequest req) {
+        String path = req.getRequestURI();
+        try {
+            return ResponseEntity.accepted().body(parkTx.execute(s -> approvals.park(ex.change(), path)));
+        } catch (DataIntegrityViolationException e) {
+            // uq_pending_open is the backstop for two makers who both passed the gate's
+            // in-transaction exists(): the target's row lock is released by the rollback before
+            // either pending row is written, so the database is the only thing that can decide
+            // which of them is the one that is waiting (B2).
+            ApprovalDtos.Accepted waiting =
+                    parkTx.execute(s -> approvals.describeExisting(ex.change(), path));
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                    ApiError.of(409, "Conflict", waiting.message(), path));
+        }
+    }
+
+    /** The record moved under the change that was approved: look again, do not replay (B2). */
+    @ExceptionHandler(StaleChangeException.class)
+    public ResponseEntity<ApiError> staleChange(StaleChangeException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                ApiError.of(409, "Conflict", ex.getMessage(), req.getRequestURI()));
+    }
 
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ApiError> notFound(NotFoundException ex, HttpServletRequest req) {

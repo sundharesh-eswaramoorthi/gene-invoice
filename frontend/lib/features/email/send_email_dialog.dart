@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
 import '../../core/table/table_providers.dart';
+import '../../shared/widgets/role_token_field.dart';
 import 'email_entity.dart';
 import 'email_models.dart';
 import 'email_providers.dart';
@@ -406,7 +407,7 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     if (t.isUser) return _personText(t.userId!);
     if (t.isCustomer) return _customerEmailsText(ctx);
     final option = ctx.roleOf(t);
-    if (option == null) return _roleKeyLabel(t.role!);
+    if (option == null) return roleKeyLabel(t.role!);
     final bothLevels = _to.where((other) => other.isRole && other.role == t.role).length > 1;
     return _roleText(option, ctx, levelled: bothLevels);
   }
@@ -625,7 +626,7 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
       }
     }
     if (from != null && from.isRole && chosen == null) {
-      item(value, _fromItem(_roleKeyLabel(from.role!)));
+      item(value, _fromItem(roleKeyLabel(from.role!)));
     }
     if (from != null && from.isUser) {
       item(value, _fromItem(_personText(from.userId!), note: _gmailNote(_people[from.userId!], ctx)));
@@ -691,95 +692,29 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     );
   }
 
-  Widget _toField(EmailContext ctx) {
-    final theme = Theme.of(context);
-    IconData iconOf(EmailToken t) => t.isUser
-        ? Icons.person_outline
-        : t.isRole
-            ? Icons.badge_outlined
-            : Icons.business_outlined;
-
-    final groups = [
-      for (final group in ctx.roleGroups)
-        (
-          label: group.label,
-          roles: [
-            for (final r in group.roles)
-              if (!_to.contains(r.token)) r,
-          ],
-        ),
-    ];
-    const customer = EmailToken.customer();
-
-    Widget addRow(List<Widget> children) => Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: children,
-          ),
-        );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        InputDecorator(
-          decoration: InputDecoration(labelText: 'To *', errorText: _toError),
-          child: _to.isEmpty
-              ? Text('Add recipients below', style: TextStyle(color: theme.hintColor))
-              : Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final t in _to)
-                      Tooltip(
-                        message: _tokenTooltip(t, ctx) ?? '',
-                        child: InputChip(
-                          avatar: Icon(iconOf(t), size: 18),
-                          label: Text(_tokenText(t, ctx), overflow: TextOverflow.ellipsis),
-                          deleteButtonTooltipMessage: 'Remove',
-                          onDeleted: _sending ? null : () => _removeTo(t),
-                        ),
-                      ),
-                  ],
-                ),
-        ),
-        addRow([
-          Text('Add', style: theme.textTheme.labelLarge),
-          // Only staff may address other staff by name (E13).
-          if (!ctx.restricted)
-            ActionChip(
-              avatar: const Icon(Icons.person_add_alt, size: 18),
-              label: const Text('Person…'),
-              onPressed: _sending ? null : _addPerson,
-            ),
-        ]),
-        for (final group in groups)
-          if (group.roles.isNotEmpty)
-            addRow([
-              _groupLabel(group.label),
-              for (final r in group.roles)
-                ActionChip(
-                  avatar: const Icon(Icons.badge_outlined, size: 18),
-                  label: Text(_roleText(r, ctx), overflow: TextOverflow.ellipsis),
-                  tooltip: _roleTooltip(r, ctx),
-                  onPressed: _sending ? null : () => _addTo(r.token),
-                ),
-            ]),
-        if (!_to.contains(customer))
-          addRow([
-            ActionChip(
-              avatar: const Icon(Icons.business_outlined, size: 18),
-              label: Text(_customerEmailsText(ctx), overflow: TextOverflow.ellipsis),
-              tooltip: ctx.customerEmailsAvailable ? null : 'There is no customer to write to',
-              onPressed: _sending || !ctx.customerEmailsAvailable ? null : () => _addTo(customer),
-            ),
-          ]),
-      ],
-    );
-  }
+  /// The To field is now [RoleTokenField], which is this method's own widget tree lifted into
+  /// shared/widgets so the automation rule builder addresses people with the SAME picker rather
+  /// than a second one that would drift (A3). Everything that needs the record — what a role
+  /// resolves to, who holds it, whether there is a customer to write to — is still worked out
+  /// here and handed over as a callback.
+  Widget _toField(EmailContext ctx) => RoleTokenField(
+        label: 'To *',
+        errorText: _toError,
+        tokens: _to,
+        roleGroups: ctx.roleGroups,
+        tokenText: (t) => _tokenText(t, ctx),
+        tokenTooltip: (t) => _tokenTooltip(t, ctx),
+        roleText: (r) => _roleText(r, ctx),
+        roleTooltip: (r) => _roleTooltip(r, ctx),
+        customerText: _customerEmailsText(ctx),
+        customerEnabled: ctx.customerEmailsAvailable,
+        customerTooltip: ctx.customerEmailsAvailable ? null : 'There is no customer to write to',
+        offerPerson: !ctx.restricted,
+        enabled: !_sending,
+        onAddPerson: _addPerson,
+        onAdd: _addTo,
+        onRemove: _removeTo,
+      );
 
   Widget _previewPanel() {
     final theme = Theme.of(context);
@@ -855,7 +790,10 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   }
 }
 
-String _roleKeyLabel(String key) => key
+/// A role key as a person reads it — "Sales POC". PUBLIC because the automation rule builder
+/// addresses the same seats through the same [RoleTokenField] and must not decode them a second,
+/// slightly different way (A3).
+String roleKeyLabel(String key) => key
     .split('_')
     .where((w) => w.isNotEmpty)
     .map((w) => w == 'POC' ? w : '${w[0]}${w.substring(1).toLowerCase()}')

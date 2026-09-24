@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,7 @@ import '../../core/table/table_providers.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_name_cell.dart';
@@ -35,7 +37,6 @@ class InvoicesScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.invoiceManage) ?? false;
     final canExport = user?.has(Privileges.exportData) ?? false;
-    final canPromise = user?.has(Privileges.promiseManage) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
     final canSendEmail = ref.watch(canSendEmailProvider);
@@ -185,7 +186,15 @@ class InvoicesScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, inv) => InvoiceStatusChip(status: inv.status),
+            cell: (context, inv) => Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                InvoiceStatusChip(status: inv.status),
+                if (inv.approvalPending) const ApprovalPendingDot(),
+              ],
+            ),
           ),
           // A person's name is as long as a customer's; capped and ellipsised like the
           // Customer column beside it, rather than cut mid-letter against the row actions
@@ -205,10 +214,18 @@ class InvoicesScreen extends ConsumerWidget {
             onPressed: () => context.go('/invoices/${inv.id}'),
           ),
           sendEmailRowAction(context,
-              type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber),
+              type: EmailEntityType.invoice,
+              entityId: inv.id,
+              entityLabel: inv.invoiceNumber,
+              regionId: inv.regionId),
           // A cancelled invoice owes nothing, whatever balance it last showed, and the backend
           // refuses a promise on it (D-49).
-          if (canPromise && inv.balance > 0 && inv.status != InvoiceStatus.CANCELLED)
+          // hasIn, not has: somebody who manages one branch and only reads another holds the
+          // privilege everywhere and may act only here. The server answers 403 either way; this
+          // is so the button is not offered in the first place (B1).
+          if ((user?.hasIn(Privileges.promiseManage, inv.regionId) ?? false) &&
+              inv.balance > 0 &&
+              inv.status != InvoiceStatus.CANCELLED)
             IconButton(
               tooltip: 'Raise promise',
               icon: const Icon(Icons.handshake_outlined, size: 18),
@@ -219,7 +236,8 @@ class InvoicesScreen extends ConsumerWidget {
                 preselectedInvoices: [inv],
               ),
             ),
-          if (canManage && inv.status == InvoiceStatus.UNPAID)
+          if ((user?.hasIn(Privileges.invoiceManage, inv.regionId) ?? false) &&
+              inv.status == InvoiceStatus.UNPAID)
             IconButton(
               tooltip: 'Cancel invoice',
               icon: const Icon(Icons.block, size: 18),
@@ -254,6 +272,22 @@ class InvoicesScreen extends ConsumerWidget {
       await ref.read(dioProvider).post('/api/invoices/${inv.id}/cancel');
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);
+    } on DioException catch (e) {
+      // INVOICE_CANCEL is gated on the invoice's balance, so a big one comes back 202 and the
+      // invoice is still ISSUED. Amber and not red: the ask was accepted, nothing failed, and
+      // nothing happened either. The table is still reloaded, because the row now carries a
+      // change waiting on it and that is what the pending dot reads (B2).
+      final held = pendingApprovalOf(e);
+      if (held != null) {
+        ref.invalidate(tablePageProvider);
+        ref.invalidate(tableSummaryProvider);
+        if (context.mounted) showApprovalSentSnackBar(context, held);
+        return;
+      }
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context)

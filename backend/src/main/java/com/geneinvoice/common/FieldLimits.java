@@ -26,4 +26,17 @@ public final class FieldLimits {
     public static final int GMAIL_CLIENT_ID = 300;
     public static final int GMAIL_CLIENT_SECRET = 300;
     public static final int GMAIL_REFRESH_TOKEN = 2000;
+
+    // A task title is a line somebody reads in a list, and the notes are the paragraph
+    // behind it; both are varchar and never @Lob, which on Postgres would store an OID
+    // instead of readable text (A6).
+    public static final int TASK_TITLE = 200;
+    public static final int TASK_NOTES = 2000;
+
+    // A rule's own name and the sentence under it. Both are plain varchar; the TEMPLATE fields a
+    // rule carries (a task title, an email subject, an email body) are bounded at save time by
+    // TASK_TITLE, TASK_NOTES, EMAIL_SUBJECT and EMAIL_BODY above, because a template and the text
+    // it renders to land in the same columns and must not have two different ceilings (A1, A3).
+    public static final int RULE_NAME = 200;
+    public static final int RULE_DESCRIPTION = 1000;
 }

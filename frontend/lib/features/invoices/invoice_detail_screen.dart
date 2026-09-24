@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,11 +10,14 @@ import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
+import '../../shared/models/pending_change.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/payment_term.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/approval_providers.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
@@ -23,6 +27,7 @@ import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
+import '../tasks/task_actions.dart';
 import 'invoices_screen.dart';
 
 class InvoiceDetailScreen extends ConsumerStatefulWidget {
@@ -152,6 +157,9 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Invoice saved')));
       }
+    } on DioException catch (e) {
+      if (_handleHeld(e)) return;
+      setState(() => _error = apiErrorMessage(e));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -159,11 +167,29 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     }
   }
 
+  /// The save was taken and has not happened: the server is holding the change now, not this
+  /// form. _dirty goes false so unsaved_changes.dart's exit guard does not challenge on the way
+  /// out over edits nobody is holding, and the providers are invalidated so the chip and the
+  /// amber panel appear without a reload (B2).
+  bool _handleHeld(DioException e) {
+    final held = pendingApprovalOf(e);
+    if (held == null) return false;
+    ref.invalidate(invoiceDetailProvider(widget.id));
+    invalidateApprovals(ref);
+    if (mounted) {
+      setState(() {
+        _dirty = false;
+        _error = null;
+      });
+      showApprovalSentSnackBar(context, held);
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(invoiceDetailProvider(widget.id));
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.has(Privileges.invoiceManage) ?? false;
     final canAssignPoc = ref.watch(canAssignPocProvider);
     final canSeePoc = ref.watch(canSeePocProvider);
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
@@ -180,12 +206,32 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       ),
       data: (inv) {
         _seed(inv);
+        // hasIn, not has: this invoice is in one branch, and holding INVOICE_MANAGE somewhere
+        // is not holding it here. The server refuses either way; this keeps the page from
+        // offering fields and a Save button that cannot work (B1).
+        final canEdit = user?.hasIn(Privileges.invoiceManage, inv.regionId) ?? false;
         final sendEmail = sendEmailHeaderButton(context, ref,
-            type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
+            type: EmailEntityType.invoice,
+            entityId: inv.id,
+            entityLabel: inv.invoiceNumber,
+            regionId: inv.regionId);
         final documentsTab = documentsDetailTab(ref,
-            type: DocumentEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
+            type: DocumentEntityType.invoice,
+            entityId: inv.id,
+            entityLabel: inv.invoiceNumber,
+            regionId: inv.regionId);
+        // After Promises and before History, on all three record screens: work outstanding on
+        // a record sits with the other things somebody is chasing, not in the audit trail (A6).
+        final tasksTab = tasksDetailTab(ref,
+            type: TaskEntityType.invoice,
+            entityId: inv.id,
+            entityLabel: inv.invoiceNumber,
+            regionId: inv.regionId);
         final emailTab = emailDetailTab(ref,
-            type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
+            type: EmailEntityType.invoice,
+            entityId: inv.id,
+            entityLabel: inv.invoiceNumber,
+            regionId: inv.regionId);
         return PopScope(
           canPop: !_dirty,
           onPopInvokedWithResult: (didPop, _) {
@@ -201,6 +247,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             onBack: () => goGuarded(context, '/invoices'),
             titleTrailing: [
               if (canSeePoc && inv.pocMissing) const PocMissingBadge(),
+              if (inv.approvalPending) const ApprovalPendingChip(),
               InvoiceStatusChip(status: inv.status),
               if (inv.overdue) OverdueBadge(daysOverdue: inv.daysOverdue),
               if (canSeeDisputes && user!.canRaiseDispute)
@@ -219,7 +266,21 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) =>
                 context.go('/invoices/${widget.id}?tab=$slug'),
-            top: _top(inv, canEdit: canEdit, canAssignPoc: canAssignPoc, canSeePoc: canSeePoc),
+            top: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Only when the record itself says so: the flag costs the server one indexed
+                // lookup it was already making, and this way a page with nothing waiting asks
+                // the queue nothing at all (B2).
+                if (inv.approvalPending)
+                  PendingApprovalBanner(
+                    target: PendingTarget(PendingTargetType.INVOICE, inv.id),
+                    onDecided: () => ref.invalidate(invoiceDetailProvider(widget.id)),
+                  ),
+                _top(inv, canEdit: canEdit, canAssignPoc: canAssignPoc, canSeePoc: canSeePoc),
+              ],
+            ),
             tabs: [
               if (canSeeDisputes)
                 DetailTab(
@@ -241,8 +302,10 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                     customerId: inv.customerId,
                     customerName: inv.customerName,
                     invoice: inv,
+                    regionId: inv.regionId,
                   ),
                 ),
+              if (tasksTab != null) tasksTab,
               if (canViewAudit)
                 DetailTab(
                   slug: 'history',
@@ -295,11 +358,22 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                   showLabel: false,
                   enabled: canEdit && canAssignPoc,
                   required: true,
+                  // This invoice's account, so the picker offers only people who work in the
+                  // branch it belongs to (B1).
+                  customerId: inv.customerId,
                   onChanged: (u) => setState(() {
                     _salesPoc = u;
                     _dirty = true;
                   }),
                 ),
+              ),
+            // Which branch this invoice's account is in. It is read-only here and everywhere:
+            // an invoice takes its branch from its account and moves only when the account does
+            // — it explains why Edit may be missing on a record you can plainly read (B1).
+            if (inv.regionId != null)
+              DetailGridItem(
+                label: 'Branch',
+                child: ReadOnlyValue(inv.regionName ?? '#${inv.regionId}'),
               ),
             DetailGridItem(
               label: 'Payment terms',

@@ -8,7 +8,7 @@ import '../../core/format.dart';
 import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/widgets/status_chip.dart';
-import 'email_actions.dart' show canSendEmailProvider;
+import 'email_actions.dart' show canSendEmailInProvider;
 import 'email_entity.dart';
 import 'email_models.dart';
 import 'email_providers.dart';
@@ -67,7 +67,16 @@ class EmailTab extends ConsumerStatefulWidget {
   final int entityId;
   final String? entityLabel;
 
-  const EmailTab({super.key, required this.type, required this.entityId, this.entityLabel});
+  /// The branch the record lives in. Writing about it is a WRITE there, so Send and Retry ask
+  /// about this branch and not about the privilege held somewhere (B1).
+  final int? regionId;
+
+  const EmailTab(
+      {super.key,
+      required this.type,
+      required this.entityId,
+      this.entityLabel,
+      this.regionId});
 
   @override
   ConsumerState<EmailTab> createState() => _EmailTabState();
@@ -99,7 +108,7 @@ class _EmailTabState extends ConsumerState<EmailTab> {
 
   @override
   Widget build(BuildContext context) {
-    final canSend = ref.watch(canSendEmailProvider);
+    final canSend = ref.watch(canSendEmailInProvider(widget.regionId));
     final first = ref.watch(entityEmailsProvider(_key(0)));
     final theme = Theme.of(context);
 

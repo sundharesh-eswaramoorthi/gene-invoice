@@ -13,6 +13,7 @@ import com.geneinvoice.privilege.Privileges;
 import com.geneinvoice.promise.PaymentPromiseRepository;
 import com.geneinvoice.promise.PaymentPromiseService;
 import com.geneinvoice.user.User;
+import com.geneinvoice.user.UserController;
 import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -56,14 +57,51 @@ public class AuditController {
     private final CustomerRepository customerRepository;
     private final PaymentPromiseRepository promiseRepository;
     private final UserRepository userRepository;
+    // The staff-directory gate, so a person's history is readable exactly where the person is (B1).
+    private final UserController users;
     private final CurrentUser currentUser;
 
+    // pendingChangeId is TRAILING, the blueprint's fixed append order. The panel renders it
+    // "via approval #N" beside the "via dispute #N" it already renders, so the four-eyes story of
+    // a record is readable from its own history rather than only from the queue (B2).
     public record AuditEntryDto(Long id, String entityType, Long entityId, String entityLabel,
                                 String action, String beforeJson, String afterJson,
                                 Long changedByUserId, String changedByUsername,
                                 Long disputeId, String reason,
-                                Instant createdAt, boolean derived, boolean actorHidden) {}
+                                Instant createdAt, boolean derived, boolean actorHidden,
+                                Long pendingChangeId) {}
 
+    /**
+     * THE TRAIL, LIVE OR AS IT STOOD ON A DATE (B3).
+     *
+     * <p>{@code ?asOf} is honoured here and the endpoint is in AsOfEndpoints.AS_OF_CAPABLE, but
+     * nothing below changes for it and that is deliberate. The truncation and the suppression of
+     * the fabricated entries both live in {@link AuditTimelineService#timeline}, where the entries
+     * are, so there is no second opinion about what "as of" means in this package.
+     *
+     * <p>THREE THINGS STAY TODAY'S, AND EACH IS A DECISION RATHER THAN AN OVERSIGHT.
+     *
+     * <ul>
+     *   <li>{@link #ensureCallerCanSee} and {@code withoutPocIdentity} are untouched: WHO MAY READ
+     *       a trail is judged by the rights the caller holds now, which is contract clause a.1 and
+     *       is the one thing as-of must never widen. A privilege somebody held in January does not
+     *       come back because they asked about January.</li>
+     *   <li>The usernames resolved below, and every {@code entityLabel} the timeline carries, are
+     *       today's — an invoice renumbered since renders under its new number, a person renamed
+     *       since under their new name. That is contract clause a.3, the same rule that renders a
+     *       branch and a product under today's name on every other as-of answer.</li>
+     *   <li>{@code includeRelated} walks TODAY'S relationships to decide which records' trails to
+     *       gather. It needs no as-of arm because every row it can reach is stamped with the
+     *       instant it was written, and the truncation drops everything after T regardless of
+     *       which record led us to it.</li>
+     * </ul>
+     *
+     * <p>A RECORD THAT DID NOT EXIST THEN IS 404 FOR AN INVOICE AND AN EMPTY TRAIL FOR THE OTHER
+     * THREE, because {@code InvoiceService.requireInBook} roots on the mirror under an open context
+     * and the customer, payment and promise checks root live. Both answers are honest — neither
+     * shows anything that had not happened by T — and the difference is recorded rather than
+     * papered over here (B3).
+     */
     @GetMapping
     @PreAuthorize("hasAuthority('" + Privileges.AUDIT_VIEW + "')")
     public List<AuditEntryDto> history(@RequestParam String entityType,
@@ -92,7 +130,8 @@ public class AuditController {
         return entries.stream().map(e -> new AuditEntryDto(e.id(), e.entityType(), e.entityId(),
                 e.entityLabel(), e.action(), e.beforeJson(), e.afterJson(),
                 e.changedByUserId(), usernames.get(e.changedByUserId()),
-                e.disputeId(), e.reason(), e.createdAt(), e.derived(), e.actorHidden())).toList();
+                e.disputeId(), e.reason(), e.createdAt(), e.derived(), e.actorHidden(),
+                e.pendingChangeId())).toList();
     }
 
     private void ensureCallerCanSee(String entityType, Long entityId) {
@@ -111,7 +150,20 @@ public class AuditController {
                     customerRepository::existsById);
             case "PROMISE" -> readOrGone(entityId, () -> promiseService.get(entityId),
                     promiseRepository::existsById);
-            default -> { }
+            // A person is visible where they work, so their history is read through the same gate
+            // the staff directory uses: somebody the caller shares no branch with answers exactly
+            // as a missing person does (B1, AUTH-08).
+            case "USER" -> readOrGone(entityId, () -> users.requireInScope(entityId),
+                    userRepository::existsById);
+            // The catalogue is ONE company-wide list with no branch of its own — unregioned by
+            // declaration, and PRODUCT_VIEW above is the whole of its gate. Said out loud rather
+            // than left to fall through (B1).
+            case "PRODUCT" -> { }
+            // Not "do nothing": a type added to SUPPORTED without a visibility verdict is a
+            // history readable by anyone holding its view privilege, anywhere. Unreachable today,
+            // because SUPPORTED is checked above, and that is the point (B1).
+            default -> throw new IllegalStateException(
+                    "No audit visibility rule for entity type " + entityType);
         }
     }
 

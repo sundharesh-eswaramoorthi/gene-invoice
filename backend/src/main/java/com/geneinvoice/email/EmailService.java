@@ -24,6 +24,8 @@ import com.geneinvoice.email.transport.ConnectionState;
 import com.geneinvoice.email.transport.MailConnections;
 import com.geneinvoice.email.transport.MailTransport;
 import com.geneinvoice.email.transport.SyncResult;
+import com.geneinvoice.region.RegionAccess;
+import com.geneinvoice.region.RegionScope;
 import com.geneinvoice.user.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +62,7 @@ public class EmailService {
     private static final int PEOPLE_LIMIT = 20;
     private static final int MAX_UTC_OFFSET_MINUTES = 14 * 60;
 
-    private static final TableSchema RECORD_EMAILS = TableSchema.of("emails", "occurredAt,desc",
+    private static final TableSchema RECORD_EMAILS = TableSchema.of("emails", Email.class, "occurredAt,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).notFilterable().build(),
             ColumnDef.of("occurredAt", "Date", ColumnType.DATE).notFilterable().build());
 
@@ -79,6 +81,11 @@ public class EmailService {
     private final GmailConnectionService gmailConnections;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactions;
+    // The region chips this list says it is narrowed by; empty for an unregioned table,
+    // for a wildcard holder and for a customer login, so it is passed unconditionally (B1).
+    private final RegionScope regionScope;
+    // The write-side gate; see requireSendable below for why a send is a write (B1).
+    private final RegionAccess regionAccess;
 
     /** Subject and body as they will be saved (E16), checked the same way for one email and for a bulk send. */
     private record Content(String subject, String body) {
@@ -217,6 +224,7 @@ public class EmailService {
 
     public EmailDtos.EmailDto send(EmailDtos.SendEmailRequest req) {
         EmailTargets.Target target = targets.load(EmailEntityType.parse(req.entityType()), requireId(req.entityId()));
+        requireSendable(target);
         Content content = Content.check(req.subject(), req.body(), req.to());
         EmailAddressing.Resolution resolution = addressing.resolve(
                 addressing.plan(target, req.from(), req.to()), target);
@@ -246,6 +254,10 @@ public class EmailService {
         Map<Long, Long> emailByRecord = new HashMap<>();
         BulkDtos.BulkResult result = bulkExecutor.run(req, ids, truncated, id -> {
             EmailTargets.Target target = targets.load(type, id);
+            // Per record and not once for the run: a filter can span branches, and a run over a
+            // mixed set sends what this caller may send and reports the rest as failures rather
+            // than refusing the whole click (B1).
+            requireSendable(target);
             EmailAddressing.Resolution resolution = addressing.resolve(plan, target);
             resolution.problem().ifPresent(problem -> {
                 throw new BulkExecutor.IneligibleException(problem);
@@ -254,6 +266,19 @@ public class EmailService {
         });
         dispatcher.dispatchAll(result.succeeded().stream().map(emailByRecord::get).filter(Objects::nonNull).toList());
         return result;
+    }
+
+    /**
+     * Sending is a write in the branch the record lives in. EMAIL_SEND is MANAGE-level in
+     * RegionRights, but the global authority on the controller only says the caller may send
+     * SOMEWHERE, and targets.load reads the record at VIEW — so without this a caller holding
+     * MANAGE in one branch could send company email about another branch's account on the
+     * strength of VIEW there, which is the one effect in this application that cannot be undone.
+     * A record that belongs to nobody — a product, a role, an internal person — has no branch and
+     * so has nothing to ask (B1, D-46).
+     */
+    private void requireSendable(EmailTargets.Target target) {
+        if (target.regionId() != null) regionAccess.requireManage(target.regionId());
     }
 
     private Long save(EmailTargets.Target target, Content content, EmailAddressing.Resolution resolution,
@@ -296,7 +321,10 @@ public class EmailService {
 
     public EmailDtos.EmailDto retry(Long id) {
         Email email = emailRepository.findById(id).orElseThrow(() -> new NotFoundException("Email not found"));
-        targets.requireVisible(email.getEntityType(), email.getEntityId());
+        // load and not requireVisible: a retry puts the same mail back on the wire, so it is a
+        // send and is asked the send question. load does everything requireVisible did and also
+        // says which branch the record is in (B1).
+        requireSendable(targets.load(email.getEntityType(), email.getEntityId()));
         EmailViews.Viewer viewer = views.viewer();
         if (viewer.isCustomer() && !EmailViews.customerTookPart(email,
                 recipientRepository.findByEmailIdOrderByIdAsc(id), viewer.customerId())) {
@@ -330,7 +358,8 @@ public class EmailService {
                 (root, q, cb) -> cb.equal(root.get("entityId"), entityId)));
         if (viewer.isCustomer()) scope.add(EmailViews.customerTookPart(viewer.customerId()));
         var result = queryExecutor.run(Email.class, RECORD_EMAILS, query, scope, List.of());
-        return PageResponse.of(views.toDtos(result.content(), viewer, true), query, result.total(), List.of());
+        return PageResponse.of(views.toDtos(result.content(), viewer, true), query, result.total(),
+                List.of(), regionScope.lockedFilters(Email.class));
     }
 
     public EmailDtos.EmailDto get(Long id) {

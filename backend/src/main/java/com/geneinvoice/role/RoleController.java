@@ -15,6 +15,7 @@ import com.geneinvoice.email.connection.GmailDisconnects;
 import com.geneinvoice.privilege.Privilege;
 import com.geneinvoice.privilege.PrivilegeRepository;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.RegionScope;
 import com.geneinvoice.user.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -45,6 +46,9 @@ public class RoleController {
     private final TableQueryExecutor queryExecutor;
     private final GmailDisconnects gmailDisconnects;
     private final CurrentUser currentUser;
+    // The region chips this list says it is narrowed by; empty for an unregioned table,
+    // for a wildcard holder and for a customer login, so it is passed unconditionally (B1).
+    private final RegionScope regionScope;
 
     public record RoleDto(Long id, String name, String description, List<String> privileges) {
         static RoleDto from(Role r) {
@@ -69,7 +73,7 @@ public class RoleController {
         TableQuery query = TableQuery.parse(TableSchemas.ROLES, page, size, sort, FilterParams.from(request));
         var result = queryExecutor.run(Role.class, TableSchemas.ROLES, query, List.of(), List.of());
         return PageResponse.of(result.content().stream().map(RoleDto::from).toList(),
-                query, result.total(), List.of());
+                query, result.total(), List.of(), regionScope.lockedFilters(Role.class));
     }
 
     @PostMapping("/export")

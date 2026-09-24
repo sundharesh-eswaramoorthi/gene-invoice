@@ -16,7 +16,8 @@ public record ColumnDef(
         String referenceKind,
         boolean pocRestricted,
         PathResolver path,
-        PredicateResolver customFilter
+        PredicateResolver customFilter,
+        String asOfMode
 ) {
 
     public static Builder of(String name, String label, ColumnType type) {
@@ -33,6 +34,13 @@ public record ColumnDef(
 
     public static PathResolver referenceId(String association) {
         return (root, q, cb) -> root.get(association).get("id");
+    }
+
+    // LEFT at both hops on purpose: referenceId over a 2-level path INNER-joins and silently drops
+    // every row whose intermediate association is null, which is exactly the rows a region column
+    // has to keep showing (B1).
+    public static PathResolver nested2(String a, String b, String attribute) {
+        return (root, q, cb) -> leftJoin(leftJoin(root, a), b).get(attribute);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
@@ -56,6 +64,9 @@ public record ColumnDef(
         private boolean pocRestricted;
         private PathResolver path;
         private PredicateResolver customFilter;
+        // EXACT means "this column reads as of the requested date"; it is the default because a
+        // column with no historical source is the exception, not the rule (B3).
+        private String asOfMode = "EXACT";
 
         private Builder(String name, String label, ColumnType type) {
             this.name = name;
@@ -71,10 +82,13 @@ public record ColumnDef(
         public Builder pocRestricted() { this.pocRestricted = true; return this; }
         public Builder path(PathResolver p) { this.path = p; return this; }
         public Builder filter(PredicateResolver r) { this.customFilter = r; return this; }
+        // CURRENT marks a denormalised label that is always read live, so the client can say
+        // "(current value)" instead of pretending the label is the one that was in force (B3).
+        public Builder current() { this.asOfMode = "CURRENT"; return this; }
 
         public ColumnDef build() {
             return new ColumnDef(name, label, type, sortable, filterable, enumValues,
-                    referenceKind, pocRestricted, path, customFilter);
+                    referenceKind, pocRestricted, path, customFilter, asOfMode);
         }
     }
 }

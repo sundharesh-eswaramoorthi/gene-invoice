@@ -3,6 +3,12 @@ package com.geneinvoice.config;
 import com.geneinvoice.privilege.Privilege;
 import com.geneinvoice.privilege.PrivilegeRepository;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.Region;
+import com.geneinvoice.region.RegionProperties;
+import com.geneinvoice.region.RegionRepository;
+import com.geneinvoice.region.RegionRight;
+import com.geneinvoice.region.UserRegionGrant;
+import com.geneinvoice.region.UserRegionGrantRepository;
 import com.geneinvoice.role.Role;
 import com.geneinvoice.role.RoleRepository;
 import com.geneinvoice.user.User;
@@ -33,6 +39,9 @@ public class DataSeeder implements CommandLineRunner {
     private final PrivilegeRepository privilegeRepository;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+    private final RegionRepository regionRepository;
+    private final UserRegionGrantRepository userRegionGrantRepository;
+    private final RegionProperties regionProperties;
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -53,7 +62,7 @@ public class DataSeeder implements CommandLineRunner {
 
         Role admin = upsertRole("ADMIN", "Full system access", all);
 
-        Role cashier = upsertRole("CASHIER", "Day-to-day billing operations", pickByNames(
+        Set<Privilege> cashierPrivileges = pickByNames(
                 CUSTOMER_VIEW, CUSTOMER_MANAGE,
                 PRODUCT_VIEW,
                 INVOICE_VIEW, INVOICE_MANAGE,
@@ -65,8 +74,17 @@ public class DataSeeder implements CommandLineRunner {
                 EMAIL_VIEW, EMAIL_SEND,
                 DOCUMENT_VIEW, DOCUMENT_MANAGE,
                 EXPORT_DATA
-        ));
-        upsertRole("VIEWER", "Read-only access", pickByNames(
+        );
+        // Through keptOrNew, not the list above: a cashier gets these on the one boot that creates
+        // them and never again, so an operator who takes TASK_MANAGE away from CASHIER keeps it
+        // away. Seeing the queue comes with seeing the record it is waiting on (B2, A6).
+        cashierPrivileges.addAll(keptOrNew("CASHIER", createdNow, pickByNames(
+                APPROVAL_VIEW,
+                TASK_VIEW, TASK_MANAGE,
+                AUTOMATION_VIEW)));
+        Role cashier = upsertRole("CASHIER", "Day-to-day billing operations", cashierPrivileges);
+
+        Set<Privilege> viewerPrivileges = pickByNames(
                 CUSTOMER_VIEW, PRODUCT_VIEW, INVOICE_VIEW, PAYMENT_VIEW,
                 NOTIFICATION_VIEW,
                 POC_VIEW,
@@ -74,7 +92,11 @@ public class DataSeeder implements CommandLineRunner {
                 SCOPE_OVERRIDE,
                 EMAIL_VIEW,
                 DOCUMENT_VIEW
-        ));
+        );
+        // A reader may see what is pending and what is outstanding, and decide neither (B2, A6).
+        viewerPrivileges.addAll(keptOrNew("VIEWER", createdNow, pickByNames(APPROVAL_VIEW, TASK_VIEW)));
+        upsertRole("VIEWER", "Read-only access", viewerPrivileges);
+
         Set<Privilege> customerPrivileges = pickByNames(
                 CUSTOMER_VIEW,
                 INVOICE_VIEW,
@@ -162,6 +184,72 @@ public class DataSeeder implements CommandLineRunner {
             userRepository.save(u);
             log.info("Seeded cashier user: cashier / cashier123");
         }
+
+        // A database born with regions has nothing for RegionSchemaUpgrade to backfill — there is
+        // no customer to place and no staff user to staff — so the default region and the two
+        // seeded logins' grants are made here instead, where the users have just been created
+        // (this runs after every InitializingBean, DataSeeder being a CommandLineRunner) (B1).
+        Region defaultRegion = ensureDefaultRegion();
+        // The administrator holds the wildcard so opening a branch next year cannot lock the
+        // company out of it; everyone else is staffed in the default region only (B1).
+        //
+        // TWO wildcard rows, not one: the ladder is deliberately not a total order, so APPROVE
+        // does not cover MANAGE. An administrator holding APPROVE alone could sign changes off
+        // everywhere and raise an invoice nowhere — the authority-drop rule would take every
+        // MANAGE-level privilege off them the moment regions arrived (B1, R3 INTEGRATION).
+        grantIfUnstaffed("admin", null, RegionRight.MANAGE, RegionRight.APPROVE);
+        // Null when this installation has branches of its own and none of them carries the
+        // configured code any more. Nobody is staffed into a branch that was picked for them by a
+        // stale line of yaml; an unstaffed cashier sees nothing, which is the discoverable answer
+        // and the one the migration already gives a staff user it cannot place (B1).
+        if (defaultRegion != null) {
+            grantIfUnstaffed("cashier", defaultRegion.getId(), RegionRight.MANAGE);
+        }
+    }
+
+    /**
+     * The default region — seeded ONLY when this installation has no region at all, which is the
+     * same condition RegionSchemaUpgrade.seedDefaultRegion inserts under.
+     *
+     * <p>Find-or-create on the CODE would resurrect it. This runs on every boot, so the first
+     * restart after an administrator renames the default branch through the shipped
+     * PUT /api/regions/{id} would find no row carrying the old code and make a second, empty,
+     * active one under it — in GET /api/regions, in every branch picker, and competing to be the
+     * branch a new account is filed into. application.yml states the contract in the same words:
+     * renaming it later is a data change and not a config change, BECAUSE the row is seeded once
+     * by code (B1).
+     */
+    private Region ensureDefaultRegion() {
+        Region existing = regionRepository.findByCode(regionProperties.defaultCode()).orElse(null);
+        if (existing != null) return existing;
+        if (regionRepository.count() > 0) {
+            log.info("No region has the code {}, and this installation already has its own"
+                            + " branches, so none is seeded",
+                    regionProperties.defaultCode());
+            return null;
+        }
+        log.info("Seeding the default region {} ({})",
+                regionProperties.defaultCode(), regionProperties.defaultName());
+        return regionRepository.save(Region.builder()
+                .code(regionProperties.defaultCode())
+                .name(regionProperties.defaultName())
+                .active(true)
+                .build());
+    }
+
+    // "Has no grant at all" rather than "has no grant like this one", the same guard the schema
+    // upgrade uses: an operator who narrows admin to two regions tomorrow must not have the
+    // wildcard handed back on the next restart (B1).
+    private void grantIfUnstaffed(String username, Long regionId, RegionRight... rights) {
+        userRepository.findByUsername(username).ifPresent(u -> {
+            if (!userRegionGrantRepository.findByUserId(u.getId()).isEmpty()) return;
+            for (RegionRight right : rights) {
+                userRegionGrantRepository.save(UserRegionGrant.builder()
+                        .userId(u.getId()).regionId(regionId).right(right).build());
+                log.info("Granted {} {} in {}", username, right,
+                        regionId == null ? "every region" : "the default region");
+            }
+        });
     }
 
     private Role upsertRole(String name, String description, Set<Privilege> privs) {

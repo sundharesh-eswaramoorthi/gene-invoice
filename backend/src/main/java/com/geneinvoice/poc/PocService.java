@@ -5,9 +5,14 @@ import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.Strings;
+import com.geneinvoice.common.asof.AsOfContext;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.notification.NotificationService;
+import com.geneinvoice.region.RegionAccess;
+import com.geneinvoice.region.RegionRepository;
+import com.geneinvoice.region.RegionRight;
+import com.geneinvoice.region.UserRegionGrantRepository;
 import com.geneinvoice.user.User;
 import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,24 +40,58 @@ public class PocService {
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
     private final CustomerPocRepository customerPocRepository;
+    // The seat mirror, read on ONE path only: "who sat here on the date asked about".
+    // A seat that was vacated left no live row behind it, so the live table cannot answer
+    // that question at all (B3).
+    private final CustomerPocHistoryRepository customerPocHistoryRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final CurrentUser currentUser;
+    // Read rather than asked of the principal: the subject of the question is the SEAT HOLDER and
+    // not the caller, so it is the grant table that answers it (B1).
+    private final UserRegionGrantRepository userRegionGrantRepository;
+    // Only ever asked for a code, and only on the way to a refusal message: an operator told
+    // "does not work in NORTH" can act on it, one told "does not work in region 7" cannot (B1).
+    private final RegionRepository regionRepository;
+    // The write-side gate, and a DIFFERENT question from requireAssignable: that one asks whether
+    // the PERSON being seated works there, this one asks whether the CALLER may change this
+    // account's book at all. Both are needed and neither implies the other (B1).
+    private final RegionAccess regionAccess;
 
+    /**
+     * Who may be offered this seat in this branch. The picker only offers people who work there,
+     * because a name it offers and the gate then refuses is a name that should never have been on
+     * the list (B1).
+     *
+     * @param regionId the branch the seat is in, or null when the caller named none — which only
+     *                 a wildcard holder may do, and which then means "assignable anywhere at all"
+     */
     @Transactional(readOnly = true)
-    public List<User> assignable(PocType type, String query, int limit) {
+    public List<User> assignable(PocType type, Long regionId, String query, int limit) {
         // The picker's box is a plain substring search, so the user's own % and _ match only
         // themselves rather than acting as wildcards (CP-11).
         String pattern = (query == null || query.isBlank())
                 ? null
                 : "%" + Strings.escapeLike(query.trim().toLowerCase(Locale.ROOT)) + "%";
         int capped = Math.min(Math.max(limit, 1), 100);
-        return userRepository.findAssignable(type.assignabilityPrivilege(), pattern,
-                PageRequest.of(0, capped));
+        return userRepository.findAssignableInRegion(type.assignabilityPrivilege(), regionId,
+                pattern, PageRequest.of(0, capped));
     }
 
+    /**
+     * The gate every seat and every per-record POC field passes through. A seat is only valid if
+     * its holder can MANAGE the customer's region: the book axis and the region axis are ANDed by
+     * the query funnel, so a POC named in a branch they cannot work in would hold a seat that
+     * shows them nothing and routes them mail they cannot act on (B1).
+     *
+     * <p>A null regionId means the branch is not named AT THIS CALL SITE and the region half of
+     * the check is left to the per-record path. There is exactly one such caller — the ADD_POC
+     * bulk pre-flight in CustomerController, which spans as many branches as the selection does —
+     * and every row it then touches re-enters through {@link #add}, which passes the customer's
+     * own region. Nothing else may pass null (B1).
+     */
     @Transactional(readOnly = true)
-    public User requireAssignable(Long userId, PocType type) {
+    public User requireAssignable(Long userId, PocType type, Long regionId) {
         if (userId == null) {
             throw new BadRequestException(type.label() + " is required");
         }
@@ -67,6 +106,13 @@ public class PocService {
         if (!userRepository.hasPrivilege(userId, type.assignabilityPrivilege())) {
             throw new BadRequestException(
                     "User " + u.getUsername() + " is not assignable as " + type.label());
+        }
+        // The rejection names the branch by its code rather than its id, and it is a 400 and not a
+        // 403 because the caller is being told something about the PERSON they named, not about
+        // their own reach — refusing with "you have no access" would be a lie (B1, D-46).
+        if (regionId != null && !userRegionGrantRepository.covers(userId, regionId, RegionRight.MANAGE)) {
+            throw new BadRequestException("User " + u.getUsername() + " does not work in "
+                    + regionRepository.codeOf(regionId) + " and cannot be its " + type.label());
         }
         return u;
     }
@@ -83,6 +129,28 @@ public class PocService {
     @Transactional(readOnly = true)
     public List<CustomerPoc> listFor(Long customerId) {
         return customerPocRepository.findByCustomerIdOrderByPocTypeAscPrimaryDescIdAsc(customerId);
+    }
+
+    /**
+     * WHO SAT ON THIS ACCOUNT, LIVE OR ON THE DATE ASKED ABOUT (B3).
+     *
+     * <p>"Who was the primary collection POC on 31 January" is a question the live table cannot
+     * answer at all — a seat that was vacated left no row behind it — so under an open context
+     * this reads the seat mirror instead, with the same interval rule every other as-of read uses.
+     *
+     * <p>It returns DTOs and not entities because the two roots are different types and only one
+     * of them is a {@code CustomerPoc}; {@link #listFor} keeps its entity return for the write
+     * paths, which are never asked as of a date. The mapping is
+     * {@code PocDtos.CustomerPocDto.from}'s two overloads, so the two answers cannot drift into
+     * different shapes.
+     */
+    @Transactional(readOnly = true)
+    public List<PocDtos.CustomerPocDto> seatsFor(Long customerId) {
+        if (!AsOfContext.isActive()) {
+            return listFor(customerId).stream().map(PocDtos.CustomerPocDto::from).toList();
+        }
+        return customerPocHistoryRepository.inForce(List.of(customerId), AsOfContext.instant())
+                .stream().map(PocDtos.CustomerPocDto::from).toList();
     }
 
     @Transactional(readOnly = true)
@@ -123,7 +191,10 @@ public class PocService {
         // rather than both finding an empty group, both calling themselves the first seat and
         // both ending up primary — after which "make primary" could never be answered (CP-02).
         Customer customer = lockCustomer(customerId);
-        User user = requireAssignable(userId, type);
+        // .getId() on a lazy Region proxy initialises nothing, so the seat's region costs no
+        // extra read on the way to the two checks that use it (B1).
+        regionAccess.requireManage(customer.getRegion().getId());
+        User user = requireAssignable(userId, type, customer.getRegion().getId());
 
         if (customerPocRepository.findByCustomerIdAndUserIdAndPocType(customerId, userId, type).isPresent()) {
             throw new AlreadyAssignedException(user.getUsername() + " is already a " + type.label()
@@ -170,7 +241,9 @@ public class PocService {
 
     @Transactional
     public void remove(Long customerId, Long pocId) {
-        lockCustomer(customerId);
+        Customer customer = lockCustomer(customerId);
+        // Taking a seat away is as much a change to the account's book as giving one (B1).
+        regionAccess.requireManage(customer.getRegion().getId());
         CustomerPoc poc = customerPocRepository.findById(pocId)
                 .orElseThrow(() -> new NotFoundException("POC assignment not found"));
         if (!poc.getCustomer().getId().equals(customerId)) {
@@ -221,12 +294,44 @@ public class PocService {
         }
     }
 
+    /**
+     * The seats a move orphans. A POC who cannot MANAGE the region the account has just moved to
+     * has no business holding a seat on it, so the seat is given up — through {@link #remove},
+     * which already promotes the oldest remaining seat to primary and audits POC_REMOVED and
+     * POC_PRIMARY_CHANGED, so a move leaves exactly the trail a hand-made removal would (B1, D-44).
+     *
+     * <p>Per-record POC fields (Invoice.salesPoc, Payment.collectionPoc and PaymentPromise's, the
+     * last of which is optional=false and cannot be nulled) are deliberately left in place: the
+     * book axis and the region axis are ANDed by the query funnel, so a stale POC stops granting
+     * visibility the moment the account moves and never leaks (B1).
+     *
+     * @return how many seats were vacated, for the move's own answer
+     */
+    @Transactional
+    public int vacateSeatsWhoseHolderCannotManage(Long customerId, Long toRegionId) {
+        int vacated = 0;
+        // The whole list is read before any of it is removed: remove() promotes a new primary and
+        // flushes, so iterating a live query while deleting from under it would be a wager (B1).
+        for (CustomerPoc seat : customerPocRepository
+                .findByCustomerIdOrderByPocTypeAscPrimaryDescIdAsc(customerId)) {
+            if (userRegionGrantRepository.covers(seat.getUser().getId(), toRegionId, RegionRight.MANAGE)) {
+                continue;
+            }
+            remove(customerId, seat.getId());
+            vacated++;
+        }
+        return vacated;
+    }
+
     @Transactional
     public CustomerPoc setPrimary(Long customerId, Long pocId) {
         // Clearing the old primary and marking the new one is one change, and has to happen
         // inside one serialised transaction: two people tapping different chips at the same
         // moment used to leave both seats primary (CP-02).
-        lockCustomer(customerId);
+        Customer customer = lockCustomer(customerId);
+        // Which of them is primary decides who the account's mail is addressed to, so it is a
+        // write in the account's branch like the other two (B1).
+        regionAccess.requireManage(customer.getRegion().getId());
         CustomerPoc poc = customerPocRepository.findById(pocId)
                 .orElseThrow(() -> new NotFoundException("POC assignment not found"));
         if (!poc.getCustomer().getId().equals(customerId)) {

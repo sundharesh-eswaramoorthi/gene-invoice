@@ -27,11 +27,16 @@ class DocumentsTab extends ConsumerStatefulWidget {
   final int entityId;
   final String? entityLabel;
 
+  /// The branch the record lives in. Attaching a file to it is a WRITE there, so the Upload
+  /// control asks about this branch and not about the privilege held somewhere (B1).
+  final int? regionId;
+
   const DocumentsTab({
     super.key,
     required this.type,
     required this.entityId,
     this.entityLabel,
+    this.regionId,
   });
 
   @override
@@ -144,7 +149,8 @@ class _DocumentsTabState extends ConsumerState<DocumentsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final canUpload = ref.watch(canUploadDocumentsProvider(widget.type));
+    final canUpload = ref
+        .watch(canUploadDocumentsProvider((type: widget.type, regionId: widget.regionId)));
     final first = ref.watch(entityDocumentsProvider(_key(0)));
     final theme = Theme.of(context);
 

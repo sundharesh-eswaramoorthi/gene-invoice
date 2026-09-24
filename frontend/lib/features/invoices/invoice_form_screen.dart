@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,10 @@ import '../../shared/models/invoice.dart';
 import '../../shared/models/payment_term.dart';
 import '../../shared/models/product.dart';
 import '../../shared/widgets/search_picker_field.dart';
+import '../../shared/models/privileges.dart';
+import '../approvals/approval_providers.dart';
+import '../approvals/pending_approval_panel.dart';
+import '../auth/auth_controller.dart';
 import '../customers/customers_screen.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
@@ -152,6 +157,17 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     return _dueDate!.difference(basis).inDays > FieldLimits.dueDateHorizonDays;
   }
 
+  /// Whether this account is in a branch this person may raise invoices in. A create NAMES the
+  /// account, so the server answers 403 rather than 404 (D-46) — the form says so before the
+  /// invoice is composed rather than after it is submitted (B1).
+  bool get _outsideMyBranches =>
+      _customer != null &&
+      !(ref.read(currentUserProvider)?.hasIn(Privileges.invoiceManage, _customer!.regionId) ??
+          false);
+
+  String get _branchRefusal =>
+      'You cannot raise invoices in ${_customer?.regionName ?? 'that branch'}.';
+
   Future<void> _submit() async {
     setState(() {
       _submitted = true;
@@ -159,6 +175,10 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     });
     if (_customer == null || !_linesValid || _salesPoc == null) {
       setState(() => _error = 'Fill in the customer, the Sales POC and at least one line');
+      return;
+    }
+    if (_outsideMyBranches) {
+      setState(() => _error = _branchRefusal);
       return;
     }
     setState(() => _saving = true);
@@ -190,9 +210,25 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
             notify: _notify,
             type: EmailEntityType.invoice,
             entityId: (res.data as Map)['id'] as int,
-            event: EmailEvent.created);
+            event: EmailEvent.created,
+            regionId: _customer?.regionId);
       }
       if (mounted && compose != EmailComposeOutcome.leftForGmail) context.go('/invoices');
+    } on DioException catch (e) {
+      final held = pendingApprovalOf(e);
+      if (held != null) {
+        // Nothing was created: there is no invoice, no number was consumed and there is nothing
+        // to email anybody about. The form is no longer holding the change, the server is, so it
+        // leaves for the list the same way a successful create does (B2).
+        invalidateApprovals(ref);
+        if (mounted) {
+          setState(() => _error = null);
+          showApprovalSentSnackBar(context, held);
+          context.go('/invoices');
+        }
+        return;
+      }
+      setState(() => _error = apiErrorMessage(e));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -205,8 +241,13 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
     final scope = ref.watch(myPocScopeProvider).valueOrNull;
     final canSeePoc = ref.watch(canSeePocProvider);
 
-    if (canSeePoc && scope != null) {
-      ref.watch(assignablePocsProvider(const AssignableQuery(PocType.SALES, '')))
+    // Only once an account is chosen: who may be its Sales POC is a question about the
+    // account's branch, and asking it with no branch named is refused for anybody but a
+    // wildcard holder (B1).
+    if (canSeePoc && scope != null && _customer != null) {
+      ref
+          .watch(assignablePocsProvider(
+              AssignableQuery(PocType.SALES, '', customerId: _customer!.id)))
           .whenData((users) => _preselectSelf(users, scope.userId));
     }
 
@@ -227,7 +268,9 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                 labelOf: (c) => c.name,
                 subtitleOf: (c) => c.email,
                 search: (q) => searchCustomers(ref.read(dioProvider), q),
-                errorText: _submitted && _customer == null ? 'Pick a customer' : null,
+                errorText: _customer == null
+                    ? (_submitted ? 'Pick a customer' : null)
+                    : (_outsideMyBranches ? _branchRefusal : null),
                 onChanged: _customerPicked,
               ),
               const SizedBox(height: 12),
@@ -238,6 +281,9 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                   type: PocType.SALES,
                   value: _salesPoc,
                   required: true,
+                  // Null until a customer is chosen: an assignable list is branch-dependent and
+                  // a form with no account yet has no branch to name (B1).
+                  customerId: _customer?.id,
                   errorText: _submitted && _salesPoc == null
                       ? 'A Sales POC is required before this invoice can be saved'
                       : null,
@@ -287,6 +333,9 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
               NotifyByEmailCheckbox(
                 value: _notify,
                 onChanged: (v) => setState(() => _notify = v),
+                // Writing to the customer about their invoice is a write in the account's
+                // branch, not a company-wide one (B1).
+                regionId: _customer?.regionId,
               ),
               if (_error != null)
                 Padding(

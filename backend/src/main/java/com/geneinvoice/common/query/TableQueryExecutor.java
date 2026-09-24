@@ -1,5 +1,8 @@
 package com.geneinvoice.common.query;
 
+import com.geneinvoice.region.RegionAxis;
+import com.geneinvoice.region.RegionRight;
+import com.geneinvoice.region.RegionScope;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -24,6 +27,14 @@ public class TableQueryExecutor {
 
     @PersistenceContext
     private EntityManager em;
+
+    // Constructor-injected on purpose: the region axis is part of what a query IS, so the one
+    // object that can answer it has to be present before the executor can run at all (B1).
+    private final RegionScope regionScope;
+
+    public TableQueryExecutor(RegionScope regionScope) {
+        this.regionScope = regionScope;
+    }
 
     public record Page<T>(List<T> content, long total) {}
 
@@ -70,7 +81,11 @@ public class TableQueryExecutor {
 
     @Transactional(readOnly = true)
     public <T> boolean inScope(Class<T> type, TableSchema schema, Long id, List<PredicateFactory> scope) {
-        if (scope.isEmpty()) return true;
+        // An empty scope list no longer means "everything": the region axis still applies, so this
+        // short-circuits only for the schemas that are deliberately unregioned. Without this one
+        // line every requireInBook is a no-op for a SCOPE_OVERRIDE holder, and four of the six
+        // seeded roles hold SCOPE_OVERRIDE (B1).
+        if (scope.isEmpty() && schema.axis() == RegionAxis.NONE) return true;
         return count(type, schema, TableQuery.parseUnpaged(schema, null, List.of("id:eq:" + id)), scope) > 0;
     }
 
@@ -108,6 +123,17 @@ public class TableQueryExecutor {
                                            TableSchema schema, TableQuery query,
                                            List<PredicateFactory> scope) {
         List<Predicate> all = new ArrayList<>();
+        // The schema and the root must be the same entity, or the region axis would be read off
+        // the wrong classification and a mismatched pair would scope itself by somebody else's
+        // rule. Nothing enforced this before (B1).
+        if (schema.entityType() != root.getJavaType()) {
+            throw new IllegalStateException("Schema " + schema.entity() + " used on root "
+                    + root.getJavaType().getSimpleName());
+        }
+        // Mandatory and caller-independent: region is an axis of the query, not a scope argument,
+        // so an endpoint written next year cannot omit it by passing List.of() (B1).
+        Predicate region = regionScope.predicate(root, cq, cb, RegionRight.VIEW, null);
+        if (region != null) all.add(region);
         for (PredicateFactory f : scope) {
             Predicate p = f.build(root, cq, cb);
             if (p != null) all.add(p);

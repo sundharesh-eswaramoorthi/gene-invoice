@@ -2,7 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/as_of/as_of_providers.dart';
+import '../../core/region/region_providers.dart';
 import '../../core/table/route_query.dart';
+import '../../core/table/table_models.dart';
 import '../../shared/models/promise.dart';
 
 enum Coverage { all, book, own }
@@ -14,6 +17,39 @@ Coverage _coverage(Object? wire) => switch (wire) {
     };
 
 double _money(Object? v) => (v as num? ?? 0).toDouble();
+
+/// Which branches a figure counted. Orthogonal to [Coverage], which is about the POC book: a
+/// figure can be "your book" and "two branches" at once, and neither implies the other (B1).
+///
+/// allRegions true means "not narrowed by a branch" — what a wildcard holder and a customer
+/// login both get. allRegions false with an empty list is "you can see no branch at all", the
+/// dashboard's twin of the regionId:isEmpty: chip that explains a page of zeros.
+class RegionCoverage {
+  final bool allRegions;
+  final List<RegionRef> regions;
+
+  const RegionCoverage({required this.allRegions, required this.regions});
+
+  static const everywhere = RegionCoverage(allRegions: true, regions: []);
+
+  bool get isNarrowed => !allRegions;
+  bool get isNothing => !allRegions && regions.isEmpty;
+
+  /// What to put on the card: the branch codes, which is what a reader recognises a branch by.
+  String get label => regions.map((r) => r.code).join(', ');
+
+  static RegionCoverage fromWire(Object? wire) {
+    if (wire is! Map) return RegionCoverage.everywhere;
+    final map = wire.cast<String, dynamic>();
+    return RegionCoverage(
+      allRegions: map['allRegions'] as bool? ?? true,
+      regions: ((map['regions'] as List?) ?? const [])
+          .cast<Map<String, dynamic>>()
+          .map(RegionRef.fromJson)
+          .toList(),
+    );
+  }
+}
 
 Map<String, dynamic> _map(Object? data) => (data as Map).cast<String, dynamic>();
 
@@ -33,15 +69,27 @@ class MonthPoint {
 
 class MonthlySeries {
   final Coverage coverage;
+  final RegionCoverage regionCoverage;
+
+  /// The third component, after the book and the branches: which date this figure was answered as
+  /// of, in the server's own words. Null on a live read (B3).
+  final AsOfInfo? asOf;
 
   final List<MonthPoint> months;
 
-  const MonthlySeries({required this.coverage, required this.months});
+  const MonthlySeries({
+    required this.coverage,
+    required this.months,
+    this.regionCoverage = RegionCoverage.everywhere,
+    this.asOf,
+  });
 
   double get total => months.fold(0, (sum, m) => sum + m.amount);
 
   factory MonthlySeries.fromJson(Map<String, dynamic> json) => MonthlySeries(
         coverage: _coverage(json['coverage']),
+        regionCoverage: RegionCoverage.fromWire(json['regionCoverage']),
+        asOf: AsOfInfo.fromJson(json['asOf']),
         months: ((json['months'] as List?) ?? const [])
             .cast<Map<String, dynamic>>()
             .map(MonthPoint.fromJson)
@@ -90,12 +138,21 @@ DateTime? _day(Object? value) =>
 
 class OutstandingByAge {
   final Coverage coverage;
+  final RegionCoverage regionCoverage;
+  final AsOfInfo? asOf;
   final List<AgeBucket> buckets;
 
-  const OutstandingByAge({required this.coverage, required this.buckets});
+  const OutstandingByAge({
+    required this.coverage,
+    required this.buckets,
+    this.regionCoverage = RegionCoverage.everywhere,
+    this.asOf,
+  });
 
   factory OutstandingByAge.fromJson(Map<String, dynamic> json) => OutstandingByAge(
         coverage: _coverage(json['coverage']),
+        regionCoverage: RegionCoverage.fromWire(json['regionCoverage']),
+        asOf: AsOfInfo.fromJson(json['asOf']),
         buckets: ((json['buckets'] as List?) ?? const [])
             .cast<Map<String, dynamic>>()
             .map(AgeBucket.fromJson)
@@ -121,14 +178,23 @@ class RankedCustomer {
 
 class CustomerRanking {
   final Coverage coverage;
+  final RegionCoverage regionCoverage;
+  final AsOfInfo? asOf;
   final List<RankedCustomer> customers;
 
-  const CustomerRanking({required this.coverage, required this.customers});
+  const CustomerRanking({
+    required this.coverage,
+    required this.customers,
+    this.regionCoverage = RegionCoverage.everywhere,
+    this.asOf,
+  });
 
   static CustomerRanking _fromJson(
       Map<String, dynamic> json, String amountKey, String countKey, String dateKey) {
     return CustomerRanking(
       coverage: _coverage(json['coverage']),
+      regionCoverage: RegionCoverage.fromWire(json['regionCoverage']),
+      asOf: AsOfInfo.fromJson(json['asOf']),
       customers: ((json['customers'] as List?) ?? const [])
           .cast<Map<String, dynamic>>()
           .map((c) => RankedCustomer(
@@ -156,47 +222,63 @@ DateTime todayUtc() {
   return DateTime.utc(now.year, now.month, now.day);
 }
 
+/// The as-of parameter every dashboard request carries, or nothing at all.
+///
+/// EVERY request, not only the five figures: the tiles above them and the promise cards beside
+/// them read /api/invoices/summary, /api/promises/summary and /api/promises, all three of which
+/// can answer as of a date. One screen half in January and half today, with one date control over
+/// the lot, is the misreading this feature has to make impossible (B3).
+Map<String, dynamic> _asOfParam(Ref ref) {
+  final day = ref.watch(dashboardAsOfProvider);
+  return day == null ? const {} : {'asOf': formatAsOfDay(day)};
+}
+
 final billedByMonthProvider = FutureProvider.autoDispose<MonthlySeries>((ref) async {
   final months = ref.watch(dashboardMonthsProvider);
-  final res = await ref
-      .watch(dioProvider)
-      .get('/api/dashboard/billed-by-month', queryParameters: {'months': months});
+  final res = await ref.watch(dioProvider).get('/api/dashboard/billed-by-month',
+      queryParameters: {'months': months, ..._asOfParam(ref)});
   return MonthlySeries.fromJson(_map(res.data));
 });
 
 final collectedByMonthProvider = FutureProvider.autoDispose<MonthlySeries>((ref) async {
   final months = ref.watch(dashboardMonthsProvider);
-  final res = await ref
-      .watch(dioProvider)
-      .get('/api/dashboard/collected-by-month', queryParameters: {'months': months});
+  final res = await ref.watch(dioProvider).get('/api/dashboard/collected-by-month',
+      queryParameters: {'months': months, ..._asOfParam(ref)});
   return MonthlySeries.fromJson(_map(res.data));
 });
 
 final outstandingByAgeProvider = FutureProvider.autoDispose<OutstandingByAge>((ref) async {
-  final res = await ref.watch(dioProvider).get('/api/dashboard/outstanding-by-age');
+  final res = await ref
+      .watch(dioProvider)
+      .get('/api/dashboard/outstanding-by-age', queryParameters: _asOfParam(ref));
   return OutstandingByAge.fromJson(_map(res.data));
 });
 
 final topOutstandingProvider = FutureProvider.autoDispose<CustomerRanking>((ref) async {
-  final res = await ref.watch(dioProvider).get('/api/dashboard/top-outstanding-customers');
+  final res = await ref
+      .watch(dioProvider)
+      .get('/api/dashboard/top-outstanding-customers', queryParameters: _asOfParam(ref));
   return CustomerRanking.outstandingFromJson(_map(res.data));
 });
 
 final topPayingProvider = FutureProvider.autoDispose<CustomerRanking>((ref) async {
   final months = ref.watch(dashboardMonthsProvider);
-  final res = await ref
-      .watch(dioProvider)
-      .get('/api/dashboard/top-paying-customers', queryParameters: {'months': months});
+  final res = await ref.watch(dioProvider).get('/api/dashboard/top-paying-customers',
+      queryParameters: {'months': months, ..._asOfParam(ref)});
   return CustomerRanking.payingFromJson(_map(res.data));
 });
 
 final invoiceSummaryProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
-  final res = await ref.watch(dioProvider).get('/api/invoices/summary');
+  final res = await ref
+      .watch(dioProvider)
+      .get('/api/invoices/summary', queryParameters: _asOfParam(ref));
   return _map(res.data);
 });
 
 final promiseSummaryProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
-  final res = await ref.watch(dioProvider).get('/api/promises/summary');
+  final res = await ref
+      .watch(dioProvider)
+      .get('/api/promises/summary', queryParameters: _asOfParam(ref));
   return _map(res.data);
 });
 
@@ -206,9 +288,13 @@ class UpcomingPromises {
 
   const UpcomingPromises({required this.promises, required this.book});
 
-  static String listLink(DateTime today) => RouteQuery.location('/promises', {
+  static String listLink(DateTime today, {DateTime? asOf}) =>
+      RouteQuery.location('/promises', {
         'sort': 'promisedDate,asc',
         'f': _upcomingFilters(today),
+        // Same parameter name as the wire and as TableQuery.fromRoute reads it, so the list opens
+        // in the past the dashboard was already showing (B3).
+        if (asOf != null) 'asOf': formatAsOfDay(asOf),
       });
 }
 
@@ -218,10 +304,14 @@ List<String> _upcomingFilters(DateTime today) => [
     ];
 
 final upcomingPromisesProvider = FutureProvider.autoDispose<UpcomingPromises>((ref) async {
+  // "Upcoming" is relative to the date being read as of, not to the wall clock: asked as of
+  // January, the card has to mean the promises that were still ahead in January.
+  final asOf = ref.watch(dashboardAsOfProvider);
   final res = await ref.watch(dioProvider).get('/api/promises', queryParameters: {
     'size': 10,
     'sort': 'promisedDate,asc',
-    'filter': _upcomingFilters(todayUtc()),
+    'filter': _upcomingFilters(asOf ?? todayUtc()),
+    ..._asOfParam(ref),
   });
   final data = _map(res.data);
   return UpcomingPromises(

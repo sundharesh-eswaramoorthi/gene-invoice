@@ -124,24 +124,65 @@ final myPocScopeProvider = FutureProvider<MyPocScope?>((ref) async {
 class AssignableQuery {
   final PocType type;
   final String search;
-  const AssignableQuery(this.type, this.search);
+
+  /// The account this seat is being filled on. Preferred over a bare branch: the server resolves
+  /// it through the already-scoped read, so an account the caller cannot see is a 404 and the
+  /// picker cannot be used to probe for one (B1, AUTH-08).
+  final int? customerId;
+
+  /// With no account in scope — a bulk reassignment across a selection, or a picker on a form
+  /// before a customer is chosen — the branches to ask about instead. Empty names none, which
+  /// the server accepts only from a wildcard holder (B1).
+  final List<int> regionIds;
+
+  const AssignableQuery(
+    this.type,
+    this.search, {
+    this.customerId,
+    this.regionIds = const [],
+  });
 
   @override
   bool operator ==(Object other) =>
-      other is AssignableQuery && other.type == type && other.search == search;
+      other is AssignableQuery &&
+      other.type == type &&
+      other.search == search &&
+      other.customerId == customerId &&
+      listEquals(other.regionIds, regionIds);
   @override
-  int get hashCode => Object.hash(type, search);
+  int get hashCode => Object.hash(type, search, customerId, Object.hashAll(regionIds));
 }
 
 final assignablePocsProvider =
     FutureProvider.autoDispose.family<List<PocUser>, AssignableQuery>((ref, q) async {
   final dio = ref.watch(dioProvider);
-  final res = await dio.get('/api/pocs/assignable', queryParameters: {
-    'type': q.type.name,
-    if (q.search.isNotEmpty) 'q': q.search,
-    'limit': 25,
-  });
-  return (res.data as List).cast<Map<String, dynamic>>().map(PocUser.fromJson).toList();
+  Map<String, dynamic> params(int? regionId) => {
+        'type': q.type.name,
+        if (q.customerId != null) 'customerId': q.customerId,
+        if (q.customerId == null && regionId != null) 'regionId': regionId,
+        if (q.search.isNotEmpty) 'q': q.search,
+        'limit': 25,
+      };
+  List<PocUser> parse(Object? data) =>
+      (data as List).cast<Map<String, dynamic>>().map(PocUser.fromJson).toList();
+
+  if (q.customerId != null || q.regionIds.isEmpty) {
+    // One branch (the account's) or none named at all — the latter is the wildcard holder's
+    // case, and for everybody else the server refuses rather than guessing (B1).
+    final res = await dio.get('/api/pocs/assignable', queryParameters: params(null));
+    return parse(res.data);
+  }
+  // Several branches in scope and no account to choose between them: ask about each and take
+  // the union, in branch order, rather than naming one and calling it the answer (B1).
+  final answers = await Future.wait(
+      q.regionIds.map((r) => dio.get('/api/pocs/assignable', queryParameters: params(r))));
+  final seen = <int, PocUser>{};
+  for (final res in answers) {
+    for (final u in parse(res.data)) {
+      seen[u.id] = u;
+    }
+  }
+  return seen.values.toList();
 });
 
 final customerPocsProvider =

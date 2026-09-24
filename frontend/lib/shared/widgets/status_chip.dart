@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../features/automation/automation_models.dart';
+import '../../features/tasks/task_models.dart';
 import '../models/dispute.dart';
 import '../models/invoice.dart';
 import '../models/payment.dart';
@@ -127,4 +129,55 @@ class DisputeStatusChip extends StatelessWidget {
         label: disputeStatusLabel(status),
         color: disputeStatusColor(context, status),
       );
+}
+
+/// Where a piece of work has got to. Open is the app's "waiting" primary, in progress its amber,
+/// and the two terminal states borrow the endings the rest of the app already uses: finished is
+/// green, called off is the same grey a cancelled invoice or a voided payment wears (A6).
+Color taskStatusColor(BuildContext context, TaskStatus s) {
+  final scheme = Theme.of(context).colorScheme;
+  return switch (s) {
+    TaskStatus.OPEN => scheme.primary,
+    TaskStatus.IN_PROGRESS => Colors.orange.shade800,
+    TaskStatus.DONE => Colors.green.shade700,
+    TaskStatus.CANCELLED => scheme.outline,
+  };
+}
+
+/// The PaymentStatusChip shape. A-UI appends StepStatusChip to this same file two waves later,
+/// with no shared hunk (A6, A5).
+class TaskStatusChip extends StatelessWidget {
+  final TaskStatus status;
+  const TaskStatusChip({super.key, required this.status});
+
+  @override
+  Widget build(BuildContext context) =>
+      StatusChip(label: status.label, color: taskStatusColor(context, status));
+}
+
+/// Where one unit of automation work has got to. QUEUED is the app's "waiting" primary and
+/// RUNNING its amber, exactly as a task's in-progress is; the three terminal states are the
+/// endings the rest of the app already uses — finished is green, SKIPPED is the same grey a
+/// cancelled invoice wears, and POISONED is the error colour because something is stuck and
+/// somebody has to look (A5).
+Color stepStatusColor(BuildContext context, StepStatus s) {
+  final scheme = Theme.of(context).colorScheme;
+  return switch (s) {
+    StepStatus.QUEUED => scheme.primary,
+    StepStatus.RUNNING => Colors.orange.shade800,
+    StepStatus.DONE => Colors.green.shade700,
+    StepStatus.SKIPPED => scheme.outline,
+    StepStatus.POISONED => scheme.error,
+  };
+}
+
+/// The PaymentStatusChip shape, appended after A-TASKS-UI's TaskStatusChip with no shared hunk,
+/// as the file-conflict note mandates (A5, A6).
+class StepStatusChip extends StatelessWidget {
+  final StepStatus status;
+  const StepStatusChip({super.key, required this.status});
+
+  @override
+  Widget build(BuildContext context) =>
+      StatusChip(label: status.label, color: stepStatusColor(context, status));
 }

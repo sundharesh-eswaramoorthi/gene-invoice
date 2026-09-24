@@ -12,6 +12,7 @@ import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.RegionScope;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,9 @@ public class InboxController {
     private final CurrentUser currentUser;
     private final TableQueryExecutor queryExecutor;
     private final BulkExecutor bulkExecutor;
+    // The region chips this list says it is narrowed by; empty for an unregioned table,
+    // for a wildcard holder and for a customer login, so it is passed unconditionally (B1).
+    private final RegionScope regionScope;
 
     private TableSchema schema() {
         return TableSchemas.INBOX.visibleTo(currentUser.isCustomer());
@@ -49,7 +53,7 @@ public class InboxController {
         var result = queryExecutor.run(EmailRecipient.class, TableSchemas.INBOX, query,
                 ownedByCaller(), List.of("email"));
         return PageResponse.of(views.toInboxItems(result.content(), views.viewer()),
-                query, result.total(), List.of());
+                query, result.total(), List.of(), regionScope.lockedFilters(EmailRecipient.class));
     }
 
     @GetMapping("/unread-count")

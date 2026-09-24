@@ -1,5 +1,6 @@
 package com.geneinvoice.promise;
 
+import com.geneinvoice.region.RegionScope;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -18,7 +19,14 @@ public class PromiseSweepScheduler {
             initialDelayString = "${app.promises.sweep-interval-ms:900000}")
     public void sweep() {
         try {
-            promiseService.sweepOverdue();
+            // Nobody is signed in on the scheduler's thread, and "nobody" reads as no regions at
+            // all rather than as every region (the deliberate safe direction in RegionScope). A
+            // sweep that marked only the promises of whoever happened to be logged in would be
+            // worse than useless, so it names why it is entitled to the whole company (B1).
+            // A block body, so the int sweepOverdue returns cannot make the Runnable and Supplier
+            // overloads of asSystem ambiguous.
+            RegionScope.asSystem(RegionScope.SystemReason.PROMISE_SWEEP,
+                    () -> { promiseService.sweepOverdue(); });
         } catch (RuntimeException e) {
             log.warn("Promise sweep failed: {}", e.getMessage());
         }

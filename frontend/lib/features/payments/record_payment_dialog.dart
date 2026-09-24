@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,8 +9,11 @@ import '../../core/format.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/promise.dart';
+import '../../shared/models/privileges.dart';
 import '../../shared/widgets/search_picker_field.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/pending_approval_panel.dart';
+import '../auth/auth_controller.dart';
 import '../customers/customers_screen.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
@@ -92,6 +96,17 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     if (_error != null) setState(() => _error = null);
   }
 
+  /// Whether this account is in a branch this person may record payments in. Recording NAMES
+  /// the account, so the server answers 403 rather than 404 (D-46) — better said here than
+  /// after the amount has been typed (B1).
+  bool get _outsideMyBranches =>
+      _customer != null &&
+      !(ref.read(currentUserProvider)?.hasIn(Privileges.paymentManage, _customer!.regionId) ??
+          false);
+
+  String get _branchRefusal =>
+      'You cannot record payments in ${_customer?.regionName ?? 'that branch'}.';
+
   Future<void> _submit() async {
     setState(() {
       _submitted = true;
@@ -99,6 +114,10 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
     });
     if (_customer == null) {
       setState(() => _error = 'Pick a customer');
+      return;
+    }
+    if (_outsideMyBranches) {
+      setState(() => _error = _branchRefusal);
       return;
     }
     final amount = parseMoneyInput(_amountCtrl.text);
@@ -125,6 +144,21 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
         Navigator.of(context)
             .pop<_RecordedPayment>((id: (res.data as Map)['id'] as int, notify: _notify));
       }
+    } on DioException catch (e) {
+      final held = pendingApprovalOf(e);
+      if (held != null) {
+        if (mounted) {
+          // The amber first and the pop second: the SnackBar is the app-level messenger's, so it
+          // outlives this dialog, and looking the messenger up while the dialog is certainly
+          // still mounted is the safe order (B2).
+          showApprovalSentSnackBar(context, held);
+          // Nothing was created, so there is no payment to notify anybody about — and popping
+          // null is exactly what tells showRecordPaymentDialog's caller so (B2).
+          Navigator.of(context).pop<_RecordedPayment>(null);
+        }
+        return;
+      }
+      setState(() => _error = apiErrorMessage(e));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -157,7 +191,9 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                 labelOf: (c) => c.name,
                 subtitleOf: (c) => c.email,
                 search: (q) => searchCustomers(ref.read(dioProvider), q),
-                errorText: _submitted && _customer == null ? 'Pick a customer' : null,
+                errorText: _customer == null
+                    ? (_submitted ? 'Pick a customer' : null)
+                    : (_outsideMyBranches ? _branchRefusal : null),
                 onChanged: (c) => setState(() {
                   _customer = c;
                   _selectedInvoices.clear();
@@ -172,6 +208,10 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                   type: PocType.COLLECTION,
                   value: _collectionPoc,
                   required: true,
+                  // Null until a customer is chosen, and then the account's own branch decides
+                  // who may hold the seat. Before that the picker falls back to every branch
+                  // this person works in rather than asking about none (B1).
+                  customerId: _customer?.id,
                   errorText: _submitted && _collectionPoc == null
                       ? 'A Collection POC is required before this payment can be saved'
                       : null,
@@ -206,6 +246,9 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
               NotifyByEmailCheckbox(
                 value: _notify,
                 onChanged: (v) => setState(() => _notify = v),
+                // Writing to the customer about their payment is a write in the account's
+                // branch, not a company-wide one (B1).
+                regionId: _customer?.regionId,
               ),
               if (_error != null)
                 Padding(

@@ -1,5 +1,8 @@
 package com.geneinvoice.payment;
 
+import com.geneinvoice.automation.Change;
+import com.geneinvoice.automation.ChangeFeed;
+import com.geneinvoice.automation.SubjectType;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
@@ -22,6 +25,13 @@ public class CreditLedger {
     private final PaymentAllocationRepository allocationRepository;
     private final CustomerRepository customerRepository;
     private final InvoiceRepository invoiceRepository;
+    /**
+     * LOAD-BEARING, and the reason this class has an automation dependency at all: both methods
+     * below move {@code customer.credit_balance} and write NO audit row against CUSTOMER, so the
+     * one chokepoint the engine hooks never hears about them. Without these two calls a rule
+     * armed on a customer changing is blind to every credit movement in the application (A1).
+     */
+    private final ChangeFeed changeFeed;
 
     public record CreditMove(PaymentService.InvoicePaymentAudit before,
                              PaymentService.InvoicePaymentAudit after) {}
@@ -55,6 +65,7 @@ public class CreditLedger {
         invoice.setPaidAmount(invoice.getPaidAmount().add(remaining));
         customer.setCreditBalance(credit.subtract(apply));
         customerRepository.save(customer);
+        changeFeed.changed(SubjectType.CUSTOMER, customer.getId(), Change.UPDATED);       // (A1)
         return moves;
     }
 
@@ -80,6 +91,7 @@ public class CreditLedger {
         }
         locked.setCreditBalance(locked.getCreditBalance().add(amount));
         customerRepository.save(locked);
+        changeFeed.changed(SubjectType.CUSTOMER, locked.getId(), Change.UPDATED);         // (A1)
     }
 
     private Customer lockCustomer(Long customerId) {

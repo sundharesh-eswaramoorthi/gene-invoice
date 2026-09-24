@@ -23,6 +23,18 @@ class Customer {
   final bool pocMissing;
   final DateTime? createdAt;
 
+  /// Which branch this account is in. Null means the server did not say — an older payload, or
+  /// a call that does not carry it — and a record that does not say cannot be narrowed by a
+  /// branch, so every per-record check falls back to the plain privilege (B1).
+  final int? regionId;
+  final String? regionName;
+
+  /// True when a change on this record is waiting for approval. The figures beside it are the
+  /// LIVE ones — nothing pending has taken effect — so the flag is the only thing that differs
+  /// from a record with nothing waiting. Defaults false: null on the wire means the server was
+  /// not asked, and "not asked" must never read as "something is waiting" (B2).
+  final bool approvalPending;
+
   const Customer({
     required this.id,
     required this.name,
@@ -39,6 +51,9 @@ class Customer {
     this.collectionPocs,
     this.pocMissing = false,
     this.createdAt,
+    this.regionId,
+    this.regionName,
+    this.approvalPending = false,
   });
 
   /// What to call this customer's terms on screen. No terms of their own is a legitimate state
@@ -87,5 +102,8 @@ class Customer {
         pocMissing: json['pocMissing'] as bool? ?? false,
         createdAt:
             json['createdAt'] == null ? null : DateTime.parse(json['createdAt'] as String),
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionName: json['regionName'] as String?,
+        approvalPending: json['approvalPending'] as bool? ?? false,
       );
 }

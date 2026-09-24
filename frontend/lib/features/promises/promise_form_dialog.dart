@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +10,8 @@ import '../../core/format.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/promise.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/approval_providers.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_providers.dart';
 import '../poc/poc_picker.dart';
@@ -139,6 +142,23 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
     return options;
   }
 
+  /// The save was taken and has not happened: the server is holding the change now, not this
+  /// dialog. Nothing was created or changed, so it closes with nothing to report — popping null
+  /// is what tells showPromiseDialog's caller that there is no promise to email anybody
+  /// about — and the providers are put back in step so the chip and the amber panel appear (B2).
+  bool _handleHeld(DioException e) {
+    final held = pendingApprovalOf(e);
+    if (held == null) return false;
+    ref.invalidate(scopedPromisesProvider);
+    if (widget.existing != null) ref.invalidate(promiseDetailProvider(widget.existing!.id));
+    invalidateApprovals(ref);
+    if (mounted) {
+      showApprovalSentSnackBar(context, held);
+      Navigator.of(context).pop();
+    }
+    return true;
+  }
+
   Future<void> _submit() async {
     final amount = parseMoneyInput(_amount.text);
     if (amount == null || amount <= 0) {
@@ -170,6 +190,9 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
       ref.invalidate(scopedPromisesProvider);
       ref.invalidate(promiseDetailProvider(id));
       if (mounted) Navigator.of(context).pop((id: id, notify: _notify));
+    } on DioException catch (e) {
+      if (_handleHeld(e)) return;
+      setState(() => _error = apiErrorMessage(e));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -239,6 +262,8 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
                 type: PocType.COLLECTION,
                 value: _poc,
                 required: true,
+                // The account this promise is against decides who may collect it (B1).
+                customerId: widget.customerId,
                 onChanged: (u) => setState(() => _poc = u),
               ),
               const SizedBox(height: 12),
@@ -427,6 +452,21 @@ class _OverrideDialogState extends ConsumerState<_OverrideDialog> {
     super.dispose();
   }
 
+  /// See _PromiseFormDialogState._handleHeld. An override that needs approval has changed
+  /// nothing, so the dialog closes and the promise's status is still whatever it was (B2).
+  bool _handleHeld(DioException e) {
+    final held = pendingApprovalOf(e);
+    if (held == null) return false;
+    ref.invalidate(scopedPromisesProvider);
+    ref.invalidate(promiseDetailProvider(widget.promise.id));
+    invalidateApprovals(ref);
+    if (mounted) {
+      showApprovalSentSnackBar(context, held);
+      Navigator.of(context).pop();
+    }
+    return true;
+  }
+
   Future<void> _submit({required bool clear}) async {
     if (!clear && _reason.text.trim().isEmpty) {
       setState(() => _error = 'A reason is required');
@@ -445,6 +485,9 @@ class _OverrideDialogState extends ConsumerState<_OverrideDialog> {
             data: {'status': _status.name, 'reason': _reason.text.trim()});
       }
       if (mounted) Navigator.of(context).pop(true);
+    } on DioException catch (e) {
+      if (_handleHeld(e)) return;
+      setState(() => _error = apiErrorMessage(e));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {

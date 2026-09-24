@@ -22,6 +22,24 @@ app:
   promises:
     # Long enough that the background sweeper never races a test; tests call sweepOverdue directly.
     sweep-interval-ms: 3600000
+  regions:
+    # Named, not defaulted: a test that asserts on the default region asserts against this line.
+    default-code: HQ
+  region:
+    # The boot check is the point of the region migration, so the tests run under the strict
+    # setting production runs under (B1).
+    boot-check: strict
+  automation:
+    # No daemon thread: nothing is handed to the engine in the background while a test is
+    # asserting. The nudge arrives on the committing thread, where the dispatcher deliberately
+    # does nothing (Spring has not released that transaction yet), so tests drive fan-out and
+    # perform by calling the dispatcher directly, exactly as they do for the other two sweepers.
+    async: false
+    # Long enough that no scheduled run races a test; tests call the dispatcher directly.
+    sweep-interval-ms: 3600000
+  history:
+    # Tests call the reconcile sweep directly, as they do every other job.
+    reconcile-interval-ms: 3600000
   documents:
     # A scratch directory of the machine's own, made at startup; never the repository's ./data.
     local:

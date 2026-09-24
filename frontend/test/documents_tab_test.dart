@@ -29,13 +29,16 @@ const _staff = {
 
 const _viewer = {Privileges.documentView, Privileges.invoiceView};
 
-CurrentUser _user(Set<String> privileges, {int? customerId}) => CurrentUser(
+CurrentUser _user(Set<String> privileges,
+        {int? customerId, List<RegionGrant> regions = const []}) =>
+    CurrentUser(
       id: 3,
       username: 'jane',
       fullName: 'Jane Doe',
       role: customerId == null ? 'CASHIER' : 'CUSTOMER',
       privileges: privileges,
       customerId: customerId,
+      regions: regions,
     );
 
 Map<String, dynamic> _document(
@@ -92,6 +95,7 @@ Future<List<String>> _pump(
   DocumentSaver? saver,
   String initialTab = 'documents',
   bool settle = true,
+  int? regionId,
   Size size = const Size(1366, 1400),
 }) async {
   tester.view.physicalSize = size;
@@ -110,7 +114,10 @@ Future<List<String>> _pump(
       home: Scaffold(
         body: Consumer(builder: (context, ref, _) {
           final tab = documentsDetailTab(ref,
-              type: DocumentEntityType.invoice, entityId: 42, entityLabel: 'INV-0042');
+              type: DocumentEntityType.invoice,
+              entityId: 42,
+              entityLabel: 'INV-0042',
+              regionId: regionId);
           return DetailScaffold(
             title: 'INV-0042',
             top: const SizedBox(height: 40),
@@ -302,6 +309,37 @@ void main() {
       );
 
       expect(find.text('Upload'), findsNothing);
+    });
+
+    testWidgets('a branch you only read offers nothing to attach with', (tester) async {
+      await _pump(
+        tester,
+        _backend(documents: [_document(1, canEdit: false, canDelete: false)]),
+        user: _user(_staff, regions: const [
+          RegionGrant(id: 3, code: 'NORTH', name: 'North', rights: {regionRightManage}),
+          RegionGrant(id: 7, code: 'WEST', name: 'West', rights: {regionRightView}),
+        ]),
+        regionId: 7,
+      );
+
+      // DOCUMENT_MANAGE is MANAGE-level in the region partition, so holding it in NORTH is not
+      // permission to attach a file to a West record — and the server now asks per record (B1).
+      expect(find.text('terms.pdf'), findsOneWidget);
+      expect(find.text('Upload'), findsNothing);
+    });
+
+    testWidgets('the same person may attach in the branch they manage', (tester) async {
+      await _pump(
+        tester,
+        _backend(documents: const []),
+        user: _user(_staff, regions: const [
+          RegionGrant(id: 3, code: 'NORTH', name: 'North', rights: {regionRightManage}),
+          RegionGrant(id: 7, code: 'WEST', name: 'West', rights: {regionRightView}),
+        ]),
+        regionId: 3,
+      );
+
+      expect(find.text('Upload'), findsOneWidget);
     });
 
     testWidgets('a customer login may attach to its own record (§1, answer 4)', (tester) async {

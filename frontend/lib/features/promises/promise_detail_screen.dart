@@ -6,8 +6,11 @@ import '../../core/format.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/privileges.dart';
+import '../../shared/models/pending_change.dart';
 import '../../shared/models/promise.dart';
 import '../../shared/widgets/detail_scaffold.dart';
+import '../approvals/approval_providers.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
@@ -27,8 +30,6 @@ class PromiseDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(promiseDetailProvider(id));
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.promiseManage) ?? false;
-    final canOverride = user?.has(Privileges.promiseOverride) ?? false;
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
 
@@ -39,17 +40,28 @@ class PromiseDetailScreen extends ConsumerWidget {
         onBack: () => context.go('/promises'),
       ),
       data: (p) {
+        // hasIn, not has: a promise belongs to one account in one branch, and holding
+        // PROMISE_MANAGE or PROMISE_OVERRIDE elsewhere is not permission here (B1).
+        final canManage = user?.hasIn(Privileges.promiseManage, p.regionId) ?? false;
+        final canOverride = user?.hasIn(Privileges.promiseOverride, p.regionId) ?? false;
         final title = 'Promise #${p.id}';
         final send = sendEmailHeaderButton(context, ref,
-            type: EmailEntityType.promise, entityId: p.id, entityLabel: title);
-        final email =
-            emailDetailTab(ref, type: EmailEntityType.promise, entityId: p.id, entityLabel: title);
+            type: EmailEntityType.promise,
+            entityId: p.id,
+            entityLabel: title,
+            regionId: p.regionId);
+        final email = emailDetailTab(ref,
+            type: EmailEntityType.promise,
+            entityId: p.id,
+            entityLabel: title,
+            regionId: p.regionId);
 
         return DetailScaffold(
           title: title,
           subtitle: '${p.customerName} • ${formatMoney(p.amount)} by ${formatDate(p.promisedDate)}',
           onBack: () => goGuarded(context, '/promises'),
           titleTrailing: [
+            if (p.approvalPending) const ApprovalPendingChip(),
             PromiseStatusChip(status: p.status, overridden: p.statusOverridden),
             if (canManage && p.isLive)
               TextButton.icon(
@@ -87,7 +99,21 @@ class PromiseDetailScreen extends ConsumerWidget {
           ],
           initialTabSlug: initialTab,
           onTabChanged: (slug) => context.go('/promises/$id?tab=$slug'),
-          top: _top(context, p, canSeePoc: canSeePoc),
+          top: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Only when the record itself says so: the flag costs the server one indexed
+              // lookup it was already making, and this way a page with nothing waiting asks the
+              // queue nothing at all (B2).
+              if (p.approvalPending)
+                PendingApprovalBanner(
+                  target: PendingTarget(PendingTargetType.PROMISE, p.id),
+                  onDecided: () => _refresh(ref),
+                ),
+              _top(context, p, canSeePoc: canSeePoc),
+            ],
+          ),
           tabs: [
             if (canViewAudit)
               DetailTab(

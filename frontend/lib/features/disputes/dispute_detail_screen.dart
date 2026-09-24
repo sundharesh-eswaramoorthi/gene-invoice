@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,9 +9,12 @@ import '../../core/api/api_client.dart';
 import '../../core/format.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
+import '../../shared/models/pending_change.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/approval_providers.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../../core/table/table_providers.dart';
@@ -109,6 +113,22 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
             event: EmailEvent.updated);
       }
       if (mounted && compose != EmailComposeOutcome.leftForGmail) context.go('/disputes');
+    } on DioException catch (e) {
+      final held = pendingApprovalOf(e);
+      if (held != null) {
+        // Approving a dispute can move money, so it is gated like any other money write. The
+        // dispute is NOT resolved and this page must stay where it is — the navigation to
+        // /disputes above is on the success path only (B2).
+        ref.invalidate(disputeDetailProvider(widget.dispute.id));
+        ref.invalidate(scopedDisputesProvider);
+        invalidateApprovals(ref);
+        if (mounted) {
+          setState(() => _error = null);
+          showApprovalSentSnackBar(context, held);
+        }
+        return;
+      }
+      setState(() => _error = apiErrorMessage(e));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -133,12 +153,27 @@ class _DisputeBodyState extends ConsumerState<_DisputeBody> {
       subtitle: disputeTargetText(d),
       onBack: () => goGuarded(context, '/disputes'),
       titleTrailing: [
+        if (d.approvalPending) const ApprovalPendingChip(),
         DisputeStatusChip(status: d.status),
         if (send != null) send,
       ],
       initialTabSlug: widget.initialTab,
       onTabChanged: (slug) => context.go('/disputes/${d.id}?tab=$slug'),
-      top: _top(d, canResolve: canResolve),
+      top: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (d.approvalPending)
+            PendingApprovalBanner(
+              target: PendingTarget(PendingTargetType.DISPUTE, d.id),
+              onDecided: () {
+                ref.invalidate(disputeDetailProvider(d.id));
+                ref.invalidate(scopedDisputesProvider);
+              },
+            ),
+          _top(d, canResolve: canResolve),
+        ],
+      ),
       tabs: [
         if (canResolve)
           DetailTab(

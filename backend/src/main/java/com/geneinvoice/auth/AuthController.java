@@ -4,6 +4,11 @@ import com.geneinvoice.auth.dto.LoginRequest;
 import com.geneinvoice.auth.dto.LoginResponse;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Passwords;
+import com.geneinvoice.privilege.Privilege;
+import com.geneinvoice.region.RegionDtos;
+import com.geneinvoice.region.RegionGrants;
+import com.geneinvoice.region.RegionRepository;
+import com.geneinvoice.region.RegionRight;
 import com.geneinvoice.user.User;
 import com.geneinvoice.user.UserRepository;
 import jakarta.validation.Valid;
@@ -13,6 +18,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -31,6 +37,7 @@ public class AuthController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final CurrentUser currentUser;
+    private final RegionRepository regionRepository;
 
     @PostMapping("/login")
     public LoginResponse login(@Valid @RequestBody LoginRequest req) {
@@ -40,15 +47,13 @@ public class AuthController {
             );
             AppUserDetails principal = (AppUserDetails) auth.getPrincipal();
             User u = principal.getUser();
-            List<String> privs = u.getRole().getPrivileges().stream().map(p -> p.getName()).toList();
             // The token carries the credential generation it was minted against, so a later
             // password change ends this session with it (AUTH-04).
             String token = jwtService.generateToken(u.getUsername(), jwtService.claimsFor(u));
             return new LoginResponse(
                     token,
                     jwtService.getExpirationMs(),
-                    new LoginResponse.UserInfo(u.getId(), u.getUsername(), u.getFullName(),
-                            u.getRole().getName(), privs, u.getCustomerId())
+                    info(u)
             );
         } catch (BadCredentialsException ex) {
             throw new BadCredentialsException("Invalid username or password");
@@ -61,10 +66,30 @@ public class AuthController {
         if (auth == null || !(auth.getPrincipal() instanceof AppUserDetails p)) {
             throw new BadCredentialsException("Not authenticated");
         }
-        User u = p.getUser();
-        List<String> privs = u.getRole().getPrivileges().stream().map(pr -> pr.getName()).toList();
+        return info(p.getUser());
+    }
+
+    /**
+     * One shape for both sign-in and /me, so the client can never be told two different things
+     * about the same person. privileges is filtered through the authority set rather than read
+     * straight off the role: a privilege exercisable in no region is not in the authority set, so
+     * listing it here would offer a button the server refuses (B1).
+     */
+    private LoginResponse.UserInfo info(User u) {
+        List<String> exercisable = AppUserDetailsService.buildAuthorities(u).stream()
+                .map(GrantedAuthority::getAuthority).toList();
+        List<String> privs = u.getRole().getPrivileges().stream()
+                .map(Privilege::getName)
+                // By name equality against the privilege list, never by stripping a "ROLE_"
+                // prefix: ROLE_VIEW and ROLE_MANAGE are privileges of this application (B1).
+                .filter(exercisable::contains)
+                .toList();
+        RegionGrants grants = RegionGrants.of(u.getRegionGrants());
         return new LoginResponse.UserInfo(u.getId(), u.getUsername(), u.getFullName(),
-                u.getRole().getName(), privs, u.getCustomerId());
+                u.getRole().getName(), privs, u.getCustomerId(),
+                // Any wildcard right covers VIEW, so this is "holds a null-region grant" (B1).
+                grants.allRegions(RegionRight.VIEW),
+                RegionDtos.heldBy(grants, regionRepository));
     }
 
     public record ChangePasswordRequest(

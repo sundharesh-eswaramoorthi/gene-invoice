@@ -10,9 +10,12 @@ import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
 import '../../shared/models/payment.dart';
+import '../../shared/models/pending_change.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/approval_providers.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
@@ -22,6 +25,7 @@ import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
+import '../tasks/task_actions.dart';
 import 'payments_screen.dart';
 
 class PaymentDetailScreen extends ConsumerStatefulWidget {
@@ -117,7 +121,6 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(paymentDetailProvider(widget.id));
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.has(Privileges.paymentManage) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
@@ -134,13 +137,32 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
       ),
       data: (payment) {
         _seed(payment);
+        // hasIn, not has: the money belongs to one branch, and PAYMENT_MANAGE held in another
+        // is not permission to edit it here (B1).
+        final canEdit = user?.hasIn(Privileges.paymentManage, payment.regionId) ?? false;
         final label = 'Payment #${payment.id}';
         final sendEmail = sendEmailHeaderButton(context, ref,
-            type: EmailEntityType.payment, entityId: payment.id, entityLabel: label);
+            type: EmailEntityType.payment,
+            entityId: payment.id,
+            entityLabel: label,
+            regionId: payment.regionId);
         final documentsTab = documentsDetailTab(ref,
-            type: DocumentEntityType.payment, entityId: payment.id, entityLabel: label);
+            type: DocumentEntityType.payment,
+            entityId: payment.id,
+            entityLabel: label,
+            regionId: payment.regionId);
+        // After Promises and before History, on all three record screens: work outstanding on
+        // a record sits with the other things somebody is chasing, not in the audit trail (A6).
+        final tasksTab = tasksDetailTab(ref,
+            type: TaskEntityType.payment,
+            entityId: payment.id,
+            entityLabel: label,
+            regionId: payment.regionId);
         final emailTab = emailDetailTab(ref,
-            type: EmailEntityType.payment, entityId: payment.id, entityLabel: label);
+            type: EmailEntityType.payment,
+            entityId: payment.id,
+            entityLabel: label,
+            regionId: payment.regionId);
         return PopScope(
           canPop: !_dirty,
           onPopInvokedWithResult: (didPop, _) {
@@ -152,6 +174,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
             onBack: () => goGuarded(context, '/payments'),
             titleTrailing: [
               if (canSeePoc && payment.pocMissing) const PocMissingBadge(),
+              if (payment.approvalPending) const ApprovalPendingChip(),
               PaymentStatusChip(status: payment.status),
               if (canSeeDisputes &&
                   user!.canRaiseDispute &&
@@ -170,8 +193,21 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
             ],
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) => context.go('/payments/${widget.id}?tab=$slug'),
-            top: _top(payment,
-                canEdit: canEdit, canSeePoc: canSeePoc, canAssignPoc: canAssignPoc),
+            top: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // A void or an amount change raised through a dispute marks THIS payment, and
+                // the figures below stay the live ones until somebody approves it (B2).
+                if (payment.approvalPending)
+                  PendingApprovalBanner(
+                    target: PendingTarget(PendingTargetType.PAYMENT, payment.id),
+                    onDecided: () => ref.invalidate(paymentDetailProvider(widget.id)),
+                  ),
+                _top(payment,
+                    canEdit: canEdit, canSeePoc: canSeePoc, canAssignPoc: canAssignPoc),
+              ],
+            ),
             tabs: [
               if (canSeeDisputes)
                 DetailTab(
@@ -193,8 +229,10 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                     customerId: payment.customerId,
                     customerName: payment.customerName,
                     paymentId: payment.id,
+                    regionId: payment.regionId,
                   ),
                 ),
+              if (tasksTab != null) tasksTab,
               if (canViewAudit)
                 DetailTab(
                   slug: 'history',
@@ -246,11 +284,21 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                   showLabel: false,
                   enabled: canEdit && canAssignPoc,
                   required: true,
+                  // This payment's account, so the picker offers only people who work in the
+                  // branch the money belongs to (B1).
+                  customerId: p.customerId,
                   onChanged: (u) => setState(() {
                     _collectionPoc = u;
                     _dirty = true;
                   }),
                 ),
+              ),
+            // Which branch this payment's account is in — read-only, and the reason Edit may
+            // be missing on a record you can plainly read (B1).
+            if (p.regionId != null)
+              DetailGridItem(
+                label: 'Branch',
+                child: ReadOnlyValue(p.regionName ?? '#${p.regionId}'),
               ),
             DetailGridItem(
               label: 'Notes',

@@ -3,10 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/unsaved_changes.dart';
+import '../../features/approvals/approval_providers.dart';
 import '../../features/auth/auth_controller.dart';
+import '../../features/automation/automation_providers.dart';
 import '../../features/auth/change_password_dialog.dart';
 import '../../features/email/email_providers.dart';
 import '../../features/notifications/notifications_providers.dart';
+import '../../features/tasks/task_providers.dart';
+import '../models/auth_models.dart';
 import '../models/privileges.dart';
 
 class NavEntry {
@@ -17,8 +21,38 @@ class NavEntry {
   final bool hideForCustomer;
 
   final bool unreadBadge;
+
+  /// Carries the count of changes waiting for THIS person to decide. A second flag rather than a
+  /// widened `unreadBadge`, because the two counts come from different endpoints and neither
+  /// should be fetched for an entry that does not show it (B2).
+  final bool approvalBadge;
+
+  /// Carries the count of open tasks assigned to THIS person. A third flag for the third
+  /// endpoint, for the reason the second one exists: an entry that does not show a count must
+  /// not fetch one (A6, B2).
+  final bool taskBadge;
+
+  /// Carries the count of automation steps that are STUCK — poisoned, nobody is going to try
+  /// again. A fourth flag on the same pattern rather than a widening of one of the other three,
+  /// because the whole point is that an entry which does not show a count never fetches one
+  /// (A5, A6, B2).
+  final bool poisonedBadge;
+
+  /// Where the entry actually GOES, when that is not the path it is matched on.
+  ///
+  /// "Tasks" opens my work — the same list, seeded with the filters that make it mine — and
+  /// URL-is-the-state is what makes that a link rather than a second screen and a second
+  /// endpoint. [path] stays the bare route so the sidebar still highlights on /tasks/7 and
+  /// [navPrivilegesFor] still finds the entry the router guards with (A6).
+  final String Function(CurrentUser? user)? seed;
+
   const NavEntry(this.label, this.icon, this.path, this.requiredAnyOf,
-      {this.hideForCustomer = false, this.unreadBadge = false});
+      {this.hideForCustomer = false,
+      this.unreadBadge = false,
+      this.approvalBadge = false,
+      this.taskBadge = false,
+      this.poisonedBadge = false,
+      this.seed});
 }
 
 const navEntries = <NavEntry>[
@@ -33,6 +67,11 @@ const navEntries = <NavEntry>[
   NavEntry('Payments', Icons.payments_outlined, '/payments',
       [Privileges.paymentView, Privileges.paymentManage]),
   NavEntry('Promises', Icons.handshake_outlined, '/promises', [Privileges.promiseView]),
+  // Between Promises and Disputes: the nav list order IS the sidebar order. Hidden from a
+  // customer login, which sees no approvals at all — ScopeResolver.forApprovals answers a
+  // customer with nothing, so the screen would be empty by construction (B2).
+  NavEntry('Approvals', Icons.rule_outlined, '/approvals', [Privileges.approvalView],
+      hideForCustomer: true, approvalBadge: true),
   NavEntry('Disputes', Icons.flag_outlined, '/disputes',
       [Privileges.disputeView, Privileges.disputeCreate, Privileges.disputeManage]),
   NavEntry('Products', Icons.inventory_2_outlined, '/products',
@@ -42,6 +81,27 @@ const navEntries = <NavEntry>[
       [Privileges.userView, Privileges.userManage]),
   NavEntry('Roles', Icons.admin_panel_settings_outlined, '/roles',
       [Privileges.roleView, Privileges.roleManage]),
+  // The company's branches, beside the other two company-wide maps it belongs with. REGION_VIEW
+  // is company-wide, so the entry is not itself narrowed by where you work (B1).
+  NavEntry('Regions', Icons.account_tree_outlined, '/regions', [Privileges.regionView],
+      hideForCustomer: true),
+  // APPENDED AFTER REGIONS, ON PURPOSE. The nav list's order IS the sidebar's order, and the
+  // settled order is reached by INSERTION rather than by the order the waves happen to land in:
+  // Approvals went in ABOVE this entry (B2-UI put it between Promises and Disputes, where it
+  // belongs beside the money it holds up) and A-UI appends Automation BELOW it. Anything new
+  // goes where it reads, not where the merge left off. Hidden from a customer login, which holds
+  // no TASK_VIEW on a stock installation and whose account's tasks are staff work ABOUT them,
+  // not work FOR them (A6, B2, B1).
+  NavEntry('Tasks', Icons.task_alt_outlined, '/tasks', [Privileges.taskView],
+      hideForCustomer: true, taskBadge: true, seed: myWorkLocation),
+  // APPENDED BELOW TASKS, completing the settled order (… Regions, Approvals, Tasks,
+  // Automation). The nav list's order IS the sidebar's order and the settled order is reached by
+  // INSERTION rather than by the order the waves happened to land in, which is what the comment
+  // above says and what this entry obeys. Hidden from a customer login: AUTOMATION_VIEW is a
+  // staff privilege about the engine, and a customer has no rules of their own (A1, A6, B1).
+  NavEntry('Automation', Icons.bolt_outlined, '/automation/rules',
+      [Privileges.automationView],
+      hideForCustomer: true, poisonedBadge: true),
 ];
 
 /// What a user needs to hold for the screen at [path] — the sidebar's own rule, which the router
@@ -52,6 +112,16 @@ List<String> navPrivilegesFor(String path) {
     if (e.path == path) return e.requiredAnyOf;
   }
   return const [];
+}
+
+/// Where clicking the entry at [path] should land this person. Usually [path] itself; for an
+/// entry carrying a [NavEntry.seed] it is that path with the filters, sort and size that make the
+/// list the one the entry promises — the URL is the state, so nothing else is needed (A6).
+String navDestination(String path, CurrentUser? user) {
+  for (final e in navEntries) {
+    if (e.path == path) return e.seed?.call(user) ?? e.path;
+  }
+  return path;
 }
 
 class AppShell extends ConsumerWidget {
@@ -166,7 +236,7 @@ class AppShell extends ConsumerWidget {
           : _DrawerNav(
               entries: visible,
               selectedIndex: selected,
-              onSelect: (path) => goGuarded(context, path),
+              onSelect: (path) => goGuarded(context, navDestination(path, user)),
             ),
       body: Row(
         children: [
@@ -174,7 +244,7 @@ class AppShell extends ConsumerWidget {
             _HoverRail(
               entries: visible,
               selectedIndex: selected,
-              onSelect: (path) => goGuarded(context, path),
+              onSelect: (path) => goGuarded(context, navDestination(path, user)),
             ),
           if (isWide) const VerticalDivider(width: 1),
           Expanded(child: child),
@@ -232,8 +302,19 @@ class _NavIcon extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final icon = Icon(entry.icon);
-    if (!entry.unreadBadge) return icon;
-    final count = ref.watch(inboxUnreadCountProvider).maybeWhen(data: (c) => c, orElse: () => 0);
+    if (!entry.unreadBadge &&
+        !entry.approvalBadge &&
+        !entry.taskBadge &&
+        !entry.poisonedBadge) {
+      return icon;
+    }
+    final count = entry.approvalBadge
+        ? ref.watch(approvalsAwaitingMeProvider).maybeWhen(data: (c) => c, orElse: () => 0)
+        : entry.taskBadge
+            ? ref.watch(myOpenTaskCountProvider).maybeWhen(data: (c) => c, orElse: () => 0)
+            : entry.poisonedBadge
+                ? ref.watch(poisonedStepCountProvider).maybeWhen(data: (c) => c, orElse: () => 0)
+                : ref.watch(inboxUnreadCountProvider).maybeWhen(data: (c) => c, orElse: () => 0);
     return Badge(
       isLabelVisible: count > 0,
       label: Text(count > 99 ? '99+' : '$count'),

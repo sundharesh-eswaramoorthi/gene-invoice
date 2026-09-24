@@ -19,6 +19,12 @@ abstract final class FieldLimits {
 
   static const documentMaxBytes = 10485760;
 
+  /// The server's FieldLimits.TASK_TITLE / TASK_NOTES. Both are plain varchar columns and a save
+  /// longer than these is a 400, so the boxes stop at the same number rather than letting somebody
+  /// type a paragraph the server will refuse (A6).
+  static const taskTitle = 200;
+  static const taskNotes = 2000;
+
   static const gmailClientId = 300;
   static const gmailClientSecret = 300;
   static const gmailRefreshToken = 2000;

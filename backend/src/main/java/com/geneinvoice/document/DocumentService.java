@@ -13,6 +13,8 @@ import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.document.DocumentDtos.DocumentDto;
 import com.geneinvoice.document.DocumentTargets.Target;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.RegionAccess;
+import com.geneinvoice.region.RegionScope;
 import com.geneinvoice.user.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,7 +42,7 @@ public class DocumentService {
     static final String NOT_FOUND = "Document not found";
     static final String PARENT_GONE = "Customer not found";
 
-    private static final TableSchema RECORD_DOCUMENTS = TableSchema.of("documents", "uploadedAt,desc",
+    private static final TableSchema RECORD_DOCUMENTS = TableSchema.of("documents", Document.class, "uploadedAt,desc",
             ColumnDef.of("id", "Id", ColumnType.NUMBER).notFilterable().build(),
             ColumnDef.of("uploadedAt", "Uploaded", ColumnType.DATE).notFilterable().build());
 
@@ -54,6 +56,15 @@ public class DocumentService {
     private final AuditService auditService;
     private final CurrentUser currentUser;
     private final TransactionTemplate transactions;
+    // The region chips this list says it is narrowed by; empty for an unregioned table,
+    // for a wildcard holder and for a customer login, so it is passed unconditionally (B1).
+    private final RegionScope regionScope;
+    // The write-side gate. DOCUMENT_MANAGE is MANAGE-level in RegionRights, but the global
+    // authority only says the caller may manage documents SOMEWHERE, and targets.requireManageable
+    // reads the record at VIEW. Without this a caller holding MANAGE in one branch could attach,
+    // publish and delete documents on another branch's records on the strength of VIEW there
+    // (B1, D-46).
+    private final RegionAccess regionAccess;
 
     public record Download(String filename, long sizeBytes, InputStream stream) {}
 
@@ -65,6 +76,10 @@ public class DocumentService {
                               String description, String visibility) {
         DocumentEntityType type = DocumentEntityType.parse(entityType);
         Target target = targets.requireManageable(type, entityId);
+        // After the read gate and not before it: a record this caller cannot reach at all has
+        // already answered 404, and one they can see but not manage is owed the true reason
+        // (B1, AUTH-08, D-46).
+        regionAccess.requireManage(target.regionId());
         boolean customer = currentUser.isCustomer();
         DocumentVisibility wanted = customer ? DocumentVisibility.SHARED
                 : visibility == null || visibility.isBlank()
@@ -111,7 +126,7 @@ public class DocumentService {
                 storage.delete(key);
                 throw e;
             }
-            return toDto(saved);
+            return toDto(saved, target.regionId());
         }
     }
 
@@ -119,12 +134,14 @@ public class DocumentService {
     @Transactional(readOnly = true)
     public PageResponse<DocumentDto> list(String entityType, Long entityId, Integer page, Integer size) {
         DocumentEntityType type = DocumentEntityType.parse(entityType);
-        targets.requireVisible(type, entityId);
+        Target target = targets.requireVisible(type, entityId);
         TableQuery query = TableQuery.parse(RECORD_DOCUMENTS, page, size, null, List.of());
         var result = queryExecutor.run(Document.class, RECORD_DOCUMENTS, query,
                 onRecord(type, entityId), List.of());
-        return PageResponse.of(result.content().stream().map(this::toDto).toList(),
-                query, result.total(), List.of());
+        // Every row on this page hangs off the one record, so they all share its branch and the
+        // per-record manage flag is resolved once rather than per row (B1).
+        return PageResponse.of(result.content().stream().map(d -> toDto(d, target.regionId())).toList(),
+                query, result.total(), List.of(), regionScope.lockedFilters(Document.class));
     }
 
     @Transactional(readOnly = true)
@@ -148,6 +165,9 @@ public class DocumentService {
         if (currentUser.isCustomer()) throw new AccessDeniedException("Not allowed");
         Document doc = live(id);
         Target target = targets.requireManageable(doc.getEntityType(), doc.getEntityId());
+        // Flipping INTERNAL to SHARED publishes another branch's document into that customer's
+        // self-service portal, so a patch is a write in that branch like any other (B1).
+        regionAccess.requireManage(target.regionId());
         DocumentSnapshot before = snapshot(doc);
 
         if (req.description() != null) doc.setDescription(rules.description(req.description()));
@@ -156,7 +176,7 @@ public class DocumentService {
 
         auditService.record(doc.getEntityType().name(), target.id(), "DOCUMENT_UPDATED",
                 before, snapshot(saved), currentUser.require().getId(), null, null);
-        return toDto(saved);
+        return toDto(saved, target.regionId());
     }
 
     @Transactional
@@ -164,8 +184,13 @@ public class DocumentService {
         if (currentUser.isCustomer()) throw new AccessDeniedException("Not allowed");
         Document doc = liveForUpdate(id);
         Target target = targets.requireVisible(doc.getEntityType(), doc.getEntityId());
+        // Removing a document is a write where the account lives, and that holds for the person
+        // who uploaded it too: the uploader rule below says WHOSE documents you may remove, never
+        // WHERE, and somebody moved from MANAGE to VIEW in a branch keeps neither (B1).
+        regionAccess.requireManage(target.regionId());
         User me = currentUser.require();
-        if (!me.getId().equals(doc.getUploadedByUserId()) && !targets.canManage(doc.getEntityType())) {
+        if (!me.getId().equals(doc.getUploadedByUserId())
+                && !targets.canManage(doc.getEntityType(), target.regionId())) {
             throw new AccessDeniedException("Not allowed");
         }
         DocumentSnapshot before = snapshot(doc);
@@ -213,8 +238,11 @@ public class DocumentService {
         return scope;
     }
 
-    DocumentDto toDto(Document d) {
-        boolean manage = targets.canManage(d.getEntityType());
+    DocumentDto toDto(Document d, Long regionId) {
+        // Per-record and not per-page: the flag drives the row's own Delete button, and a global
+        // "may I manage documents somewhere" would offer it on a branch the server now refuses
+        // (B1).
+        boolean manage = targets.canManage(d.getEntityType(), regionId);
         boolean uploader = !currentUser.isCustomer()
                 && currentUser.has(Privileges.DOCUMENT_MANAGE)
                 && currentUser.require().getId().equals(d.getUploadedByUserId());

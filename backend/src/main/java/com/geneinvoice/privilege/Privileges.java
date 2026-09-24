@@ -51,6 +51,29 @@ public final class Privileges {
 
     public static final String EXPORT_DATA = "EXPORT_DATA";
 
+    // See the region map and the grants; manage regions and who is granted which of them (B1).
+    public static final String REGION_VIEW = "REGION_VIEW";
+    public static final String REGION_MANAGE = "REGION_MANAGE";
+
+    public static final String APPROVAL_VIEW = "APPROVAL_VIEW";               // see the queue and the panel (B2)
+    public static final String APPROVAL_APPROVE = "APPROVAL_APPROVE";         // decide, in a region (B2)
+    // Break-glass for a region with a single approver, and for bootstrap. It never waives
+    // maker != approver: nobody approves their own change, however many privileges they hold (B2).
+    public static final String APPROVAL_APPROVE_ANY = "APPROVAL_APPROVE_ANY";
+    public static final String APPROVAL_CONFIGURE = "APPROVAL_CONFIGURE";     // propose a threshold change (B2)
+
+    public static final String TASK_VIEW = "TASK_VIEW";                       // (A6)
+    public static final String TASK_MANAGE = "TASK_MANAGE";                   // (A6)
+
+    // Authoring is company-wide on purpose: this privilege says you may write rules, and WHERE a
+    // rule may reach is bounded by automation_rule_regions, validated at save against the author's
+    // MANAGE grants (A1, B1 INTEGRATION).
+    public static final String AUTOMATION_VIEW = "AUTOMATION_VIEW";
+    public static final String AUTOMATION_MANAGE = "AUTOMATION_MANAGE";
+    public static final String AUTOMATION_RUN = "AUTOMATION_RUN";             // run a rule now, dry or applied (A5)
+
+    // A constant missing from ALL is never created by DataSeeder, so it can never be granted and
+    // every @PreAuthorize naming it denies everyone.
     public static final List<String> ALL = List.of(
             USER_VIEW, USER_MANAGE,
             ROLE_VIEW, ROLE_MANAGE,
@@ -67,6 +90,10 @@ public final class Privileges {
             PROMISE_VIEW, PROMISE_MANAGE, PROMISE_OVERRIDE,
             EMAIL_VIEW, EMAIL_SEND,
             DOCUMENT_VIEW, DOCUMENT_MANAGE,
-            EXPORT_DATA
+            EXPORT_DATA,
+            REGION_VIEW, REGION_MANAGE,
+            APPROVAL_VIEW, APPROVAL_APPROVE, APPROVAL_APPROVE_ANY, APPROVAL_CONFIGURE,
+            TASK_VIEW, TASK_MANAGE,
+            AUTOMATION_VIEW, AUTOMATION_MANAGE, AUTOMATION_RUN
     );
 }

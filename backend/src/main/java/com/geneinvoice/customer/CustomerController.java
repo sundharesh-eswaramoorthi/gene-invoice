@@ -2,6 +2,7 @@ package com.geneinvoice.customer;
 
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.asof.AsOfCsv;
 import com.geneinvoice.common.Money;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.BulkExecutor;
@@ -16,6 +17,7 @@ import com.geneinvoice.poc.PocDtos;
 import com.geneinvoice.poc.PocService;
 import com.geneinvoice.poc.PocType;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.RegionCustodyService;
 import jakarta.servlet.http.HttpServletRequest;
 import com.geneinvoice.user.UserRepository;
 import jakarta.validation.Valid;
@@ -34,6 +36,7 @@ import java.util.List;
 public class CustomerController {
 
     private final CustomerService service;
+    private final RegionCustodyService custodyService;
     private final PocService pocService;
     private final BulkExecutor bulkExecutor;
     private final CurrentUser currentUser;
@@ -63,7 +66,11 @@ public class CustomerController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.CUSTOMER_VIEW + "')")
     public CustomerDtos.CustomerDto get(@PathVariable Long id) {
-        return service.toDto(service.get(id));
+        // Every figure below is the LIVE one — unless the reader asked as of a date, and then
+        // every figure is that date's, including what the account owed and who sat on it. The
+        // switch is inside the service, in the one place the list makes it too, so the two cannot
+        // disagree about which account this is (B3).
+        return service.detail(id);
     }
 
     @PostMapping
@@ -85,12 +92,33 @@ public class CustomerController {
         service.delete(id);
     }
 
+    /**
+     * Move an account to another branch. CUSTOMER_MANAGE says WHAT, and the region rights the
+     * custody service checks say WHERE: MANAGE is needed in the branch it is leaving AND in the one
+     * it is joining, because the caller named both (B1, D-46).
+     */
+    @PostMapping("/{id}/region")
+    @PreAuthorize("hasAuthority('" + Privileges.CUSTOMER_MANAGE + "')")
+    public RegionCustodyService.MoveResult moveRegion(
+            @PathVariable Long id,
+            @Valid @RequestBody RegionCustodyService.MoveRegionRequest in) {
+        // Reached before it is moved: an account outside this caller's book or their regions is
+        // 404 here exactly as it is on every other read, and only then is the move's own 403 about
+        // the two regions they named (B1, AUTH-08).
+        service.get(id);
+        return custodyService.move(id, in.toRegionId(), in.effectiveFrom(), in.reason());
+    }
+
     @GetMapping("/{id}/pocs")
     @PreAuthorize("hasAuthority('" + Privileges.POC_VIEW + "')")
     public List<PocDtos.CustomerPocDto> pocs(@PathVariable Long id) {
         requireNonCustomerCaller();
-        service.get(id);
-        return pocService.listFor(id).stream().map(PocDtos.CustomerPocDto::from).toList();
+        // Both halves move together under ?asOf: an account that did not exist then is 404, and
+        // the seats are the seats that were HELD then rather than the ones held today. "Who was
+        // the primary collection POC on 31 January" is a question the live table cannot answer at
+        // all, because a vacated seat left no row behind it (B3, AUTH-08).
+        service.requireVisible(id);
+        return pocService.seatsFor(id);
     }
 
     @PostMapping("/{id}/pocs")
@@ -146,14 +174,17 @@ public class CustomerController {
         if (pocType == PocType.SALES) {
             throw new BadRequestException("Sales POC is assigned per invoice, not per customer");
         }
-        pocService.requireAssignable(userId, pocType);
-        return bulkExecutor.run(req, ids, truncated, id -> {
-            try {
-                pocService.add(id, pocType, userId, makePrimary);
-            } catch (PocService.AlreadyAssignedException e) {
-                throw new BulkExecutor.IneligibleException(e.getMessage());
-            }
-        });
+        // Null region on purpose: one selection can span as many branches as the filter does, so
+        // "does this person work HERE" has no single answer to pre-flight. Everything else about
+        // the assignee — active, not a customer login, holds the assignability privilege — is
+        // still one 400 for the whole request rather than the same message on every row (D-45),
+        // and each row's own add() then checks that row's own branch (B1).
+        pocService.requireAssignable(userId, pocType, null);
+        // A row whose branch this person does not work in did not QUALIFY; it did not go wrong.
+        // eligibility() reports it the way an already-assigned row is already reported, which is
+        // also how every other list's bulk action reports a row it could not act on (B1, TBL-05).
+        return bulkExecutor.run(req, ids, truncated,
+                BulkExecutor.eligibility(id -> pocService.add(id, pocType, userId, makePrimary)));
     }
 
     @PostMapping("/export")
@@ -171,19 +202,26 @@ public class CustomerController {
         String csv = Csv.of(
                 List.of("Id", "Name", "Phone", "Email", "Payment terms",
                         "Credit balance", "Outstanding", "Overdue",
-                        "Customer Success POCs", "Collection POCs"),
+                        "Customer Success POCs", "Collection POCs", "Awaiting approval"),
                 rows.stream().map(c -> List.<Object>of(
                         c.id(), c.name(), c.phone() == null ? "" : c.phone(),
                         c.email() == null ? "" : c.email(),
                         c.paymentTermLabel() == null ? "" : c.paymentTermLabel(),
                         Money.scale(c.creditBalance()), Money.scale(c.outstanding()),
                         Money.scale(c.overdueAmount()),
-                        joinPocs(c.successPocs()), joinPocs(c.collectionPocs()))).toList());
+                        joinPocs(c.successPocs()), joinPocs(c.collectionPocs()),
+                        // Read straight off the DTO: toDtos already resolved the whole export's
+                        // flags in the one batch it runs for the page (B2).
+                        Boolean.TRUE.equals(c.approvalPending()))).toList());
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"customers.csv\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + AsOfCsv.filename("customers") + "\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
-                .body(csv);
+                // A downloaded file outlives the banner that framed it, so the caveat travels
+                // inside the file: a leading one-cell row, built by the same Csv.of every other
+                // row goes through, and empty on a live export (B3).
+                .body(AsOfCsv.caveat() + csv);
     }
 
     private String joinPocs(List<PocDtos.CustomerPocDto> pocs) {

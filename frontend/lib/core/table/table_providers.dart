@@ -24,10 +24,16 @@ class TableRequest {
 
   Map<String, dynamic> get apiParams => {...query.toApiParams(), ...extra};
 
+  /// The same question without the paging: the tiles describe the SET the list is showing.
+  ///
+  /// It builds a TableQuery from scratch and so drops every field it does not name. asOf has to be
+  /// copied here by hand, or the tiles go live while the rows underneath them are historical —
+  /// the single most misleading thing this feature can produce, because both halves look right
+  /// and only their combination is a lie (B3).
   TableRequest get forSummary => TableRequest(
         entity: entity,
         path: path,
-        query: TableQuery(filters: query.filters),
+        query: TableQuery(filters: query.filters, asOf: query.asOf),
         extra: extra,
       );
 

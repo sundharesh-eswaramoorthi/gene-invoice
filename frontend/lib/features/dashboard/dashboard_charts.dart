@@ -26,6 +26,11 @@ class DashboardCard extends StatelessWidget {
   final String title;
   final String? subtitle;
   final bool book;
+
+  /// Which branches this figure counted, when it counted fewer than all of them. A partial-grant
+  /// holder now sees a one-branch total where yesterday they saw a company-wide one, and nothing
+  /// else on the card explains why (B1).
+  final RegionCoverage? regions;
   final Widget? action;
   final Widget child;
 
@@ -34,6 +39,7 @@ class DashboardCard extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.book = false,
+    this.regions,
     this.action,
     required this.child,
   });
@@ -64,11 +70,54 @@ class DashboardCard extends StatelessWidget {
                   ),
                 ),
                 if (book) const BookBadge(),
+                if (regions != null && regions!.isNarrowed) RegionBadge(coverage: regions!),
                 if (action != null) action!,
               ],
             ),
             const SizedBox(height: 12),
             child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "This figure covers these branches", or none at all. The twin of the locked region chip a
+/// list carries (B1).
+class RegionBadge extends StatelessWidget {
+  final RegionCoverage coverage;
+  const RegionBadge({super.key, required this.coverage});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final nothing = coverage.isNothing;
+    return Tooltip(
+      message: nothing
+          ? 'You can see no branch at all — ask an administrator'
+          : 'Only these branches, not the whole organisation',
+      child: Container(
+        margin: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: nothing ? scheme.errorContainer : scheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.account_tree_outlined,
+                size: 13, color: nothing ? scheme.onErrorContainer : scheme.onSurfaceVariant),
+            const SizedBox(width: 4),
+            Text(
+              nothing ? 'No branch' : coverage.label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: nothing ? scheme.onErrorContainer : scheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ),

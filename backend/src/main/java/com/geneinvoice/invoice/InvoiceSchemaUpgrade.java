@@ -1,6 +1,7 @@
 package com.geneinvoice.invoice;
 
 import com.geneinvoice.audit.AuditService;
+import com.geneinvoice.common.SchemaSupport;
 import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
@@ -18,7 +19,6 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 @Component
@@ -144,40 +144,6 @@ class InvoiceSchemaUpgrade implements InitializingBean {
     }
 
     static void enforceDueDateNotNull(Connection connection) throws SQLException {
-        String product = product(connection);
-        String alter;
-        if (product.contains("postgresql")) {
-            alter = "alter table invoices alter column due_date set not null";
-        } else if (product.contains("h2")) {
-            alter = "alter table invoices alter column due_date date not null";
-        } else {
-            return;
-        }
-        if (!isNullable(connection, "invoices", "due_date")) return;
-        try (Statement statement = connection.createStatement()) {
-            statement.execute(alter);
-            if (!connection.getAutoCommit()) connection.commit();
-            log.info("invoices.due_date is now not null");
-        } catch (SQLException e) {
-            log.warn("Could not make invoices.due_date not null: {}", e.getMessage());
-        }
-    }
-
-    static boolean isNullable(Connection connection, String table, String column) throws SQLException {
-        boolean h2 = product(connection).contains("h2");
-        try (PreparedStatement statement = connection.prepareStatement("""
-                select is_nullable from information_schema.columns
-                 where table_name = ? and column_name = ? and table_schema = %s
-                """.formatted(h2 ? "schema()" : "current_schema()"))) {
-            statement.setString(1, h2 ? table.toUpperCase(Locale.ROOT) : table);
-            statement.setString(2, h2 ? column.toUpperCase(Locale.ROOT) : column);
-            try (ResultSet rows = statement.executeQuery()) {
-                return !rows.next() || !"NO".equalsIgnoreCase(rows.getString(1));
-            }
-        }
-    }
-
-    private static String product(Connection connection) throws SQLException {
-        return connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
+        SchemaSupport.enforceNotNull(connection, "invoices", "due_date", "date");
     }
 }

@@ -2,6 +2,7 @@ package com.geneinvoice.promise;
 
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.asof.AsOfCsv;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.BulkExecutor;
 import com.geneinvoice.common.bulk.Csv;
@@ -146,27 +147,34 @@ public class PaymentPromiseController {
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.PROMISE_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         List<Long> ids = resolveIds(req);
-        List<PromiseDtos.PromiseDto> rows = service.allMatching(
+        List<? extends PromiseView> found = service.allMatching(
                         TableQuery.parseUnpaged(schema(), req.sort(), req.filters())).stream()
                 .filter(p -> ids.contains(p.getId()))
-                .map(service::toDto)
                 .toList();
+        // Through the page's own mapper, which batches the approval flags and — under ?asOf — the
+        // two link collections the mirror rows cannot walk to for themselves (B2, B3).
+        List<PromiseDtos.PromiseDto> rows = service.toDtos(found);
 
         List<String> headers = new ArrayList<>(List.of(
                 "Id", "Customer", "Promised amount", "Promised by", "Status", "Fulfilled",
-                "Remaining", "Invoices", "Collection POC", "Notes"));
+                "Remaining", "Invoices", "Collection POC", "Notes", "Awaiting approval"));
         List<List<Object>> body = rows.stream().map(p -> List.<Object>of(
                 p.id(), p.customerName(), p.amount(), p.promisedDate(), p.status(),
                 p.fulfilledAmount(), p.remainingAmount(),
                 p.invoices().stream().map(PromiseDtos.PromiseInvoiceDto::invoiceNumber)
                         .reduce((a, b) -> a + "; " + b).orElse(""),
                 p.collectionPoc() == null ? "" : p.collectionPoc().username(),
-                p.notes() == null ? "" : p.notes())).toList();
+                p.notes() == null ? "" : p.notes(),
+                // Read straight off the DTO the batch above already filled (B2).
+                Boolean.TRUE.equals(p.approvalPending()))).toList();
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"payment-promises.csv\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + AsOfCsv.filename("payment-promises") + "\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
-                .body(Csv.of(headers, body));
+                // A downloaded file outlives the banner that framed it, so the caveat travels
+                // inside the file: one leading cell, empty on a live export (B3).
+                .body(AsOfCsv.caveat() + Csv.of(headers, body));
     }
 
     private List<Long> resolveIds(BulkDtos.BulkRequest req) {

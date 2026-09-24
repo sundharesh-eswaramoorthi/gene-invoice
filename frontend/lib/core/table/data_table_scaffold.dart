@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/auth/auth_controller.dart';
 import '../api/api_client.dart';
+import '../region/region_providers.dart';
+import 'as_of_bar.dart';
 import 'filter_editor.dart';
 import 'table_models.dart';
 import 'table_providers.dart';
@@ -136,6 +139,27 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
         extra: widget.extraParams,
       );
 
+  /// THE DATE THIS TABLE IS READ-ONLY FOR, which is not simply the date that was asked for.
+  ///
+  /// `AsOfDates.parse` short-circuits any date at or after today to live, and the picker's own
+  /// last selectable day IS today — so "pick today and press Show" asks for a date and is answered
+  /// with today's live rows. Driving the dimming off `widget.query.asOf` then dimmed every write
+  /// on the page, with a tooltip saying the reader was looking at the past, beside a chip
+  /// correctly saying they were looking at today; and the writes would in fact have succeeded,
+  /// because nothing the buttons send carries the date.
+  ///
+  /// So this reads the SAME fact AsOfBar reads when it decides what the chip says: the SERVER's
+  /// account of what it answered. One fact, one screen. Until an answer arrives — or when the
+  /// request failed — the date that was asked for still stands, because the safe reading is the
+  /// one that must be on screen first (B3).
+  DateTime? get _readOnlyAsOf {
+    final asked = widget.query.asOf;
+    if (asked == null) return null;
+    final answer = ref.read(tablePageProvider(_request));
+    final servedLive = answer.hasValue && answer.valueOrNull?.asOf == null;
+    return servedLive ? null : asked;
+  }
+
   @override
   void didUpdateWidget(covariant DataTableScaffold<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -190,27 +214,43 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     final schema = schemaAsync.valueOrNull;
     final isNarrow = MediaQuery.sizeOf(context).width < 760;
 
+    // The SERVER's account of what it answered, never the client's guess. Null with a date set
+    // means the server served live, which the bar says out loud rather than papering over (B3).
+    final asOfInfo = pageAsync.valueOrNull?.asOf;
+    // NOT `widget.query.asOf`: the bar below is handed what the client ASKED for, and the write
+    // affordances are handed what the server ANSWERED. See _readOnlyAsOf (B3).
+    final readOnlyAsOf = _readOnlyAsOf;
+
     final filterBar = _FilterBar(
       schema: schema,
       query: widget.query,
       quickFilters: widget.quickFilters,
       lockedFilters: pageAsync.valueOrNull?.lockedFilters ?? const [],
+      asOfInfo: asOfInfo,
+      asOfAnswered: pageAsync.hasValue,
       onQueryChanged: (q) => widget.onQueryChanged(q),
     );
-    final pageActions = Theme(
-      data: Theme.of(context).copyWith(
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(minimumSize: const Size(64, 40))
-              .merge(Theme.of(context).filledButtonTheme.style),
+    final pageActions = _ReadOnlyWhileAsOf(
+      asOf: readOnlyAsOf,
+      child: Theme(
+        data: Theme.of(context).copyWith(
+          filledButtonTheme: FilledButtonThemeData(
+            style: FilledButton.styleFrom(minimumSize: const Size(64, 40))
+                .merge(Theme.of(context).filledButtonTheme.style),
+          ),
         ),
+        child: Wrap(spacing: 8, runSpacing: 8, children: widget.actions),
       ),
-      child: Wrap(spacing: 8, runSpacing: 8, children: widget.actions),
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         if (widget.header != null) widget.header!,
+        // ABOVE the tiles, not below them: a caveat saying a value is the floor's rather than the
+        // day's has to be read before the numbers it is about, and the tiles are the most
+        // prominent numbers on the page (B3).
+        AsOfNotice(info: asOfInfo),
         // On a phone the tiles scroll with the rows instead of standing above them, where they
         // left barely one card's worth of list (D-61).
         if (widget.tiles != null && !isNarrow)
@@ -236,6 +276,7 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
             busy: _busy,
             actions: widget.bulkActions,
             canExport: widget.canExport,
+            asOf: readOnlyAsOf,
             onSelectAllMatching: () => setState(() => _selectAllMatching = true),
             onClear: _clearSelection,
             onRun: _runBulkAction,
@@ -370,14 +411,17 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
             DataRow(
               selected: _isSelected(row),
               cells: [
-                DataCell(IconButtonTheme(
-                  data: IconButtonThemeData(
-                    style: IconButton.styleFrom(visualDensity: VisualDensity.compact)
-                        .merge(IconButtonTheme.of(context).style),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: widget.rowActions!(context, row),
+                DataCell(_ReadOnlyWhileAsOf(
+                  asOf: _readOnlyAsOf,
+                  child: IconButtonTheme(
+                    data: IconButtonThemeData(
+                      style: IconButton.styleFrom(visualDensity: VisualDensity.compact)
+                          .merge(IconButtonTheme.of(context).style),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: widget.rowActions!(context, row),
+                    ),
                   ),
                 )),
               ],
@@ -438,7 +482,10 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
                           ),
                   ),
                   if (widget.rowActions != null)
-                    Column(children: widget.rowActions!(context, row)),
+                    _ReadOnlyWhileAsOf(
+                      asOf: _readOnlyAsOf,
+                      child: Column(children: widget.rowActions!(context, row)),
+                    ),
                 ],
               ),
             ),
@@ -496,13 +543,23 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
   Future<void> _runExport() async {
     setState(() => _busy = true);
     try {
-      final res = await ref.read(dioProvider).post('${widget.path}/export', data: {
-        'action': 'EXPORT',
-        if (!_selectAllMatching) 'ids': _selected.toList(),
-        if (_selectAllMatching) 'selectAllMatchingFilter': true,
-        'sort': widget.query.sort,
-        'filters': widget.query.filters.map((f) => f.wire).toList(),
-      });
+      final asOf = widget.query.asOf;
+      final res = await ref.read(dioProvider).post(
+        '${widget.path}/export',
+        // An export is the one POST that may carry a date, and it has to carry it as a QUERY
+        // parameter: the interceptor reads req.getParameter and never the body. Without this the
+        // download is today's rows under a historical list — the same file, silently different
+        // from what is on screen, and with none of the caveat row the server writes when it knows
+        // (B3).
+        queryParameters: {if (asOf != null) 'asOf': formatAsOfDay(asOf)},
+        data: {
+          'action': 'EXPORT',
+          if (!_selectAllMatching) 'ids': _selected.toList(),
+          if (_selectAllMatching) 'selectAllMatchingFilter': true,
+          'sort': widget.query.sort,
+          'filters': widget.query.filters.map((f) => f.wire).toList(),
+        },
+      );
       if (mounted) _showCsv(res.data.toString());
     } catch (e) {
       if (mounted) {
@@ -553,9 +610,14 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     final succeeded = ((result['succeeded'] as List?) ?? const []).length;
     final failed = ((result['failed'] as List?) ?? const []).cast<Map<String, dynamic>>();
     final skipped = ((result['skipped'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    // Rows the server HELD for approval: neither a success nor a failure nor a row that did not
+    // qualify. Without this bucket a run where every row was held short-circuits below to
+    // "0 records updated" and the operator is never told that fifty changes are now waiting (B2).
+    final pending = ((result['pending'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    final pendingLimitReached = result['pendingLimitReached'] as bool? ?? false;
     final truncated = result['truncated'] as bool? ?? false;
 
-    if (failed.isEmpty && skipped.isEmpty && !truncated) {
+    if (failed.isEmpty && skipped.isEmpty && pending.isEmpty && !truncated) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(spec.successMessage?.call(succeeded) ??
               '$succeeded record${succeeded == 1 ? '' : 's'} updated')));
@@ -573,8 +635,18 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('$succeeded succeeded, ${failed.length} failed, '
-                    '${skipped.length} skipped, of ${result['requested']} requested.'),
+                Text('$succeeded succeeded, ${pending.length} sent for approval, '
+                    '${failed.length} failed, ${skipped.length} skipped, '
+                    'of ${result['requested']} requested.'),
+                if (pendingLimitReached)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'This run had already raised as many approvals as it may at once, so the '
+                      'rest were left alone. Run it again for them.',
+                      style: TextStyle(color: Theme.of(context).colorScheme.tertiary),
+                    ),
+                  ),
                 if (truncated)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -588,6 +660,17 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
                   const SizedBox(height: 12),
                   Text('Failed', style: Theme.of(context).textTheme.titleSmall),
                   for (final f in failed) Text('#${f['id']} — ${f['reason']}'),
+                ],
+                // Above Skipped and in the app's amber: these rows have not failed and have
+                // not happened either, and the reason names the change each one raised (B2).
+                if (pending.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text('Sent for approval',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.copyWith(color: Theme.of(context).colorScheme.tertiary)),
+                  for (final p in pending) Text('#${p['id']} — ${p['reason']}'),
                 ],
                 if (skipped.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -725,11 +808,43 @@ class SummaryTile extends StatelessWidget {
   }
 }
 
-class _FilterBar extends StatelessWidget {
+/// The wire name of the as-of narrowing, identical on the API, in a locked chip and in the URL.
+/// It is NOT a TableFilter in the query — it is [TableQuery.asOf] — which is exactly why "Clear
+/// all" keeps it without being told to (B3).
+const asOfFilterField = 'asOf';
+
+/// A write affordance while a past date is set.
+///
+/// It is not hidden, because a button that vanishes teaches nobody anything: it is dimmed and it
+/// says why. The refusal itself is the server's — a non-GET carrying ?asOf is 400 "The past is
+/// read only" — and this is the client agreeing with it rather than enforcing it (B3).
+class _ReadOnlyWhileAsOf extends StatelessWidget {
+  final DateTime? asOf;
+  final Widget child;
+
+  const _ReadOnlyWhileAsOf({required this.asOf, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final day = asOf;
+    if (day == null) return child;
+    return Tooltip(
+      message: AsOfBar.readOnlyTooltip(day),
+      child: Opacity(
+        opacity: 0.45,
+        child: IgnorePointer(child: child),
+      ),
+    );
+  }
+}
+
+class _FilterBar extends ConsumerWidget {
   final TableSchema? schema;
   final TableQuery query;
   final List<QuickFilterSpec> quickFilters;
   final List<TableFilter> lockedFilters;
+  final AsOfInfo? asOfInfo;
+  final bool asOfAnswered;
   final ValueChanged<TableQuery> onQueryChanged;
 
   const _FilterBar({
@@ -737,14 +852,42 @@ class _FilterBar extends StatelessWidget {
     required this.query,
     required this.quickFilters,
     required this.lockedFilters,
+    required this.asOfInfo,
+    required this.asOfAnswered,
     required this.onQueryChanged,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final quick = schema == null
         ? const <QuickFilterSpec>[]
         : quickFilters.where((q) => schema!.column(q.filter.field)?.filterable ?? false).toList();
+    final regionNames = ref.watch(regionNamesProvider);
+    // The branches every picker this bar opens should ask about. A filter has no record to take
+    // one from, so the list names its own (B1).
+    final branches = pickerRegionsFor(ref.watch(currentUserProvider),
+        applied: query.filters, locked: lockedFilters);
+    // A region narrowing is a real filter inside the query — so it survives the URL, the back
+    // button and a shared link — but it is shown by the selector and not as one more removable
+    // chip, and "Clear all" leaves it alone (B1).
+    //
+    // By OPERATOR and not by field: the selector only ever writes and reads `regionId:in`, so a
+    // `regionId:eq:7` built through "Add filter" — which is what the dialog composes by default,
+    // REFERENCE's first operator being `eq` — belongs in the chip row like any other filter.
+    // Excluding it by field alone applied it, hid it, left it out of the count and kept it
+    // through "Clear all" (B1).
+    final others = query.filters
+        .where((f) => !quick.any((q) => q.filter == f) && !isRegionSelectorFilter(f))
+        .toList();
+    // The server sends "asOf:eq:2026-01-31" among the locked chips. It is dropped from the chip
+    // row and not relabelled, because the bar beside it already says the same thing louder AND
+    // offers the way back — and because the fallback label for an unrecognised locked chip is
+    // "My records only", which would be a flat lie about the date (B3).
+    final visibleLocked = lockedFilters.where((f) => f.field != asOfFilterField).toList();
+    // Offered where there is a mirror behind the table, and shown UNCONDITIONALLY once a date is
+    // set: a schema that fails to load, or a table whose flag says no while a hand-edited link
+    // carries a date, must not leave historical rows on screen with nothing to say so (B3).
+    final asOfOffered = (schema?.asOfSupported ?? false) || query.asOf != null;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -753,13 +896,25 @@ class _FilterBar extends StatelessWidget {
         runSpacing: 6,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
+          _RegionSelector(query: query, onQueryChanged: onQueryChanged),
+          if (asOfOffered)
+            AsOfBar(
+              value: query.asOf,
+              info: asOfInfo,
+              answered: asOfAnswered,
+              onChanged: (day) => onQueryChanged(query.withAsOf(day)),
+            ),
           ActionChip(
             avatar: const Icon(Icons.filter_alt_outlined, size: 18),
             label: const Text('Add filter'),
             onPressed: schema == null
                 ? null
                 : () async {
-                    final f = await showFilterEditor(context: context, schema: schema!);
+                    final f = await showFilterEditor(
+                        context: context,
+                        schema: schema!,
+                        regionIds: branches,
+                        asOf: query.asOf);
                     if (f != null) onQueryChanged(query.addFilter(f));
                   },
           ),
@@ -771,31 +926,41 @@ class _FilterBar extends StatelessWidget {
               onSelected: (on) => onQueryChanged(
                   on ? query.addFilter(q.filter) : query.removeFilter(q.filter)),
             ),
-          for (final locked in lockedFilters)
+          for (final locked in visibleLocked)
             Tooltip(
-              message: 'Your role limits this list to your own records',
+              message: locked.field == regionFilterField
+                  ? 'This list covers the branches you work in'
+                  : 'Your role limits this list to your own records',
               child: Chip(
                 avatar: const Icon(Icons.lock_outline, size: 16),
-                label: Text(_lockedLabel(locked)),
+                label: Text(_lockedLabel(locked, regionNames)),
               ),
             ),
-          for (final f in query.filters.where((f) => !quick.any((q) => q.filter == f)))
+          for (final f in others)
             InputChip(
-              label: Text(describeFilter(f, schema)),
+              label: Text(describeFilter(f, schema, asOf: query.asOf != null)),
               onPressed: schema == null
                   ? null
                   : () async {
-                      final edited =
-                          await showFilterEditor(context: context, schema: schema!, existing: f);
+                      final edited = await showFilterEditor(
+                          context: context,
+                          schema: schema!,
+                          existing: f,
+                          regionIds: branches,
+                          asOf: query.asOf);
                       if (edited != null) {
                         onQueryChanged(query.removeFilter(f).addFilter(edited));
                       }
                     },
               onDeleted: () => onQueryChanged(query.removeFilter(f)),
             ),
-          if (query.hasFilters)
+          if (others.isNotEmpty)
             TextButton(
-              onPressed: () => onQueryChanged(query.withFilters(const [])),
+              // The region narrowing is kept: it says which branches this list is about, not
+              // which rows within them, and clearing the filters must not silently widen the
+              // list back to every branch the caller can see (B1).
+              onPressed: () => onQueryChanged(
+                  query.withFilters(query.filters.where(isRegionSelectorFilter).toList())),
               child: const Text('Clear all'),
             ),
         ],
@@ -803,9 +968,94 @@ class _FilterBar extends StatelessWidget {
     );
   }
 
-  String _lockedLabel(TableFilter f) {
+  String _lockedLabel(TableFilter f, Map<int, String> regionNames) {
     if (f.field == 'myBook') return 'My book only';
+    if (f.field == regionFilterField) {
+      // A person who holds no grant at all gets a chip naming no branch and a page of zero
+      // rows, which is a 200 and not an error — so the list has to explain itself (B1).
+      if (f.operator == 'isEmpty') return 'No region access — ask an administrator';
+      final names = f.values
+          .map((v) => regionNames[int.tryParse(v) ?? -1] ?? v)
+          .toList();
+      return 'Regions: ${names.join(", ")}';
+    }
     return 'My records only';
+  }
+}
+
+/// Which branches this list covers, written into the query as a real `regionId:in:3,7` filter.
+///
+/// No new query parameter, no new response field and no TableQuery change: the narrowing is the
+/// existing filter grammar, so it survives the URL, the back button and a shared link, and every
+/// bulk action and export inherits it for free (B1).
+class _RegionSelector extends ConsumerWidget {
+  final TableQuery query;
+  final ValueChanged<TableQuery> onQueryChanged;
+
+  const _RegionSelector({required this.query, required this.onQueryChanged});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final choices = ref.watch(selectableRegionsProvider).valueOrNull ?? const [];
+    // One branch, or none, is not a choice: the locked chip already says which branch this list
+    // covers, and a picker with a single entry would only invite a click that changes nothing.
+    if (choices.length < 2) return const SizedBox.shrink();
+    final selected = regionIdsIn(query.filters).toSet();
+    final label = selected.isEmpty
+        ? 'All my branches'
+        : 'Regions: ${choices.where((r) => selected.contains(r.id)).map((r) => r.code).join(", ")}';
+
+    return PopupMenuButton<int>(
+      tooltip: 'Which branches this list covers',
+      position: PopupMenuPosition.under,
+      onSelected: (id) => onQueryChanged(_toggled(selected, id)),
+      itemBuilder: (_) => [
+        // 0 and not null for "all": PopupMenuButton reads a null selection as a cancelled menu
+        // and never calls onSelected, so the entry that clears the narrowing would do nothing.
+        CheckedPopupMenuItem<int>(
+          value: _allBranches,
+          checked: selected.isEmpty,
+          child: const Text('All my branches'),
+        ),
+        const PopupMenuDivider(),
+        for (final r in choices)
+          CheckedPopupMenuItem<int>(
+            value: r.id,
+            checked: selected.contains(r.id),
+            child: Text(r.label),
+          ),
+      ],
+      child: Chip(
+        avatar: const Icon(Icons.account_tree_outlined, size: 16),
+        label: Text(label),
+        deleteIcon: const Icon(Icons.arrow_drop_down, size: 18),
+        onDeleted: null,
+      ),
+    );
+  }
+
+  /// The sentinel the "All my branches" entry carries. No branch has id 0.
+  static const _allBranches = 0;
+
+  TableQuery _toggled(Set<int> selected, int id) {
+    final next = {...selected};
+    if (id == _allBranches) {
+      next.clear();
+    } else if (!next.remove(id)) {
+      next.add(id);
+    }
+    // Only the selector's own filter is replaced. A `regionId:eq:7` the operator built through
+    // "Add filter" is theirs, is on screen as its own chip, and is not this control's to drop
+    // silently when they pick a branch (B1).
+    final without = query.filters.where((f) => !isRegionSelectorFilter(f)).toList();
+    // Nothing selected is "every branch I can see", which is what the mandatory predicate
+    // already answers — so it is the absence of a filter rather than a filter naming them all.
+    if (next.isEmpty) return query.withFilters(without);
+    final ids = next.toList()..sort();
+    return query.withFilters([
+      ...without,
+      TableFilter(regionFilterField, 'in', ids.map((i) => '$i').toList()),
+    ]);
   }
 }
 
@@ -816,6 +1066,11 @@ class _SelectionToolbar extends StatelessWidget {
   final bool busy;
   final List<BulkActionSpec> actions;
   final bool canExport;
+
+  /// The date this selection was made as of, or null. Every bulk action is a WRITE and the server
+  /// refuses one carrying ?asOf; the export is a read and stays offered, with the as-of caveat
+  /// row the server puts in the file itself (B3).
+  final DateTime? asOf;
   final VoidCallback onSelectAllMatching;
   final VoidCallback onClear;
   final ValueChanged<BulkActionSpec> onRun;
@@ -828,6 +1083,7 @@ class _SelectionToolbar extends StatelessWidget {
     required this.busy,
     required this.actions,
     required this.canExport,
+    required this.asOf,
     required this.onSelectAllMatching,
     required this.onClear,
     required this.onRun,
@@ -857,13 +1113,16 @@ class _SelectionToolbar extends StatelessWidget {
               const SizedBox(
                   width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
             for (final a in actions)
-              TextButton.icon(
-                icon: Icon(a.icon, size: 18),
-                label: Text(a.label),
-                style: a.destructive
-                    ? TextButton.styleFrom(foregroundColor: scheme.error)
-                    : null,
-                onPressed: busy ? null : () => onRun(a),
+              _ReadOnlyWhileAsOf(
+                asOf: asOf,
+                child: TextButton.icon(
+                  icon: Icon(a.icon, size: 18),
+                  label: Text(a.label),
+                  style: a.destructive
+                      ? TextButton.styleFrom(foregroundColor: scheme.error)
+                      : null,
+                  onPressed: busy ? null : () => onRun(a),
+                ),
               ),
             if (canExport)
               TextButton.icon(

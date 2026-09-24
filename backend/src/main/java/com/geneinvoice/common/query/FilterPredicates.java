@@ -2,6 +2,7 @@ package com.geneinvoice.common.query;
 
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Strings;
+import com.geneinvoice.invoice.InvoiceDates;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -65,7 +66,10 @@ final class FilterPredicates {
         if (def.type() != ColumnType.DATE) {
             throw new BadRequestException("relative is only valid on date columns");
         }
-        DateRange range = DateRange.preset(spec.first(), LocalDate.now(ZoneOffset.UTC));
+        // Through the read clock and not straight to the wall clock: this was the one date preset
+        // in the codebase that bypassed the chokepoint, so relative:last30Days under ?asOf now
+        // means the thirty days ending on the date that was asked for (B3).
+        DateRange range = DateRange.preset(spec.first(), InvoiceDates.today());
         Class<?> javaType = path.getJavaType();
         List<Predicate> parts = new ArrayList<>();
         if (range.from() != null) {

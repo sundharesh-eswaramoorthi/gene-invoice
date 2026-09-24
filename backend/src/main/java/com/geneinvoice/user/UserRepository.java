@@ -34,6 +34,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByCustomerId(Long customerId);
     List<User> findByRoleName(String roleName);
 
+    /**
+     * The POC picker, narrowed to the people who can actually work on the account. A seat is only
+     * worth offering to somebody who may MANAGE the branch the customer is in, so the directory is
+     * semi-joined to user_region_grants rather than filtered by a column on customer_pocs — a
+     * seat's region IS its customer's, by definition, and a column would be a second source of
+     * truth that goes stale on every move (B1).
+     *
+     * <p>{@code right <> VIEW} rather than {@code = MANAGE}: the ladder is deliberately not a
+     * total order, and somebody who may APPROVE in a branch demonstrably works there. The seat
+     * itself is still checked at MANAGE by PocService.requireAssignable, which is the gate; this
+     * query is the picker, and offering one name too many is better than hiding a colleague (B1).
+     *
+     * <p>A null regionId means the branch was not named — a wildcard caller browsing the whole
+     * directory — and then the EXISTS asks only that the person works SOMEWHERE at more than
+     * VIEW, so nobody is offered who could not be a POC anywhere at all (B1).
+     */
     @Query("""
             select distinct u from User u
               join u.role r
@@ -41,15 +57,20 @@ public interface UserRepository extends JpaRepository<User, Long> {
             where u.active = true
               and u.customerId is null
               and p.name = :privilege
+              and exists (select 1 from UserRegionGrant g
+                           where g.userId = u.id
+                             and (:regionId is null or g.regionId is null or g.regionId = :regionId)
+                             and g.right <> com.geneinvoice.region.RegionRight.VIEW)
               and (:q is null
                    or lower(u.username) like :q escape '\\'
                    or lower(coalesce(u.fullName, '')) like :q escape '\\'
                    or lower(coalesce(u.email, '')) like :q escape '\\')
             order by u.fullName asc, u.username asc
             """)
-    List<User> findAssignable(@Param("privilege") String privilege,
-                              @Param("q") String lowercaseLikePattern,
-                              Pageable pageable);
+    List<User> findAssignableInRegion(@Param("privilege") String privilege,
+                                      @Param("regionId") Long regionId,
+                                      @Param("q") String lowercaseLikePattern,
+                                      Pageable pageable);
 
     @Query("""
             select count(u) > 0 from User u

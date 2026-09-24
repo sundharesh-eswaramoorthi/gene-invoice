@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/as_of/as_of_providers.dart';
 import '../../core/format.dart';
+import '../../core/table/as_of_bar.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
+import '../../core/table/table_models.dart';
 import '../../shared/models/auth_models.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
@@ -133,15 +136,43 @@ class _Header extends ConsumerWidget {
 
   const _Header({required this.user, required this.access});
 
+  /// What the server said about the figures on this page, and whether any of them has answered.
+  ///
+  /// Only the figures this person may actually see are watched: asking for a figure they hold no
+  /// privilege for to find out what date it was answered as of would be a 403 per page load.
+  static (AsOfInfo?, bool) _asOfOfFigures(WidgetRef ref, DashboardAccess access) {
+    AsOfInfo? info;
+    var answered = false;
+    for (final figure in <AsyncValue<MonthlySeries>>[
+      if (access.invoices) ref.watch(billedByMonthProvider),
+      if (access.payments) ref.watch(collectedByMonthProvider),
+    ]) {
+      if (!figure.hasValue) continue;
+      answered = true;
+      info ??= figure.value!.asOf;
+    }
+    return (info, answered);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final months = ref.watch(dashboardMonthsProvider);
     final showPeriod = access.invoices || access.payments;
-    final today = todayUtc();
+    // The as-of date follows the reader into the past everywhere on this page, including the
+    // month window the range sentence names — DashboardController.today() is the as-of date under
+    // an open context, so the client has to agree or the heading describes a different window
+    // from the bars under it (B3).
+    final asOf = ref.watch(dashboardAsOfProvider);
+    final today = asOf ?? todayUtc();
     final from = DateTime.utc(today.year, today.month - (months - 1));
     final range =
         '${DateFormat('MMM yyyy').format(from)} – ${DateFormat('MMM yyyy').format(today)}';
+    final (asOfInfo, asOfAnswered) = _asOfOfFigures(ref, access);
+    // The bar is offered only where the installation actually has mirrors behind it; GET /api/as-of
+    // is the one place that knows, and the dashboard has no table schema to ask instead (B3).
+    final offerAsOf =
+        showPeriod && (ref.watch(asOfCapabilityProvider).valueOrNull?.isAvailable ?? false);
 
     final String note;
     if (!showPeriod) {
@@ -152,36 +183,65 @@ class _Header extends ConsumerWidget {
         if (access.payments) access.collectedLabel.toLowerCase(),
       ].join(' and ');
       final account = access.isCustomer ? 'Your account. ' : '';
+      // "as of today (UTC)" is a lie the moment a date is set, and it is the exact kind of lie
+      // this feature has to not tell: the numbers would be January's under a sentence saying now.
+      final asAt = asOf == null ? 'today (UTC)' : formatDayLong(asOf);
       note = '$account${flows[0].toUpperCase()}${flows.substring(1)} cover $range; '
-          'balances and promises are as of today (UTC).';
+          'balances and promises are as of $asAt.';
     }
 
-    return Wrap(
-      spacing: 16,
-      runSpacing: 12,
-      alignment: WrapAlignment.spaceBetween,
-      crossAxisAlignment: WrapCrossAlignment.end,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        Wrap(
+          spacing: 16,
+          runSpacing: 12,
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.end,
           children: [
-            Text('Welcome${user?.fullName != null ? ", ${user!.fullName}" : ""}',
-                style: theme.textTheme.headlineSmall),
-            Text(note, style: theme.textTheme.bodySmall),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Welcome${user?.fullName != null ? ", ${user!.fullName}" : ""}',
+                    style: theme.textTheme.headlineSmall),
+                Text(note, style: theme.textTheme.bodySmall),
+              ],
+            ),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (offerAsOf)
+                  AsOfBar(
+                    value: asOf,
+                    info: asOfInfo,
+                    answered: asOfAnswered,
+                    clientToday: todayUtc(),
+                    onChanged: (day) =>
+                        ref.read(dashboardAsOfProvider.notifier).state = day,
+                  ),
+                if (showPeriod)
+                  SegmentedButton<int>(
+                    showSelectedIcon: false,
+                    segments: const [
+                      ButtonSegment(value: 3, label: Text('3 months')),
+                      ButtonSegment(value: 6, label: Text('6 months')),
+                      ButtonSegment(value: 12, label: Text('12 months')),
+                    ],
+                    selected: {months},
+                    onSelectionChanged: (s) =>
+                        ref.read(dashboardMonthsProvider.notifier).state = s.first,
+                  ),
+              ],
+            ),
           ],
         ),
-        if (showPeriod)
-          SegmentedButton<int>(
-            showSelectedIcon: false,
-            segments: const [
-              ButtonSegment(value: 3, label: Text('3 months')),
-              ButtonSegment(value: 6, label: Text('6 months')),
-              ButtonSegment(value: 12, label: Text('12 months')),
-            ],
-            selected: {months},
-            onSelectionChanged: (s) => ref.read(dashboardMonthsProvider.notifier).state = s.first,
-          ),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: AsOfNotice(info: asOfInfo),
+        ),
       ],
     );
   }
@@ -340,6 +400,9 @@ class _TrendCard extends ConsumerWidget {
           ? 'Payments count only what was paid against your invoices'
           : null,
       book: book,
+      // All five figures now say which branches they counted; a partial-grant holder sees a
+      // one-branch total where yesterday they saw a company-wide one (B1).
+      regions: parts.map((p) => p.valueOrNull?.regionCoverage).whereType<RegionCoverage>().firstOrNull,
       child: body,
     );
   }
@@ -355,9 +418,11 @@ class _InvoiceStatusCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final book = ref.watch(billedByMonthProvider).valueOrNull?.coverage == Coverage.book;
+    final billed = ref.watch(billedByMonthProvider).valueOrNull;
     return DashboardCard(
       title: 'Invoices by status',
       book: book,
+      regions: billed?.regionCoverage,
       child: asyncCard(ref.watch(invoiceSummaryProvider), (s) {
         DonutSlice slice(InvoiceStatus status, String key) => DonutSlice(
               label: statusLabel(status),
@@ -382,11 +447,15 @@ class _AgingCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final aging = ref.watch(outstandingByAgeProvider);
+    // The bars are aged against the date the figure was answered as of, so the due-date window
+    // each bar links to is the window the server actually bucketed by (B3).
+    final today = ref.watch(dashboardAsOfProvider) ?? todayUtc();
     return DashboardCard(
       title: 'Outstanding by days overdue',
       subtitle: 'Days overdue',
       book: aging.valueOrNull?.coverage == Coverage.book,
-      child: asyncCard(aging, (data) => AgingBars(data: data, today: todayUtc())),
+      regions: aging.valueOrNull?.regionCoverage,
+      child: asyncCard(aging, (data) => AgingBars(data: data, today: today)),
     );
   }
 }
@@ -428,10 +497,16 @@ class _TopOutstandingCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ranking = ref.watch(topOutstandingProvider);
+    // The SERVER's date, read through AsOfInfo.day so a malformed one leaves the card saying
+    // "today" rather than throwing inside a subtitle (B3).
+    final answeredOn = ranking.valueOrNull?.asOf?.day;
     return DashboardCard(
       title: 'Top customers by outstanding',
-      subtitle: 'The five owing the most today',
+      subtitle: answeredOn == null
+          ? 'The five owing the most today'
+          : 'The five owing the most on ${formatDayLong(answeredOn)}',
       book: ranking.valueOrNull?.coverage == Coverage.book,
+      regions: ranking.valueOrNull?.regionCoverage,
       action: access.customers
           ? TextButton(
               onPressed: () => context.go('/customers?sort=outstanding,desc'),
@@ -459,6 +534,7 @@ class _TopPayingCard extends ConsumerWidget {
           ? 'Last $months months, paid against your invoices'
           : 'The five who paid the most in the last $months months',
       book: book,
+      regions: ranking.valueOrNull?.regionCoverage,
       child:
           asyncCard(ranking, (r) => TopPayingTable(ranking: r, canOpenCustomer: access.customers)),
     );
@@ -477,7 +553,12 @@ class _UpcomingPromisesCard extends ConsumerWidget {
       subtitle: 'The next ten due, open or partly kept',
       book: upcoming.valueOrNull?.book ?? false,
       action: TextButton(
-        onPressed: () => context.go(UpcomingPromises.listLink(todayUtc())),
+        // The link inherits the date, so "View all" from a January dashboard opens the January
+        // list rather than silently dropping back to now (B3).
+        onPressed: () {
+          final asOf = ref.read(dashboardAsOfProvider);
+          context.go(UpcomingPromises.listLink(asOf ?? todayUtc(), asOf: asOf));
+        },
         child: const Text('View all'),
       ),
       child: asyncCard(

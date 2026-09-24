@@ -60,6 +60,8 @@ class _CustomerPocEditorState extends ConsumerState<CustomerPocEditor> {
                   type: widget.type,
                   value: picked,
                   required: true,
+                  // The account's own branch decides who may hold this seat (B1).
+                  customerId: widget.customerId,
                   onChanged: (u) => setState(() => picked = u),
                 ),
                 CheckboxListTile(

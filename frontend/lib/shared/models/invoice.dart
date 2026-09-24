@@ -43,6 +43,16 @@ class InvoiceSummary {
 
   final bool pocMissing;
 
+  /// The branch this invoice's account is in. Null means the server did not say (B1).
+  final int? regionId;
+  final String? regionName;
+
+  /// True when a change on this record is waiting for approval. The figures beside it are the
+  /// LIVE ones — nothing pending has taken effect — so the flag is the only thing that differs
+  /// from a record with nothing waiting. Defaults false: null on the wire means the server was
+  /// not asked, and "not asked" must never read as "something is waiting" (B2).
+  final bool approvalPending;
+
   const InvoiceSummary({
     required this.id,
     required this.invoiceNumber,
@@ -60,6 +70,9 @@ class InvoiceSummary {
     required this.status,
     this.salesPoc,
     this.pocMissing = false,
+    this.regionId,
+    this.regionName,
+    this.approvalPending = false,
   });
 
   String get termsLabel => paymentTermLabel ?? paymentTerm?.label ?? '—';
@@ -83,6 +96,9 @@ class InvoiceSummary {
             ? null
             : PocUser.fromJson(json['salesPoc'] as Map<String, dynamic>),
         pocMissing: json['pocMissing'] as bool? ?? false,
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionName: json['regionName'] as String?,
+        approvalPending: json['approvalPending'] as bool? ?? false,
       );
 }
 
@@ -140,6 +156,9 @@ class InvoiceDetail extends InvoiceSummary {
     required this.items,
     super.salesPoc,
     super.pocMissing,
+    super.regionId,
+    super.regionName,
+    super.approvalPending,
     this.createdAt,
   });
 
@@ -166,6 +185,9 @@ class InvoiceDetail extends InvoiceSummary {
             ? null
             : PocUser.fromJson(json['salesPoc'] as Map<String, dynamic>),
         pocMissing: json['pocMissing'] as bool? ?? false,
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionName: json['regionName'] as String?,
+        approvalPending: json['approvalPending'] as bool? ?? false,
         createdAt: json['createdAt'] == null
             ? null
             : DateTime.parse(json['createdAt'] as String),

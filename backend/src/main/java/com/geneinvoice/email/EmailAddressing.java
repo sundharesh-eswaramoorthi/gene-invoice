@@ -56,6 +56,38 @@ public class EmailAddressing {
         return plan(target.type(), targets.rolesOffered(target), from, to);
     }
 
+    /**
+     * plan() for a caller who is not a person. An automation rule runs on a thread with no
+     * principal, so the two customer-login restrictions the request path applies have no subject
+     * to ask about, and the sender cannot fall back to "whoever clicked Send": a rule names its
+     * sender explicitly or it is refused here, at save time, rather than at 3 a.m. (A3, A5).
+     */
+    public Plan planForRule(EmailEntityType type, EmailToken from, List<EmailToken> to) {
+        if (from == null) throw new BadRequestException("A rule's email needs a sender");
+        List<RoleRef> offered = targets.rolesOffered(type);
+        List<To> recipients = new ArrayList<>();
+        for (EmailToken token : to == null ? List.<EmailToken>of() : to) {
+            // The SAME checkTo the To field uses, with restricted false: there is no customer
+            // login in the loop, so the E13 staff-by-name rule has nobody to apply to (A3).
+            recipients.add(checkTo(type, offered, token, false));
+        }
+        return new Plan(checkForRule(type, offered, from), recipients);
+    }
+
+    /**
+     * checkFrom with the {@code caller} parameter REMOVED rather than passed as null: checkFrom
+     * reads the caller only on the token==null arm and the customer-login arm, neither of which a
+     * rule can reach, and a null there would be a latent NPE the day somebody adds a third read
+     * (A3).
+     */
+    private From checkForRule(EmailEntityType type, List<RoleRef> offered, EmailToken token) {
+        return switch (kind(token, "from")) {
+            case USER -> new From(activeInternalUser(token.userId()), null);
+            case ROLE -> new From(null, offeredRole(type, offered, token));
+            case CUSTOMER -> throw new BadRequestException("The sender must be a person or a role");
+        };
+    }
+
     private Plan plan(EmailEntityType type, List<RoleRef> offered, EmailToken from, List<EmailToken> to) {
         User caller = currentUser.require();
         boolean restricted = caller.getCustomerId() != null;
@@ -119,7 +151,10 @@ public class EmailAddressing {
         return Person.of(u);
     }
 
-    private static RoleRef offeredRole(EmailEntityType type, List<RoleRef> offered, EmailToken token) {
+    // Package-private rather than private, with no change to the body: RoleResolver asks this
+    // exact question when a rule NAMES a role, so a rule author sees the same already-asserted 400
+    // the To field gives rather than a second copy of the rule that could drift from it (A3).
+    static RoleRef offeredRole(EmailEntityType type, List<RoleRef> offered, EmailToken token) {
         EmailRole role = EmailRole.parse(token.role());
         RoleLevel level = token.level() == null || token.level().isBlank()
                 ? EmailTargets.defaultLevel(type, role)

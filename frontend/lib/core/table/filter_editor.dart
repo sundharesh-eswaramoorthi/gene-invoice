@@ -8,17 +8,43 @@ Future<TableFilter?> showFilterEditor({
   required BuildContext context,
   required TableSchema schema,
   TableFilter? existing,
+  List<int> regionIds = const [],
+  DateTime? asOf,
 }) {
   return showDialog<TableFilter>(
     context: context,
-    builder: (_) => _FilterEditorDialog(schema: schema, existing: existing),
+    builder: (_) => _FilterEditorDialog(
+        schema: schema, existing: existing, regionIds: regionIds, asOf: asOf),
   );
 }
+
+/// What a column is called in the editor while the list is being read as of a past date.
+///
+/// A column the server marks CURRENT is filtered and sorted on TODAY's value even on a historical
+/// page — nothing mirrors what it reads — so filtering "assignee is Nina" as of January finds the
+/// records Nina holds NOW. The name says so where the filter is built, rather than leaving a
+/// reader to infer that the whole row came from January (B3).
+String columnLabelAsOf(ColumnDef c, {required bool asOf}) =>
+    asOf && c.isCurrentUnderAsOf ? '${c.label} (current value)' : c.label;
 
 class _FilterEditorDialog extends StatefulWidget {
   final TableSchema schema;
   final TableFilter? existing;
-  const _FilterEditorDialog({required this.schema, this.existing});
+
+  /// The branches the list is about, handed to every reference picker this dialog opens: a
+  /// filter has no record to take a branch from, and the POC picker is refused without one (B1).
+  final List<int> regionIds;
+
+  /// The date the list is being read as of, or null. Only used to mark the columns whose value is
+  /// today's rather than that date's (B3).
+  final DateTime? asOf;
+
+  const _FilterEditorDialog({
+    required this.schema,
+    this.existing,
+    this.regionIds = const [],
+    this.asOf,
+  });
 
   @override
   State<_FilterEditorDialog> createState() => _FilterEditorDialogState();
@@ -140,7 +166,11 @@ class _FilterEditorDialogState extends State<_FilterEditorDialog> {
                 initialValue: _column,
                 isExpanded: true,
                 items: columns
-                    .map((c) => DropdownMenuItem(value: c, child: Text(c.label)))
+                    .map((c) => DropdownMenuItem(
+                        value: c,
+                        child: Text(
+                            columnLabelAsOf(c, asOf: widget.asOf != null),
+                            overflow: TextOverflow.ellipsis)))
                     .toList(),
                 onChanged: (c) => setState(() {
                   _column = c;
@@ -252,6 +282,7 @@ class _FilterEditorDialogState extends State<_FilterEditorDialog> {
             ReferencePicker(
               kind: column.referenceKind ?? 'customer',
               value: _reference,
+              regionIds: widget.regionIds,
               onChanged: (o) => setState(() => _reference = o),
             ),
           ],
@@ -327,8 +358,11 @@ class _FilterEditorDialogState extends State<_FilterEditorDialog> {
       );
 }
 
-String describeFilter(TableFilter f, TableSchema? schema) {
-  final label = schema?.labelFor(f.field) ?? f.field;
+String describeFilter(TableFilter f, TableSchema? schema, {bool asOf = false}) {
+  final column = schema?.column(f.field);
+  final label = column == null
+      ? f.field
+      : columnLabelAsOf(column, asOf: asOf);
   if (f.operator == 'isEmpty') return '$label is empty';
   if (f.operator == 'isNotEmpty') return '$label is set';
   if (f.operator == 'relative') return '$label ${datePresetLabel(f.values.firstOrNull ?? '')}';

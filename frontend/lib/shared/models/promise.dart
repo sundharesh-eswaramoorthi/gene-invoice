@@ -82,6 +82,16 @@ class PaymentPromise {
   final int? createdByUserId;
   final DateTime? createdAt;
 
+  /// The branch this promise's account is in. Null means the server did not say (B1).
+  final int? regionId;
+  final String? regionName;
+
+  /// True when a change on this record is waiting for approval. The figures beside it are the
+  /// LIVE ones — nothing pending has taken effect — so the flag is the only thing that differs
+  /// from a record with nothing waiting. Defaults false: null on the wire means the server was
+  /// not asked, and "not asked" must never read as "something is waiting" (B2).
+  final bool approvalPending;
+
   const PaymentPromise({
     required this.id,
     required this.customerId,
@@ -101,6 +111,9 @@ class PaymentPromise {
     this.payments = const [],
     this.createdByUserId,
     this.createdAt,
+    this.regionId,
+    this.regionName,
+    this.approvalPending = false,
   });
 
   bool get isLive => status != PromiseStatus.CANCELLED;
@@ -139,5 +152,8 @@ class PaymentPromise {
         createdByUserId: (json['createdByUserId'] as num?)?.toInt(),
         createdAt:
             json['createdAt'] == null ? null : DateTime.parse(json['createdAt'] as String),
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionName: json['regionName'] as String?,
+        approvalPending: json['approvalPending'] as bool? ?? false,
       );
 }

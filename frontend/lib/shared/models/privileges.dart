@@ -45,4 +45,19 @@ class Privileges {
 
   static const documentView = 'DOCUMENT_VIEW';
   static const documentManage = 'DOCUMENT_MANAGE';
+
+  static const regionView = 'REGION_VIEW';
+  static const regionManage = 'REGION_MANAGE';
+
+  static const approvalView = 'APPROVAL_VIEW';
+  static const approvalApprove = 'APPROVAL_APPROVE';
+  static const approvalApproveAny = 'APPROVAL_APPROVE_ANY';
+  static const approvalConfigure = 'APPROVAL_CONFIGURE';
+
+  static const taskView = 'TASK_VIEW';
+  static const taskManage = 'TASK_MANAGE';
+
+  static const automationView = 'AUTOMATION_VIEW';
+  static const automationManage = 'AUTOMATION_MANAGE';
+  static const automationRun = 'AUTOMATION_RUN';
 }

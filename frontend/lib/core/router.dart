@@ -3,6 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/auth_controller.dart';
+import '../features/approvals/approval_detail_screen.dart';
+import '../features/automation/activity_screen.dart';
+import '../features/automation/rule_detail_screen.dart';
+import '../features/automation/rule_form_screen.dart';
+import '../features/automation/rules_screen.dart';
+import '../features/approvals/approvals_screen.dart';
 import '../features/auth/login_screen.dart';
 import '../features/customers/customer_detail_screen.dart';
 import '../features/customers/customers_screen.dart';
@@ -21,6 +27,9 @@ import '../features/products/product_detail_screen.dart';
 import '../features/products/products_screen.dart';
 import '../features/promises/promise_detail_screen.dart';
 import '../features/promises/promises_screen.dart';
+import '../features/regions/regions_screen.dart';
+import '../features/tasks/task_detail_screen.dart';
+import '../features/tasks/tasks_screen.dart';
 import '../features/users/role_detail_screen.dart';
 import '../features/users/roles_screen.dart';
 import '../features/users/user_detail_screen.dart';
@@ -185,6 +194,101 @@ final routerProvider = Provider<GoRouter>((ref) {
                     )),
           ),
 
+          // The queue, and one change's own page. Both sit behind APPROVAL_VIEW, the same
+          // privilege the sidebar hides the entry on, so a hand-edited URL is refused too
+          // (UI-10, B2).
+          GoRoute(
+            path: '/approvals',
+            redirect: needs(navPrivilegesFor('/approvals')),
+            builder: (c, s) => ApprovalsScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('approvals'), defaultSort: 'requestedAt,desc'),
+            ),
+          ),
+          GoRoute(
+            path: '/approvals/:id',
+            builder: (c, s) => pageForId(s,
+                noun: 'change',
+                backTo: '/approvals',
+                build: (id) => ApprovalDetailScreen(
+                      key: ValueKey('approval-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
+          ),
+
+          // The list, and one task's own page. Both sit behind TASK_VIEW, the same privilege
+          // the sidebar hides the entry on, so a hand-edited URL is refused too (UI-10, A6).
+          //
+          // There is no separate "my work" route: the sidebar entry navigates to THIS one with
+          // the filters that make the list mine already in the URL, which is why the seeded link
+          // needs no screen, no endpoint and no state of its own (A6).
+          GoRoute(
+            path: '/tasks',
+            redirect: needs(navPrivilegesFor('/tasks')),
+            builder: (c, s) => TasksScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('tasks'), defaultSort: 'dueDate,asc'),
+            ),
+          ),
+          // A TASK_ASSIGNED notification deep-links here (A6).
+          GoRoute(
+            path: '/tasks/:id',
+            builder: (c, s) => pageForId(s,
+                noun: 'task',
+                backTo: '/tasks',
+                build: (id) => TaskDetailScreen(
+                      key: ValueKey('task-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
+          ),
+
+          // THE RULES, THE BUILDER, ONE RULE AND THE RUN HISTORY. All four sit behind
+          // AUTOMATION_VIEW, the same privilege the sidebar hides the entry on, so a hand-edited
+          // URL is refused too (UI-10, A1).
+          //
+          // /automation/rules/new is declared ABOVE /automation/rules/:id, the /invoices/new
+          // precedent: go_router matches in declaration order and "new" would otherwise be read
+          // as an id and answered with "That rule does not exist" (A1).
+          GoRoute(
+            path: '/automation/rules/new',
+            redirect: needs(navPrivilegesFor('/automation/rules')),
+            onExit: mayLeave,
+            builder: (c, s) => const RuleFormScreen(),
+          ),
+          GoRoute(
+            path: '/automation/rules',
+            redirect: needs(navPrivilegesFor('/automation/rules')),
+            builder: (c, s) => AutomationRulesScreen(
+              query: RouteQuery.read(s,
+                  defaultSize: sizeFor('automationRules'), defaultSort: 'name,asc'),
+            ),
+          ),
+          // ?edit=true is the BUILDER on this rule, and it is a state of this page rather than a
+          // fifth route: the URL is the state here as it is for ?tab=, and onExit guards both
+          // (A1, AC-D4).
+          GoRoute(
+            path: '/automation/rules/:id',
+            onExit: mayLeave,
+            builder: (c, s) => pageForId(s,
+                noun: 'rule',
+                backTo: '/automation/rules',
+                build: (id) => s.uri.queryParameters['edit'] == 'true'
+                    ? RuleEditGate(key: ValueKey('rule-edit-$id'), id: id)
+                    : RuleDetailScreen(
+                        key: ValueKey('rule-$id'),
+                        id: id,
+                        initialTab: s.uri.queryParameters['tab'],
+                      )),
+          ),
+          GoRoute(
+            path: '/automation/activity',
+            redirect: needs(navPrivilegesFor('/automation/rules')),
+            builder: (c, s) => AutomationActivityPage(
+              query: RouteQuery.read(s,
+                  defaultSize: sizeFor('automationSteps'), defaultSort: 'id,desc'),
+            ),
+          ),
+
           GoRoute(
             path: '/disputes',
             redirect: needs(navPrivilegesFor('/disputes')),
@@ -229,6 +333,13 @@ final routerProvider = Provider<GoRouter>((ref) {
                       id: id,
                       initialTab: s.uri.queryParameters['tab'],
                     )),
+          ),
+          GoRoute(
+            path: '/regions',
+            redirect: needs(navPrivilegesFor('/regions')),
+            builder: (c, s) => RegionsScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('regions'), defaultSort: 'code,asc'),
+            ),
           ),
           GoRoute(
             path: '/roles',

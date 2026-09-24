@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.geneinvoice.common.asof.AsOfContext;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.dispute.Dispute;
@@ -46,10 +47,13 @@ public class AuditTimelineService {
             .comparing(Entry::createdAt, Comparator.nullsLast(Comparator.<Instant>reverseOrder()))
             .thenComparing(Entry::id, Comparator.nullsLast(Comparator.<Long>reverseOrder()));
 
+    // pendingChangeId is TRAILING, the blueprint's fixed append order, and is rendered "via
+    // approval #N" exactly as disputeId is already rendered "via dispute #N" (B2).
     public record Entry(Long id, String entityType, Long entityId, String entityLabel,
                         String action, String beforeJson, String afterJson,
                         Long changedByUserId, Long disputeId, String reason,
-                        Instant createdAt, boolean derived, boolean actorHidden) {}
+                        Instant createdAt, boolean derived, boolean actorHidden,
+                        Long pendingChangeId) {}
 
     private final AuditLogRepository auditRepository;
     private final CustomerRepository customerRepository;
@@ -120,11 +124,36 @@ public class AuditTimelineService {
                     entries.add(new Entry(a.getId(), a.getEntityType(), a.getEntityId(),
                             labels.get(a.getEntityId()), a.getAction(),
                             a.getBeforeJson(), a.getAfterJson(), a.getChangedByUserId(),
-                            a.getDisputeId(), a.getReason(), a.getCreatedAt(), false, false));
+                            a.getDisputeId(), a.getReason(), a.getCreatedAt(), false, false,
+                            a.getPendingChangeId()));
                 }
             }
         });
-        entries.addAll(derived(r, entries));
+        // AS OF A DATE, THE TRAIL STOPS AT T AND CARRIES NOTHING FABRICATED (B3).
+        //
+        // audit_logs is append-only, so "the history as it stood on 31 January" is this history
+        // with everything recorded after that instant removed. That is a truncation and not a
+        // reconstruction, which is why the one as-of read in the application with no mirror table
+        // behind it needs no mirror table.
+        //
+        // AND THE DERIVED ENTRIES ARE SUPPRESSED ENTIRELY, which is the point rather than a
+        // simplification. derived() fabricates CUSTOMER_CREATED, INVOICE_CREATED, PAYMENT_RECORDED,
+        // PROMISE_CREATED, DISPUTE_OPENED/DENIED and the allocation-derived PAYMENT_APPLIED rows
+        // from the LIVE record as it stands NOW — the amount it carries today, the status it has
+        // today — and stamps them with a date in the past. Truncating them would hide the ones
+        // dated after T and leave the rest reading as contemporaneous evidence of values that were
+        // never recorded. A gap in the trail is honest; a fabricated entry presented as history is
+        // not (B3).
+        //
+        // An entry with no createdAt cannot be shown to have happened by T, so it goes too. Today
+        // there is none — audit_logs.created_at is written by @PrePersist — and a row that somehow
+        // had one would otherwise be the single entry in a historical answer that is not historical.
+        if (AsOfContext.isActive()) {
+            Instant until = AsOfContext.instant();
+            entries.removeIf(e -> e.createdAt() == null || e.createdAt().isAfter(until));
+        } else {
+            entries.addAll(derived(r, entries));
+        }
         entries.sort(NEWEST_FIRST);
         return entries;
     }
@@ -140,7 +169,7 @@ public class AuditTimelineService {
             boolean hide = e.changedByUserId() != null && !visibleActors.contains(e.changedByUserId());
             out.add(new Entry(e.id(), e.entityType(), e.entityId(), e.entityLabel(), e.action(),
                     before, after, hide ? null : e.changedByUserId(), e.disputeId(), e.reason(),
-                    e.createdAt(), e.derived(), hide));
+                    e.createdAt(), e.derived(), hide, e.pendingChangeId()));
         }
         return out;
     }
@@ -238,8 +267,10 @@ public class AuditTimelineService {
     private Entry derivedEntry(String type, Long id, String label, String action,
                                Map<String, Object> after, Long by, Long disputeId, String reason,
                                Instant at) {
+        // A derived entry is inferred from the record as it stands now, not read from a row
+        // somebody wrote: nobody approved it, so it belongs to no change (B2).
         return new Entry(null, type, id, label, action, null, toJson(after), by, disputeId, reason,
-                at, true, false);
+                at, true, false, null);
     }
 
     private static String key(String type, Long id, String action) {

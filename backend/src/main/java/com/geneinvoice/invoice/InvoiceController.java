@@ -1,5 +1,8 @@
 package com.geneinvoice.invoice;
 
+import com.geneinvoice.approval.PendingChangeRepository;
+import com.geneinvoice.approval.PendingTargetType;
+import com.geneinvoice.common.asof.AsOfCsv;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.BulkExecutor;
 import com.geneinvoice.common.bulk.Csv;
@@ -27,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/invoices")
@@ -38,6 +42,8 @@ public class InvoiceController {
     private final BulkExecutor bulkExecutor;
     private final CurrentUser currentUser;
     private final UserRepository userRepository;
+    // The export's flags, batched exactly as the list page's are (B2).
+    private final PendingChangeRepository pendingChangeRepository;
 
     private TableSchema schema() {
         return TableSchemas.INVOICES.visibleTo(currentUser.isCustomer());
@@ -67,7 +73,14 @@ public class InvoiceController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public InvoiceDtos.InvoiceDto get(@PathVariable Long id) {
-        return InvoiceDtos.InvoiceDto.from(service.get(id), scopeResolver.canSeePoc());
+        // Every money figure below is the LIVE one; the flag is the only thing a waiting change
+        // adds to this response, because nothing pending has taken effect (B2).
+        //
+        // ...unless the reader asked as of a date, and then every figure is that date's and the
+        // flag says whether the change was still waiting THEN. The switch is inside the service,
+        // in the one place the list makes it too, so the two cannot disagree about which invoice
+        // this is (B3).
+        return service.detail(id, scopeResolver.canSeePoc());
     }
 
     @GetMapping("/due-date-preview")
@@ -130,30 +143,42 @@ public class InvoiceController {
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         boolean poc = scopeResolver.canSeePoc();
         List<Long> ids = resolveIds(req);
-        List<Invoice> invoices = service.allMatching(
+        List<? extends InvoiceView> invoices = service.allMatching(
                         TableQuery.parseUnpaged(schema(), req.sort(), req.filters())).stream()
                 .filter(i -> ids.contains(i.getId()))
                 .toList();
 
-        // Overdue is read from the clock at export time, exactly as the list shows it (D3).
+        // Overdue is read from the clock at export time, exactly as the list shows it (D3) — and
+        // under ?asOf that clock IS the date asked for, so a downloaded file ages its rows against
+        // the same day the page did (B3).
         LocalDate today = InvoiceDates.today();
+        // One query for the whole export, the same batch the list page uses (B2).
+        Set<Long> held = pendingChangeRepository.openTargetIds(PendingTargetType.INVOICE,
+                invoices.stream().map(InvoiceView::getId).toList());
         List<String> headers = new ArrayList<>(List.of(
                 "Invoice #", "Customer", "Date", "Due date", "Total", "Paid", "Balance",
-                "Status", "Overdue"));
+                "Status", "Overdue", "Awaiting approval"));
         if (poc) headers.add("Sales POC");
+        // The account's name off the VIEW, not off a customer association: on a mirror row it is
+        // the name the account had THEN, and on a live row it is the same value the list shows
+        // (B3).
         List<List<Object>> rows = invoices.stream().map(i -> {
             List<Object> row = new ArrayList<>(List.of(
-                    i.getInvoiceNumber(), i.getCustomer().getName(), i.getInvoiceDate(),
+                    i.getInvoiceNumber(), i.getCustomerName(), i.getInvoiceDate(),
                     i.getDueDate(), i.getTotal(), i.getPaidAmount(), i.getBalance(),
-                    i.getStatus(), i.isOverdue(today)));
+                    i.getStatus(), i.isOverdue(today), held.contains(i.getId())));
             if (poc) row.add(i.getSalesPoc() == null ? "" : i.getSalesPoc().getUsername());
             return row;
         }).toList();
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"invoices.csv\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + AsOfCsv.filename("invoices") + "\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
-                .body(Csv.of(headers, rows));
+                // A downloaded file outlives the banner that framed it, so the caveat travels
+                // inside the file: a leading one-cell row, built by the same Csv.of every other
+                // row goes through, and empty on a live export (B3).
+                .body(AsOfCsv.caveat() + Csv.of(headers, rows));
     }
 
     private List<Long> resolveIds(BulkDtos.BulkRequest req) {

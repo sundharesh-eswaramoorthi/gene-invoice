@@ -7,8 +7,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 
 @Component
@@ -31,7 +29,9 @@ public class InvoiceNumbers {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public String next() {
-        String day = LocalDate.now(ZoneOffset.UTC).format(DAY);
+        // An invoice number is a write: it is stamped with the wall clock and never with the
+        // date a reader asked to see the world as of (B3).
+        String day = InvoiceDates.todayForWrite().format(DAY);
         String prefix = "INV-" + day + "-";
         InvoiceNumberSequence seq = sequenceRepository.lockById(ROW)
                 .orElseGet(() -> sequenceRepository.saveAndFlush(new InvoiceNumberSequence(ROW, null, 0)));

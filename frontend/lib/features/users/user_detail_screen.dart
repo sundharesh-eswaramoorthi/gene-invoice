@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/region/region_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
@@ -11,6 +12,7 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../customers/customers_screen.dart';
 import '../email/email_actions.dart';
+import '../regions/region_grant_editor.dart';
 import 'users_screen.dart';
 
 /// A user's account, read-only, with its emails and history below. Edits go through the same
@@ -28,6 +30,14 @@ class UserDetailScreen extends ConsumerWidget {
     final canViewAudit =
         (viewer?.has(Privileges.auditView) ?? false) && (viewer?.has(Privileges.userView) ?? false);
     final canOpenCustomer = viewer?.has(Privileges.customerView) ?? false;
+    // Handing out region reach needs USER_MANAGE and REGION_MANAGE together, the pair the
+    // endpoint itself asks for (B1).
+    //
+    // OPENING the dialog needs only the VIEW pair, which is what its read side asks for: seeing
+    // who may work where is strictly less than deciding it, and a reader who may look gets a
+    // read-only dialog rather than no answer. The MANAGE pair is checked again on the Save inside
+    // it, so the button being here never promises a write (B1).
+    final canSeeRegions = ref.watch(canViewRegionGrantsProvider);
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -51,6 +61,15 @@ class UserDetailScreen extends ConsumerWidget {
                 icon: const Icon(Icons.edit_outlined, size: 18),
                 label: const Text('Edit'),
                 onPressed: () => openUserForm(context, ref, existing: user),
+              ),
+            // A customer login holds no grants at all: its reach is its own account, and
+            // giving one a branch would mean nothing (B1).
+            if (canSeeRegions && user.customerId == null)
+              OutlinedButton.icon(
+                icon: const Icon(Icons.account_tree_outlined, size: 18),
+                label: const Text('Branches'),
+                onPressed: () => showRegionGrantEditor(context,
+                    userId: user.id, username: user.username),
               ),
             if (send != null) send,
           ],

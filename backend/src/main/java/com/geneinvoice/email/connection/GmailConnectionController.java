@@ -6,6 +6,7 @@ import com.geneinvoice.email.connection.GmailConnectionDtos.GmailConnectionDto;
 import com.geneinvoice.email.connection.GmailConnectionDtos.UserGmailDto;
 import com.geneinvoice.email.transport.MailConnectException;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.user.UserController;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,6 +19,9 @@ import org.springframework.web.bind.annotation.*;
 public class GmailConnectionController {
 
     private final GmailConnectionService service;
+    // The staff-directory gate, borrowed rather than copied: this endpoint reads the same person
+    // GET /api/users/{id} does, and two spellings of one rule is how they come to disagree (B1).
+    private final UserController users;
 
     @GetMapping("/api/me/gmail")
     @PreAuthorize("hasAuthority('" + Privileges.EMAIL_SEND + "')")
@@ -41,6 +45,9 @@ public class GmailConnectionController {
     @GetMapping("/api/users/{id}/gmail")
     @PreAuthorize("hasAuthority('" + Privileges.USER_VIEW + "')")
     public UserGmailDto ofUser(@PathVariable Long id) {
+        // Somebody the caller shares no branch with reads as somebody who does not exist, exactly
+        // as the staff directory answers (B1, AUTH-08).
+        users.requireInScope(id);
         return service.ofUser(id);
     }
 

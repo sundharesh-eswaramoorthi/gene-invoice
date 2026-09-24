@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,6 +9,7 @@ import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../auth/auth_controller.dart';
 import 'promise_form_dialog.dart';
 import 'promise_providers.dart';
@@ -44,19 +46,24 @@ class PromisesTab extends ConsumerWidget {
 
   final int? paymentId;
 
+  /// Which branch the account this tab hangs off is in, so "Raise promise" is offered only to
+  /// somebody who may write here rather than to anybody holding PROMISE_MANAGE somewhere (B1).
+  final int? regionId;
+
   const PromisesTab({
     super.key,
     required this.customerId,
     this.customerName,
     this.invoice,
     this.paymentId,
+    this.regionId,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.promiseManage) ?? false;
-    final canOverride = user?.has(Privileges.promiseOverride) ?? false;
+    final canManage = user?.hasIn(Privileges.promiseManage, regionId) ?? false;
+    final canOverride = user?.hasIn(Privileges.promiseOverride, regionId) ?? false;
     final scope =
         PromiseScope(customerId: customerId, invoiceId: invoice?.id, paymentId: paymentId);
     final async = ref.watch(scopedPromisesProvider(scope));
@@ -128,6 +135,14 @@ class PromiseCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Narrowed a second time per row: a tab can list promises from more than one branch once a
+    // record's account has moved, and the card's own promise is the only thing that says where
+    // this one lives (B1).
+    final viewer = ref.watch(currentUserProvider);
+    final mayManage =
+        canManage && (viewer?.hasIn(Privileges.promiseManage, promise.regionId) ?? false);
+    final mayOverride =
+        canOverride && (viewer?.hasIn(Privileges.promiseOverride, promise.regionId) ?? false);
     return Card(
       margin: EdgeInsets.zero,
       child: Padding(
@@ -198,7 +213,7 @@ class PromiseCard extends ConsumerWidget {
                     label: const Text('Open'),
                     onPressed: () => goGuarded(context, '/promises/${promise.id}'),
                   ),
-                  if (canManage && promise.isLive)
+                  if (mayManage && promise.isLive)
                     TextButton.icon(
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       label: const Text('Edit'),
@@ -212,7 +227,7 @@ class PromiseCard extends ConsumerWidget {
                         if (saved == true) onChanged();
                       },
                     ),
-                  if (canOverride && promise.isLive)
+                  if (mayOverride && promise.isLive)
                     TextButton.icon(
                       icon: const Icon(Icons.rule, size: 18),
                       label: Text(promise.statusOverridden ? 'Override…' : 'Override status'),
@@ -221,7 +236,7 @@ class PromiseCard extends ConsumerWidget {
                         if (saved == true) onChanged();
                       },
                     ),
-                  if (canManage && promise.isLive)
+                  if (mayManage && promise.isLive)
                     TextButton.icon(
                       icon: const Icon(Icons.cancel_outlined, size: 18),
                       style: TextButton.styleFrom(
@@ -283,6 +298,19 @@ Future<bool> cancelPromise(BuildContext context, WidgetRef ref, PaymentPromise p
         .read(dioProvider)
         .post('/api/promises/${promise.id}/cancel', data: {'reason': reason.text.trim()});
     return true;
+  } on DioException catch (e) {
+    // PROMISE_CANCEL is gated on the promise's amount, so a big one comes back 202 and the
+    // promise is still ACTIVE. `true` here would tell the caller to refresh as though the cancel
+    // had happened, so a held answer returns false and says amber what it says (B2).
+    final held = pendingApprovalOf(e);
+    if (held != null) {
+      if (context.mounted) showApprovalSentSnackBar(context, held);
+      return false;
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));
+    }
+    return false;
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(apiErrorMessage(e))));

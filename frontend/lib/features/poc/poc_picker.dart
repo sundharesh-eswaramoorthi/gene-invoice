@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../shared/models/auth_models.dart';
+import '../auth/auth_controller.dart';
 import 'poc_providers.dart';
 
-class PocPicker extends StatelessWidget {
+class PocPicker extends ConsumerWidget {
   final PocType type;
   final PocUser? value;
   final ValueChanged<PocUser?> onChanged;
@@ -15,6 +17,15 @@ class PocPicker extends StatelessWidget {
   final String? labelOverride;
 
   final bool showLabel;
+
+  /// The account this seat is being filled on, wherever there is one. Who may hold a seat is a
+  /// question about a branch, and the account is the only answer that cannot be a guess (B1).
+  final int? customerId;
+
+  /// With no account in scope, the branches to ask about. Left null, the picker falls back to
+  /// every branch the viewer works in, so no call site can silently ask about none and be
+  /// refused — which is what the shipped client did at every one of them (B1).
+  final List<int>? regionIds;
 
   const PocPicker({
     super.key,
@@ -26,12 +37,25 @@ class PocPicker extends StatelessWidget {
     this.errorText,
     this.labelOverride,
     this.showLabel = true,
+    this.customerId,
+    this.regionIds,
   });
 
+  /// The branches this picker asks about when it has no account: the ones it was given, else
+  /// every branch the viewer works in. Empty for a wildcard holder, who may browse the whole
+  /// directory because for them "anywhere" is an answer (B1).
+  List<int> _branches(CurrentUser? viewer) {
+    if (customerId != null) return const [];
+    if (regionIds != null) return regionIds!;
+    if (viewer == null || viewer.allRegions || viewer.isCustomer) return const [];
+    return viewer.workingSet.toList();
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final label = labelOverride ?? pocTypeLabel(type);
     final theme = Theme.of(context);
+    final branches = _branches(ref.watch(currentUserProvider));
 
     if (!enabled) {
       return InputDecorator(
@@ -42,7 +66,7 @@ class PocPicker extends StatelessWidget {
     }
 
     return InkWell(
-      onTap: () => _openPicker(context),
+      onTap: () => _openPicker(context, branches),
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: !showLabel ? null : (required ? '$label *' : label),
@@ -79,10 +103,15 @@ class PocPicker extends StatelessWidget {
     );
   }
 
-  Future<void> _openPicker(BuildContext context) async {
+  Future<void> _openPicker(BuildContext context, List<int> branches) async {
     final selected = await showDialog<PocUser>(
       context: context,
-      builder: (_) => _PocPickerDialog(type: type, selectedId: value?.id),
+      builder: (_) => _PocPickerDialog(
+        type: type,
+        selectedId: value?.id,
+        customerId: customerId,
+        regionIds: branches,
+      ),
     );
     if (selected != null) onChanged(selected);
   }
@@ -91,7 +120,14 @@ class PocPicker extends StatelessWidget {
 class _PocPickerDialog extends ConsumerStatefulWidget {
   final PocType type;
   final int? selectedId;
-  const _PocPickerDialog({required this.type, this.selectedId});
+  final int? customerId;
+  final List<int> regionIds;
+  const _PocPickerDialog({
+    required this.type,
+    this.selectedId,
+    this.customerId,
+    this.regionIds = const [],
+  });
 
   @override
   ConsumerState<_PocPickerDialog> createState() => _PocPickerDialogState();
@@ -119,7 +155,12 @@ class _PocPickerDialogState extends ConsumerState<_PocPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(assignablePocsProvider(AssignableQuery(widget.type, _search)));
+    final async = ref.watch(assignablePocsProvider(AssignableQuery(
+      widget.type,
+      _search,
+      customerId: widget.customerId,
+      regionIds: widget.regionIds,
+    )));
     return AlertDialog(
       title: Text('Choose ${pocTypeLabel(widget.type)}'),
       content: SizedBox(
@@ -146,9 +187,12 @@ class _PocPickerDialogState extends ConsumerState<_PocPickerDialog> {
                     return const Center(
                       child: Padding(
                         padding: EdgeInsets.all(16),
+                        // A seat is only valid if its holder can manage the account's branch, so
+                        // the picker offers nobody from a branch this person does not work in
+                        // — which is why an empty list is no longer only about the role (B1).
                         child: Text(
-                          'Nobody matches. Only active users whose role can hold this '
-                          'POC appear here.',
+                          'Nobody matches. Only active users whose role can hold this POC, and '
+                          'who work in this branch, appear here.',
                           textAlign: TextAlign.center,
                         ),
                       ),

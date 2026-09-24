@@ -12,6 +12,16 @@ public class CountingStatements implements StatementInspector {
     private static volatile boolean counting;
 
     public static long reads(String table, ThrowingRunnable body) throws Exception {
+        return capture(body).stream().filter(sql -> sql.startsWith("select") && sql.contains(table)).count();
+    }
+
+    /**
+     * The same recording handed back as the statements themselves rather than as a count, so a
+     * test can assert what a query CONTAINED and not only how many there were. That is what the
+     * region tripwire needs: "no statement against a regional table runs without a region
+     * restriction" is a question about the text of the SQL, not about its cardinality (B1).
+     */
+    public static List<String> capture(ThrowingRunnable body) throws Exception {
         synchronized (RUN) {
             RUN.clear();
         }
@@ -22,7 +32,7 @@ public class CountingStatements implements StatementInspector {
             counting = false;
         }
         synchronized (RUN) {
-            return RUN.stream().filter(sql -> sql.startsWith("select") && sql.contains(table)).count();
+            return List.copyOf(RUN);
         }
     }
 

@@ -52,6 +52,16 @@ class PaymentRecord {
   final PocUser? collectionPoc;
   final bool pocMissing;
 
+  /// The branch this payment's account is in. Null means the server did not say (B1).
+  final int? regionId;
+  final String? regionName;
+
+  /// True when a change on this record is waiting for approval. The figures beside it are the
+  /// LIVE ones — nothing pending has taken effect — so the flag is the only thing that differs
+  /// from a record with nothing waiting. Defaults false: null on the wire means the server was
+  /// not asked, and "not asked" must never read as "something is waiting" (B2).
+  final bool approvalPending;
+
   const PaymentRecord({
     required this.id,
     required this.customerId,
@@ -66,6 +76,9 @@ class PaymentRecord {
     required this.customerCreditBalance,
     this.collectionPoc,
     this.pocMissing = false,
+    this.regionId,
+    this.regionName,
+    this.approvalPending = false,
   });
 
   factory PaymentRecord.fromJson(Map<String, dynamic> json) => PaymentRecord(
@@ -86,5 +99,8 @@ class PaymentRecord {
             ? null
             : PocUser.fromJson(json['collectionPoc'] as Map<String, dynamic>),
         pocMissing: json['pocMissing'] as bool? ?? false,
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionName: json['regionName'] as String?,
+        approvalPending: json['approvalPending'] as bool? ?? false,
       );
 }

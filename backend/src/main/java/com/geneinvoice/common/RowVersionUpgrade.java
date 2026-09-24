@@ -15,7 +15,12 @@ import java.util.List;
 @Slf4j
 class RowVersionUpgrade implements InitializingBean {
 
-    private static final List<String> TABLES = List.of("customers", "invoices");
+    // payments and payment_promises joined the list the day they gained @Version: ddl-auto adds
+    // the column to the rows already there as NULL, and Hibernate reads a null version as "this
+    // row was never saved", so the first edit of an old payment or promise would fail its
+    // optimistic lock. Zeroing them here, before any traffic, is what stops that (B2).
+    private static final List<String> TABLES =
+            List.of("customers", "invoices", "payments", "payment_promises");
 
     private final DataSource dataSource;
 

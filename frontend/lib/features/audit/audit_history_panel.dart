@@ -22,6 +22,13 @@ class AuditEntry {
   final int? changedByUserId;
   final String? changedByUsername;
   final int? disputeId;
+
+  /// The change somebody had to approve for this row to exist. Null for ~everything — most rows
+  /// are a change nobody had to approve, and that is what null means here — and a number on the
+  /// six CHANGE_* actions maker-checker writes. Always null on a derived entry, which is
+  /// inferred from the record as it stands and was never a change anybody approved (B2).
+  final int? pendingChangeId;
+
   final String? reason;
   final DateTime? createdAt;
 
@@ -44,6 +51,7 @@ class AuditEntry {
     required this.changedByUserId,
     this.changedByUsername,
     required this.disputeId,
+    this.pendingChangeId,
     required this.reason,
     required this.createdAt,
     this.derived = false,
@@ -72,6 +80,7 @@ class AuditEntry {
       changedByUserId: (json['changedByUserId'] as num?)?.toInt(),
       changedByUsername: json['changedByUsername'] as String?,
       disputeId: (json['disputeId'] as num?)?.toInt(),
+      pendingChangeId: (json['pendingChangeId'] as num?)?.toInt(),
       reason: json['reason'] as String?,
       createdAt: json['createdAt'] == null ? null : DateTime.parse(json['createdAt'] as String),
       derived: json['derived'] as bool? ?? false,
@@ -137,6 +146,13 @@ String? _headline(String action, Object? before, Object? after) {
       final term = _termLabel(a?['paymentTerm']);
       if (was == now) return term == null ? null : 'on $term';
       return term == null ? '$was → $now' : '$was → $now · $term';
+    case 'CUSTOMER_REGION_CHANGED':
+      // The blob is {regionId, regionCode} on each side, and the codes are the half a reader
+      // recognises (B1).
+      final from = b?['regionCode'] as String?;
+      final to = a?['regionCode'] as String?;
+      if (from == null || to == null || from == to) return null;
+      return '$from → $to';
     case 'CUSTOMER_PAYMENT_TERM_CHANGED':
       // A bare term name on each side; none on either side is the system default (D1).
       final was = _termLabel(before) ?? Customer.systemDefaultTerms;
@@ -189,6 +205,13 @@ const _actionLabels = <String, String>{
   'CUSTOMER_CREATED': 'Customer created',
   'CUSTOMER_UPDATED': 'Customer details updated',
   'CUSTOMER_PAYMENT_TERM_CHANGED': 'Payment terms changed',
+  // A move writes one row on the CUSTOMER naming both branches; without this it rendered as its
+  // raw action string on the customer's History tab (B1).
+  'CUSTOMER_REGION_CHANGED': 'Branch changed',
+  'REGIONS_BACKFILLED': 'Branches backfilled',
+  'REGION_CREATED': 'Branch opened',
+  'REGION_UPDATED': 'Branch updated',
+  'USER_REGIONS_CHANGED': 'Branches changed',
   // Destructive writes leave a trail of their own (CP-04); the record is gone, so these read on
   // the deleted entity's own history, which staff can still open.
   'CUSTOMER_DELETED': 'Customer deleted',
@@ -384,6 +407,10 @@ class _AuditTile extends StatelessWidget {
       if (entry.createdAt != null) formatDateTime(entry.createdAt),
       if (who != null) who,
       if (entry.disputeId != null && entry.entityType != 'DISPUTE') 'via dispute #${entry.disputeId}',
+      // The twin of the dispute line. It is what ties the two halves of one approval together:
+      // for a create the CHANGE_REQUESTED row lands on the customer and the CHANGE_APPROVED row
+      // on the record the replay just made, so the same number appears on two timelines (B2).
+      if (entry.pendingChangeId != null) 'via approval #${entry.pendingChangeId}',
     ].join(' • ');
 
     // Each link is its own node, so a screen reader can reach the link without activating it

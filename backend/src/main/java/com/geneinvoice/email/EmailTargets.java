@@ -143,7 +143,13 @@ public class EmailTargets {
         }
     }
 
-    public record Target(EmailEntityType type, Long id, String label, Long customerId,
+    /**
+     * regionId is the branch the record's ACCOUNT is in, and null for a record that belongs to
+     * nobody — a product, a role, an internal person. It is what the write gate in EmailService
+     * asks about; the read that produced this target has already answered 404 for a record the
+     * caller cannot reach at all (B1).
+     */
+    public record Target(EmailEntityType type, Long id, String label, Long customerId, Long regionId,
                          Map<RoleRef, List<Person>> holders, List<Person> customerEmails) {
 
         public String link() {
@@ -224,6 +230,21 @@ public class EmailTargets {
         return describe(type, loadScoped(type, id));
     }
 
+    /**
+     * The same snapshot as {@link #load}, without the caller's privileges or book: the automation
+     * consumer has no principal at all, so the rule's region is the access decision instead, and
+     * this method is region-checked by its only caller, RoleResolver.snapshot (B1, A3).
+     *
+     * <p>NOTHING ELSE MAY CALL THIS. It reads any record by id with no check of its own, so a
+     * second caller on a request path would be a way past both requireTypeAccess and the POC
+     * book; RoleResolver is the one door and it asks the region question first (A3, B1).
+     */
+    @Transactional(readOnly = true)
+    public Target describeUnscoped(EmailEntityType type, Long id) {
+        return describe(type, loadUnscoped(type, id)
+                .orElseThrow(() -> new NotFoundException(type.title() + " not found")));
+    }
+
     private Optional<?> loadUnscoped(EmailEntityType type, Long id) {
         return switch (type) {
             case CUSTOMER -> customerRepository.findById(id);
@@ -302,7 +323,20 @@ public class EmailTargets {
     private Target target(EmailEntityType type, Long id, String label, Long customerId,
                           Map<EmailRole, Optional<User>> ownFields) {
         return new Target(type, id, EmailText.fit(label, Email.LABEL_MAX), customerId,
-                holders(type, customerId, ownFields), customerEmails(customerId));
+                regionOf(customerId), holders(type, customerId, ownFields),
+                customerEmails(customerId));
+    }
+
+    /**
+     * The branch a record belongs to: its account's, because an email is always about somebody's
+     * account. A product, a role and an internal person have no account and so have no branch —
+     * they are company-wide by declaration in RegionRights, not by omission (B1).
+     */
+    private Long regionOf(Long customerId) {
+        if (customerId == null) return null;
+        // .getId() on the lazy Region proxy initialises nothing (B1).
+        return customerRepository.findById(customerId)
+                .map(c -> c.getRegion().getId()).orElse(null);
     }
 
     private Map<RoleRef, List<Person>> holders(EmailEntityType type, Long customerId,

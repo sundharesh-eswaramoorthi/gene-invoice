@@ -15,8 +15,19 @@ export 'email_models.dart' show EmailEvent;
 export 'send_email_dialog.dart' show EmailComposeOutcome;
 export 'gmail_connection_screen.dart' show UserGmailStatus;
 
-final canSendEmailProvider = Provider<bool>(
-    (ref) => ref.watch(currentUserProvider)?.has(Privileges.emailSend) ?? false);
+/// "May I send company email about a record in THIS branch."
+///
+/// EMAIL_SEND is a MANAGE-level privilege in the region partition, so holding it in one branch
+/// says nothing about a record in another — and the server now asks the same question per
+/// record. hasIn, not has: the global answer is "somewhere", which is the nav gate and not the
+/// button gate. A null regionId is a record that does not say which branch it is in — a product,
+/// a role, a user — and falls back to the global answer (B1).
+final canSendEmailInProvider = Provider.family<bool, int?>((ref, regionId) =>
+    ref.watch(currentUserProvider)?.hasIn(Privileges.emailSend, regionId) ?? false);
+
+/// The same question with no record in hand: a page action that opens a picker, or a bulk action
+/// the server answers row by row (B1).
+final canSendEmailProvider = Provider<bool>((ref) => ref.watch(canSendEmailInProvider(null)));
 final canViewEmailProvider = Provider<bool>(
     (ref) => ref.watch(currentUserProvider)?.has(Privileges.emailView) ?? false);
 
@@ -33,8 +44,12 @@ Future<EmailComposeOutcome> showSendEmailForPickedRecord(BuildContext context,
     openSendEmailForPickedRecord(context, type: type);
 
 Widget sendEmailRowAction(BuildContext context,
-    {required EmailEntityType type, required int entityId, String? entityLabel}) {
-  final canSend = ProviderScope.containerOf(context, listen: false).read(canSendEmailProvider);
+    {required EmailEntityType type,
+    required int entityId,
+    String? entityLabel,
+    int? regionId}) {
+  final canSend =
+      ProviderScope.containerOf(context, listen: false).read(canSendEmailInProvider(regionId));
   if (!canSend) return const SizedBox.shrink();
   return IconButton(
     tooltip: 'Send email',
@@ -64,8 +79,11 @@ BulkActionSpec sendEmailBulkAction(EmailEntityType type) => BulkActionSpec(
     );
 
 Widget? sendEmailHeaderButton(BuildContext context, WidgetRef ref,
-    {required EmailEntityType type, required int entityId, String? entityLabel}) {
-  if (!ref.watch(canSendEmailProvider)) return null;
+    {required EmailEntityType type,
+    required int entityId,
+    String? entityLabel,
+    int? regionId}) {
+  if (!ref.watch(canSendEmailInProvider(regionId))) return null;
   return OutlinedButton.icon(
     icon: const Icon(Icons.mail_outline, size: 18),
     label: const Text('Send email'),
@@ -75,24 +93,32 @@ Widget? sendEmailHeaderButton(BuildContext context, WidgetRef ref,
 }
 
 DetailTab? emailDetailTab(WidgetRef ref,
-    {required EmailEntityType type, required int entityId, String? entityLabel}) {
+    {required EmailEntityType type,
+    required int entityId,
+    String? entityLabel,
+    int? regionId}) {
   if (!ref.watch(canViewEmailProvider)) return null;
   return DetailTab(
     slug: 'email',
     label: 'Email',
     icon: Icons.mail_outline,
-    builder: (context) => EmailTab(type: type, entityId: entityId, entityLabel: entityLabel),
+    builder: (context) => EmailTab(
+        type: type, entityId: entityId, entityLabel: entityLabel, regionId: regionId),
   );
 }
 
 class NotifyByEmailCheckbox extends ConsumerWidget {
-  const NotifyByEmailCheckbox({super.key, required this.value, required this.onChanged});
+  const NotifyByEmailCheckbox(
+      {super.key, required this.value, required this.onChanged, this.regionId});
   final bool value;
   final ValueChanged<bool> onChanged;
 
+  /// The branch the record being saved lives in, when the form knows it (B1).
+  final int? regionId;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!ref.watch(canSendEmailProvider)) return const SizedBox.shrink();
+    if (!ref.watch(canSendEmailInProvider(regionId))) return const SizedBox.shrink();
     return CheckboxListTile(
       value: value,
       onChanged: (v) => onChanged(v ?? false),
@@ -109,10 +135,12 @@ Future<EmailComposeOutcome> notifyByEmailAfterSave(BuildContext context,
     {required bool notify,
     required EmailEntityType type,
     required int entityId,
-    required EmailEvent event}) async {
+    required EmailEvent event,
+    int? regionId}) async {
   if (!notify || !context.mounted) return EmailComposeOutcome.closed;
   try {
-    final canSend = ProviderScope.containerOf(context, listen: false).read(canSendEmailProvider);
+    final canSend =
+        ProviderScope.containerOf(context, listen: false).read(canSendEmailInProvider(regionId));
     if (!canSend) return EmailComposeOutcome.closed;
     return await showSendEmailDialog(context, type: type, entityId: entityId, event: event);
   } catch (_) {

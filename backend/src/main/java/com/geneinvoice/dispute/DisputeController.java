@@ -1,6 +1,7 @@
 package com.geneinvoice.dispute;
 
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.asof.AsOfCsv;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.Csv;
 import com.geneinvoice.common.query.FilterParams;
@@ -8,7 +9,6 @@ import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
-import com.geneinvoice.poc.ScopeResolver;
 import com.geneinvoice.privilege.Privileges;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -28,9 +28,6 @@ import java.util.List;
 public class DisputeController {
 
     private final DisputeService service;
-    private final DisputeRepository repository;
-    private final ScopeResolver scopeResolver;
-    private final TableQueryExecutor queryExecutor;
 
     @GetMapping
     @PreAuthorize("hasAuthority('" + Privileges.DISPUTE_VIEW + "')")
@@ -42,19 +39,22 @@ public class DisputeController {
             @RequestParam(required = false) Long customerId,
             @RequestParam(required = false) DisputeTargetType targetType,
             @RequestParam(required = false) Long targetId) {
-        TableQuery query = TableQuery.parse(TableSchemas.DISPUTES, page, size, sort,
-                withContext(FilterParams.from(request), customerId, targetType, targetId));
-        ScopeResolver.Scope scope = scopeResolver.forDisputes();
-        var result = queryExecutor.run(Dispute.class, TableSchemas.DISPUTES, query,
-                scope.predicates(), List.of());
-        return PageResponse.of(result.content().stream().map(service::toDto).toList(),
-                query, result.total(), scope.lockedFilters());
+        // The query is parsed against the LIVE schema and answered by the service's source switch,
+        // which is the shape every other list in this application has: the twin's column names,
+        // filterability and operator sets are equal to the live schema's by construction, so the
+        // requireFilterable messages are byte-identical and the executor re-checks anyway (B3).
+        return service.page(TableQuery.parse(TableSchemas.DISPUTES, page, size, sort,
+                withContext(FilterParams.from(request), customerId, targetType, targetId)));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.DISPUTE_VIEW + "')")
     public DisputeDtos.DisputeDto get(@PathVariable Long id) {
-        return service.toDto(service.get(id));
+        // Every figure below is the LIVE one and the flag is the only thing a waiting change adds
+        // (B2) — unless the reader asked as of a date, and then the dispute, the record it is
+        // about and the flag are all that date's, and one that did not exist then is 404 rather
+        // than 403 (B3, AUTH-08).
+        return service.detail(id);
     }
 
     @PostMapping
@@ -81,24 +81,31 @@ public class DisputeController {
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.DISPUTE_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         TableQuery query = TableQuery.parseUnpaged(TableSchemas.DISPUTES, req.sort(), req.filters());
-        List<Long> permitted = queryExecutor.ids(Dispute.class, TableSchemas.DISPUTES, query,
-                scopeResolver.forDisputes().predicates(), TableQueryExecutor.BULK_ID_LIMIT);
+        List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT);
         List<Long> ids = req.allMatching() ? permitted
                 : (req.ids() == null ? List.<Long>of()
                         : req.ids().stream().filter(permitted::contains).toList());
         if (ids.isEmpty() && !req.allMatching()) {
             throw new BadRequestException("Provide ids or set selectAllMatchingFilter");
         }
+        // The ROWS the query matched, filtered to the ids this caller named — and no longer
+        // repository.findAllById, which read the live table whatever date was asked for and would
+        // have put today's disputes in a file the banner called January's (B3, B1).
         String csv = Csv.of(
                 List.of("Id", "Customer", "Target", "Target id", "Status", "Opened", "Resolved", "Reason"),
-                repository.findAllById(ids).stream().map(service::toDto).map(d -> List.<Object>of(
+                service.allMatching(query).stream()
+                        .filter(d -> ids.contains(d.getId()))
+                        .map(service::toDto).map(d -> List.<Object>of(
                         d.id(), d.customerName() == null ? "" : d.customerName(),
                         d.targetType(), d.targetId(), d.status(), d.createdAt(),
                         d.resolvedAt() == null ? "" : d.resolvedAt(), d.reason())).toList());
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"disputes.csv\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + AsOfCsv.filename("disputes") + "\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
-                .body(csv);
+                // A downloaded file outlives the banner that framed it, so the caveat travels
+                // inside the file: one leading cell, empty on a live export (B3).
+                .body(AsOfCsv.caveat() + csv);
     }
 
     private List<String> withContext(List<String> chips, Long customerId,

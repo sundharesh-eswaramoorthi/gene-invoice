@@ -16,7 +16,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Dispute {
+public class Dispute implements DisputeView {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -38,7 +38,18 @@ public class Dispute {
     @Column(nullable = false, length = 2000)
     private String reason;
 
-    @Lob
+    /**
+     * What the customer asked to have changed, as JSON.
+     *
+     * <p>NO LONGER &#64;Lob, AND IT MUST NOT COME BACK, for the reason spelled out in full on
+     * {@code AuditLog.beforeJson}: &#64;Lob made the Postgres driver store a large-object OID in
+     * this text column instead of the text. Here it also made B3's mirror lie — the reconciler
+     * compares {@code disputes.proposed_change_json} against {@code dispute_history}'s copy in
+     * raw SQL, and an OID never equals the JSON the mirror holds, so every dispute carrying a
+     * proposed change drifted for ever on Postgres and read back as a run of digits once the
+     * repair had copied the OID into the mirror. columnDefinition stays, so the DDL does not
+     * change; {@code common/LobTextUpgrade} rewrites the rows a deployment already wrote (B2, B3).
+     */
     @Column(name = "proposed_change_json", columnDefinition = "TEXT")
     private String proposedChangeJson;
 

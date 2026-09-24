@@ -6,6 +6,7 @@ import com.geneinvoice.email.transport.MailSendException;
 import com.geneinvoice.email.transport.MailTransport;
 import com.geneinvoice.email.transport.NoopMailTransport;
 import com.geneinvoice.email.transport.Submission;
+import com.geneinvoice.region.RegionScope;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -103,13 +104,17 @@ public class EmailDispatcher {
         }
         backgroundOwned.addAll(ids);
         try {
-            background.execute(() -> ids.forEach(id -> {
-                try {
-                    dispatchQuietly(id);
-                } finally {
-                    backgroundOwned.remove(id);
-                }
-            }));
+            // The WORKER's body, not the submit call: the hatch is a ThreadLocal and is
+            // deliberately not inheritable, so wrapping dispatchAll would leave this thread with
+            // no principal and no reason — which reads as no regions at all (B1).
+            background.execute(() -> RegionScope.asSystem(RegionScope.SystemReason.EMAIL_DISPATCH,
+                    () -> ids.forEach(id -> {
+                        try {
+                            dispatchQuietly(id);
+                        } finally {
+                            backgroundOwned.remove(id);
+                        }
+                    })));
         } catch (RejectedExecutionException e) {
             ids.forEach(backgroundOwned::remove);
             log.warn("Shutting down; {} email(s) stay queued for the sweeper", ids.size());

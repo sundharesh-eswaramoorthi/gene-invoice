@@ -9,6 +9,7 @@ import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_providers.dart';
@@ -26,7 +27,6 @@ class PromisesScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.promiseManage) ?? false;
-    final canOverride = user?.has(Privileges.promiseOverride) ?? false;
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canSendEmail = ref.watch(canSendEmailProvider);
@@ -118,8 +118,15 @@ class PromisesScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, p) =>
+            cell: (context, p) => Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
                 PromiseStatusChip(status: p.status, overridden: p.statusOverridden),
+                if (p.approvalPending) const ApprovalPendingDot(),
+              ],
+            ),
           ),
           TableColumnSpec(
             label: 'Fulfilled',
@@ -148,8 +155,12 @@ class PromisesScreen extends ConsumerWidget {
             onPressed: () => context.go('/customers/${p.customerId}?tab=promises'),
           ),
           sendEmailRowAction(context,
-              type: EmailEntityType.promise, entityId: p.id, entityLabel: 'Promise #${p.id}'),
-          if (canOverride && p.isLive)
+              type: EmailEntityType.promise,
+              entityId: p.id,
+              entityLabel: 'Promise #${p.id}',
+              regionId: p.regionId),
+          // hasIn, not has: overriding is a write on this promise's account, in its branch (B1).
+          if ((user?.hasIn(Privileges.promiseOverride, p.regionId) ?? false) && p.isLive)
             IconButton(
               tooltip: 'Override status',
               icon: const Icon(Icons.rule, size: 18),
@@ -177,6 +188,10 @@ Future<Map<String, dynamic>?> pickPocParams(BuildContext context, PocType type) 
         title: Text('Reassign ${pocTypeLabel(type)}'),
         content: SizedBox(
           width: 420,
+          // No customerId: a bulk reassignment runs over a selection that can span as many
+          // branches as the filter does, so there is no single account to name. The picker
+          // therefore offers everybody assignable in any branch the caller works in, and the
+          // server refuses the rows where this person does not work (B1).
           child: PocPicker(
             type: type,
             value: picked,

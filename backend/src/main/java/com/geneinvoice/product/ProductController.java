@@ -16,6 +16,7 @@ import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.RegionScope;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
@@ -46,6 +47,9 @@ public class ProductController {
     private final BulkExecutor bulkExecutor;
     private final AuditService auditService;
     private final CurrentUser currentUser;
+    // The region chips this list says it is narrowed by; empty for an unregioned table,
+    // for a wildcard holder and for a customer login, so it is passed unconditionally (B1).
+    private final RegionScope regionScope;
 
     public record ProductDto(Long id, String name, String description, BigDecimal price, boolean active,
                              Instant createdAt) {
@@ -73,7 +77,7 @@ public class ProductController {
         TableQuery query = TableQuery.parse(TableSchemas.PRODUCTS, page, size, sort, FilterParams.from(request));
         var result = queryExecutor.run(Product.class, TableSchemas.PRODUCTS, query, List.of(), List.of());
         return PageResponse.of(result.content().stream().map(ProductDto::from).toList(),
-                query, result.total(), List.of());
+                query, result.total(), List.of(), regionScope.lockedFilters(Product.class));
     }
 
     @GetMapping("/{id}")
@@ -83,6 +87,15 @@ public class ProductController {
                 .orElseThrow(() -> new NotFoundException("Product not found"));
     }
 
+    // not gated (B2), and a NAMED HOLE rather than an oversight — it speaks for create, update
+    // and delete alike, because all three live in this one class: Product.price is the only
+    // caller-supplied money column in the application with no approvalGate.check in front of it.
+    // Two settled reasons. A catalogue price is COPIED onto the line at InvoiceService.buildLines,
+    // so moving it never re-prices an invoice that has already been issued, and the money it will
+    // eventually move is measured at INVOICE_CREATE. And this class has no service and no
+    // @Transactional of its own, so there is no transaction for the gate's throw to roll back —
+    // holding a price change here means rewriting the catalogue around a service first.
+    // RE-CHECK THIS if either changes. ApprovalGateSiteTest pins both halves.
     @PostMapping
     @PreAuthorize("hasAuthority('" + Privileges.PRODUCT_MANAGE + "')")
     public ProductDto create(@Valid @RequestBody ProductUpsert in) {

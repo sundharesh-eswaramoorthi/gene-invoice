@@ -163,8 +163,10 @@ class CustomerFieldHygieneTest extends IntegrationTestBase {
         List<String> lines = List.of(csv.split("\r\n"));
         assertThat(lines).hasSize(2);
 
+        // "Awaiting approval" is appended, not inserted: every column this test already pinned
+        // keeps its position, so the assertions below still read the same cells (B2).
         assertThat(lines.get(0)).isEqualTo("Id,Name,Phone,Email,Payment terms,Credit balance,"
-                + "Outstanding,Overdue,Customer Success POCs,Collection POCs");
+                + "Outstanding,Overdue,Customer Success POCs,Collection POCs,Awaiting approval");
         String row = lines.get(1);
         assertThat(row).contains(",0.00,0.00,0.00,");
         assertThat(row).contains("sara.success (primary)");

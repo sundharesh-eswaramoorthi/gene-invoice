@@ -24,6 +24,7 @@ import com.geneinvoice.email.transport.IncomingMail;
 import com.geneinvoice.email.transport.IncomingMailHandler;
 import com.geneinvoice.email.transport.MailAddress;
 import com.geneinvoice.notification.NotificationService;
+import com.geneinvoice.region.RegionScope;
 import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,7 +63,17 @@ public class MailServiceEventHandler {
     private final TransactionTemplate transactions;
     private final ObjectMapper json;
 
+    /**
+     * The webhook is permitAll plus an HMAC and has no SecurityContext at all: there is nobody to
+     * read region rights from, and the mail it is reporting on belongs to whichever branch its own
+     * record belongs to. So the reach comes from the RUN and not from a caller, named out loud, and
+     * RegionCoverageTest asserts the reasons match their call sites (B1, AUTH-08).
+     */
     public void apply(Event event) {
+        RegionScope.asSystem(RegionScope.SystemReason.MAIL_WEBHOOK, () -> handle(event));
+    }
+
+    private void handle(Event event) {
         switch (event.type() == null ? "" : event.type()) {
             case "message.status" -> copyChanged(data(event, CopyState.class));
             case "message.received" -> replyReceived(data(event, MessageReceived.class));

@@ -33,6 +33,11 @@ String formatMoneyCompact(Object? value) {
 
 final DateFormat _date = DateFormat('yyyy-MM-dd');
 final DateFormat _dateTime = DateFormat('d MMM yyyy, h:mm a');
+final DateFormat _dayLong = DateFormat('d MMM yyyy');
+
+/// A day written for a person to read — "31 Jan 2026" — rather than for a server to parse. The
+/// wire spelling of the same day is yyyy-MM-dd and lives beside the query that carries it (B3).
+String formatDayLong(DateTime day) => _dayLong.format(DateTime(day.year, day.month, day.day));
 
 String formatDate(Object? value) {
   final d = _toDate(value);

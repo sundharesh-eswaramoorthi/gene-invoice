@@ -9,8 +9,11 @@ import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/payment_term.dart';
+import '../../shared/models/pending_change.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
+import '../approvals/approval_providers.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/disputes_tab.dart';
@@ -19,6 +22,8 @@ import '../email/email_actions.dart';
 import '../poc/customer_poc_editor.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
+import '../tasks/task_actions.dart';
+import '../regions/move_region_dialog.dart';
 import '../promises/promises_tab.dart';
 import 'customers_screen.dart';
 import 'payment_term_field.dart';
@@ -126,11 +131,33 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         ScaffoldMessenger.of(context)
             .showSnackBar(const SnackBar(content: Text('Customer saved')));
       }
+    } on DioException catch (e) {
+      if (_handleHeld(e)) return;
+      setState(() => _error = apiErrorMessage(e));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// The save was taken and has not happened: the server is holding the change now, not this
+  /// form. _dirty goes false so unsaved_changes.dart's exit guard does not challenge on the way
+  /// out over edits nobody is holding, and the providers are invalidated so the chip and the
+  /// amber panel appear without a reload (B2).
+  bool _handleHeld(DioException e) {
+    final held = pendingApprovalOf(e);
+    if (held == null) return false;
+    ref.invalidate(customerDetailProvider(widget.id));
+    invalidateApprovals(ref);
+    if (mounted) {
+      setState(() {
+        _dirty = false;
+        _error = null;
+      });
+      showApprovalSentSnackBar(context, held);
+    }
+    return true;
   }
 
   /// Removes the customer, after a confirmation that names it and says what goes with it.
@@ -175,6 +202,11 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       _dirty = false;
       messenger.showSnackBar(SnackBar(content: Text('${c.name} deleted')));
       if (mounted) context.go('/customers');
+    } on DioException catch (e) {
+      // CUSTOMER_DELETE is always checked, whatever the amount, so this is the ONE arm that a
+      // held answer reaches most often. Nothing was deleted, so the navigation to /customers
+      // below must not run (B2, CP-04).
+      if (!_handleHeld(e) && mounted) setState(() => _error = _deleteRefusal(e));
     } catch (e) {
       if (mounted) setState(() => _error = _deleteRefusal(e));
     } finally {
@@ -192,7 +224,6 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(customerDetailProvider(widget.id));
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.has(Privileges.customerManage) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
@@ -209,13 +240,32 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
       ),
       data: (customer) {
         _seed(customer);
+        // hasIn, not has: this account lives in one branch, and CUSTOMER_MANAGE held in
+        // another is not permission to edit or delete it here (B1).
+        final canEdit = user?.hasIn(Privileges.customerManage, customer.regionId) ?? false;
         // A customer login reaches its own customer here, and may write about it too (E13).
         final sendEmail = sendEmailHeaderButton(context, ref,
-            type: EmailEntityType.customer, entityId: customer.id, entityLabel: customer.name);
+            type: EmailEntityType.customer,
+            entityId: customer.id,
+            entityLabel: customer.name,
+            regionId: customer.regionId);
         final documentsTab = documentsDetailTab(ref,
-            type: DocumentEntityType.customer, entityId: customer.id, entityLabel: customer.name);
+            type: DocumentEntityType.customer,
+            entityId: customer.id,
+            entityLabel: customer.name,
+            regionId: customer.regionId);
+        // After Promises and before History, on all three record screens: work outstanding on
+        // an account sits with the other things somebody is chasing, not in the audit trail (A6).
+        final tasksTab = tasksDetailTab(ref,
+            type: TaskEntityType.customer,
+            entityId: customer.id,
+            entityLabel: customer.name,
+            regionId: customer.regionId);
         final emailTab = emailDetailTab(ref,
-            type: EmailEntityType.customer, entityId: customer.id, entityLabel: customer.name);
+            type: EmailEntityType.customer,
+            entityId: customer.id,
+            entityLabel: customer.name,
+            regionId: customer.regionId);
         return PopScope(
           canPop: !_dirty,
           onPopInvokedWithResult: (didPop, _) {
@@ -227,6 +277,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             onBack: () => goGuarded(context, '/customers'),
             titleTrailing: [
               if (canSeePoc && customer.pocMissing) const PocMissingBadge(),
+              if (customer.approvalPending) const ApprovalPendingChip(),
               if (sendEmail != null) sendEmail,
               // Only for those who may manage customers: the endpoint is behind the same
               // privilege, so anyone else would only be offered a 403 (CP-03).
@@ -241,7 +292,28 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             ],
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) => context.go('/customers/${widget.id}?tab=$slug'),
-            top: _top(customer, canEdit: canEdit, canSeePoc: canSeePoc, canAssignPoc: canAssignPoc),
+            top: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Only when the record itself says so: the flag costs the server one indexed
+                // lookup it was already making, and this way a page with nothing waiting asks
+                // the queue nothing at all (B2).
+                if (customer.approvalPending)
+                  PendingApprovalBanner(
+                    target: PendingTarget(PendingTargetType.CUSTOMER, customer.id),
+                    onDecided: () => ref.invalidate(customerDetailProvider(widget.id)),
+                  ),
+                _top(customer,
+                    canEdit: canEdit,
+                    onMove: canEdit ? () => _move(customer) : null,
+                    canSeePoc: canSeePoc,
+                    // POC_ASSIGN is MANAGE-level in the branch the seat's account is in, so the
+                    // seat editor follows the account and not the page (B1).
+                    canAssignPoc: canAssignPoc &&
+                        (user?.hasIn(Privileges.pocAssign, customer.regionId) ?? false)),
+              ],
+            ),
             tabs: [
               if (canSeeDisputes)
                 DetailTab(
@@ -256,8 +328,12 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                   label: 'Payment Promise',
                   icon: Icons.handshake_outlined,
                   builder: (context) =>
-                      PromisesTab(customerId: customer.id, customerName: customer.name),
+                      PromisesTab(
+                          customerId: customer.id,
+                          customerName: customer.name,
+                          regionId: customer.regionId),
                 ),
+              if (tasksTab != null) tasksTab,
               if (canViewAudit)
                 DetailTab(
                   slug: 'history',
@@ -278,11 +354,30 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     );
   }
 
+  /// Moving an account between branches. Offered on the same privilege the endpoint asks for
+  /// and only where the caller may manage the account's own branch — the destination's own
+  /// check is the server's, and it answers 403 because the caller named it (D-46, B1).
+  Future<void> _move(Customer c) async {
+    final moved = await showMoveRegionDialog(context,
+        customerId: c.id, customerName: c.name, currentRegionId: c.regionId);
+    if (!moved) return;
+    ref.invalidate(customerDetailProvider(c.id));
+    ref.invalidate(customerPocsProvider(c.id));
+    ref.invalidate(tablePageProvider);
+    ref.invalidate(tableSummaryProvider);
+    ref.invalidate(auditHistoryProvider);
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('${c.name} moved')));
+    }
+  }
+
   Widget _top(
     Customer c, {
     required bool canEdit,
     required bool canSeePoc,
     required bool canAssignPoc,
+    VoidCallback? onMove,
   }) {
     void pocsChanged() {
       ref.invalidate(customerDetailProvider(c.id));
@@ -357,6 +452,23 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                     )
                   : ReadOnlyValue(c.address ?? ''),
             ),
+            // Which branch the account lives in, and the only way to change it: the move closes
+            // its placement and opens the next one, so it is never an editable field (B1).
+            if (c.regionId != null)
+              DetailGridItem(
+                label: 'Branch',
+                child: Row(
+                  children: [
+                    Expanded(child: ReadOnlyValue(c.regionName ?? '#${c.regionId}')),
+                    if (onMove != null)
+                      TextButton.icon(
+                        icon: const Icon(Icons.swap_horiz, size: 18),
+                        label: const Text('Move'),
+                        onPressed: onMove,
+                      ),
+                  ],
+                ),
+              ),
             // What this customer's new invoices default to (US-A1). Invoices already raised keep
             // the date they were given, whatever this is changed to (D1).
             DetailGridItem(

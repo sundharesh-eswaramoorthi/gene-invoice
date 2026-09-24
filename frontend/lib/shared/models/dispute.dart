@@ -47,6 +47,12 @@ class Dispute {
   final DateTime createdAt;
   final DateTime? updatedAt;
 
+  /// True when a change on this record is waiting for approval. The figures beside it are the
+  /// LIVE ones — nothing pending has taken effect — so the flag is the only thing that differs
+  /// from a record with nothing waiting. Defaults false: null on the wire means the server was
+  /// not asked, and "not asked" must never read as "something is waiting" (B2).
+  final bool approvalPending;
+
   const Dispute({
     required this.id,
     required this.customerId,
@@ -65,6 +71,7 @@ class Dispute {
     required this.resolvedAt,
     required this.createdAt,
     required this.updatedAt,
+    this.approvalPending = false,
   });
 
   factory Dispute.fromJson(Map<String, dynamic> json) => Dispute(
@@ -85,5 +92,6 @@ class Dispute {
         resolvedAt: json['resolvedAt'] == null ? null : DateTime.parse(json['resolvedAt'] as String),
         createdAt: DateTime.parse(json['createdAt'] as String),
         updatedAt: json['updatedAt'] == null ? null : DateTime.parse(json['updatedAt'] as String),
+        approvalPending: json['approvalPending'] as bool? ?? false,
       );
 }

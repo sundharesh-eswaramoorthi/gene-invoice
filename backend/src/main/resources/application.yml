@@ -25,9 +25,10 @@ spring:
   task:
     scheduling:
       pool:
-        # The email sweeper and the promise sweeper each get a thread, so a slow mail service call
-        # (up to 40 s) never holds up the other.
-        size: 3
+        # The email sweeper, the promise sweeper, the automation dispatcher and the history
+        # reconcile sweep each get a thread, so a slow mail service call (up to 40 s) never holds
+        # up the other three (A5, B3 INTEGRATION).
+        size: 5
   servlet:
     multipart:
       # The same setting as app.documents.max-size-bytes below, not a copy of today's value of
@@ -65,6 +66,32 @@ app:
       connect-timeout-ms: 5000
       read-timeout-ms: 40000                          # connecting calls Google
       webhook-max-bytes: 33554432                     # largest webhook body read; 32 MiB
+  regions:
+    # The region every customer that predates regions is backfilled into; renaming it later is a
+    # data change, not a config change, because the row is seeded once by code (B1).
+    default-code: ${REGION_DEFAULT_CODE:HQ}
+    default-name: ${REGION_DEFAULT_NAME:Head Office}
+  region:
+    # strict | warn. Strict refuses to start while customers.region_id is still nullable — i.e.
+    # while the backfill has not finished — because a half-regioned table answers reads that leak
+    # across regions. Set REGION_BOOT_CHECK=warn to start anyway and only log it (B1).
+    boot-check: ${REGION_BOOT_CHECK:strict}
+  approvals:
+    # Unset (the default) is not a threshold of zero: it means maker-checker holds nothing, so the
+    # feature ships dormant and an operator turns it on by naming an amount (B2).
+    default-threshold: ${APPROVAL_DEFAULT_THRESHOLD:}
+    bulk-pending-limit: ${APPROVAL_BULK_PENDING_LIMIT:50}   # rows one bulk action may park for approval
+  automation:
+    sweep-interval-ms: 60000
+    async: true                    # false hands a run over inline, which is what the tests want
+    max-steps-per-run: 50000       # a runaway rule stops itself rather than the database
+    keep-events: P30D              # how long a delivered event is kept before the reaper takes it
+    keep-steps: P180D
+  history:
+    reconcile-interval-ms: 900000
+    # seeded | none. What an as-of read may claim about the time before the mirror started: the
+    # seeded floor answers from the seed row, none refuses to answer at all (B3).
+    pre-floor: ${HISTORY_PRE_FLOOR:seeded}
 
 ---
 spring:

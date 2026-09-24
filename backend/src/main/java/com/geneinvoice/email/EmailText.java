@@ -61,4 +61,9 @@ final class EmailText {
         String words = value.name().replace('_', ' ').toLowerCase();
         return Character.toUpperCase(words.charAt(0)) + words.substring(1);
     }
+
+    /** A BOOLEAN placeholder reads as a word: nobody wants "true" in a customer's email (A4). */
+    static String yesNo(boolean value) {
+        return value ? "Yes" : "No";
+    }
 }

@@ -11,6 +11,7 @@ import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.RegionScope;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,9 @@ public class NotificationController {
     private final CurrentUser currentUser;
     private final TableQueryExecutor queryExecutor;
     private final BulkExecutor bulkExecutor;
+    // The region chips this list says it is narrowed by; empty for an unregioned table,
+    // for a wildcard holder and for a customer login, so it is passed unconditionally (B1).
+    private final RegionScope regionScope;
 
     public record NotificationDto(Long id, String type, String title, String message,
                                   String link, boolean read, Instant createdAt) {
@@ -51,7 +55,7 @@ public class NotificationController {
         var result = queryExecutor.run(Notification.class, TableSchemas.NOTIFICATIONS, query,
                 ownedByCaller(), List.of());
         return PageResponse.of(result.content().stream().map(NotificationDto::from).toList(),
-                query, result.total(), List.of());
+                query, result.total(), List.of(), regionScope.lockedFilters(Notification.class));
     }
 
     @GetMapping("/unread-count")

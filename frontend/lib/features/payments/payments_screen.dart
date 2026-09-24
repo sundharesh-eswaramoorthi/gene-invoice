@@ -11,6 +11,7 @@ import '../../core/table/table_providers.dart';
 import '../../shared/models/payment.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_name_cell.dart';
@@ -144,7 +145,15 @@ class PaymentsScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, p) => PaymentStatusChip(status: p.status),
+            cell: (context, p) => Wrap(
+              spacing: 6,
+              runSpacing: 2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                PaymentStatusChip(status: p.status),
+                if (p.approvalPending) const ApprovalPendingDot(),
+              ],
+            ),
           ),
           if (canSeePoc)
             TableColumnSpec(
@@ -161,7 +170,10 @@ class PaymentsScreen extends ConsumerWidget {
             onPressed: () => context.go('/payments/${p.id}'),
           ),
           sendEmailRowAction(context,
-              type: EmailEntityType.payment, entityId: p.id, entityLabel: 'Payment #${p.id}'),
+              type: EmailEntityType.payment,
+              entityId: p.id,
+              entityLabel: 'Payment #${p.id}',
+              regionId: p.regionId),
         ],
       ),
     );

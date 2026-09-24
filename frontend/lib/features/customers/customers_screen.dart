@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/region/region_providers.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
@@ -12,6 +13,7 @@ import '../../core/table/table_providers.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/payment_term.dart';
 import '../../shared/models/privileges.dart';
+import '../approvals/pending_approval_panel.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_name_cell.dart';
@@ -48,7 +50,6 @@ class CustomersScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider);
     final canManage = user?.has(Privileges.customerManage) ?? false;
     final canExport = user?.has(Privileges.exportData) ?? false;
-    final canPromise = user?.has(Privileges.promiseManage) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
     final canSendEmail = ref.watch(canSendEmailProvider);
@@ -130,6 +131,7 @@ class CustomersScreen extends ConsumerWidget {
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                 ),
                 if (canSeePoc && c.pocMissing) const PocMissingBadge(),
+                if (c.approvalPending) const ApprovalPendingDot(),
               ],
             ),
           ),
@@ -180,8 +182,13 @@ class CustomersScreen extends ConsumerWidget {
             onPressed: () => context.go('/customers/${c.id}'),
           ),
           sendEmailRowAction(context,
-              type: EmailEntityType.customer, entityId: c.id, entityLabel: c.name),
-          if (canPromise && c.outstanding > 0)
+              type: EmailEntityType.customer,
+              entityId: c.id,
+              entityLabel: c.name,
+              regionId: c.regionId),
+          // hasIn, not has: the privilege is held somewhere, the account is in one branch,
+          // and only the second question decides whether this button does anything (B1).
+          if ((user?.hasIn(Privileges.promiseManage, c.regionId) ?? false) && c.outstanding > 0)
             IconButton(
               tooltip: 'Raise promise',
               icon: const Icon(Icons.handshake_outlined, size: 18),
@@ -242,6 +249,9 @@ Future<Map<String, dynamic>?> _pickCustomerPocParams(BuildContext context) async
                 }),
               ),
               const SizedBox(height: 12),
+              // No customerId: the selection can span as many branches as the filter does,
+              // so the picker offers everybody assignable in any branch the caller works in and
+              // a row in a branch this person does not work in is refused per row (B1).
               PocPicker(
                 type: type,
                 value: picked,
@@ -293,6 +303,11 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
 
   /// Null means the system default, which is what a customer starts on (D1).
   PaymentTerm? _term;
+
+  /// Which branch this account is opened in. The server resolves null to the caller's only
+  /// manageable branch and refuses it with fieldErrors.regionId == "Choose a region" the day a
+  /// second one opens, so this is load-bearing and not decoration (B1).
+  int? _regionId;
   bool _saving = false;
   bool _notify = false;
   String? _error;
@@ -332,6 +347,9 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
       if (_isCreate) {
         final res = await dio.post('/api/customers', data: {
           'name': _name.text.trim(),
+          // Omitted rather than sent as null when there is nothing to say, so the server's own
+          // "your only branch" resolution still applies (B1).
+          if (_regionId != null) 'regionId': _regionId,
           // A box left empty means the customer has no phone or address, not that it has an
           // empty one: the list then reads "—" rather than an empty cell (CP-15).
           'phone': optionalText(_phone.text),
@@ -398,6 +416,15 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
                   value: _term,
                   onChanged: (t) => setState(() => _term = t),
                 ),
+                // Only on a create: an account changes branch through the move, which closes
+                // its placement and opens the next one, not by editing a field (B1).
+                if (_isCreate) ...[
+                  const SizedBox(height: 8),
+                  _RegionField(
+                    value: _regionId,
+                    onChanged: (id) => setState(() => _regionId = id),
+                  ),
+                ],
                 const Divider(height: 24),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -437,6 +464,9 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
                   NotifyByEmailCheckbox(
                     value: _notify,
                     onChanged: (v) => setState(() => _notify = v),
+                    // Writing to the account is a write in the branch it is being opened in
+                    // (B1). Null until one is chosen, which falls back to the global answer.
+                    regionId: _regionId ?? widget.existing?.regionId,
                   ),
                 if (_error != null)
                   Padding(
@@ -460,6 +490,76 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
               : const Text('Save'),
         ),
       ],
+    );
+  }
+}
+
+/// Which branch a new account is opened in.
+///
+/// Offers only branches the caller may MANAGE, because naming one you cannot manage is a 403 and
+/// not a 404 — the branch was NAMED, so no id space is being probed (D-46, B1). With exactly one
+/// candidate it is chosen without asking, which is what the server does anyway.
+class _RegionField extends ConsumerWidget {
+  final int? value;
+  final ValueChanged<int?> onChanged;
+
+  const _RegionField({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final async = ref.watch(manageableRegionsProvider);
+    final regions = async.valueOrNull ?? const <RegionRef>[];
+    if (async.isLoading) {
+      return const InputDecorator(
+        decoration: InputDecoration(labelText: 'Branch', isDense: true),
+        child: LinearProgressIndicator(),
+      );
+    }
+    if (regions.isEmpty) {
+      // Nothing to choose, and the two reasons are not the same refusal.
+      //
+      // A WILDCARD holder may open an account in any branch — the server would accept one — but
+      // the whole map is behind REGION_VIEW, which is a separate privilege, so this client has
+      // no branch id to send. It omits regionId, and the server answers 400 with
+      // fieldErrors.regionId "Choose a region" as soon as a second branch exists. Hiding the
+      // field left that error pointing at a control that was not on the form, with nothing on
+      // screen saying why. Say why (B1).
+      final roster = ref.watch(myRegionsProvider).valueOrNull;
+      final user = ref.watch(currentUserProvider);
+      final wildcard = roster?.allRegions ?? user?.allRegions ?? false;
+      return InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Branch',
+          isDense: true,
+          errorText: wildcard
+              ? 'You may open an account in any branch, but this app cannot list them: that '
+                  'needs the Regions privilege. Ask an administrator for it, or for a named '
+                  'branch.'
+              : 'You manage no branch, so an account cannot be opened. Ask an administrator '
+                  'for Manage in the branch it belongs to.',
+          errorMaxLines: 3,
+        ),
+        child: const Text('—'),
+      );
+    }
+    if (regions.length == 1) {
+      final only = regions.single;
+      if (value != only.id) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => onChanged(only.id));
+      }
+      return InputDecorator(
+        decoration: const InputDecoration(labelText: 'Branch', isDense: true),
+        child: Text(only.label),
+      );
+    }
+    return DropdownButtonFormField<int>(
+      initialValue: value,
+      isExpanded: true,
+      decoration: const InputDecoration(labelText: 'Branch *', isDense: true),
+      items: regions
+          .map((r) => DropdownMenuItem(value: r.id, child: Text(r.label)))
+          .toList(),
+      onChanged: onChanged,
     );
   }
 }

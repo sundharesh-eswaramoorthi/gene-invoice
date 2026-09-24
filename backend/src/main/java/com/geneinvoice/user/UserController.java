@@ -23,6 +23,7 @@ import com.geneinvoice.poc.CustomerPocRepository;
 import com.geneinvoice.privilege.Privileges;
 import jakarta.servlet.http.HttpServletRequest;
 import com.geneinvoice.promise.PaymentPromiseRepository;
+import com.geneinvoice.region.RegionScope;
 import com.geneinvoice.role.Role;
 import com.geneinvoice.role.RoleRepository;
 import jakarta.validation.Valid;
@@ -61,6 +62,9 @@ public class UserController {
     private final PaymentPromiseRepository promiseRepository;
     private final CustomerPocRepository customerPocRepository;
     private final GmailDisconnects gmailDisconnects;
+    // The region chips this list says it is narrowed by; empty for an unregioned table,
+    // for a wildcard holder and for a customer login, so it is passed unconditionally (B1).
+    private final RegionScope regionScope;
 
     public record UserDto(Long id, String username, String email, String fullName,
                           boolean active, String role, Long customerId,
@@ -103,14 +107,32 @@ public class UserController {
         TableQuery query = TableQuery.parse(TableSchemas.USERS, page, size, sort, FilterParams.from(request));
         var result = queryExecutor.run(User.class, TableSchemas.USERS, query, List.of(), List.of("role"));
         return PageResponse.of(result.content().stream().map(UserDto::from).toList(),
-                query, result.total(), List.of());
+                query, result.total(), List.of(), regionScope.lockedFilters(User.class));
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.USER_VIEW + "')")
     public UserDto get(@PathVariable Long id) {
+        requireInScope(id);
         return userRepository.findById(id).map(UserDto::from)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+    }
+
+    /**
+     * The single-record gate the users LIST already has for free: a person is visible where they
+     * work, or if they are a customer login, or if they hold no grant at all (the VIA_USER_GRANTS
+     * axis, so an administrator can still see the account they have just made). Somebody the
+     * caller shares no branch with answers exactly as a missing person does, never 403, because an
+     * id space is being probed (B1, AUTH-08).
+     *
+     * <p>Public because GET /api/users/{id}/gmail is the same read of the same person and lives in
+     * GmailConnectionController; it is the ONE outside caller and there is deliberately no second
+     * copy of this rule.
+     */
+    public void requireInScope(Long id) {
+        if (!queryExecutor.inScope(User.class, TableSchemas.USERS, id, List.of())) {
+            throw new NotFoundException("User not found");
+        }
     }
 
     @PostMapping

@@ -38,7 +38,14 @@ public class DocumentTargets {
     private final PaymentService paymentService;
     private final CurrentUser currentUser;
 
-    public record Target(DocumentEntityType type, Long id, String label, Long customerId) {
+    /**
+     * regionId is the branch the record's ACCOUNT is in, carried here because every document
+     * hangs off a customer and that account's branch is the only region a document has. It is
+     * what the write gate in DocumentService asks about; the read that produced it has already
+     * answered 404 for a record this caller cannot reach at all (B1).
+     */
+    public record Target(DocumentEntityType type, Long id, String label, Long customerId,
+                         Long regionId) {
 
         public String link() {
             return type.link(id);
@@ -59,10 +66,27 @@ public class DocumentTargets {
         return describe(type, id);
     }
 
+    /**
+     * "Somewhere" — the answer a page-level button used to be built from. Kept for the one caller
+     * that has no record in hand, and never used as a per-record gate: that question is
+     * {@link #canManage(DocumentEntityType, Long)} (B1).
+     */
     public boolean canManage(DocumentEntityType type) {
         return !currentUser.isCustomer()
                 && currentUser.has(Privileges.DOCUMENT_MANAGE)
                 && currentUser.has(MANAGE_PRIVILEGE.get(type));
+    }
+
+    /**
+     * The same question asked about ONE record's branch, so the flag a row carries back agrees
+     * with what the server will actually do when the button is pressed. DOCUMENT_MANAGE and the
+     * record's own MANAGE privilege are both MANAGE-level in RegionRights, so has(p, regionId)
+     * answers both halves at once (B1).
+     */
+    public boolean canManage(DocumentEntityType type, Long regionId) {
+        return !currentUser.isCustomer()
+                && currentUser.has(Privileges.DOCUMENT_MANAGE, regionId)
+                && currentUser.has(MANAGE_PRIVILEGE.get(type), regionId);
     }
 
     private void requirePrivilege(String privilege) {
@@ -75,17 +99,19 @@ public class DocumentTargets {
         return switch (type) {
             case CUSTOMER -> {
                 Customer c = customerService.get(id);
-                yield new Target(type, c.getId(), label("Customer " + c.getName()), c.getId());
+                // .getId() on the lazy Region proxy initialises nothing (B1).
+                yield new Target(type, c.getId(), label("Customer " + c.getName()), c.getId(),
+                        c.getRegion().getId());
             }
             case INVOICE -> {
                 Invoice i = invoiceService.get(id);
                 yield new Target(type, i.getId(), label("Invoice " + i.getInvoiceNumber()),
-                        i.getCustomer().getId());
+                        i.getCustomer().getId(), i.getCustomer().getRegion().getId());
             }
             case PAYMENT -> {
                 Payment p = paymentService.get(id);
                 yield new Target(type, p.getId(), label("Payment #" + p.getId()),
-                        p.getCustomer().getId());
+                        p.getCustomer().getId(), p.getCustomer().getRegion().getId());
             }
         };
     }
