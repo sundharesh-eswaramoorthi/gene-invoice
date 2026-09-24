@@ -92,7 +92,10 @@ class _RegionGrantEditorState extends ConsumerState<_RegionGrantEditor> {
       _held = null;
     });
     try {
-      final roster = await ref.read(userRegionGrantsProvider(widget.userId).future);
+      // refresh and not read: this dialog is ABOUT what the person holds right now, and a cached
+      // roster from an earlier open — theirs may have been changed by somebody else since — would
+      // tick a set that no longer exists and then save it over the real one (B1).
+      final roster = await ref.refresh(userRegionGrantsProvider(widget.userId).future);
       if (!mounted) return;
       setState(() {
         _held = roster;
