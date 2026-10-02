@@ -1,0 +1,100 @@
+{
+  "area": "approvals-rerun1",
+  "round": 2,
+  "env": {
+    "api": "http://localhost:18103",
+    "web": "http://localhost:18203/"
+  },
+  "cases": [
+    {
+      "id": "APP-D-26",
+      "feature": "What the checker is shown",
+      "kind": "API",
+      "prd": "B2",
+      "title": "The change detail gives readable labels and names: Sales POC / Collection POC by name, humanised term and method",
+      "status": "PASS",
+      "severity": "",
+      "steps": "mia holds a 12000 invoice create (Sales POC sam, CUSTOM) and a 7000 payment (Collection POC sam, BANK_TRANSFER); admin GET /api/approvals/{id} for each",
+      "expected": "FIXLOG APP-R1-4 / DESIGN §7.7.1: rows labelled \"Sales POC\"/\"Collection POC\" with proposedText \"Sam South\"; the summary names the customer; \"Payment term\" proposedText \"Custom\"; \"Method\" proposedText \"Bank transfer\"; no label ending in \"user id\"",
+      "actual": "ok: both held [[202,202]]; ok: invoice: Sales POC -> Sam South [[\"Invoice date=\\\"2026-09-27T17:58:36.543577Z\\\"\",\"Due date=\\\"2026-10-27\\\"\",\"Payment term=Custom\",\"Total=12000\",\"Sales POC=Sam South\",\"Notes=null\",\"Items=[{\\\"productId\\\":1,\\\"quantity\\\":1,\\\"unitPrice\\\":12000}]\"]]; ok: invoice: summary names the customer [Create invoice for SOUTH apv-muk4h0uwd609 (₹12,000.00)]; ok: invoice: Payment term -> Custom [{\"field\":\"paymentTerm\",\"label\":\"Payment term\",\"current\":null,\"proposed\":\"CUSTOM\",\"changedSinceRequest\":false,\"currentText\":null,\"proposedText\":\"Custom\"}]; ok: payment: Collection POC -> Sam South [[\"Amount=7000\",\"Method=Bank transfer\",\"Notes=null\",\"Invoice ids=null\",\"Promise ids=null\",\"Collection POC=Sam South\"]]; ok: payment: Method -> Bank transfer [{\"field\":\"method\",\"label\":\"Method\",\"current\":null,\"proposed\":\"BANK_TRANSFER\",\"changedSinceRequest\":false,\"currentText\":null,\"proposedText\":\"Bank transfer\"}]; ok: no \"user id\" labels [[\"Invoice date\",\"Due date\",\"Payment term\",\"Total\",\"Sales POC\",\"Notes\",\"Items\",\"Amount\",\"Method\",\"Notes\",\"Invoice ids\",\"Promise ids\",\"Collection POC\"]]",
+      "evidence": "invoice rows [\"Invoice date=\\\"2026-09-27T17:58:36.543577Z\\\"\",\"Due date=\\\"2026-10-27\\\"\",\"Payment term=Custom\",\"Total=12000\",\"Sales POC=Sam South\",\"Notes=null\",\"Items=[{\\\"productId\\\":1,\\\"quantity\\\":1,\\\"unitPrice\\\":12000}]\"]; payment rows [\"Amount=7000\",\"Method=Bank transfer\",\"Notes=null\",\"Invoice ids=null\",\"Promise ids=null\",\"Collection POC=Sam South\"]",
+      "screenshot": "",
+      "codeRef": "backend/src/main/java/com/geneinvoice/approval/PendingChangeViews.java:274"
+    },
+    {
+      "id": "APP-D-28",
+      "feature": "What the checker is shown",
+      "kind": "API",
+      "prd": "B2",
+      "title": "The change detail names the invoices a held payment is allocated to and the products on a held invoice (not raw ids)",
+      "status": "FAIL",
+      "severity": "low",
+      "steps": "admin invoice 8000 on a fresh South customer; mia POST /api/payments 7000 invoiceIds [that invoice] (held); mia POST /api/invoices items [{productId, quantity 150}] (held); admin GET /api/approvals/{id} for each",
+      "expected": "APP-R1-4 follow-up (DESIGN §7.7.1 the changes table; the approver can tell what the change does): the allocation row reads the invoice number (e.g. \"INV-…\"), not the database id, and has a people label (\"Invoices\"); the Items row names the product",
+      "actual": "Attempt 1: ok: both held [[202,202]]; NOT OK: allocation row names the invoice number [{\"field\":\"invoiceIds\",\"label\":\"Invoice ids\",\"current\":null,\"proposed\":[16],\"changedSinceRequest\":false,\"currentText\":null,\"proposedText\":null}]; NOT OK: allocation row label is not \"Invoice ids\" [Invoice ids]; NOT OK: Items row names the product [{\"proposed\":[{\"productId\":1,\"quantity\":150,\"unitPrice\":100}],\"proposedText\":null}] || Attempt 2 (reproduced): ok: both held [[202,202]]; NOT OK: allocation row names the invoice number [{\"field\":\"invoiceIds\",\"label\":\"Invoice ids\",\"current\":null,\"proposed\":[17],\"changedSinceRequest\":false,\"currentText\":null,\"proposedText\":null}]; NOT OK: allocation row label is not \"Invoice ids\" [Invoice ids]; NOT OK: Items row names the product [{\"proposed\":[{\"productId\":1,\"quantity\":150,\"unitPrice\":100}],\"proposedText\":null}]",
+      "evidence": "GET /api/approvals/4 invoiceIds row {\"field\":\"invoiceIds\",\"label\":\"Invoice ids\",\"current\":null,\"proposed\":[16],\"changedSinceRequest\":false,\"currentText\":null,\"proposedText\":null}; invoice 16 is INV-20260927-0016; GET /api/approvals/5 items row {\"field\":\"items\",\"label\":\"Items\",\"current\":null,\"proposed\":[{\"productId\":1,\"quantity\":150,\"unitPrice\":100}],\"changedSinceRequest\":false,\"currentText\":null,\"proposedText\":null} || GET /api/approvals/6 invoiceIds row {\"field\":\"invoiceIds\",\"label\":\"Invoice ids\",\"current\":null,\"proposed\":[17],\"changedSinceRequest\":false,\"currentText\":null,\"proposedText\":null}; invoice 17 is INV-20260927-0017; GET /api/approvals/7 items row {\"field\":\"items\",\"label\":\"Items\",\"current\":null,\"proposed\":[{\"productId\":1,\"quantity\":150,\"unitPrice\":100}],\"changedSinceRequest\":false,\"currentText\":null,\"proposedText\":null}",
+      "screenshot": "",
+      "codeRef": "backend/src/main/java/com/geneinvoice/approval/PendingChangeViews.java:239 (text() resolves only *UserId and customerId; invoiceIds / items.productId stay raw) + :274 (LABELS has no invoiceIds/promiseIds)"
+    },
+    {
+      "id": "APP-UI-11",
+      "feature": "202 handling: new invoice",
+      "kind": "UI",
+      "prd": "B2",
+      "title": "Creating a 15000 invoice in the form opens the held change and says so, creating nothing",
+      "status": "PASS",
+      "severity": "",
+      "steps": "mia: /invoices/new -> customer -> product E2E Widget -> Qty 150 -> Create invoice",
+      "expected": "DESIGN §7.6: navigates to /approvals/{id} (\"Approval #…\", \"Awaiting approval\"); SnackBar \"Sent for approval: Create invoice …\"; no invoice",
+      "actual": "ok: snackbar [PM | Raised by | A person | Changes | Current and proposed | Field | Current | Proposed | Invoice date | — | 27 Sep 2026, 11:29 PM | Due date | 2026-10-27 | Payment term | Net 30 | Total | ₹15,000.00 | Sales POC | Mia Maker | Notes | Items | [ | { | \"productId\": 1, | \"quantity\": 150, | \"unitPrice\": \"₹100.00\" | } | ] | Sent for approval: Create invoice for SOUTH apv-muk4h1hyc812 (₹15,000.00) | View]; ok: on the approval page [#/approvals/8]; ok: no page exception (no crash) [[]]; ok: no unexpected API error [[]]; ok: no invoice",
+      "evidence": "writes=[{\"status\":202,\"method\":\"POST\",\"url\":\"/api/invoices\"}]",
+      "screenshot": "docs/regression/2026-09-28/data/runs/r2/approvals/shots/APP-UI-11-1.png",
+      "codeRef": "frontend/lib/features/invoices/invoice_form_screen.dart:194"
+    },
+    {
+      "id": "APP-UI-26",
+      "feature": "What the checker is shown",
+      "kind": "UI",
+      "prd": "B2",
+      "title": "The Changes table shows multi-line values in full (a loosened limit's window, an invoice's lines)",
+      "status": "PASS",
+      "severity": "",
+      "steps": "sam PUT South [INVOICE_CANCEL 6000 over 12 h] (held); mia holds a 12000 invoice create; admin opens each /approvals/{id} (Changes tab)",
+      "expected": "DESIGN §7.7.1 \"the changes table\": the approver can read each field's current and proposed value; cells are tall enough for their text (not clipped at one row height)",
+      "actual": "ok: threshold change: no clipped cell [[]]; ok: invoice create: no clipped cell [[]]; ok: no page exception (no crash) [[]]; ok: no unexpected API error [[]]",
+      "evidence": "writes=[]",
+      "screenshot": "docs/regression/2026-09-28/data/runs/r2/approvals/shots/APP-UI-26-1.png",
+      "codeRef": "frontend/lib/features/approvals/approval_detail_screen.dart:378 (DataTable with the default one-line row height; multi-line JsonDiffView.pretty text is cut off)"
+    },
+    {
+      "id": "APP-UI-30",
+      "feature": "What the checker is shown",
+      "kind": "UI",
+      "prd": "B2",
+      "title": "A held payment's Changes table names the Collection POC and shows a readable method",
+      "status": "PASS",
+      "severity": "",
+      "steps": "mia holds a 7000 BANK_TRANSFER payment (Collection POC sam); admin opens /approvals/{id}",
+      "expected": "FIXLOG APP-R1-4: a \"Collection POC\" row reading \"Sam South\", \"Bank transfer\", the customer named on the page; no \"... user id\" label",
+      "actual": "ok: Collection POC row [[\"Amount\",\"—\",\"₹7,000.00\",\"Method\",\"—\",\"Bank transfer\",\"Notes\",\"—\",\"—\",\"Invoice ids\",\"—\",\"—\",\"Promise ids\",\"—\",\"—\",\"Collection POC\",\"—\",\"Sam South\"]]; ok: Sam South by name [[\"Amount\",\"—\",\"₹7,000.00\",\"Method\",\"—\",\"Bank transfer\",\"Notes\",\"—\",\"—\",\"Invoice ids\",\"—\",\"—\",\"Promise ids\",\"—\",\"—\",\"Collection POC\",\"—\",\"Sam South\"]]; ok: Bank transfer [[\"Amount\",\"—\",\"₹7,000.00\",\"Method\",\"—\",\"Bank transfer\",\"Notes\",\"—\",\"—\",\"Invoice ids\",\"—\",\"—\",\"Promise ids\",\"—\",\"—\",\"Collection POC\",\"—\",\"Sam South\"]]; ok: customer named on the page; ok: no raw \"user id\" label [[]]; ok: no page exception (no crash) [[]]; ok: no unexpected API error [[]]",
+      "evidence": "writes=[]",
+      "screenshot": "docs/regression/2026-09-28/data/runs/r2/approvals/shots/APP-UI-30-1.png",
+      "codeRef": "frontend/lib/features/approvals/approval_detail_screen.dart"
+    },
+    {
+      "id": "APP-UI-32",
+      "feature": "What the checker is shown",
+      "kind": "UI",
+      "prd": "B2",
+      "title": "A held payment's Changes table says which invoice it pays by number, not by database id",
+      "status": "FAIL",
+      "severity": "low",
+      "steps": "admin invoice 8000 on a fresh South customer; mia holds a 7000 payment allocated to it; admin opens /approvals/{id}",
+      "expected": "APP-R1-4 follow-up (DESIGN §7.7.1): the allocation row shows the invoice number (INV-…); no raw \"[ id ]\" JSON and no \"Invoice ids\" label",
+      "actual": "Attempt 1: NOT OK: the invoice number is shown [[\"Amount\",\"—\",\"₹7,000.00\",\"Method\",\"—\",\"Bank transfer\",\"Notes\",\"—\",\"—\",\"Invoice ids\",\"—\",\"[\\n  18\\n]\",\"Promise ids\",\"—\",\"—\",\"Collection POC\",\"—\",\"Sam South\"]]; NOT OK: no \"Invoice ids\" label [[\"Invoice ids\",\"Promise ids\"]]; ok: no page exception (no crash) [[]]; ok: no unexpected API error [[]] || Attempt 2 (reproduced): NOT OK: the invoice number is shown [[\"Amount\",\"—\",\"₹7,000.00\",\"Method\",\"—\",\"Bank transfer\",\"Notes\",\"—\",\"—\",\"Invoice ids\",\"—\",\"[\\n  19\\n]\",\"Promise ids\",\"—\",\"—\",\"Collection POC\",\"—\",\"Sam South\"]]; NOT OK: no \"Invoice ids\" label [[\"Invoice ids\",\"Promise ids\"]]; ok: no page exception (no crash) [[]]; ok: no unexpected API error [[]]",
+      "evidence": "invoice 18 = INV-20260927-0018; cells [\"Amount\",\"—\",\"₹7,000.00\",\"Method\",\"—\",\"Bank transfer\",\"Notes\",\"—\",\"—\",\"Invoice ids\",\"—\",\"[\\n  18\\n]\",\"Promise ids\",\"—\",\"—\",\"Collection POC\",\"—\",\"Sam South\"]; writes=[] || invoice 19 = INV-20260927-0019; cells [\"Amount\",\"—\",\"₹7,000.00\",\"Method\",\"—\",\"Bank transfer\",\"Notes\",\"—\",\"—\",\"Invoice ids\",\"—\",\"[\\n  19\\n]\",\"Promise ids\",\"—\",\"—\",\"Collection POC\",\"—\",\"Sam South\"]; writes=[]",
+      "screenshot": "docs/regression/2026-09-28/data/runs/r2/approvals/shots/APP-UI-32-2.png",
+      "codeRef": "backend/src/main/java/com/geneinvoice/approval/PendingChangeViews.java:239 + frontend/lib/features/approvals/approval_detail_screen.dart (_value pretty-prints the id list)"
+    }
+  ]
+}

@@ -1,0 +1,467 @@
+<title>__TITLE__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --surface-2:#eef1f5; --ink:#17202b; --muted:#566172; --line:#d9dfe7;
+  --accent:#1f5f78; --accent-soft:#e1edf2;
+  --pass:#1d7447; --pass-soft:#e2f2e9; --fail:#b3261e; --fail-soft:#fbe6e4;
+  --nt:#955f00; --nt-soft:#fbf0db; --blk:#5f6b7a; --blk-soft:#e9edf1;
+  --shadow:0 1px 2px rgba(23,32,43,.06);
+  --sans:"Public Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0e1319; --surface:#151c24; --surface-2:#1b242e; --ink:#e3e8ee; --muted:#96a2b0; --line:#27313c;
+    --accent:#6ab3cd; --accent-soft:#16303b;
+    --pass:#57c28c; --pass-soft:#143126; --fail:#f2786d; --fail-soft:#3a1a18;
+    --nt:#e2ab45; --nt-soft:#35270f; --blk:#a3aebb; --blk-soft:#232c36;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0e1319; --surface:#151c24; --surface-2:#1b242e; --ink:#e3e8ee; --muted:#96a2b0; --line:#27313c;
+  --accent:#6ab3cd; --accent-soft:#16303b;
+  --pass:#57c28c; --pass-soft:#143126; --fail:#f2786d; --fail-soft:#3a1a18;
+  --nt:#e2ab45; --nt-soft:#35270f; --blk:#a3aebb; --blk-soft:#232c36;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;padding-inline:16px;padding-block:28px 64px;font-variant-numeric:tabular-nums}
+.wrap{max-width:1120px;margin:0 auto;display:grid;gap:40px}
+a{color:var(--accent)}
+h1,h2,h3{text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:clamp(28px,4vw,38px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:21px;font-weight:700}
+h3{font-size:15px;font-weight:600}
+p{margin:0;max-width:70ch}
+.mono{font-family:var(--mono);font-size:.86em}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+section{display:grid;gap:16px}
+.sec-head{display:grid;gap:6px}
+header.top{display:grid;gap:14px;border-bottom:1px solid var(--line);padding-bottom:24px}
+.switch{display:flex;gap:8px;flex-wrap:wrap}
+.tabpill{font-size:13px;font-weight:600;padding:6px 12px;border-radius:999px;border:1px solid var(--line);color:var(--muted);text-decoration:none;background:var(--surface)}
+.tabpill[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.meta{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+.verdict{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--pass);padding:14px 16px;border-radius:6px;box-shadow:var(--shadow)}
+.verdict.warn{border-left-color:var(--nt)} .verdict.bad{border-left-color:var(--fail)}
+.verdict strong{font-size:17px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;display:grid;gap:2px;box-shadow:var(--shadow)}
+.tile .n{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.tile .l{font-size:13px;color:var(--muted)}
+.tile.pass .n{color:var(--pass)} .tile.fail .n{color:var(--fail)} .tile.nt .n{color:var(--nt)}
+.unit{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.unit div{background:var(--surface);padding:10px 14px;display:grid;gap:2px}
+.unit .v{font-weight:600}
+.tbl-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);background:var(--surface-2);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.pill.PASS{background:var(--pass-soft);color:var(--pass)} .pill.FAIL{background:var(--fail-soft);color:var(--fail)}
+.pill.NOT_TESTED{background:var(--nt-soft);color:var(--nt)} .pill.BLOCKED,.pill.PARTIAL{background:var(--blk-soft);color:var(--blk)}
+.bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--surface-2);min-width:90px}
+.bar i{display:block;height:100%}
+.bar .p{background:var(--pass)} .bar .f{background:var(--fail)} .bar .n{background:var(--nt)} .bar .b{background:var(--blk)}
+.chart{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px;display:grid;gap:10px;box-shadow:var(--shadow)}
+.chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(--c)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.list{display:grid;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow)}
+.list > div{padding:12px 16px;border-bottom:1px solid var(--line);display:grid;gap:4px}
+.list > div:last-child{border-bottom:0}
+.list .id{font-family:var(--mono);font-size:12px;color:var(--accent)}
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px}
+.filters label{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+.filters select,.filters input{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:6px 8px;min-width:0}
+.filters input[type=search]{width:min(320px,100%)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:inherit;font-size:13px;font-weight:600;padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.count{font-size:13px;color:var(--muted)}
+tr.case{cursor:pointer}
+tr.case:hover td{background:var(--surface-2)}
+tr.case:focus-visible td{outline:2px solid var(--accent);outline-offset:-2px}
+tr.detail td{background:var(--surface-2);padding:0}
+.detail-body{padding:14px 16px;display:grid;gap:10px}
+.detail-body dl{display:grid;grid-template-columns:120px 1fr;gap:6px 14px;margin:0}
+.detail-body dt{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+.detail-body dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+@media (max-width:600px){.detail-body dl{grid-template-columns:1fr}.detail-body dt{padding-top:6px}}
+.more{font:inherit;font-weight:600;font-size:14px;padding:8px 14px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--accent);cursor:pointer;justify-self:start}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.shot{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden;display:grid;grid-template-rows:auto 1fr;box-shadow:var(--shadow)}
+.shot button{all:unset;cursor:zoom-in;display:block}
+.shot button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.shot img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top left;background:var(--surface-2)}
+.shot figcaption{padding:10px 12px;display:grid;gap:4px;font-size:13px}
+dialog{border:0;padding:0;background:transparent;max-width:min(1280px,96vw)}
+dialog::backdrop{background:rgba(10,14,19,.78)}
+dialog img{max-width:100%;max-height:82vh;display:block;border-radius:4px}
+dialog p{color:#e3e8ee;font-size:13px;margin-top:8px;max-width:none}
+dialog .close{position:absolute;top:8px;right:8px;font:inherit;font-weight:600;background:#e3e8ee;color:#17202b;border:0;border-radius:5px;padding:4px 10px;cursor:pointer}
+.jump{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:14px;text-decoration:none;color:var(--accent);border:1px solid var(--accent);border-radius:6px;padding:6px 12px;background:var(--surface)}
+.slideview{background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);display:grid;grid-template-rows:auto auto auto;overflow:hidden}
+.slideview:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sv-head{padding:14px 18px 12px;border-bottom:1px solid var(--line);display:grid;gap:6px;background:var(--surface)}
+.sv-top{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;font-size:13px}
+.sv-top .id{font-family:var(--mono);font-size:13px;color:var(--accent);font-weight:500}
+.sv-count{margin-left:auto;font-weight:600;color:var(--ink)}
+.sv-title{font-size:clamp(17px,2.2vw,21px);font-weight:700;line-height:1.3;margin:0;max-width:none}
+.sv-cap{font-size:14px;color:var(--muted);max-width:none}
+.sv-stage{position:relative;background:var(--surface-2);display:grid;place-items:center;min-height:240px}
+.sv-stage img{display:block;width:100%;height:auto;max-height:72vh;object-fit:contain}
+.sv-nav{position:absolute;top:50%;transform:translateY(-50%);font:inherit;font-size:22px;font-weight:600;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.15);display:grid;place-items:center}
+.sv-nav:disabled{opacity:.35;cursor:default}
+.sv-nav:focus-visible{outline:2px solid var(--accent)}
+.sv-prev{left:10px} .sv-next{right:10px}
+.sv-controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:12px 18px;border-top:1px solid var(--line)}
+.sv-controls input[type=range]{flex:1 1 220px;accent-color:var(--accent)}
+.sv-controls select{font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:6px 8px}
+.sv-controls .btn{font:inherit;font-size:14px;font-weight:600;padding:6px 12px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.sv-controls .btn:focus-visible{outline:2px solid var(--accent)}
+.sv-hint{font-size:12px;color:var(--muted)}
+.pill.DEFECT{background:var(--fail-soft);color:var(--fail)}
+.slideview:fullscreen{border-radius:0;border:0;grid-template-rows:auto 1fr auto;height:100%;background:var(--surface)}
+.slideview:fullscreen .sv-stage{min-height:0}
+.slideview:fullscreen .sv-stage img{max-height:100%;height:100%;width:auto;max-width:100%}
+footer{border-top:1px solid var(--line);padding-top:20px;display:grid;gap:10px;font-size:13px;color:var(--muted)}
+footer .unit div{font-size:13px}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="switch" aria-label="Reports">__SWITCH__</div>
+    <div class="eyebrow">GeneInvoice · automation, regions, maker-checker, as-of · final test run</div>
+    <h1 id="h1"></h1>
+    <p class="muted" id="lede"></p>
+    <div class="meta" id="meta"></div>
+    <div class="verdict" id="verdict"></div>
+  </header>
+
+  <section aria-labelledby="s-sum">
+    <div class="sec-head"><h2 id="s-sum">Final run at a glance</h2><p class="muted" id="sum-note"></p></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="unit" id="unit"></div>
+  </section>
+
+  <section aria-labelledby="s-def">
+    <div class="sec-head"><h2 id="s-def">Open defects</h2><p class="muted">Defects found in the final run. By agreement, nothing was fixed during this run; each defect is reported exactly as observed.</p></div>
+    <div class="list" id="defects"></div>
+  </section>
+
+  <section aria-labelledby="s-prd">
+    <div class="sec-head"><h2 id="s-prd">Coverage by PRD clause</h2><p class="muted">Every case is tagged with the PRD clause it proves. A clause passes when none of its cases failed or were blocked; cases that did not run are counted separately.</p></div>
+    <div class="tbl-wrap"><table id="prd"></table></div>
+  </section>
+
+  <section aria-labelledby="s-area">
+    <div class="sec-head"><h2 id="s-area">Coverage by test area</h2><p class="muted">Each area ran on its own fresh PostgreSQL database, backend and web server. "Suite" is the regression suite built up over six fix rounds, re-run as written; "Exploratory" is a new set of cases written for this run by a tester who had not seen the suite.</p></div>
+    <div class="tbl-wrap"><table id="areas"></table></div>
+  </section>
+
+  __GALLERY__
+
+  <section aria-labelledby="s-hist">
+    <div class="sec-head"><h2 id="s-hist">How the build got here</h2><p class="muted">Pass rate of every E2E round across all areas and all case kinds, and the defects each round found. Defects found in rounds 1–5 were fixed, each with a unit test, before the next round. The final run fixes nothing.</p></div>
+    <div class="cols">
+      <div class="chart"><h3>Pass rate by round</h3><div id="rate"></div></div>
+      <div class="chart"><h3>Defects found by round</h3><div id="defs"></div></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-dec">
+    <div class="sec-head"><h2 id="s-dec">Product decisions applied</h2><p class="muted">Where the PRD or design left a question open, the build applied the default below. Tests assert these defaults, so they are not reported as defects. Any of them can be changed.</p></div>
+    <div class="list" id="decisions"></div>
+  </section>
+
+  <section aria-labelledby="s-lim">
+    <div class="sec-head"><h2 id="s-lim">Known limitations of this run</h2></div>
+    <div class="list" id="limits"></div>
+  </section>
+
+  <section aria-labelledby="s-cases">
+    <div class="sec-head"><h2 id="s-cases">Every case</h2><p class="muted">Select a row to see its steps, expected and actual results, evidence and the code it exercises.</p></div>
+    <div class="filters">
+      <label for="f-area">Area<select id="f-area"></select></label>
+      <label for="f-prd">PRD clause<select id="f-prd"></select></label>
+      <label for="f-src">Source<select id="f-src"><option value="">Suite and exploratory</option><option value="suite">Suite</option><option value="explore">Exploratory</option></select></label>
+      <label for="f-q">Search<input type="search" id="f-q" placeholder="Title, id, steps…"></label>
+      <div style="display:grid;gap:4px"><span class="eyebrow" style="letter-spacing:.04em">Status</span><div class="chips" id="f-status"></div></div>
+    </div>
+    <div class="count" id="case-count"></div>
+    <div class="tbl-wrap"><table id="cases"><thead><tr><th>Id</th><th>Area</th><th>PRD</th><th>Case</th><th>Status</th></tr></thead><tbody></tbody></table></div>
+    <button class="more" id="more" type="button">Show more</button>
+  </section>
+
+  <footer>
+    <h3 style="color:var(--ink)">About this run</h3>
+    <div class="unit" id="about"></div>
+    <p id="cost"></p>
+  </footer>
+</div>
+
+<dialog id="zoom"><button class="close" type="button" id="zoom-close">Close</button><img id="zoom-img" alt=""><p id="zoom-cap"></p></dialog>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function(){
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const R = D.report;           // api or ui block
+  const KIND = D.kind;          // 'API' | 'UI'
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmt = n => Number(n || 0).toLocaleString('en-US');
+  const S = R.summary;
+  const ran = S.pass + S.fail + (S.blocked || 0);
+
+  $('h1').textContent = KIND === 'API' ? 'API test report' : 'UI test report';
+  $('lede').textContent = KIND === 'API'
+    ? 'End-to-end API tests of the automation engine, regions, maker-checker and as-of reads, run against the real Spring Boot backend on PostgreSQL. Each case logs in as a real user with specific regional rights and checks status codes, response bodies and what was saved.'
+    : 'End-to-end UI tests of the same features, driven in a real Chromium browser against the Flutter web build and the real backend. Each case works through the screen as a user would and keeps a screenshot as evidence.';
+  const m = D.meta;
+  $('meta').innerHTML = [
+    ['Final run', m.generatedAt ? m.generatedAt.replace('T',' ').replace(/:\d\dZ$/,' UTC') : ''],
+    ['Build', (m.snapshot || '').slice(0,10)],
+    ['Branch', 'feature/automation-regions-approvals-asof'],
+    ['Database', 'PostgreSQL 16'],
+    ['Browser', KIND === 'UI' ? 'Chromium (headless)' : '—'],
+  ].filter(x => x[1] && x[1] !== '—').map(([k,v]) => `<span>${esc(k)} <b class="${k==='Build'?'mono':''}">${esc(v)}</b></span>`).join('');
+
+  const v = $('verdict');
+  if (S.fail > 0) { v.classList.add('bad'); v.innerHTML = `<strong>${fmt(S.fail)} of ${fmt(ran)} cases failed.</strong><span class="muted">See the defects in the case list below.</span>`; }
+  else if (S.notTested + (S.blocked||0) > 0) { v.classList.add('warn');
+    const blockers = (R.defects || []).map(x => x.id).join(', ');
+    v.innerHTML = `<strong>${fmt(S.pass)} of ${fmt(S.total)} cases passed; none failed.</strong><span class="muted">${fmt(S.notTested + (S.blocked||0))} could not reach the screen they test${blockers ? `, blocked by open defect ${esc(blockers)} (below)` : ''}.</span>`; }
+  else { v.innerHTML = `<strong>All ${fmt(S.total)} cases passed.</strong><span class="muted">No defects found in the final run. Nothing was fixed during it.</span>`; }
+
+  $('sum-note').textContent = `${fmt(S.total)} ${KIND} cases across 7 areas and all 9 PRD clauses.`;
+  $('tiles').innerHTML = [
+    ['', S.total, `${KIND} cases`], ['pass', S.pass, 'Passed'], ['fail', S.fail, 'Failed'],
+    ['nt', S.notTested + (S.blocked||0), 'Did not run'],
+  ].map(([c,n,l]) => `<div class="tile ${c}"><span class="n">${fmt(n)}</span><span class="l">${esc(l)}</span></div>`).join('');
+
+  const u = m.unit || {};
+  $('unit').innerHTML = [
+    ['Backend unit and integration tests', `${fmt(u.backend?.tests)} passed · ${fmt(u.backend?.failures + u.backend?.errors)} failed`],
+    ['Mail-service tests', `${fmt(u.mailService?.tests)} passed · ${fmt(u.mailService?.failures + u.mailService?.errors)} failed`],
+    ['Flutter widget tests', `${fmt(u.flutterTest?.passed)} passed · ${fmt(u.flutterTest?.failed)} failed`],
+    ['Flutter static analysis', `${fmt(u.flutterAnalyze?.issues)} issues`],
+  ].map(([k,v]) => `<div><span class="muted" style="font-size:12px">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('');
+
+  const bar = r => { const t = r.total || 1; const w = x => (100 * (x||0) / t).toFixed(2) + '%';
+    return `<div class="bar" role="img" aria-label="${r.pass} passed, ${r.fail} failed, ${r.notTested||0} not run"><i class="p" style="width:${w(r.pass)}"></i><i class="f" style="width:${w(r.fail)}"></i><i class="b" style="width:${w(r.blocked)}"></i><i class="n" style="width:${w(r.notTested)}"></i></div>`; };
+  const statusOf = r => r.fail > 0 ? 'FAIL' : (r.blocked > 0 ? 'BLOCKED' : 'PASS');
+
+  $('prd').innerHTML = `<thead><tr><th>Clause</th><th>What it requires</th><th class="num">Cases</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Not run</th><th>Result</th><th></th></tr></thead><tbody>` +
+    R.byPrd.map(r => `<tr><td class="mono">${esc(r.clause)}</td><td>${esc(r.title)}</td><td class="num">${fmt(r.total)}</td><td class="num">${fmt(r.pass)}</td><td class="num">${fmt(r.fail)}</td><td class="num">${fmt((r.notTested||0)+(r.blocked||0))}</td><td><span class="pill ${r.status}">${({PASS:'Pass', FAIL:'Fail', PARTIAL:'Partly blocked'})[r.status] || r.status}</span></td><td style="width:120px">${bar(r)}</td></tr>`).join('') + '</tbody>';
+
+  const AREA_NAMES = {regions:'Regions (B1)', asof:'As-of reads (B3)', approvals:'Maker-checker (B2)', tasks:'Tasks (A6)', automation:'Automation (A1–A5)', regression:'Existing features', migration:'Upgrade of existing data'};
+  const sub = x => x ? `${fmt(x.pass)}/${fmt(x.total)}` : '—';
+  $('areas').innerHTML = `<thead><tr><th>Area</th><th class="num">Suite</th><th class="num">Exploratory</th><th class="num">Cases</th><th class="num">Passed</th><th class="num">Failed</th><th class="num">Not run</th><th>Result</th><th></th></tr></thead><tbody>` +
+    R.byArea.map(r => `<tr><td>${esc(AREA_NAMES[r.area] || r.area)}</td><td class="num">${sub(r.suite)}</td><td class="num">${sub(r.explore)}</td><td class="num">${fmt(r.total)}</td><td class="num">${fmt(r.pass)}</td><td class="num">${fmt(r.fail)}</td><td class="num">${fmt((r.notTested||0)+(r.blocked||0))}</td><td><span class="pill ${statusOf(r)}">${statusOf(r) === 'PASS' ? 'Pass' : statusOf(r)}</span></td><td style="width:120px">${bar(r)}</td></tr>`).join('') + '</tbody>';
+
+  // ---- history charts (drawn to scale)
+  const css = getComputedStyle(document.documentElement);
+  const H = D.history;
+  const rounds = H.rounds.map(r => ({ label: r.round === 'final' ? 'Final' : r.round.toUpperCase(), pass: r.totals?.pass || 0, total: r.totals?.total || 0, note: r.note }));
+  (function rate(){
+    const W = 520, Hh = 220, L = 44, B = 36, T = 16, Rr = 12;
+    const lo = 90, hi = 100; // percentage scale shown
+    const y = p => T + (Hh - T - B) * (1 - (Math.max(lo, Math.min(hi, p)) - lo) / (hi - lo));
+    const bw = (W - L - Rr) / rounds.length;
+    let g = '';
+    for (let p = lo; p <= hi; p += 2) g += `<line x1="${L}" x2="${W-Rr}" y1="${y(p)}" y2="${y(p)}" stroke="var(--line)" stroke-width="1"/><text x="${L-8}" y="${y(p)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${p}%</text>`;
+    rounds.forEach((r, i) => {
+      const pct = r.total ? 100 * r.pass / r.total : 0;
+      const x = L + i * bw + bw * .2, w = bw * .6;
+      const top = y(pct), base = y(lo);
+      g += `<rect x="${x}" y="${top}" width="${w}" height="${Math.max(1, base - top)}" rx="2" fill="${i === rounds.length - 1 ? 'var(--accent)' : 'var(--pass)'}" opacity="${i === rounds.length - 1 ? 1 : .75}"><title>${r.label}: ${r.pass} of ${r.total} passed (${pct.toFixed(1)}%)${r.note ? ' — ' + esc(r.note) : ''}</title></rect>`;
+      g += `<text x="${x + w/2}" y="${top - 5}" text-anchor="middle" font-size="11" fill="var(--ink)">${pct.toFixed(1)}</text>`;
+      g += `<text x="${x + w/2}" y="${Hh - B + 16}" text-anchor="middle" font-size="11" fill="var(--muted)">${r.label}</text>`;
+      g += `<text x="${x + w/2}" y="${Hh - B + 29}" text-anchor="middle" font-size="10" fill="var(--muted)">${fmt(r.total)}</text>`;
+    });
+    $('rate').innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Pass rate by round">${g}</svg><div class="legend"><span style="--c:var(--pass)">Fix rounds (scale 90–100%)</span><span style="--c:var(--accent)">Final test-only run</span><span>Numbers under each bar: cases run. R6 re-tested only the three areas its fixes touched.</span></div>`;
+  })();
+  (function defs(){
+    const d = H.defectsPerRound;
+    const rows = [['Review', d.hardening], ['R1', d.r1], ['R2', d.r2], ['R3', d.r3], ['R4', d.r4], ['R5', d.r5], ['R6', d.r6], ['Final', d.final]];
+    const W = 520, Hh = 220, L = 34, B = 26, T = 16, Rr = 12;
+    const max = Math.max(...rows.map(r => r[1] || 0), 1);
+    const top = Math.ceil(max / 10) * 10;
+    const y = n => T + (Hh - T - B) * (1 - n / top);
+    const bw = (W - L - Rr) / rows.length;
+    let g = '';
+    for (let n = 0; n <= top; n += 10) g += `<line x1="${L}" x2="${W-Rr}" y1="${y(n)}" y2="${y(n)}" stroke="var(--line)"/><text x="${L-8}" y="${y(n)+4}" text-anchor="end" font-size="11" fill="var(--muted)">${n}</text>`;
+    rows.forEach(([lab, n], i) => {
+      const x = L + i * bw + bw * .2, w = bw * .6;
+      g += `<rect x="${x}" y="${y(n||0)}" width="${w}" height="${Math.max(0, y(0) - y(n||0))}" rx="2" fill="${lab === 'Review' ? 'var(--blk)' : 'var(--fail)'}" opacity=".85"><title>${lab}: ${n} defects</title></rect>`;
+      g += `<text x="${x + w/2}" y="${y(n||0) - 5}" text-anchor="middle" font-size="11" fill="var(--ink)">${n||0}</text>`;
+      g += `<text x="${x + w/2}" y="${Hh - B + 16}" text-anchor="middle" font-size="11" fill="var(--muted)">${lab}</text>`;
+    });
+    $('defs').innerHTML = `<svg viewBox="0 0 ${W} ${Hh}" role="img" aria-label="Defects found by round">${g}</svg><div class="legend"><span style="--c:var(--blk)">Whole-build code review (before E2E)</span><span style="--c:var(--fail)">E2E rounds; all fixed before the final run</span></div>`;
+  })();
+
+  const defs = R.defects || [];
+  $('defects').innerHTML = defs.length ? defs.map(x => {
+    const shots = (D.slides || []).filter(s => s.caseId === x.id)
+      .map(s => ({src: 'slides/' + s.file, caption: s.shot.includes('cold') ? 'Fresh load of #/tasks/1: the Dashboard shows instead' : s.shot.includes('after-boot') ? 'Same link after the app has loaded: the task opens' : s.title}));
+    const det = [['Steps', x.steps], ['Expected', x.expected], ['Actual', x.actual], ['Evidence', x.evidence], ['Code', x.codeRef], ['Already in baseline', x.preExisting], ['Workaround', x.workaround], ['Blocks cases', (x.blocksCases || []).join(', ')]]
+      .filter(r => r[1]).map(([k, v]) => `<dt>${k}</dt><dd class="${k === 'Code' || k === 'Blocks cases' ? 'mono' : ''}">${esc(v)}</dd>`).join('');
+    const imgs = shots.length ? `<div class="gallery" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">${shots.map(g => `<figure class="shot" style="margin:0"><img src="${esc(g.src)}" alt="${esc(g.caption)}" loading="lazy"><figcaption>${esc(g.caption)}</figcaption></figure>`).join('')}</div>` : '';
+    return `<div style="gap:10px"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span class="pill FAIL">${esc(x.severity)}</span><span class="id">${esc(x.id)}</span><span class="muted">${esc(x.prd || '')} · ${esc(x.status || '')}</span></div><h3>${esc(x.title)}</h3><div class="detail-body" style="padding:0"><dl>${det}</dl></div>${imgs}</div>`;
+  }).join('') : '<div><strong>None.</strong><span class="muted">Every case in this report either passed or is listed under Known limitations.</span></div>';
+
+  $('decisions').innerHTML = D.decisions.map(x => `<div><span class="id">${esc(x.id)}</span><span>${esc(x.summary || x.decision)}</span></div>`).join('') || '<div>None.</div>';
+  $('limits').innerHTML = D.knownLimitations.map(x => `<div><span class="id">${esc(x.kind)}${x.area ? ' · ' + esc(x.area) : ''}</span><span>${esc(x.what)}</span>${x.reason ? `<span class="muted">${esc(x.reason)}</span>` : ''}</div>`).join('') || '<div>None.</div>';
+
+  // ---- case explorer
+  const cases = R.cases;
+  const opt = (sel, vals, all) => { $(sel).innerHTML = `<option value="">${all}</option>` + vals.map(v => `<option value="${esc(v)}">${esc(AREA_NAMES[v] || v)}</option>`).join(''); };
+  opt('f-area', [...new Set(cases.map(c => c.area))], 'All areas');
+  opt('f-prd', [...new Set(cases.map(c => c.prd).filter(Boolean))].sort(), 'All clauses');
+  const STAT = ['PASS', 'FAIL', 'BLOCKED', 'NOT_TESTED'];
+  const statLabel = {PASS:'Passed', FAIL:'Failed', BLOCKED:'Blocked', NOT_TESTED:'Did not run'};
+  const present = STAT.filter(s => cases.some(c => c.status === s));
+  const active = new Set(present);
+  $('f-status').innerHTML = present.map(s => `<button type="button" class="chip" aria-pressed="true" data-s="${s}">${statLabel[s]} · ${fmt(cases.filter(c => c.status === s).length)}</button>`).join('');
+  let limit = 60;
+  const tbody = document.querySelector('#cases tbody');
+  function filtered(){
+    const a = $('f-area').value, p = $('f-prd').value, s = $('f-src').value, q = $('f-q').value.trim().toLowerCase();
+    return cases.filter(c => active.has(c.status) && (!a || c.area === a) && (!p || c.prd === p) && (!s || c.source === s) &&
+      (!q || [c.id, c.title, c.steps, c.feature, c.expected].join(' ').toLowerCase().includes(q)));
+  }
+  function row(c, i){
+    const shots = (c.screenshots && c.screenshots.length ? c.screenshots : (c.screenshot ? [c.screenshot] : []));
+    const det = [['Feature', c.feature], ['Steps', c.steps], ['Expected', c.expected], ['Actual', c.actual], ['Evidence', c.evidence], ['Code', c.codeRef], ['Source', c.source === 'explore' ? 'Exploratory pass (new in final run)' : 'Regression suite'], ['Screenshot', shots.length ? shots.map(s => s.split('/').slice(-1)[0]).join(', ') : '']]
+      .filter(x => x[1]).map(([k, v]) => `<dt>${k}</dt><dd class="${k === 'Code' ? 'mono' : ''}">${esc(v)}</dd>`).join('');
+    return `<tr class="case" tabindex="0" aria-expanded="false" data-i="${i}"><td class="mono">${esc(c.id)}</td><td>${esc(AREA_NAMES[c.area] || c.area)}</td><td class="mono">${esc(c.prd)}</td><td>${esc(c.title)}</td><td><span class="pill ${c.status}">${statLabel[c.status] || c.status}</span></td></tr>` +
+      `<tr class="detail" hidden><td colspan="5"><div class="detail-body"><dl>${det}</dl></div></td></tr>`;
+  }
+  function render(){
+    const list = filtered();
+    $('case-count').textContent = `Showing ${fmt(Math.min(limit, list.length))} of ${fmt(list.length)} matching cases (${fmt(cases.length)} in total).`;
+    tbody.innerHTML = list.slice(0, limit).map(row).join('');
+    $('more').hidden = list.length <= limit;
+  }
+  tbody.addEventListener('click', e => { const tr = e.target.closest('tr.case'); if (!tr) return; toggle(tr); });
+  tbody.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('tr.case')) { e.preventDefault(); toggle(e.target); } });
+  function toggle(tr){ const d = tr.nextElementSibling; d.hidden = !d.hidden; tr.setAttribute('aria-expanded', String(!d.hidden)); }
+  ['f-area', 'f-prd', 'f-src'].forEach(id => $(id).addEventListener('change', () => { limit = 60; render(); }));
+  $('f-q').addEventListener('input', () => { limit = 60; render(); });
+  $('f-status').addEventListener('click', e => { const b = e.target.closest('.chip'); if (!b) return; const s = b.dataset.s;
+    if (active.has(s)) active.delete(s); else active.add(s); b.setAttribute('aria-pressed', String(active.has(s))); limit = 60; render(); });
+  $('more').addEventListener('click', () => { limit += 120; render(); });
+  render();
+
+  // ---- slide view (UI report only): every screenshot, heading always visible
+  const SL = D.slides || [];
+  const sv = $('sv');
+  if (sv && SL.length) {
+    const statLbl = {PASS: 'Passed', FAIL: 'Failed', BLOCKED: 'Blocked', NOT_TESTED: 'Did not run', DEFECT: 'Open defect'};
+    const areaSel = $('sv-area'), resSel = $('sv-result'), range = $('sv-range'), img = $('sv-img');
+    areaSel.innerHTML = '<option value="">All areas</option>' + [...new Set(SL.map(s => s.area))].map(a => `<option value="${a}">${esc(AREA_NAMES[a] || a)} · ${SL.filter(s => s.area === a).length}</option>`).join('');
+    const notPass = SL.filter(s => s.status !== 'PASS').length;
+    resSel.innerHTML = `<option value="">Every result · ${SL.length}</option><option value="PASS">Passed · ${SL.length - notPass}</option>` + (notPass ? `<option value="OTHER">Blocked or defect · ${notPass}</option>` : '');
+    let list = SL, i = 0;
+    const warm = new Set();
+    function preload(k){ const s = list[k]; if (s && !warm.has(s.file)) { warm.add(s.file); const im = new Image(); im.src = 'slides/' + s.file; } }
+    function show(){
+      const s = list[i]; if (!s) return;
+      $('sv-pill').className = 'pill ' + (s.status || 'PASS');
+      $('sv-pill').textContent = statLbl[s.status] || s.status || '';
+      $('sv-id').textContent = s.caseId;
+      $('sv-meta').textContent = [AREA_NAMES[s.area] || s.area, s.prd ? 'PRD ' + s.prd : '', s.source === 'explore' ? 'Exploratory' : 'Suite', s.steps > 1 ? `screenshot ${s.step} of ${s.steps}` : ''].filter(Boolean).join(' · ');
+      $('sv-count').textContent = `${i + 1} / ${list.length}`;
+      $('sv-title').textContent = s.title;
+      const cap = s.caption || (s.feature ? s.feature : '');
+      $('sv-cap').textContent = cap; $('sv-cap').hidden = !cap;
+      img.src = 'slides/' + s.file;
+      img.alt = `${s.caseId}: ${s.title}`;
+      range.max = String(list.length - 1); range.value = String(i);
+      $('sv-prev').disabled = $('sv-prev2').disabled = i === 0;
+      $('sv-next').disabled = $('sv-next2').disabled = i === list.length - 1;
+      preload(i + 1); preload(i - 1);
+    }
+    const go = d => { i = Math.max(0, Math.min(list.length - 1, i + d)); show(); };
+    function refilter(){
+      const a = areaSel.value, r = resSel.value, cur = list[i];
+      list = SL.filter(s => (!a || s.area === a) && (!r || (r === 'PASS' ? s.status === 'PASS' : s.status !== 'PASS')));
+      if (!list.length) list = SL;
+      const keep = cur ? list.indexOf(cur) : -1;
+      i = keep >= 0 ? keep : 0; show();
+    }
+    ['sv-prev', 'sv-prev2'].forEach(id => $(id).addEventListener('click', () => go(-1)));
+    ['sv-next', 'sv-next2'].forEach(id => $(id).addEventListener('click', () => go(1)));
+    range.addEventListener('input', () => { i = +range.value; show(); });
+    areaSel.addEventListener('change', refilter); resSel.addEventListener('change', refilter);
+    const onKey = e => {
+      if (e.target.closest && e.target.closest('select, input[type=search]')) return;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); go(1); }
+      else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); go(-1); }
+      else if (e.key === 'Home') { e.preventDefault(); i = 0; show(); }
+      else if (e.key === 'End') { e.preventDefault(); i = list.length - 1; show(); }
+    };
+    sv.addEventListener('keydown', onKey);
+    // ← and → also work from anywhere while the slide view is on screen and the reader isn't typing.
+    document.addEventListener('keydown', e => {
+      if (sv.contains(e.target) || e.defaultPrevented) return;
+      if (e.target.closest && e.target.closest('input, select, textarea, [contenteditable]')) return;
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const r = sv.getBoundingClientRect();
+      const visible = document.fullscreenElement === sv || (r.top < innerHeight * 0.6 && r.bottom > innerHeight * 0.4);
+      if (!visible) return;
+      e.preventDefault(); go(e.key === 'ArrowRight' ? 1 : -1);
+    });
+    let sx = null;
+    $('sv-stage').addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, {passive: true});
+    $('sv-stage').addEventListener('touchend', e => { if (sx === null) return; const dx = e.changedTouches[0].clientX - sx; if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1); sx = null; });
+    const fsBtn = $('sv-fs');
+    if (!sv.requestFullscreen) fsBtn.hidden = true;
+    fsBtn.addEventListener('click', () => {
+      if (document.fullscreenElement) { document.exitFullscreen && document.exitFullscreen(); return; }
+      Promise.resolve(sv.requestFullscreen && sv.requestFullscreen()).then(() => sv.focus()).catch(() => { fsBtn.hidden = true; });
+    });
+    document.addEventListener('fullscreenchange', () => { fsBtn.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen'; });
+    show();
+    if (location.hash === '#slides') { sv.scrollIntoView(); sv.focus({preventScroll: true}); }
+  }
+
+  // ---- gallery (UI report only)
+  const gal = $('gallery');
+  if (gal && R.gallery) {
+    gal.innerHTML = R.gallery.map((g, i) => `<figure class="shot" style="margin:0"><button type="button" data-g="${i}" aria-label="Enlarge: ${esc(g.caption)}"><img loading="lazy" src="slides/${esc(g.file)}" alt="${esc(g.caption)}"></button><figcaption><span>${esc(g.caption)}</span><span class="muted"><span class="mono">${esc(g.caseId)}</span> · ${esc(AREA_NAMES[g.area] || g.area)} · ${esc(g.prd)}</span></figcaption></figure>`).join('');
+    const dlg = $('zoom');
+    gal.addEventListener('click', e => { const b = e.target.closest('button[data-g]'); if (!b) return; const g = R.gallery[+b.dataset.g];
+      $('zoom-img').src = 'slides/' + g.file; $('zoom-img').alt = g.caption; $('zoom-cap').textContent = `${g.caseId} — ${g.caption}`;
+      if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); });
+    $('zoom-close').addEventListener('click', () => dlg.close());
+    dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+  }
+
+  // ---- footer
+  const env = m.environment || {};
+  $('about').innerHTML = [
+    ['Tested source', `${(m.snapshot||'').slice(0,12)} (uncommitted, snapshot ref FINAL)`],
+    ['Change size', m.diffstat?.total || ''],
+    ['Database', env.database || ''],
+    ['Browser', env.browser || ''],
+    ['Isolation', env.isolation || ''],
+    ['Email', 'Transport off: tests assert the saved email and its rendered text'],
+  ].filter(x => x[1]).map(([k, v]) => `<div><span class="muted" style="font-size:12px">${esc(k)}</span><span>${esc(v)}</span></div>`).join('');
+  $('cost').textContent = D.cost || '';
+})();
+</script>

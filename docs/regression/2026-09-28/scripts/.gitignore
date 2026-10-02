@@ -1,0 +1,13 @@
+# Produced when the harness runs; never commit them.
+node_modules/
+dist/
+runtime/
+baseline-src/
+ws/
+runs/
+final/
+# The migration suite restores a pg_dump of the developer's own database here.
+suites/migration/data/dev*.sql
+# Logs and ad-hoc screenshots some suites write next to themselves.
+*.log
+xshots/

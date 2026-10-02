@@ -1,0 +1,7 @@
+{
+  "name": "geneinvoice-e2e-harness",
+  "private": true,
+  "description": "E2E harness for GeneInvoice automation / regions / maker-checker / as-of (see README.md)",
+  "scripts": { "smoke": "node smoke.js" },
+  "dependencies": { "playwright-core": "1.63.0" }
+}

@@ -1,0 +1,44 @@
+[
+ {
+  "id": "RGN-R3-1",
+  "severity": "low",
+  "kind": "API",
+  "title": "An approver who cannot open the record gets no 'You no longer have access to this record' blockedReason on the change detail",
+  "prd": "B1",
+  "stream": "backend",
+  "steps": "Fresh e2e DB with seedWorld. Tighten South thresholds with INVOICE_TERMS 1000/24h (200). Create user abby (role E2E_REGIONAL) with grant South APPROVE/BOOK and an empty book. Create a new South customer with an invoice of 2500 whose Sales and Collection POC is sam. As sam, PATCH /api/invoices/{id} {dueDate:+60d, paymentTerm:CUSTOM}, which is held (202, INVOICE_TERMS). As abby, GET /api/invoices/{id}, then GET /api/approvals/{pc}.",
+  "expected": "DESIGN \u00a75.11.9 (SC-15): Detail.current and changes[].current are filled only when the caller can still see the record; otherwise they are null and blockedReason reads 'You no longer have access to this record'.",
+  "actual": "The invoice returns 404 for abby, as expected, and the change detail returns 200 with current:null and every changes[].current/currentText null, also as expected. However blockedReason is null, and canApprove and canReject are true, so nothing tells the approver why the 'now' values are blank. Reproduced twice in one run and again in a second fresh env.",
+  "evidence": "GET /api/approvals/{pc} as abby -> 200 {\"current\":null,\"blockedReason\":null,\"canApprove\":true,\"canReject\":true}. The string 'no longer have access' appears nowhere in backend/src or frontend/lib. Logs: suites/regions/run-r3-ext3.log and run-r3-ext3b.log.",
+  "codeRef": "backend/src/main/java/com/geneinvoice/approval/PendingChangeViews.java:170 (blockedReason() ignores scope.canSeeRecord(pc); current is computed at :126)",
+  "area": "regions"
+ },
+ {
+  "id": "ASO-R3-1",
+  "severity": "high",
+  "kind": "API",
+  "stream": "backend",
+  "prd": "B3 (as-of reads: \"which approvals were outstanding\"); B2",
+  "title": "Regression from the r2 APP-R2-1 fix: an approval's detail viewed as of a date fails with 400 AS_OF_UNSUPPORTED when its Changes name invoices, promises or invoice lines, so every held invoice create and every held payment or promise that names invoices cannot be opened as of a date, in the API or the UI",
+  "steps": "Fresh e2e_asof DB. Run seedWorld, which sets a South INVOICE_CREATE threshold of 10000 and a PAYMENT_RECORD threshold of 5000. Create a held invoice of 20000 on s2 (pcA, id 2). Create a held payment of 7000 on s1 with invoiceIds [s1's 2500 invoice] (pcE, id 4). Create a held invoice of 12000 approved before T (pcF, id 5). Run ageWorld(10), then GET /api/approvals/2?asOf=<today-2> as admin, and do the same for ids 4 and 5. In the UI: admin picks As of 25 Sep 2026 and opens /approvals/2.",
+  "expected": "200 with the change as it stood at T: statusAt PENDING (or APPROVED for pcF, decided before T), canApprove/canReject/canWithdraw false, blockedReason \"Read-only in the as-of view\", and readable Changes rows. Per TRIAGE r2 APP-R2-1 / FIXLOG r2 B2 these are: \"Invoices\" = the invoice number, and items = \"1 \u00d7 E2E Widget at \u20b920,000.00\". current is null as of T. This passed in round 2 (ASO-API-34/39/39c, ASO-UI-09/10/10c). DESIGN \u00a76.11 / \u00a75.11.10.",
+  "actual": "GET /api/approvals/{2,4,5}?asOf=2026-09-25 returns 400 {\"error\":\"AS_OF_UNSUPPORTED\",\"message\":\"This page can't be shown as of a date\",\"path\":\"/api/approvals/2\"}. Reproduced on 2 attempts via curl and on 2 suite runs. The same ids live return 200: pcE changes show invoiceIds \u2192 'INV-20260927-0006' and pcA items \u2192 '1 \u00d7 E2E Widget at \u20b920,000.00'. As of T, /api/approvals/1 (cancel invoice: only a status row) and /3 (payment with no invoiceIds) return 200. The UI shows 'Could not load this change: This page can't be shown as of a date' with a Go back button. The approvals list, summary, for-record and export as of T all still work (ASO-API-30..33, 35..38, 39b PASS).",
+  "evidence": "runs/r3/asof.json cases ASO-API-34, ASO-API-39, ASO-API-39c, ASO-API-39d, ASO-UI-09, ASO-UI-10, ASO-UI-10c, ASO-UI-10d (all FAIL, reproduced 2/2). Screenshot runs/r3/shots/asof/ASO-UI-10d-A-17.png shows the as-of banner and 'Could not load this change: This page can't be shown as of a date'. ASO-API-39d: 'E asOf 400 \u2026 A asOf 400 \u2026 D asOf 200: current=null rows=[{status,cur:null,prop:Cancelled}]; live current={total:6000,status:CANCELLED}'.",
+  "codeRef": "backend/src/main/java/com/geneinvoice/approval/PendingChangeViews.java:243,247,252. changes() calls invoiceRepository, promiseRepository and productRepository.findAllById (added by FIXLOG E2E r2 B2). Those load the live, versioned Invoice, PaymentPromise and Product entities (HistoryModel.java:51-55) while an as-of point is bound. backend/src/main/java/com/geneinvoice/history/LiveReadGuard.java:22-24 then throws AsOfException.unsupported(). The fix is to wrap these name look-ups in LiveReadGuard.allow(...) or resolve them from history as of T. customerRepository.findAllById at line 239 has the same latent risk for any change with a customerId row.",
+  "area": "asof"
+ },
+ {
+  "id": "RGR-R3-1",
+  "severity": "low",
+  "kind": "UI",
+  "title": "Send email: inserting a placeholder into the Subject sometimes replaces the subject text already typed",
+  "prd": "A4",
+  "stream": "frontend",
+  "steps": "1. As admin, open #/invoices/{id} for a fresh invoice and click Send email. 2. Tick the \"Customer emails\" chip. 3. Type \"Hello \" in Subject * (the dialog previews subject \"Hello\"). 4. Click the Subject's Insert placeholder ({ }) button and choose Customer > Name. 5. Type \"Invoice \" in Message, insert Invoice > Number, then Send.",
+  "expected": "The placeholder goes in at the caret, so the subject becomes \"Hello {{Customer.Name}}\" and the saved email's subject is \"Hello <customer name>\" (PRD A4: placeholders offered in subject and body; REG-UI-23 contract).",
+  "actual": "This happens intermittently. It showed up on the case's first attempt in 4 separate executions (r3 full run, rerun batch 1, rerun batch 3 run 2, diagnostic run 3) and in 6 of about 150 probe tries; the in-case retry always passed. In the failing runs the controller held the typed text before the insert: the POST /api/emails/preview subjects were \"\" (4284ms), then \"Hello\" (6347ms), then \"{{Customer.Name}}\" (9237ms, right after the insert). So the insert replaced \"Hello \" instead of adding to it. Right after the insert, the Subject is focused with all of its text selected. The saved email has subject \"UIMail bu5sh-mukbu6mw5da5\" (no \"Hello\") and body \"Invoice INV-20260927-0001\". The multi-line Message field is never affected. The user can see the loss before sending and retype, hence low severity. The same PlaceholderButton is used on single-line fields in the automation rule editor, so those fields are probably exposed too (not tested).",
+  "evidence": "runs/r3/regression.ui23-diag3.json, REG-UI-23 'diagnostics: preview subjects' (failing attempt 1: [\"\",\"Hello\",\"{{Customer.Name}}\"...]; passing attempt 2: [\"\",\"Hello\",\"Hello {{Customer.Name}}\"...]). runs/r3/regression.fullrun1.json REG-UI-23 attempt 1: saved subject \"UIMail 8af69-muk8lu9s5cab\". Screenshot of the Subject focused and fully selected after the insert: runs/r3/regression/shots/REG-UI-23-1-subject.png. Probe log: suites/regression/probe/probe2.log (runs clickselect#5 and harness#3 lost \"Hello \"). Likely mechanism (Flutter 3.44 source): EditableText._adjustedSelectionWhenFocused selects all when a single-line field gains focus non-internally on web, because selectAllOnFocus defaults to true on web. When the popup menu route closes, focus goes back to the Subject. If that happens before PopupMenuButton.onSelected runs, insertPlaceholder() replaces controller.selection, which is now the whole subject.",
+  "codeRef": "frontend/lib/features/automation/placeholder_button.dart:91 (insertPlaceholder replaces controller.selection; the selection could be captured when the menu opens, or insert at the end when the field is unfocused); frontend/lib/features/email/send_email_dialog.dart:644 (single-line Subject TextFormField, selectAllOnFocus not disabled)",
+  "area": "regression"
+ }
+]

@@ -1,0 +1,30 @@
+[
+ {
+  "id": "RGN-R5-1",
+  "severity": "low",
+  "kind": "API",
+  "title": "After a customer moves North, a North-only reader can open the moved invoice and its History tab links 'Approval #N', but the closed change is 404 and missing from her approvals list",
+  "prd": "B2",
+  "stream": "backend",
+  "steps": "Fresh e2e DB with seedWorld. Set South INVOICE_TERMS to 1000/24h. Create user nico (role E2E_REGIONAL) with a grant of READ/ALL in North only. Create a new South customer with an invoice of 2500 whose Sales and Collection POC is sam. As sam, PATCH /api/invoices/{id} {dueDate:+60d, paymentTerm:CUSTOM}: 202 with a pc id. As admin, POST /api/customers/{cid}/move-region to North: 200, and the pc goes CLOSED. As nico: GET /api/invoices/{id}, GET /api/audit?entityType=INVOICE&entityId={id}, GET /api/approvals/{pc}, GET /api/approvals?filter=id:eq:{pc}. In the UI, open /invoices/{id}, go to the History tab and click 'Approval #{pc}'.",
+  "expected": "DESIGN \u00a75.11.9 VISIBLE has no gate on the change's region for a change on an existing record: '(entity_id IS NOT NULL AND entity_type='INVOICE' AND entity_id IN ids(Invoice, forInvoices()))'. So anyone who can see the record sees the change (PRD B2). The r4 TRIAGE B1 test plan says the admin, who holds North, gets 200 with current filled, and 'So does a North-only viewer'. The r4 userDecision gives the same reason for the opposite case: an old-region viewer loses the change 'because it is visible only to those who can see the record'. So nico should get 200 with current filled and the change in her list.",
+  "actual": "nico gets invoice 200. Her audit feed returns CHANGE_REQUESTED and CHANGE_CLOSED rows with pendingChangeId set (reason 'Customer moved from South to North'), and the History tab shows an 'Approval #1' link. But GET /api/approvals/{pc} returns 404 'Pending change not found', and the list filtered by id is empty. The UI link opens 'That change does not exist.' Reproduced on both attempts in the full run (pc 12, invoice 51, customer 53) and again in a second fresh env (pc 1, invoice 19, customer 11). This is not a regression of the RGN-R4-1 fix, which kept this gate unchanged on purpose. Only decided (CLOSED) changes are affected, because a move closes every pending change.",
+  "evidence": "runs/r5/regions.json case REG-155; suites/regions/r5-rerun155.json; nico GET /api/audit?entityType=INVOICE&entityId=19 -> [{action:CHANGE_CLOSED,pendingChangeId:1,reason:'Customer moved from South to North'},{action:CHANGE_REQUESTED,pendingChangeId:1},...]; nico GET /api/approvals/1 -> 404 {message:'Pending change not found'}. Screenshots runs/r5/regions/shots/REG-155-1.png (History tab with 'Approval #1') and REG-155-2.png ('That change does not exist.').",
+  "codeRef": "backend/src/main/java/com/geneinvoice/approval/PendingChangeScope.java:113 (isVisible: `if (!rights.has(pc.getOperation().viewPrivilege(), region)) return false;` where region = pc.getRegionId(), the region the change was asked in, before canSeeRecord is reached) and :225 (forList: `region.in(kindRegions.get(i))` on the record branches). The UI link is at frontend/lib/features/audit/audit_history_panel.dart:502-504.",
+  "area": "regions"
+ },
+ {
+  "id": "ASO-R5-1",
+  "severity": "low",
+  "kind": "UI",
+  "title": "An approval whose record the viewer can no longer see still links to that record and customer, and the link opens \"That invoice does not exist.\"",
+  "steps": "Seed the world. Create a South customer s3 with sam as Collection POC. Create an invoice of 6000 for it (salesPocUserId sam). The admin cancels it, which is held under South INVOICE_CANCEL 5000 as pcM. Create user sofia (E2E_REGIONAL, APPROVE/ALL in South only). Run ageWorld(3). The admin moves s3 from South to North (POST /api/customers/{s3}/move-region). Log in as sofia and open /approvals/{pcM}. Tap the Record link (the invoice number). Reproduced 2/2 with suites/asof/probe-link.js.",
+  "expected": "DESIGN \u00a75.11.9 (SC-15) and the r4 TRIAGE userDecision: the approval stays visible to the South approver with its now-values hidden and the message \"You no longer have access to this record\". The page should then not link into the record or the customer: show plain text, as for records the viewer cannot open. At the least, the target should not claim that the record does not exist.",
+  "actual": "The detail page shows the notice \"You no longer have access to this record\", yet \"Record: INV-\u2026\" and \"Customer: South S3 \u2026\" are rendered as tappable links (semantics role=button). Tapping the Record link goes to #/invoices/{id}, which shows \"That invoice does not exist.\" because GET /api/invoices/{id} returns 404 for sofia. The invoice exists and the admin gets 200. This is not a regression of r4: the link logic is older. It shows up in the no-access state that RGN-R3-1 and RGN-R4-1 introduced.",
+  "evidence": "runs/r5/asof/shots/ASO-UI-M1-3.png (the notice and the links together), ASO-UI-M2-2a.png, ASO-UI-M2-2b.png (\"That invoice does not exist.\"). probe-link.js output for both attempts: url=#/invoices/21, text=[\"That invoice does not exist.\"]",
+  "codeRef": "frontend/lib/features/approvals/approval_detail_screen.dart:147 (link() ignores blockedReason), :195-212 (Record/Customer links); frontend/lib/shared/widgets/detail_scaffold.dart:336 (404 -> \"That $noun does not exist.\")",
+  "prd": "B2",
+  "stream": "frontend",
+  "area": "asof"
+ }
+]

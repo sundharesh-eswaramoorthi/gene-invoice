@@ -1,0 +1,85 @@
+{
+  "area": "automation",
+  "round": 3,
+  "env": {
+    "api": "http://localhost:18105",
+    "web": "http://localhost:18205/"
+  },
+  "cases": [
+    {
+      "id": "AUT-API-150",
+      "feature": "Automation and approvals",
+      "kind": "API",
+      "prd": "B2",
+      "title": "The pending change an automation proposes reads as the rule's: origin AUTOMATION, the rule id, the owner as maker, and readable Changes rows (\"Invoices\" = the invoice number)",
+      "status": "PASS",
+      "severity": "",
+      "steps": "South customer (Collection POC sam) with invoice 6200; admin MANUAL INVOICE rule (id:eq:I) CREATE_PROMISE amount FIELD Invoice.Balance, linkRecord; run; sam GET /api/approvals/{pc}",
+      "expected": "PRD B2 + DESIGN §6.11 / TRIAGE r2 APP-R2-1: status PENDING, origin AUTOMATION, ruleId = rule, requestedBy = admin, amount 6200; changes has a row field invoiceIds labelled \"Invoices\" whose proposedText is the invoice number; no row labelled \"Invoice ids\"/\"Promise ids\"; no promiseIds row (a create with none); canApprove true for sam",
+      "actual": "{\"run\":[1,\"SUCCEEDED\"],\"effect\":[\"DONE\",{\"type\":\"PENDING_CHANGE\",\"id\":1,\"link\":\"/approvals/1\"}],\"get\":200,\"detail\":{\"status\":\"PENDING\",\"origin\":\"AUTOMATION\",\"ruleId\":1,\"requestedBy\":{\"id\":1,\"name\":\"System Administrator\"},\"amount\":6200,\"canApprove\":true},\"changes\":[{\"field\":\"amount\",\"label\":\"Amount\",\"proposed\":6200,\"proposedText\":null},{\"field\":\"promisedDate\",\"label\":\"Promised date\",\"proposed\":\"2026-10-04\",\"proposedText\":null},{\"field\":\"collectionPocUserId\",\"label\":\"Collection POC\",\"proposed\":4,\"proposedText\":\"Sam South\"},{\"field\":\"notes\",\"label\":\"Notes\",\"proposed\":\"Auto INV-20260927-0015\",\"proposedText\":null},{\"field\":\"invoiceIds\",\"label\":\"Invoices\",\"proposed\":[15],\"proposedText\":\"INV-20260927-0015\"}],\"invoiceNumber\":\"INV-20260927-0015\"}",
+      "evidence": "GET /api/approvals/1 as sam",
+      "screenshot": "",
+      "codeRef": "backend/src/main/java/com/geneinvoice/approval/PendingChangeViews.java:200"
+    },
+    {
+      "id": "AUT-API-151",
+      "feature": "Automation and approvals",
+      "kind": "API",
+      "prd": "A3",
+      "title": "A held automation promise keeps its co-assignees: once another approver applies it, the promise has them",
+      "status": "PASS",
+      "severity": "",
+      "steps": "South customer (Collection POC sam) with invoice 7300; a South staff user \"coas\" (MANAGE/ALL South); admin MANUAL INVOICE rule CREATE_PROMISE FIELD Invoice.Balance, assignees [USER coas, COLLECTION_POC@CUSTOMER]; run -> held; sam approves; GET /api/promises/{id}",
+      "expected": "DESIGN §5.11 \"Promise co-assignees survive a hold\" + BE-19 AutomationHoldTest: one promise of 7300 with origin via approval; its assignees include coas and sam (the primary Collection POC)",
+      "actual": "{\"run\":[2,\"SUCCEEDED\"],\"effect\":[\"DONE\",{\"type\":\"PENDING_CHANGE\",\"id\":2,\"link\":\"/approvals/2\"},[]],\"approve\":[200,\"APPROVED\",null],\"promises\":[[1,7300,\"OPEN\"]],\"assignees\":[{\"token\":{\"type\":\"USER\",\"userId\":16},\"label\":\"COAS-MUK8XLTD6306\",\"people\":[{\"userId\":16,\"name\":\"COAS-MUK8XLTD6306\",\"primary\":true}],\"unresolved\":false},{\"token\":{\"type\":\"ROLE\",\"role\":\"COLLECTION_POC\",\"level\":\"CUSTOMER\"},\"label\":\"Collection POC (customer)\",\"people\":[{\"userId\":4,\"name\":\"Sam South\",\"primary\":true}],\"unresolved\":false}],\"coas\":16,\"sam\":4}",
+      "evidence": "GET /api/promises/1",
+      "screenshot": "",
+      "codeRef": ""
+    },
+    {
+      "id": "AUT-API-152",
+      "feature": "Automation and approvals",
+      "kind": "API",
+      "prd": "A5",
+      "title": "A held outcome is done once: running the ONCE_PER_RECORD rule again while (and after) its change is rejected makes no second pending change",
+      "status": "PASS",
+      "severity": "",
+      "steps": "South customer with invoice 6400; admin MANUAL rule CREATE_PROMISE FIXED 6000 ONCE_PER_RECORD; run 1 -> held; run 2; sam rejects; run 3; count pending changes for the customer",
+      "expected": "DESIGN §5.10 (\"A Held outcome is recorded as effect DONE, result_type PENDING_CHANGE, with its dedupe key\"): run 1 done 1 (PENDING_CHANGE); runs 2 and 3 done 0 / skipped 1; exactly one pending-change row for the customer (REJECTED after the reject); no promise",
+      "actual": "{\"runs\":[\"SUCCEEDED:d1/s0/f0\",\"SUCCEEDED:d0/s1/f0\",\"SUCCEEDED:d0/s1/f0\"],\"pc\":3,\"reject\":[200,\"REJECTED\"],\"pendingRows\":[\"3/REJECTED\"],\"promises\":0,\"effects2\":[[\"SKIPPED\",\"Already done for this record\"]],\"effects3\":[[\"SKIPPED\",\"Already done for this record\"]]}",
+      "evidence": "",
+      "screenshot": "",
+      "codeRef": ""
+    },
+    {
+      "id": "AUT-API-153",
+      "feature": "Durable execution",
+      "kind": "API",
+      "prd": "A5",
+      "title": "Every automation event the consumer wrote in this run has its counters set (MIG-R2-1 column defaults) and none is left unprocessed",
+      "status": "PASS",
+      "severity": "",
+      "steps": "SQL on e2e_automation: column defaults of automation_events.depth/claims; count rows with null counters; count rows not DONE/SKIPPED/CANCELLED older than 2 minutes",
+      "expected": "TRIAGE r2 B1 (MIG-R2-1): depth and claims default 0; no null counters; nothing stuck",
+      "actual": "{\"defaults\":[\"attempts=\",\"claims=0\",\"depth=0\"],\"nullCounters\":0,\"statuses\":[\"DONE=80\"],\"stuckOver2Min\":0}",
+      "evidence": "",
+      "screenshot": "",
+      "codeRef": ""
+    },
+    {
+      "id": "AUT-UI-22",
+      "feature": "Automation UI",
+      "kind": "UI",
+      "prd": "B2",
+      "title": "The approver opens a change an automation proposed: \"Raised by\" links the rule, and the Changes tab names the invoice by number",
+      "status": "PASS",
+      "severity": "",
+      "steps": "South customer (Collection POC sam) with invoice 6600; admin MANUAL rule CREATE_PROMISE FIELD Invoice.Balance; run -> held; sam opens /approvals/{pc}",
+      "expected": "DESIGN §7 approval detail + TRIAGE r2 APP-R2-1: \"Raised by\" shows \"Rule #<id>\"; the Changes tab shows a row \"Invoices\" with the invoice number, not \"#<id>\" or JSON; Approve is offered to sam",
+      "actual": "{\"pc\":4,\"ruleLink\":true,\"invoicesRow\":true,\"invoiceNumberShown\":true,\"rawIdShown\":false,\"screen\":\"Regions: All regions | All regions | View the figures as they stood at the end of an earlier day | Today | 22 | Notifications | Account | sam • E2E_REGIONAL | Keep the sidebar open | Dashboard | Tab 1 of 13 | Inbox | Tab 2 of 13 | Customers | Tab 3 of 13 | Invoices | Tab 4 of 13 | Payments | Tab 5 of 13 | Promises | Tab 6 of 13 | Disputes | Tab 7 of 13 | My tasks | Tab 8 of 13 | Tasks | Tab 9 of 13 | 2 | Approvals | Tab 10 of 13 | Automation | Tab 11 of 13 | Regions | Tab 12 of 13 | Products | Tab 13 of 13 | Back | Approval #4 | Promise of ₹6,600.00 by 2026-10-04 from AutoCust-muk8xsu3fbf9 | Awaiting approval | Approve | Reject | Change | Record | Customer | Create promise | New promise from AutoCust-muk8xsu3fbf9 | AutoCust-muk8xsu3fbf9 | Region | Promised amount | Requested | South | ₹6,600.00 against a limit of ₹5,000.00 | by System Administrator on 28 Sep 2026, 1:33 AM | Raised by | R…\"}",
+      "evidence": "apiErrors=[]",
+      "screenshot": "docs/regression/2026-09-28/data/runs/r3/automation/shots/AUT-UI-22-1.png",
+      "codeRef": ""
+    }
+  ]
+}
