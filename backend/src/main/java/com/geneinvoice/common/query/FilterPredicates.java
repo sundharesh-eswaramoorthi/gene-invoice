@@ -2,6 +2,7 @@ package com.geneinvoice.common.query;
 
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Strings;
+import com.geneinvoice.common.time.Today;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
@@ -65,7 +66,7 @@ final class FilterPredicates {
         if (def.type() != ColumnType.DATE) {
             throw new BadRequestException("relative is only valid on date columns");
         }
-        DateRange range = DateRange.preset(spec.first(), LocalDate.now(ZoneOffset.UTC));
+        DateRange range = DateRange.preset(spec.first(), Today.date());
         Class<?> javaType = path.getJavaType();
         List<Predicate> parts = new ArrayList<>();
         if (range.from() != null) {

@@ -1,5 +1,6 @@
 package com.geneinvoice.product;
 
+import com.geneinvoice.common.time.AppClock;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -37,6 +38,6 @@ public class Product {
 
     @PrePersist
     void onCreate() {
-        this.createdAt = Instant.now();
+        this.createdAt = AppClock.now();
     }
 }

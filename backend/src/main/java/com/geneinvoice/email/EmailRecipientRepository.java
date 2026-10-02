@@ -29,6 +29,15 @@ public interface EmailRecipientRepository extends JpaRepository<EmailRecipient, 
     @Modifying
     @Query("""
             update EmailRecipient r set r.read = true, r.readAt = :now
+             where r.id in :ids and r.userId = :userId
+               and r.field = com.geneinvoice.email.RecipientField.TO
+               and r.read = false
+            """)
+    int markReadAmong(@Param("ids") Collection<Long> ids, @Param("userId") Long userId, @Param("now") Instant now);
+
+    @Modifying
+    @Query("""
+            update EmailRecipient r set r.read = true, r.readAt = :now
              where r.id = :id and r.userId = :userId
                and r.field = com.geneinvoice.email.RecipientField.TO
                and r.read = false

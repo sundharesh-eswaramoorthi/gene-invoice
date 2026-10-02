@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/scope/view_scope.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
@@ -20,7 +21,9 @@ class RoleDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(roleDetailProvider(id));
-    final canEdit = ref.watch(currentUserProvider)?.has(Privileges.roleManage) ?? false;
+    // A past date is read only (D2).
+    final canEdit = !ref.watch(isHistoricalProvider) &&
+        (ref.watch(currentUserProvider)?.has(Privileges.roleManage) ?? false);
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),

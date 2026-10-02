@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/scope/as_of.dart';
 
 class DetailTab {
   final String label;
@@ -325,10 +326,13 @@ class ReadOnlyValue extends StatelessWidget {
       );
 }
 
-String notFoundMessage(Object error, String noun) {
+/// [asOf] is the past date being viewed, if any: a record with no version on that day was not
+/// there yet, or was already gone, which is not the same as not existing (B3).
+String notFoundMessage(Object error, String noun, {DateTime? asOf}) {
   if (error is DioException) {
     final status = error.response?.statusCode;
     if (status == 403) return 'You do not have permission to view this $noun.';
+    if (status == 404 && asOf != null) return 'This $noun did not exist on ${asOfLabel(asOf)}.';
     if (status == 404) return 'That $noun does not exist.';
   }
   return 'Could not load this $noun: ${apiErrorMessage(error)}';

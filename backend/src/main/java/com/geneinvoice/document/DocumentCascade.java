@@ -5,7 +5,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.time.Instant;
+import java.time.Clock;
 
 @Component
 @RequiredArgsConstructor
@@ -15,10 +15,11 @@ public class DocumentCascade {
     private final DocumentRepository repository;
     private final DocumentParentLock parentLock;
     private final CurrentUser currentUser;
+    private final Clock clock;
 
     public int onCustomerDeleted(Long customerId) {
         parentLock.lockCustomer(customerId);
-        int removed = repository.softDeleteForCustomer(customerId, currentUser.idOrNull(), Instant.now());
+        int removed = repository.softDeleteForCustomer(customerId, currentUser.idOrNull(), clock.instant());
         if (removed > 0) {
             log.info("Soft-deleted {} document(s) of deleted customer {}", removed, customerId);
         }

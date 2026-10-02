@@ -2,6 +2,8 @@ package com.geneinvoice.email;
 
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.query.PageResponse;
+import com.geneinvoice.common.scope.AsOfAware;
+import com.geneinvoice.common.scope.AsOfIgnored;
 import com.geneinvoice.privilege.Privileges;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
+@AsOfIgnored
 @RequestMapping("/api/emails")
 @RequiredArgsConstructor
 public class EmailController {
@@ -33,6 +36,7 @@ public class EmailController {
     }
 
     @PostMapping("/preview")
+    @AsOfIgnored
     @PreAuthorize("hasAuthority('" + Privileges.EMAIL_SEND + "')")
     public EmailDtos.PreviewDto preview(@RequestBody EmailDtos.SendEmailRequest req) {
         return service.preview(req);
@@ -51,6 +55,7 @@ public class EmailController {
     }
 
     @GetMapping
+    @AsOfAware
     @PreAuthorize("hasAuthority('" + Privileges.EMAIL_VIEW + "')")
     public PageResponse<EmailDtos.EmailDto> list(@RequestParam String entityType,
                                                  @RequestParam Long entityId,
@@ -60,6 +65,7 @@ public class EmailController {
     }
 
     @GetMapping("/{id}")
+    @AsOfAware
     @PreAuthorize("hasAuthority('" + Privileges.EMAIL_VIEW + "')")
     public EmailDtos.EmailDto get(@PathVariable Long id) {
         return service.get(id);
@@ -78,6 +84,7 @@ public class EmailController {
     }
 
     @PostMapping("/sync")
+    @AsOfIgnored
     @PreAuthorize("hasAuthority('" + Privileges.EMAIL_VIEW + "')")
     public EmailDtos.SyncResultDto sync() {
         return service.sync();

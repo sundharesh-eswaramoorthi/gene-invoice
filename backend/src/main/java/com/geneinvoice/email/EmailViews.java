@@ -2,6 +2,7 @@ package com.geneinvoice.email;
 
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.query.PredicateFactory;
+import com.geneinvoice.common.scope.AsOf;
 import com.geneinvoice.email.EmailDtos.Participant;
 import com.geneinvoice.email.EmailDtos.Source;
 import com.geneinvoice.privilege.Privileges;
@@ -84,7 +85,7 @@ public class EmailViews {
         Boolean readByMe = recipients.stream()
                 .filter(r -> r.getField() == RecipientField.TO && viewer.userId().equals(r.getUserId()))
                 .findFirst().map(EmailRecipient::isRead).orElse(null);
-        boolean canRetry = EmailDeliveryRollup.canRetry(e, recipients)
+        boolean canRetry = !AsOf.active() && EmailDeliveryRollup.canRetry(e, recipients)
                 && viewer.canSend() && canSeeRecord && mayRetry(e, viewer);
         List<EmailDtos.Unresolved> unresolved = e.getUnresolved() == null ? List.of()
                 : Arrays.stream(e.getUnresolved().split(",")).map(String::trim).filter(t -> !t.isEmpty())
@@ -100,7 +101,7 @@ public class EmailViews {
                 participants(e, recipients, RecipientField.TO, viewer),
                 participants(e, recipients, RecipientField.CC, viewer),
                 unresolved, sentBy(e, senders, viewer), deliveredFrom(e, viewer), outcome.error(), e.getAttempts(),
-                e.getOccurredAt(), outcome.sentAt(), canRetry, canSeeRecord, readByMe);
+                e.getOccurredAt(), outcome.sentAt(), canRetry, !AsOf.active() && canSeeRecord, readByMe);
     }
 
     private record Outcome(EmailStatus status, String error, Instant sentAt) {}

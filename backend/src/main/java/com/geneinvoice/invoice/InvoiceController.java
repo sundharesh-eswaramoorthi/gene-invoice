@@ -10,11 +10,18 @@ import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.Outcomes;
+import com.geneinvoice.approval.PendingChangeViews;
+import com.geneinvoice.common.scope.AsOfAware;
+import com.geneinvoice.common.scope.AsOfIgnored;
 import com.geneinvoice.poc.PocType;
 import com.geneinvoice.poc.ScopeResolver;
+import com.geneinvoice.region.RecordAccess;
+import com.geneinvoice.region.Region;
+import com.geneinvoice.customer.Customer;
+import com.geneinvoice.customer.CustomerService;
 import com.geneinvoice.privilege.Privileges;
 import jakarta.servlet.http.HttpServletRequest;
-import com.geneinvoice.user.UserRepository;
 import com.geneinvoice.auth.CurrentUser;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -29,15 +36,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 @RestController
+@AsOfAware
 @RequestMapping("/api/invoices")
 @RequiredArgsConstructor
 public class InvoiceController {
 
     private final InvoiceService service;
     private final ScopeResolver scopeResolver;
+    private final RecordAccess recordAccess;
+    private final CustomerService customerService;
     private final BulkExecutor bulkExecutor;
     private final CurrentUser currentUser;
-    private final UserRepository userRepository;
+    private final PendingChangeViews pendingChangeViews;
 
     private TableSchema schema() {
         return TableSchemas.INVOICES.visibleTo(currentUser.isCustomer());
@@ -67,10 +77,11 @@ public class InvoiceController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public InvoiceDtos.InvoiceDto get(@PathVariable Long id) {
-        return InvoiceDtos.InvoiceDto.from(service.get(id), scopeResolver.canSeePoc());
+        return InvoiceDtos.InvoiceDto.from(service.get(id), scopeResolver.canSeePoc(), recordAccess);
     }
 
     @GetMapping("/due-date-preview")
+    @AsOfIgnored
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
     public InvoiceDtos.DueDatePreview dueDatePreview(
             @RequestParam Long customerId,
@@ -80,21 +91,27 @@ public class InvoiceController {
 
     @PostMapping
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
-    public InvoiceDtos.InvoiceDto create(@Valid @RequestBody InvoiceDtos.CreateInvoiceRequest req) {
-        return InvoiceDtos.InvoiceDto.from(service.create(req), scopeResolver.canSeePoc());
+    public ResponseEntity<Object> create(@Valid @RequestBody InvoiceDtos.CreateInvoiceRequest req) {
+        // Above the region's limit: 202 and the pending change, no invoice and no number (§6.6).
+        return Outcomes.respond(service.createOrHold(req),
+                inv -> InvoiceDtos.InvoiceDto.from(inv, scopeResolver.canSeePoc(), recordAccess), pendingChangeViews);
     }
 
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
-    public InvoiceDtos.InvoiceDto update(@PathVariable Long id,
+    public ResponseEntity<Object> update(@PathVariable Long id,
                                          @Valid @RequestBody InvoiceDtos.UpdateInvoiceRequest req) {
-        return InvoiceDtos.InvoiceDto.from(service.update(id, req), scopeResolver.canSeePoc());
+        // A due date moved later above the region's limit: 202, and the invoice as it was (§6.6).
+        return Outcomes.respond(service.updateOrHold(id, req),
+                inv -> InvoiceDtos.InvoiceDto.from(inv, scopeResolver.canSeePoc(), recordAccess), pendingChangeViews);
     }
 
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
-    public InvoiceDtos.InvoiceDto cancel(@PathVariable Long id) {
-        return InvoiceDtos.InvoiceDto.from(service.cancel(id), scopeResolver.canSeePoc());
+    public ResponseEntity<Object> cancel(@PathVariable Long id) {
+        // Above the region's limit: 202 and the pending change, the invoice untouched (§6.6).
+        return Outcomes.respond(service.cancelOrHold(id),
+                inv -> InvoiceDtos.InvoiceDto.from(inv, scopeResolver.canSeePoc(), recordAccess), pendingChangeViews);
     }
 
     public static final List<String> BULK_ACTIONS = List.of("CANCEL", "REASSIGN_SALES_POC");
@@ -102,19 +119,23 @@ public class InvoiceController {
     @PostMapping("/bulk")
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_MANAGE + "')")
     public BulkDtos.BulkResult bulk(@Valid @RequestBody BulkDtos.BulkRequest req) {
-        List<Long> ids = resolveIds(req);
+        // Rows the caller sees but may not change in their region drop out as not reachable.
+        List<Long> ids = "REASSIGN_SALES_POC".equals(req.action())
+                ? resolveIds(req, ScopeResolver.Access.MANAGE, Privileges.POC_ASSIGN)
+                : resolveIds(req, ScopeResolver.Access.MANAGE);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
 
         // A row the action does not apply to — already cancelled, or holding a payment — is one
         // that did not qualify, not one that went wrong, and is reported as skipped like every
         // other list's does (TBL-05).
         return switch (req.action()) {
-            case "CANCEL" -> bulkExecutor.run(req, ids, truncated,
-                    BulkExecutor.eligibility(service::cancel));
+            // A cancel above the region's limit is held, and reported under pending rather than as done.
+            case "CANCEL" -> bulkExecutor.runOutcomes(req, ids, truncated,
+                    BulkExecutor.eligibilityOutcome(service::cancelOrHold));
             case "REASSIGN_SALES_POC" -> {
                 Long userId = req.longParam("userId");
                 if (userId == null) throw new BadRequestException("REASSIGN_SALES_POC requires params.userId");
-                if (!currentUser.canAssignPoc(userRepository)) {
+                if (!currentUser.canAssignPocAnywhere()) {
                     throw new BadRequestException("You may not change the Sales POC");
                 }
                 yield bulkExecutor.run(req, ids, truncated,
@@ -126,10 +147,11 @@ public class InvoiceController {
     }
 
     @PostMapping("/export")
+    @AsOfAware
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.INVOICE_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         boolean poc = scopeResolver.canSeePoc();
-        List<Long> ids = resolveIds(req);
+        List<Long> ids = resolveIds(req, ScopeResolver.Access.VIEW);
         List<Invoice> invoices = service.allMatching(
                         TableQuery.parseUnpaged(schema(), req.sort(), req.filters())).stream()
                 .filter(i -> ids.contains(i.getId()))
@@ -156,9 +178,9 @@ public class InvoiceController {
                 .body(Csv.of(headers, rows));
     }
 
-    private List<Long> resolveIds(BulkDtos.BulkRequest req) {
+    private List<Long> resolveIds(BulkDtos.BulkRequest req, ScopeResolver.Access access, String... alsoRequired) {
         TableQuery query = TableQuery.parseUnpaged(schema(), req.sort(), req.filters());
-        List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT);
+        List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT, access, alsoRequired);
         if (req.allMatching()) return permitted;
         if (req.ids() == null || req.ids().isEmpty()) {
             throw new BadRequestException("Provide ids or set selectAllMatchingFilter");
@@ -174,8 +196,14 @@ public class InvoiceController {
     }
 
     @GetMapping("/assignable-check")
+    @AsOfIgnored
     @PreAuthorize("hasAuthority('" + Privileges.INVOICE_VIEW + "')")
-    public java.util.Map<String, Boolean> assignableCheck() {
-        return java.util.Map.of("sales", scopeResolver.isAssignableAs(PocType.SALES));
+    public java.util.Map<String, Boolean> assignableCheck(@RequestParam(required = false) Long customerId) {
+        if (customerId == null) {
+            return java.util.Map.of("sales", scopeResolver.isAssignableAs(PocType.SALES));
+        }
+        // For a customer's invoice: whether the caller may be its Sales POC in that customer's region.
+        Customer customer = customerService.get(customerId);
+        return java.util.Map.of("sales", scopeResolver.isAssignableIn(PocType.SALES, Region.idOf(customer.getRegion())));
     }
 }

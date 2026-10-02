@@ -1,10 +1,14 @@
 package com.geneinvoice.payment;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceStatus;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.Money;
 import com.geneinvoice.poc.PocDtos;
+import com.geneinvoice.poc.ScopeResolver;
+import com.geneinvoice.region.RecordAccess;
+import com.geneinvoice.region.Region;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -48,13 +52,24 @@ public class PaymentDtos {
             Instant paidAt, PaymentStatus status, List<PaidInvoiceDto> invoices,
             BigDecimal customerCreditBalance,
             PocDtos.PocUserDto collectionPoc,
-            Boolean pocMissing
+            Boolean pocMissing,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Long regionId,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String regionCode,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String regionName,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean canManage,
+            /** Whether a change waits for approval on it; filled by the list only (§5.11.9). */
+            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean pendingApproval
     ) {
+        /** An audit snapshot: no capability flags, so a caller's rights never land in audit JSON. */
         public static PaymentDto from(Payment p) {
-            return from(p, true);
+            return from(p, true, null);
         }
 
         public static PaymentDto from(Payment p, boolean includePoc) {
+            return from(p, includePoc, null);
+        }
+
+        public static PaymentDto from(Payment p, boolean includePoc, RecordAccess access) {
             return new PaymentDto(
                     p.getId(),
                     p.getCustomer().getId(),
@@ -68,8 +83,19 @@ public class PaymentDtos {
                     p.getAllocations().stream().map(PaidInvoiceDto::from).toList(),
                     p.getCustomer().getCreditBalance(),
                     includePoc ? PocDtos.PocUserDto.from(p.getCollectionPoc()) : null,
-                    includePoc ? p.getCollectionPoc() == null : null
+                    includePoc ? p.getCollectionPoc() == null : null,
+                    Region.idOf(p.getRegion()),
+                    Region.codeOf(p.getRegion()),
+                    Region.nameOf(p.getRegion()),
+                    access == null ? null : access.canManage(ScopeResolver.Kind.PAYMENT, Region.idOf(p.getRegion())),
+                    null
             );
+        }
+
+        public PaymentDto withPendingApproval(Boolean pending) {
+            return new PaymentDto(id, customerId, customerName, amount, creditApplied, method, notes, paidAt, status,
+                    invoices, customerCreditBalance, collectionPoc, pocMissing, regionId, regionCode, regionName,
+                    canManage, pending);
         }
     }
 

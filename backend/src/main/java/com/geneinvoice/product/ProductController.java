@@ -15,6 +15,8 @@ import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.common.scope.AsOfAware;
+import com.geneinvoice.history.Records;
 import com.geneinvoice.privilege.Privileges;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -32,16 +34,16 @@ import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 
 @RestController
+@AsOfAware
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
 public class ProductController {
 
     private final ProductRepository repository;
+    private final Records records;
     private final TableQueryExecutor queryExecutor;
     private final BulkExecutor bulkExecutor;
     private final AuditService auditService;
@@ -76,10 +78,11 @@ public class ProductController {
                 query, result.total(), List.of());
     }
 
+    /** The product, or as of a date the product as it was then (not found if it did not exist yet). */
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.PRODUCT_VIEW + "')")
     public ProductDto get(@PathVariable Long id) {
-        return repository.findById(id).map(ProductDto::from)
+        return records.find(Product.class, id).map(ProductDto::from)
                 .orElseThrow(() -> new NotFoundException("Product not found"));
     }
 
@@ -156,12 +159,12 @@ public class ProductController {
     }
 
     @PostMapping("/export")
+    @AsOfAware
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.PRODUCT_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         List<Long> ids = resolveIds(req);
-        // findAllById ignores order, so put the rows back the way the filter and sort asked (D-41).
-        List<Product> products = new ArrayList<>(repository.findAllById(ids));
-        products.sort(Comparator.comparingInt(p -> ids.indexOf(p.getId())));
+        // In the order the filter and sort asked (D-41); as of a date, the products as they were then.
+        List<Product> products = records.findAll(Product.class, ids);
         String csv = Csv.of(List.of("Id", "Name", "Description", "Price", "Active"),
                 products.stream().map(p -> List.<Object>of(p.getId(), p.getName(),
                         p.getDescription() == null ? "" : p.getDescription(),

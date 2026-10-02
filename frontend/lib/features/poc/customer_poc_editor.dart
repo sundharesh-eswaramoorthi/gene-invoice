@@ -58,6 +58,7 @@ class _CustomerPocEditorState extends ConsumerState<CustomerPocEditor> {
               children: [
                 PocPicker(
                   type: widget.type,
+                  customerId: widget.customerId,
                   value: picked,
                   required: true,
                   onChanged: (u) => setState(() => picked = u),

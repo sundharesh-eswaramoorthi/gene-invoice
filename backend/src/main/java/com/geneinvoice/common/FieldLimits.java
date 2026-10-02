@@ -26,4 +26,6 @@ public final class FieldLimits {
     public static final int GMAIL_CLIENT_ID = 300;
     public static final int GMAIL_CLIENT_SECRET = 300;
     public static final int GMAIL_REFRESH_TOKEN = 2000;
+    public static final int TASK_TITLE = 200;
+    public static final int TASK_DESCRIPTION = 2000;
 }

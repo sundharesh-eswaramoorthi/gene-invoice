@@ -15,10 +15,9 @@ import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
 import com.geneinvoice.customer.CustomerService;
 import com.geneinvoice.dispute.Dispute;
-import com.geneinvoice.dispute.DisputeRepository;
 import com.geneinvoice.dispute.DisputeService;
 import com.geneinvoice.dispute.DisputeStatus;
-import com.geneinvoice.dispute.DisputeTargetType;
+import com.geneinvoice.history.Records;
 import com.geneinvoice.email.EmailDtos.EmailToken;
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceRepository;
@@ -31,10 +30,9 @@ import com.geneinvoice.poc.PocType;
 import com.geneinvoice.poc.ScopeResolver;
 import com.geneinvoice.privilege.Privileges;
 import com.geneinvoice.product.Product;
-import com.geneinvoice.product.ProductRepository;
 import com.geneinvoice.promise.PaymentPromise;
-import com.geneinvoice.promise.PaymentPromiseRepository;
 import com.geneinvoice.promise.PaymentPromiseService;
+import com.geneinvoice.region.Region;
 import com.geneinvoice.role.Role;
 import com.geneinvoice.role.RoleRepository;
 import com.geneinvoice.user.User;
@@ -125,9 +123,6 @@ public class EmailTargets {
     private final CustomerRepository customerRepository;
     private final InvoiceRepository invoiceRepository;
     private final PaymentRepository paymentRepository;
-    private final PaymentPromiseRepository promiseRepository;
-    private final DisputeRepository disputeRepository;
-    private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PocService pocService;
@@ -135,6 +130,7 @@ public class EmailTargets {
     private final TableQueryExecutor queryExecutor;
     private final EmailDirectory directory;
     private final CurrentUser currentUser;
+    private final Records records;
 
     public record Person(Long userId, String name, String address, Long customerId, boolean internal) {
         static Person of(User u) {
@@ -143,7 +139,8 @@ public class EmailTargets {
         }
     }
 
-    public record Target(EmailEntityType type, Long id, String label, Long customerId,
+    /** {@code regionId} is the record's region, and null for a product, a user or a role, which have none. */
+    public record Target(EmailEntityType type, Long id, String label, Long customerId, Long regionId,
                          Map<RoleRef, List<Person>> holders, List<Person> customerEmails) {
 
         public String link() {
@@ -187,6 +184,11 @@ public class EmailTargets {
     }
 
     public List<RoleRef> rolesOffered(EmailEntityType type) {
+        return offeredRoles(type);
+    }
+
+    /** The roles offered on a kind of record, customer level first; needs no instance (§5.9.1, CF-3). */
+    public static List<RoleRef> offeredRoles(EmailEntityType type) {
         return ROLES_OFFERED.get(type);
     }
 
@@ -224,14 +226,32 @@ public class EmailTargets {
         return describe(type, loadScoped(type, id));
     }
 
+    /**
+     * The record as it is, whoever is signed in and whether or not they could open it: for telling the people a
+     * rule or an approval assigned (§5.10.5, §5.10.12), who are checked one by one. Empty when it does not exist.
+     * Never throws for a missing record, so it can be asked inside a write that must go on.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Target> findUnscoped(EmailEntityType type, Long id) {
+        return loadUnscoped(type, id).map(entity -> describe(type, entity));
+    }
+
+    /** A record to send email about: visible (404), and in a region where the caller may send (403). */
+    @Transactional(readOnly = true)
+    public Target loadForSend(EmailEntityType type, Long id) {
+        Target target = load(type, id);
+        if (target.regionId() != null) currentUser.requireIn(Privileges.EMAIL_SEND, target.regionId());
+        return target;
+    }
+
     private Optional<?> loadUnscoped(EmailEntityType type, Long id) {
         return switch (type) {
-            case CUSTOMER -> customerRepository.findById(id);
-            case INVOICE -> invoiceRepository.findById(id);
-            case PAYMENT -> paymentRepository.findById(id);
-            case PROMISE -> promiseRepository.findById(id);
-            case DISPUTE -> disputeRepository.findById(id);
-            case PRODUCT -> productRepository.findById(id);
+            case CUSTOMER -> records.find(Customer.class, id);
+            case INVOICE -> records.find(Invoice.class, id);
+            case PAYMENT -> records.find(Payment.class, id);
+            case PROMISE -> records.find(PaymentPromise.class, id);
+            case DISPUTE -> records.find(Dispute.class, id);
+            case PRODUCT -> records.find(Product.class, id);
             case USER -> userRepository.findById(id);
             case ROLE -> roleRepository.findById(id);
         };
@@ -244,7 +264,7 @@ public class EmailTargets {
             case PAYMENT -> paymentService.get(id);
             case PROMISE -> promiseService.get(id);
             case DISPUTE -> disputeService.get(id);
-            case PRODUCT -> productRepository.findById(id)
+            case PRODUCT -> records.find(Product.class, id)
                     .orElseThrow(() -> new NotFoundException("Product not found"));
             case USER -> userRepository.findById(id)
                     .orElseThrow(() -> new NotFoundException("User not found"));
@@ -257,62 +277,76 @@ public class EmailTargets {
         return switch (type) {
             case CUSTOMER -> {
                 Customer c = (Customer) entity;
-                yield target(type, c.getId(), "Customer " + c.getName(), c.getId(), Map.of());
+                yield target(type, c.getId(), "Customer " + c.getName(), c.getId(), Region.idOf(c.getRegion()),
+                        Map.of());
             }
             case INVOICE -> {
                 Invoice i = (Invoice) entity;
                 yield target(type, i.getId(), "Invoice " + i.getInvoiceNumber(), i.getCustomer().getId(),
-                        Map.of(SALES_POC, Optional.ofNullable(i.getSalesPoc())));
+                        Region.idOf(i.getRegion()), Map.of(SALES_POC, Optional.ofNullable(i.getSalesPoc())));
             }
             case PAYMENT -> {
                 Payment p = (Payment) entity;
                 yield target(type, p.getId(), "Payment #" + p.getId(), p.getCustomer().getId(),
-                        Map.of(COLLECTION_POC, Optional.ofNullable(p.getCollectionPoc())));
+                        Region.idOf(p.getRegion()), Map.of(COLLECTION_POC, Optional.ofNullable(p.getCollectionPoc())));
             }
             case PROMISE -> {
                 PaymentPromise p = (PaymentPromise) entity;
                 yield target(type, p.getId(), "Promise #" + p.getId(), p.getCustomer().getId(),
-                        Map.of(COLLECTION_POC, Optional.ofNullable(p.getCollectionPoc())));
+                        Region.idOf(p.getRegion()), Map.of(COLLECTION_POC, Optional.ofNullable(p.getCollectionPoc())));
             }
             case DISPUTE -> {
                 Dispute d = (Dispute) entity;
-                yield target(type, d.getId(), "Dispute #" + d.getId(), d.getCustomerId(), disputeOwnFields(d));
+                yield target(type, d.getId(), "Dispute #" + d.getId(), d.getCustomerId(), Region.idOf(d.getRegion()),
+                        disputeOwnFields(d));
             }
             case PRODUCT -> {
                 Product p = (Product) entity;
-                yield target(type, p.getId(), "Product " + p.getName(), null, Map.of());
+                yield target(type, p.getId(), "Product " + p.getName(), null, null, Map.of());
             }
             case USER -> {
                 User u = (User) entity;
-                yield target(type, u.getId(), "User " + u.getUsername(), u.getCustomerId(), Map.of());
+                yield target(type, u.getId(), "User " + u.getUsername(), u.getCustomerId(), null, Map.of());
             }
             case ROLE -> {
                 Role r = (Role) entity;
-                yield target(type, r.getId(), "Role " + r.getName(), null, Map.of());
+                yield target(type, r.getId(), "Role " + r.getName(), null, null, Map.of());
             }
         };
     }
 
+    /** A dispute's own POC is its target's; a dispute on the customer as a whole has none (S2). */
     private Map<EmailRole, Optional<User>> disputeOwnFields(Dispute d) {
-        return d.getTargetType() == DisputeTargetType.INVOICE
-                ? Map.of(SALES_POC, invoiceRepository.findById(d.getTargetId()).map(Invoice::getSalesPoc))
-                : Map.of(COLLECTION_POC, paymentRepository.findById(d.getTargetId()).map(Payment::getCollectionPoc));
+        return switch (d.getTargetType()) {
+            case INVOICE -> Map.of(SALES_POC, records.find(Invoice.class, d.getTargetId()).map(Invoice::getSalesPoc));
+            case PAYMENT -> Map.of(COLLECTION_POC,
+                    records.find(Payment.class, d.getTargetId()).map(Payment::getCollectionPoc));
+            case CUSTOMER -> Map.of();
+        };
     }
 
-    private Target target(EmailEntityType type, Long id, String label, Long customerId,
+    private Target target(EmailEntityType type, Long id, String label, Long customerId, Long regionId,
                           Map<EmailRole, Optional<User>> ownFields) {
-        return new Target(type, id, EmailText.fit(label, Email.LABEL_MAX), customerId,
-                holders(type, customerId, ownFields), customerEmails(customerId));
+        return new Target(type, id, EmailText.fit(label, Email.LABEL_MAX), customerId, regionId,
+                holders(type, customerId, regionId, ownFields), customerEmails(customerId));
     }
 
-    private Map<RoleRef, List<Person>> holders(EmailEntityType type, Long customerId,
+    /**
+     * Who holds each role on the record. Someone with no access to the record's region holds none of them
+     * (§5.6.7): the customer's seats are filtered by {@link PocService#activeHoldersByType}, and the record's own
+     * POC fields here.
+     */
+    private Map<RoleRef, List<Person>> holders(EmailEntityType type, Long customerId, Long regionId,
                                                Map<EmailRole, Optional<User>> ownFields) {
         Map<RoleRef, List<Person>> holders = new LinkedHashMap<>();
         Map<PocType, List<User>> book = null;
+        List<User> ownPeople = ownFields.values().stream().flatMap(Optional::stream).filter(User::isActive).toList();
+        List<User> ownReachable = regionId == null ? ownPeople : pocService.withRegionAccess(ownPeople, regionId);
         for (RoleRef ref : ROLES_OFFERED.get(type)) {
             List<User> people;
             if (ref.level() == RoleLevel.RECORD) {
-                people = ownFields.getOrDefault(ref.role(), Optional.empty()).stream().toList();
+                people = ownFields.getOrDefault(ref.role(), Optional.empty()).stream()
+                        .filter(ownReachable::contains).toList();
             } else if (customerId == null) {
                 people = List.of();
             } else {
@@ -341,16 +375,11 @@ public class EmailTargets {
 
     public List<Long> bulkIds(EmailEntityType type, BulkDtos.BulkRequest req) {
         List<Long> permitted = switch (type) {
-            case CUSTOMER -> permittedIds(Customer.class, TableSchemas.CUSTOMERS, req,
-                    scopeResolver.forCustomers().predicates());
-            case INVOICE -> permittedIds(Invoice.class, TableSchemas.INVOICES, req,
-                    scopeResolver.forInvoices().predicates());
-            case PAYMENT -> permittedIds(Payment.class, TableSchemas.PAYMENTS, req,
-                    scopeResolver.forPayments().predicates());
-            case PROMISE -> permittedIds(PaymentPromise.class, TableSchemas.PROMISES, req,
-                    scopeResolver.forPromises().predicates());
-            case DISPUTE -> permittedIds(Dispute.class, TableSchemas.DISPUTES, req,
-                    scopeResolver.forDisputes().predicates());
+            case CUSTOMER -> permittedIds(Customer.class, TableSchemas.CUSTOMERS, req, sendable(ScopeResolver.Kind.CUSTOMER));
+            case INVOICE -> permittedIds(Invoice.class, TableSchemas.INVOICES, req, sendable(ScopeResolver.Kind.INVOICE));
+            case PAYMENT -> permittedIds(Payment.class, TableSchemas.PAYMENTS, req, sendable(ScopeResolver.Kind.PAYMENT));
+            case PROMISE -> permittedIds(PaymentPromise.class, TableSchemas.PROMISES, req, sendable(ScopeResolver.Kind.PROMISE));
+            case DISPUTE -> permittedIds(Dispute.class, TableSchemas.DISPUTES, req, sendable(ScopeResolver.Kind.DISPUTE));
             case PRODUCT -> permittedIds(Product.class, TableSchemas.PRODUCTS, req, List.of());
             case USER -> permittedIds(User.class, TableSchemas.USERS, req, List.of());
             case ROLE -> permittedIds(Role.class, TableSchemas.ROLES, req, List.of());
@@ -361,6 +390,12 @@ public class EmailTargets {
         }
         Set<Long> reachable = new HashSet<>(permitted);
         return req.ids().stream().filter(reachable::contains).toList();
+    }
+
+    /** The records of a kind the caller sees, in the regions asked about, where they may also send email. */
+    private List<PredicateFactory> sendable(ScopeResolver.Kind kind) {
+        return scopeResolver.scope(kind, ScopeResolver.Access.VIEW, ScopeResolver.Reach.SELECTED,
+                Privileges.EMAIL_SEND).predicates();
     }
 
     private <T> List<Long> permittedIds(Class<T> entity, TableSchema schema, BulkDtos.BulkRequest req,
@@ -475,20 +510,38 @@ public class EmailTargets {
 
     private EmailDtos.Suggestion disputeSuggestion(Dispute d, Event event) {
         String customerName = customerRepository.findById(d.getCustomerId()).map(Customer::getName).orElse("The customer");
-        String target = d.getTargetType() == DisputeTargetType.INVOICE
-                ? invoiceRepository.findById(d.getTargetId())
-                        .map(i -> "Invoice " + i.getInvoiceNumber()).orElse("Invoice #" + d.getTargetId())
-                : "Payment #" + d.getTargetId();
+        String target = switch (d.getTargetType()) {
+            case INVOICE -> invoiceRepository.findById(d.getTargetId())
+                    .map(i -> "Invoice " + i.getInvoiceNumber()).orElse("Invoice #" + d.getTargetId());
+            case PAYMENT -> "Payment #" + d.getTargetId();
+            case CUSTOMER -> "Customer " + customerName;
+        };
         if (event == Event.CREATED) {
             List<EmailToken> to = new ArrayList<>(List.of(
                     EmailToken.role(RoleRef.customer(CUSTOMER_SUCCESS_POC)),
                     EmailToken.role(RoleRef.customer(COLLECTION_POC))));
-            to.add(EmailToken.role(RoleRef.record(d.getTargetType() == DisputeTargetType.INVOICE
-                    ? SALES_POC : COLLECTION_POC)));
+            switch (d.getTargetType()) {
+                case INVOICE -> to.add(EmailToken.role(RoleRef.record(SALES_POC)));
+                case PAYMENT -> to.add(EmailToken.role(RoleRef.record(COLLECTION_POC)));
+                case CUSTOMER -> { }
+            }
+            // An internal dispute is staff's own review: nothing in it speaks for the customer.
             return new EmailDtos.Suggestion("Dispute #" + d.getId() + " raised on " + target,
-                    customerName + " has raised a dispute on " + target + ".\n\n"
+                    (d.isInternal() ? "A dispute has been raised for review on " + target
+                            : customerName + " has raised a dispute on " + target) + ".\n\n"
                             + "Reason:\n" + d.getReason(),
                     to);
+        }
+        if (d.isInternal()) {
+            // Decided internal work is reported to its team, never to the customer, who never saw it.
+            String outcome = d.getStatus() == DisputeStatus.APPROVED ? "approved"
+                    : d.getStatus() == DisputeStatus.DENIED ? "denied" : "updated";
+            return new EmailDtos.Suggestion("Dispute #" + d.getId() + " " + outcome,
+                    "The dispute raised for review on " + target + " has been " + outcome + "."
+                            + (d.getAdminNotes() == null || d.getAdminNotes().isBlank()
+                                    ? "" : "\n\nNotes:\n" + d.getAdminNotes().trim()),
+                    List.of(EmailToken.role(RoleRef.customer(CUSTOMER_SUCCESS_POC)),
+                            EmailToken.role(RoleRef.customer(COLLECTION_POC))));
         }
         String outcome = d.getStatus() == DisputeStatus.APPROVED ? "approved"
                 : d.getStatus() == DisputeStatus.DENIED ? "denied" : "updated";

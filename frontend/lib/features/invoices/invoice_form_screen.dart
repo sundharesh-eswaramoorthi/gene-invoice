@@ -5,14 +5,18 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/pending_reply.dart';
 import '../../core/field_limits.dart';
 import '../../core/format.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/payment_term.dart';
+import '../../shared/models/privileges.dart';
 import '../../shared/models/product.dart';
 import '../../shared/widgets/search_picker_field.dart';
+import '../auth/auth_controller.dart';
 import '../customers/customers_screen.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
@@ -44,7 +48,11 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   final List<_LineDraft> _lines = [_LineDraft()];
   final _notesCtrl = TextEditingController();
   PocUser? _salesPoc;
-  bool _pocPreselected = false;
+  /// Which customer (-1 for none yet) the form last offered the user themself as Sales POC for.
+  /// Who may hold the seat depends on the customer's region (§6.8), so a new customer asks again
+  /// — until the user picks someone by hand.
+  int? _preselectedFor;
+  bool _pocChosen = false;
   bool _saving = false;
   bool _submitted = false;
   bool _notify = false;
@@ -69,17 +77,19 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
 
   double get _total => _lines.fold<double>(0, (sum, l) => sum + l.lineTotal);
 
-  void _preselectSelf(List<PocUser> assignable, int? myUserId) {
-    if (_pocPreselected || myUserId == null) return;
-    _pocPreselected = true;
+  void _preselectSelf(List<PocUser> assignable, int? myUserId, int? customerId) {
+    final key = customerId ?? -1;
+    if (_pocChosen || myUserId == null || _preselectedFor == key) return;
+    final hadOne = _preselectedFor != null;
+    _preselectedFor = key;
+    PocUser? me;
     for (final u in assignable) {
-      if (u.id == myUserId) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) setState(() => _salesPoc = u);
-        });
-        return;
-      }
+      if (u.id == myUserId) me = u;
     }
+    if (me == null && !hadOne) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_pocChosen) setState(() => _salesPoc = me);
+    });
   }
 
   bool get _linesValid =>
@@ -153,6 +163,7 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
   }
 
   Future<void> _submit() async {
+    if (ref.read(isHistoricalProvider)) return;
     setState(() {
       _submitted = true;
       _error = null;
@@ -179,6 +190,17 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                 })
             .toList(),
       });
+      // A held create names no invoice: it has none until someone approves it (§6.6).
+      final held = pendingFrom(res);
+      if (held != null) {
+        invalidateApprovals(ref);
+        if (!mounted) return;
+        showSentForApproval(context, held);
+        setState(() => _saving = false);
+        // Nothing to email about yet; the change itself is where this now stands.
+        context.go(held.id == null ? '/invoices' : '/approvals/${held.id}');
+        return;
+      }
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);
       var compose = EmailComposeOutcome.closed;
@@ -202,12 +224,16 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // A past date is read only (D2). The draft stays in this state, so it is all still here when
+    // the user comes back to today.
+    if (ref.watch(isHistoricalProvider)) return const _ReadOnlyNotice();
+
     final scope = ref.watch(myPocScopeProvider).valueOrNull;
     final canSeePoc = ref.watch(canSeePocProvider);
 
     if (canSeePoc && scope != null) {
-      ref.watch(assignablePocsProvider(const AssignableQuery(PocType.SALES, '')))
-          .whenData((users) => _preselectSelf(users, scope.userId));
+      ref.watch(assignablePocsProvider(AssignableQuery(PocType.SALES, '', customerId: _customer?.id)))
+          .whenData((users) => _preselectSelf(users, scope.userId, _customer?.id));
     }
 
     return Scaffold(
@@ -226,7 +252,10 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
                 value: _customer,
                 labelOf: (c) => c.name,
                 subtitleOf: (c) => c.email,
-                search: (q) => searchCustomers(ref.read(dioProvider), q),
+                // Only customers in regions where this user may raise invoices (§7.5).
+                search: (q) => searchCustomers(ref.read(dioProvider), q,
+                    regionIds:
+                        regionsForPicker(ref.read(currentUserProvider), Privileges.invoiceManage)),
                 errorText: _submitted && _customer == null ? 'Pick a customer' : null,
                 onChanged: _customerPicked,
               ),
@@ -236,12 +265,16 @@ class _InvoiceFormScreenState extends ConsumerState<InvoiceFormScreen> {
               if (canSeePoc)
                 PocPicker(
                   type: PocType.SALES,
+                  customerId: _customer?.id,
                   value: _salesPoc,
                   required: true,
                   errorText: _submitted && _salesPoc == null
                       ? 'A Sales POC is required before this invoice can be saved'
                       : null,
-                  onChanged: (u) => setState(() => _salesPoc = u),
+                  onChanged: (u) => setState(() {
+                    _salesPoc = u;
+                    _pocChosen = true;
+                  }),
                 ),
               const SizedBox(height: 16),
               Text('Items', style: Theme.of(context).textTheme.titleMedium),
@@ -472,6 +505,34 @@ class _LineRow extends StatelessWidget {
             icon: const Icon(Icons.delete_outline),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ReadOnlyNotice extends StatelessWidget {
+  const _ReadOnlyNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.lock_clock_outlined, size: 44, color: theme.colorScheme.outline),
+              const SizedBox(height: 12),
+              Text("New invoices can't be created on a past date.",
+                  textAlign: TextAlign.center, style: theme.textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text("Go back to today to carry on. What you've entered so far is kept.",
+                  textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
       ),
     );
   }

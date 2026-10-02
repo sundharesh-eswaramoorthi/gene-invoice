@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
@@ -11,6 +12,7 @@ import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../customers/customers_screen.dart';
 import '../email/email_actions.dart';
+import 'region_grants_editor.dart';
 import 'users_screen.dart';
 
 /// A user's account, read-only, with its emails and history below. Edits go through the same
@@ -24,10 +26,12 @@ class UserDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(userDetailProvider(id));
     final viewer = ref.watch(currentUserProvider);
-    final canEdit = viewer?.has(Privileges.userManage) ?? false;
+    // A past date is read only (D2).
+    final canEdit = !ref.watch(isHistoricalProvider) && (viewer?.has(Privileges.userManage) ?? false);
     final canViewAudit =
         (viewer?.has(Privileges.auditView) ?? false) && (viewer?.has(Privileges.userView) ?? false);
     final canOpenCustomer = viewer?.has(Privileges.customerView) ?? false;
+    final canSeeGrants = viewer?.has(Privileges.userView) ?? false;
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -58,6 +62,14 @@ class UserDetailScreen extends ConsumerWidget {
           onTabChanged: (slug) => context.go('/users/$id?tab=$slug'),
           top: _top(user, canOpenCustomer: canOpenCustomer),
           tabs: [
+            // A customer login takes its region from its customer and holds no grants (D17).
+            if (canSeeGrants && user.customerId == null)
+              DetailTab(
+                slug: 'regions',
+                label: 'Regions',
+                icon: Icons.public_outlined,
+                builder: (context) => _RegionsTab(user: user),
+              ),
             if (canViewAudit)
               DetailTab(
                 slug: 'history',
@@ -96,6 +108,24 @@ class UserDetailScreen extends ConsumerWidget {
             DetailGridItem(label: 'Created', child: ReadOnlyValue(formatDateTime(u.createdAt))),
         ]),
       );
+}
+
+class _RegionsTab extends ConsumerWidget {
+  final AppUser user;
+  const _RegionsTab({required this.user});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // The role's privileges decide whether the record scope means anything; without the right to
+    // read roles the editor simply does not say.
+    final canReadRoles = ref.watch(currentUserProvider)?.has(Privileges.roleView) ?? false;
+    final roles = canReadRoles ? ref.watch(rolesProvider).valueOrNull : null;
+    Set<String>? rolePrivileges;
+    for (final r in roles ?? const <AppRole>[]) {
+      if (r.name == user.role) rolePrivileges = r.privileges.toSet();
+    }
+    return UserRegionGrantsPanel(userId: user.id, rolePrivileges: rolePrivileges);
+  }
 }
 
 class _CustomerLink extends ConsumerWidget {

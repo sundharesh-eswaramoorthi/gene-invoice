@@ -11,6 +11,7 @@ import '../../shared/widgets/status_chip.dart';
 import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
+import '../regions/regions_screen.dart';
 
 class DisputesScreen extends ConsumerWidget {
   final TableQuery query;
@@ -67,7 +68,8 @@ class DisputesScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, d) => DisputeStatusChip(status: d.status),
+            cell: (context, d) =>
+                PendingApprovalChip.beside(DisputeStatusChip(status: d.status), d.pendingApproval),
           ),
           TableColumnSpec(
             label: 'Opened',
@@ -82,6 +84,8 @@ class DisputesScreen extends ConsumerWidget {
               child: Text(d.reason, maxLines: 2, overflow: TextOverflow.ellipsis),
             ),
           ),
+          if (user?.multiRegion ?? false)
+            regionColumn<Dispute>((d) => d.regionCode, (d) => d.regionName),
         ],
         rowActions: (context, d) => [
           IconButton(
@@ -90,7 +94,10 @@ class DisputesScreen extends ConsumerWidget {
             onPressed: () => context.go('/disputes/${d.id}'),
           ),
           sendEmailRowAction(context,
-              type: EmailEntityType.dispute, entityId: d.id, entityLabel: 'Dispute #${d.id}'),
+              type: EmailEntityType.dispute,
+              entityId: d.id,
+              entityLabel: 'Dispute #${d.id}',
+              regionId: d.regionId),
         ],
       ),
     );

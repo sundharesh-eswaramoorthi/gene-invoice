@@ -1,6 +1,8 @@
 package com.geneinvoice.customer;
 
+import com.geneinvoice.common.time.AppClock;
 import com.geneinvoice.invoice.PaymentTerm;
+import com.geneinvoice.region.Region;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -8,7 +10,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "customers")
+@Table(name = "customers", indexes = @Index(name = "idx_customers_region", columnList = "region_id"))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -40,6 +42,14 @@ public class Customer {
     @Column(name = "payment_term", length = 20)
     private PaymentTerm paymentTerm;
 
+    /**
+     * The region this customer and all of its records belong to. Never written by an ORM update, so a stale
+     * save can never put an old region back (F3); a move is an explicit operation.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "region_id", updatable = false)
+    private Region region;
+
     @Version
     @Column(name = "version")
     private Long version;
@@ -49,6 +59,6 @@ public class Customer {
 
     @PrePersist
     void onCreate() {
-        this.createdAt = Instant.now();
+        this.createdAt = AppClock.now();
     }
 }

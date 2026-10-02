@@ -1,6 +1,7 @@
 package com.geneinvoice.document;
 
 import com.geneinvoice.auth.CurrentUser;
+import com.geneinvoice.common.scope.ViewScopeHolder;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerService;
 import com.geneinvoice.invoice.Invoice;
@@ -8,6 +9,7 @@ import com.geneinvoice.invoice.InvoiceService;
 import com.geneinvoice.payment.Payment;
 import com.geneinvoice.payment.PaymentService;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.Region;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Component;
@@ -38,7 +40,7 @@ public class DocumentTargets {
     private final PaymentService paymentService;
     private final CurrentUser currentUser;
 
-    public record Target(DocumentEntityType type, Long id, String label, Long customerId) {
+    public record Target(DocumentEntityType type, Long id, String label, Long customerId, Long regionId) {
 
         public String link() {
             return type.link(id);
@@ -51,18 +53,29 @@ public class DocumentTargets {
         return describe(type, id);
     }
 
+    /**
+     * A record whose documents the caller may change. Staff need both DOCUMENT_MANAGE and the record's own manage
+     * privilege in the record's region (403); one they cannot see is missing (404), as for any read.
+     */
     @Transactional(readOnly = true)
     public Target requireManageable(DocumentEntityType type, Long id) {
         requirePrivilege(currentUser.isCustomer()
                 ? VIEW_PRIVILEGE.get(type)
                 : MANAGE_PRIVILEGE.get(type));
-        return describe(type, id);
+        Target target = describe(type, id);
+        ViewScopeHolder.requireLive();
+        if (!currentUser.isCustomer()) {
+            currentUser.requireIn(Privileges.DOCUMENT_MANAGE, target.regionId());
+            currentUser.requireIn(MANAGE_PRIVILEGE.get(type), target.regionId());
+        }
+        return target;
     }
 
-    public boolean canManage(DocumentEntityType type) {
+    /** Whether the caller may change any document on a record of this type in this region. */
+    public boolean canManage(DocumentEntityType type, Long regionId) {
         return !currentUser.isCustomer()
-                && currentUser.has(Privileges.DOCUMENT_MANAGE)
-                && currentUser.has(MANAGE_PRIVILEGE.get(type));
+                && currentUser.hasIn(Privileges.DOCUMENT_MANAGE, regionId)
+                && currentUser.hasIn(MANAGE_PRIVILEGE.get(type), regionId);
     }
 
     private void requirePrivilege(String privilege) {
@@ -75,17 +88,18 @@ public class DocumentTargets {
         return switch (type) {
             case CUSTOMER -> {
                 Customer c = customerService.get(id);
-                yield new Target(type, c.getId(), label("Customer " + c.getName()), c.getId());
+                yield new Target(type, c.getId(), label("Customer " + c.getName()), c.getId(),
+                        Region.idOf(c.getRegion()));
             }
             case INVOICE -> {
                 Invoice i = invoiceService.get(id);
                 yield new Target(type, i.getId(), label("Invoice " + i.getInvoiceNumber()),
-                        i.getCustomer().getId());
+                        i.getCustomer().getId(), Region.idOf(i.getRegion()));
             }
             case PAYMENT -> {
                 Payment p = paymentService.get(id);
                 yield new Target(type, p.getId(), label("Payment #" + p.getId()),
-                        p.getCustomer().getId());
+                        p.getCustomer().getId(), Region.idOf(p.getRegion()));
             }
         };
     }

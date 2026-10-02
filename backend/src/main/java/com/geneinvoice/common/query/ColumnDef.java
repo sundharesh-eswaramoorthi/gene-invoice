@@ -1,5 +1,6 @@
 package com.geneinvoice.common.query;
 
+import com.geneinvoice.history.Temporal;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
@@ -27,8 +28,12 @@ public record ColumnDef(
         return (root, q, cb) -> root.get(attribute);
     }
 
+    /**
+     * An attribute of an associated record. Read as of a date, a record history follows (a customer) is joined as
+     * it was at the point, so its name is the name then; any other (a POC, a region) is joined as it is now.
+     */
     public static PathResolver nested(String association, String attribute) {
-        return (root, q, cb) -> leftJoin(root, association).get(attribute);
+        return (root, q, cb) -> Temporal.join(root, association, JoinType.LEFT, cb).get(attribute);
     }
 
     public static PathResolver referenceId(String association) {

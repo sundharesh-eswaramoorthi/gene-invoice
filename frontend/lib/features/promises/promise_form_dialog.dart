@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/pending_reply.dart';
 import '../../core/field_limits.dart';
 import '../../core/format.dart';
 import '../../shared/models/invoice.dart';
@@ -41,17 +42,25 @@ Future<bool?> showPromiseDialog({
     ),
   );
   if (saved == null) return false;
+  final held = saved.pending;
+  if (held != null) {
+    // Nothing has changed yet, so there is nothing to email about (B2).
+    if (context.mounted) showSentForApproval(context, held);
+    return true;
+  }
   if (context.mounted) {
     await notifyByEmailAfterSave(context,
         notify: saved.notify,
         type: EmailEntityType.promise,
-        entityId: saved.id,
+        entityId: saved.id!,
         event: existing == null ? EmailEvent.created : EmailEvent.updated);
   }
   return true;
 }
 
-typedef _SavedPromise = ({int id, bool notify});
+/// The saved promise's id, or — when the save waits for approval — the change it is held as.
+/// A held new promise has no id yet.
+typedef _SavedPromise = ({int? id, PendingChangeRef? pending, bool notify});
 
 class _PromiseFormDialog extends ConsumerStatefulWidget {
   final int customerId;
@@ -166,10 +175,17 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
       final res = _isEdit
           ? await dio.put('/api/promises/${widget.existing!.id}', data: body)
           : await dio.post('/api/promises', data: body);
-      final id = _isEdit ? widget.existing!.id : ((res.data as Map)['id'] as num).toInt();
+      // A held create names no promise: it has none until someone approves it (§6.6).
+      final held = pendingFrom(res);
+      final id = _isEdit
+          ? widget.existing!.id
+          : held == null
+              ? ((res.data as Map)['id'] as num).toInt()
+              : null;
+      if (held != null) invalidateApprovals(ref);
       ref.invalidate(scopedPromisesProvider);
-      ref.invalidate(promiseDetailProvider(id));
-      if (mounted) Navigator.of(context).pop((id: id, notify: _notify));
+      if (id != null) ref.invalidate(promiseDetailProvider(id));
+      if (mounted) Navigator.of(context).pop((id: id, pending: held, notify: _notify));
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
     } finally {
@@ -237,6 +253,7 @@ class _PromiseFormDialogState extends ConsumerState<_PromiseFormDialog> {
               const SizedBox(height: 12),
               PocPicker(
                 type: PocType.COLLECTION,
+                customerId: widget.customerId,
                 value: _poc,
                 required: true,
                 onChanged: (u) => setState(() => _poc = u),
@@ -441,8 +458,14 @@ class _OverrideDialogState extends ConsumerState<_OverrideDialog> {
       if (clear) {
         await dio.delete('/api/promises/${widget.promise.id}/override');
       } else {
-        await dio.post('/api/promises/${widget.promise.id}/override',
+        final res = await dio.post('/api/promises/${widget.promise.id}/override',
             data: {'status': _status.name, 'reason': _reason.text.trim()});
+        // Pinning the status of a large promise may wait for a second person (B2).
+        final held = pendingFrom(res);
+        if (held != null) {
+          invalidateApprovals(ref);
+          if (mounted) showSentForApproval(context, held);
+        }
       }
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {

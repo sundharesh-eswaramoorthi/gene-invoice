@@ -1,5 +1,7 @@
 package com.geneinvoice.common.bulk;
 
+import com.geneinvoice.approval.Outcome;
+import com.geneinvoice.approval.PendingChange;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import org.springframework.dao.ConcurrencyFailureException;
@@ -12,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Component
@@ -35,10 +38,27 @@ public class BulkExecutor {
         void apply(Long id);
     }
 
+    /** An operation that may hold its change for approval instead of making it (B2). */
+    @FunctionalInterface
+    public interface OutcomeOperation {
+        Outcome<?> apply(Long id);
+    }
+
     public static RecordOperation eligibility(RecordOperation op) {
         return id -> {
             try {
                 op.apply(id);
+            } catch (BadRequestException e) {
+                throw new IneligibleException(e.getMessage());
+            }
+        };
+    }
+
+    /** As {@link #eligibility}: a row the action does not apply to, or already awaiting approval, is skipped. */
+    public static OutcomeOperation eligibilityOutcome(OutcomeOperation op) {
+        return id -> {
+            try {
+                return op.apply(id);
             } catch (BadRequestException e) {
                 throw new IneligibleException(e.getMessage());
             }
@@ -52,12 +72,22 @@ public class BulkExecutor {
 
     public BulkDtos.BulkResult run(BulkDtos.BulkRequest req, List<Long> permitted, boolean truncated,
                                    RecordOperation op) {
+        return runOutcomes(req, permitted, truncated, id -> {
+            op.apply(id);
+            return Outcome.applied(id);
+        });
+    }
+
+    /** Each row in its own transaction; a row whose change was held goes under {@code pending}. */
+    public BulkDtos.BulkResult runOutcomes(BulkDtos.BulkRequest req, List<Long> permitted, boolean truncated,
+                                           OutcomeOperation op) {
         List<Long> requested = req.allMatching() || req.ids() == null ? permitted : req.ids();
         Set<Long> reachable = new HashSet<>(permitted);
         List<Long> unique = new ArrayList<>(new LinkedHashSet<>(requested));
         List<Long> succeeded = new ArrayList<>();
         List<BulkDtos.BulkOutcome> failed = new ArrayList<>();
         List<BulkDtos.BulkOutcome> skipped = new ArrayList<>();
+        List<BulkDtos.BulkPending> pending = new ArrayList<>();
 
         for (Long id : unique) {
             if (!reachable.contains(id)) {
@@ -65,8 +95,12 @@ public class BulkExecutor {
                 continue;
             }
             try {
-                perRecord.executeWithoutResult(status -> op.apply(id));
-                succeeded.add(id);
+                Optional<PendingChange> held = perRecord.execute(status -> op.apply(id)).heldChange();
+                if (held.isPresent()) {
+                    pending.add(new BulkDtos.BulkPending(id, held.get().getId(), held.get().getSummary()));
+                } else {
+                    succeeded.add(id);
+                }
             } catch (IneligibleException e) {
                 skipped.add(new BulkDtos.BulkOutcome(id, e.getMessage()));
             } catch (ConcurrencyFailureException e) {
@@ -81,7 +115,7 @@ public class BulkExecutor {
             }
         }
         return new BulkDtos.BulkResult(req.action(), unique.size(), succeeded, failed, skipped,
-                truncated, TableQueryExecutor.BULK_ID_LIMIT);
+                truncated, TableQueryExecutor.BULK_ID_LIMIT, pending);
     }
 
     private String rootMessage(RuntimeException e) {

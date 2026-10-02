@@ -8,17 +8,27 @@ Future<TableFilter?> showFilterEditor({
   required BuildContext context,
   required TableSchema schema,
   TableFilter? existing,
+  Set<String>? allowedFields,
 }) {
   return showDialog<TableFilter>(
     context: context,
-    builder: (_) => _FilterEditorDialog(schema: schema, existing: existing),
+    builder: (_) =>
+        _FilterEditorDialog(schema: schema, existing: existing, allowedFields: allowedFields),
   );
 }
 
 class _FilterEditorDialog extends StatefulWidget {
   final TableSchema schema;
   final TableFilter? existing;
-  const _FilterEditorDialog({required this.schema, this.existing});
+
+  /// The only columns offered, when the list answers fewer filters than its schema publishes.
+  /// Null offers every filterable column.
+  final Set<String>? allowedFields;
+  const _FilterEditorDialog({required this.schema, this.existing, this.allowedFields});
+
+  List<ColumnDef> get columns => schema.filterable
+      .where((c) => allowedFields?.contains(c.name) ?? true)
+      .toList();
 
   @override
   State<_FilterEditorDialog> createState() => _FilterEditorDialogState();
@@ -37,7 +47,7 @@ class _FilterEditorDialogState extends State<_FilterEditorDialog> {
   @override
   void initState() {
     super.initState();
-    final columns = widget.schema.filterable;
+    final columns = widget.columns;
     if (widget.existing != null) {
       _column = widget.schema.column(widget.existing!.field);
       _operator = widget.existing!.operator;
@@ -125,7 +135,7 @@ class _FilterEditorDialogState extends State<_FilterEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final columns = widget.schema.filterable;
+    final columns = widget.columns;
     return AlertDialog(
       title: Text(widget.existing == null ? 'Add filter' : 'Edit filter'),
       content: SizedBox(

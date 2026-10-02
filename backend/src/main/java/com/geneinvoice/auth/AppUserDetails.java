@@ -1,5 +1,6 @@
 package com.geneinvoice.auth;
 
+import com.geneinvoice.region.RegionRights;
 import com.geneinvoice.user.User;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
@@ -12,10 +13,13 @@ public class AppUserDetails implements UserDetails {
 
     private final User user;
     private final Collection<? extends GrantedAuthority> authorities;
+    /** Plain data built with the principal, so asking about a region needs neither SQL nor a session. */
+    private final RegionRights rights;
 
-    public AppUserDetails(User user, Collection<? extends GrantedAuthority> authorities) {
+    public AppUserDetails(User user, Collection<? extends GrantedAuthority> authorities, RegionRights rights) {
         this.user = user;
         this.authorities = authorities;
+        this.rights = rights;
     }
 
     @Override public Collection<? extends GrantedAuthority> getAuthorities() { return authorities; }

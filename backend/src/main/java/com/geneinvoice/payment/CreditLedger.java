@@ -1,5 +1,7 @@
 package com.geneinvoice.payment;
 
+import com.geneinvoice.automation.event.AutomationEvents;
+import com.geneinvoice.automation.rule.TriggerEntity;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
@@ -22,6 +24,7 @@ public class CreditLedger {
     private final PaymentAllocationRepository allocationRepository;
     private final CustomerRepository customerRepository;
     private final InvoiceRepository invoiceRepository;
+    private final AutomationEvents automationEvents;
 
     public record CreditMove(PaymentService.InvoicePaymentAudit before,
                              PaymentService.InvoicePaymentAudit after) {}
@@ -51,10 +54,13 @@ public class CreditLedger {
             InvoiceService.recomputeStatus(invoice);
             moves.add(new CreditMove(before, position(p, take, invoice)));
             remaining = remaining.subtract(take);
+            automationEvents.updated(TriggerEntity.PAYMENT, p.getId(), "ALLOCATION");
         }
         invoice.setPaidAmount(invoice.getPaidAmount().add(remaining));
         customer.setCreditBalance(credit.subtract(apply));
         customerRepository.save(customer);
+        automationEvents.updated(TriggerEntity.CUSTOMER, customer.getId(), "CREDIT");
+        automationEvents.invoiceMoney(invoice.getId(), customer.getId(), "PAYMENT");
         return moves;
     }
 
@@ -77,9 +83,12 @@ public class CreditLedger {
             if (a.getAmount().signum() == 0) p.getAllocations().remove(a);
             p.setCreditApplied(p.getCreditApplied().add(take));
             remaining = remaining.subtract(take);
+            automationEvents.updated(TriggerEntity.PAYMENT, p.getId(), "ALLOCATION");
         }
         locked.setCreditBalance(locked.getCreditBalance().add(amount));
         customerRepository.save(locked);
+        automationEvents.updated(TriggerEntity.CUSTOMER, locked.getId(), "CREDIT");
+        automationEvents.invoiceMoney(invoice.getId(), locked.getId(), "PAYMENT");
     }
 
     private Customer lockCustomer(Long customerId) {

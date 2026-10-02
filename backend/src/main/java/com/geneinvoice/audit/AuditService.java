@@ -2,6 +2,10 @@ package com.geneinvoice.audit;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.geneinvoice.auth.CurrentUser;
+import com.geneinvoice.common.Fit;
+import com.geneinvoice.common.origin.WriteOrigin;
+import com.geneinvoice.common.origin.WriteOrigins;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -14,11 +18,35 @@ public class AuditService {
 
     private final AuditLogRepository repository;
     private final ObjectMapper objectMapper;
+    private final CurrentUser currentUser;
 
     @Transactional
     public AuditLog record(String entityType, Long entityId, String action,
                            Object before, Object after,
                            Long userId, Long disputeId, String reason) {
+        return save(entityType, entityId, action, before, after, userId, disputeId, null, reason, null);
+    }
+
+    @Transactional
+    public AuditLog record(String entityType, Long entityId, String action,
+                           Object before, Object after,
+                           Long userId, Long disputeId, String reason, Long regionId) {
+        return save(entityType, entityId, action, before, after, userId, disputeId, null, reason, regionId);
+    }
+
+    /** A row about a pending change: it names the change even when no approval is under way. */
+    @Transactional
+    public AuditLog recordLinked(String entityType, Long entityId, String action,
+                                 Object before, Object after,
+                                 Long userId, Long disputeId, Long pendingChangeId, String reason) {
+        return save(entityType, entityId, action, before, after, userId, disputeId, pendingChangeId, reason, null);
+    }
+
+    static final int REASON_MAX = 500;
+
+    private AuditLog save(String entityType, Long entityId, String action, Object before, Object after,
+                          Long userId, Long disputeId, Long pendingChangeId, String reason, Long regionId) {
+        WriteOrigin origin = WriteOrigins.current(currentUser);
         return repository.save(AuditLog.builder()
                 .entityType(entityType)
                 .entityId(entityId)
@@ -27,16 +55,13 @@ public class AuditService {
                 .afterJson(toJson(after))
                 .changedByUserId(userId)
                 .disputeId(disputeId)
-                .reason(fit(reason))
+                .reason(Fit.to(reason, REASON_MAX))
+                .regionId(regionId)
+                .origin(origin.kind() == WriteOrigin.Kind.USER ? null : origin.kind().name())
+                .ruleId(origin.ruleId())
+                .pendingChangeId(pendingChangeId != null ? pendingChangeId : origin.pendingChangeId())
+                .approvedByUserId(origin.checkerUserId())
                 .build());
-    }
-
-    static final int REASON_MAX = 500;
-
-    private static String fit(String reason) {
-        return reason == null || reason.length() <= REASON_MAX
-                ? reason
-                : reason.substring(0, REASON_MAX - 1) + "…";
     }
 
     @Transactional(readOnly = true)

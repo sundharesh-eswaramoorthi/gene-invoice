@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
@@ -29,8 +31,10 @@ Future<List<Product>> searchActiveProducts(Dio dio, String search) async {
 
 final productDetailProvider =
     FutureProvider.autoDispose.family<Product, int>((ref, id) async {
+  final asOf = ref.watch(viewAsOfProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/products/$id');
+  checkAsOf(res, asOf);
   return Product.fromJson(res.data as Map<String, dynamic>);
 });
 
@@ -58,7 +62,9 @@ class ProductsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.productManage) ?? false;
+    // A past date is read only (D2).
+    final historical = ref.watch(isHistoricalProvider);
+    final canManage = !historical && (user?.has(Privileges.productManage) ?? false);
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canSendEmail = ref.watch(canSendEmailProvider);
     final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.product);

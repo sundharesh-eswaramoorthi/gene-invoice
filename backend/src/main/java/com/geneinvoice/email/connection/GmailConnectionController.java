@@ -1,6 +1,7 @@
 package com.geneinvoice.email.connection;
 
 import com.geneinvoice.common.ApiError;
+import com.geneinvoice.common.scope.AsOfIgnored;
 import com.geneinvoice.email.connection.GmailConnectionDtos.ConnectGmailRequest;
 import com.geneinvoice.email.connection.GmailConnectionDtos.GmailConnectionDto;
 import com.geneinvoice.email.connection.GmailConnectionDtos.UserGmailDto;
@@ -14,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
+@AsOfIgnored
 @RequiredArgsConstructor
 public class GmailConnectionController {
 
@@ -26,12 +28,14 @@ public class GmailConnectionController {
     }
 
     @PutMapping("/api/me/gmail")
+    @AsOfIgnored
     @PreAuthorize("hasAuthority('" + Privileges.EMAIL_SEND + "')")
     public GmailConnectionDto connect(@RequestBody ConnectGmailRequest req) {
         return service.connect(req);
     }
 
     @DeleteMapping("/api/me/gmail")
+    @AsOfIgnored
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> disconnect() {
         service.disconnect();

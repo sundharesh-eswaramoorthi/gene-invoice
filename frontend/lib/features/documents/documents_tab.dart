@@ -5,9 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
 import '../../core/format.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/table_models.dart';
 import '../../shared/widgets/status_chip.dart';
-import 'document_actions.dart' show canUploadDocumentsProvider;
+import 'document_actions.dart' show canUploadDocumentsInProvider;
 import 'document_files.dart';
 import 'document_models.dart';
 import 'document_providers.dart';
@@ -27,11 +28,15 @@ class DocumentsTab extends ConsumerStatefulWidget {
   final int entityId;
   final String? entityLabel;
 
+  /// The record's region, which uploading to it needs the right in (§7.5).
+  final int? regionId;
+
   const DocumentsTab({
     super.key,
     required this.type,
     required this.entityId,
     this.entityLabel,
+    this.regionId,
   });
 
   @override
@@ -144,7 +149,10 @@ class _DocumentsTabState extends ConsumerState<DocumentsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final canUpload = ref.watch(canUploadDocumentsProvider(widget.type));
+    final canUpload =
+        ref.watch(canUploadDocumentsInProvider((type: widget.type, regionId: widget.regionId)));
+    // The server's flags say what this user may do today; a past date is read only (D2).
+    final historical = ref.watch(isHistoricalProvider);
     final first = ref.watch(entityDocumentsProvider(_key(0)));
     final theme = Theme.of(context);
 
@@ -239,6 +247,7 @@ class _DocumentsTabState extends ConsumerState<DocumentsTab> {
                 key: ValueKey('document-${d.id}'),
                 document: d,
                 busy: _busy.contains(d.id),
+                readOnly: historical,
                 onDownload: () => _download(d),
                 onEdit: () => _edit(d),
                 onDelete: () => _delete(d),
@@ -268,6 +277,7 @@ class _DocumentsTabState extends ConsumerState<DocumentsTab> {
 class _DocumentRow extends StatelessWidget {
   final DocumentItem document;
   final bool busy;
+  final bool readOnly;
   final VoidCallback onDownload;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
@@ -276,6 +286,7 @@ class _DocumentRow extends StatelessWidget {
     super.key,
     required this.document,
     required this.busy,
+    required this.readOnly,
     required this.onDownload,
     required this.onEdit,
     required this.onDelete,
@@ -349,13 +360,13 @@ class _DocumentRow extends StatelessWidget {
                       icon: const Icon(Icons.download_outlined, size: 20),
                       onPressed: onDownload,
                     ),
-                  if (document.canEdit)
+                  if (document.canEdit && !readOnly)
                     IconButton(
                       tooltip: 'Edit',
                       icon: const Icon(Icons.edit_outlined, size: 20),
                       onPressed: onEdit,
                     ),
-                  if (document.canDelete)
+                  if (document.canDelete && !readOnly)
                     IconButton(
                       tooltip: 'Remove',
                       icon: const Icon(Icons.delete_outline, size: 20),

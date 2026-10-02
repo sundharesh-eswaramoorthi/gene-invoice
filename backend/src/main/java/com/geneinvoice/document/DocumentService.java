@@ -10,6 +10,9 @@ import com.geneinvoice.common.query.PredicateFactory;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
+import com.geneinvoice.common.scope.AsOf;
+import com.geneinvoice.common.scope.AsOfPoint;
+import com.geneinvoice.common.scope.ViewScopeHolder;
 import com.geneinvoice.document.DocumentDtos.DocumentDto;
 import com.geneinvoice.document.DocumentTargets.Target;
 import com.geneinvoice.privilege.Privileges;
@@ -26,6 +29,7 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +58,7 @@ public class DocumentService {
     private final AuditService auditService;
     private final CurrentUser currentUser;
     private final TransactionTemplate transactions;
+    private final Clock clock;
 
     public record Download(String filename, long sizeBytes, InputStream stream) {}
 
@@ -111,7 +116,7 @@ public class DocumentService {
                 storage.delete(key);
                 throw e;
             }
-            return toDto(saved);
+            return toDto(saved, target);
         }
     }
 
@@ -119,11 +124,11 @@ public class DocumentService {
     @Transactional(readOnly = true)
     public PageResponse<DocumentDto> list(String entityType, Long entityId, Integer page, Integer size) {
         DocumentEntityType type = DocumentEntityType.parse(entityType);
-        targets.requireVisible(type, entityId);
+        Target target = targets.requireVisible(type, entityId);
         TableQuery query = TableQuery.parse(RECORD_DOCUMENTS, page, size, null, List.of());
         var result = queryExecutor.run(Document.class, RECORD_DOCUMENTS, query,
                 onRecord(type, entityId), List.of());
-        return PageResponse.of(result.content().stream().map(this::toDto).toList(),
+        return PageResponse.of(result.content().stream().map(d -> toDto(d, target)).toList(),
                 query, result.total(), List.of());
     }
 
@@ -131,6 +136,11 @@ public class DocumentService {
     public DocumentDtos.DocumentCount count(String entityType, Long entityId) {
         DocumentEntityType type = DocumentEntityType.parse(entityType);
         targets.requireVisible(type, entityId);
+        if (AsOf.active()) {
+            TableQuery query = TableQuery.parse(RECORD_DOCUMENTS, null, null, null, List.of());
+            return new DocumentDtos.DocumentCount(
+                    queryExecutor.count(Document.class, RECORD_DOCUMENTS, query, onRecord(type, entityId)));
+        }
         return new DocumentDtos.DocumentCount(currentUser.isCustomer()
                 ? repository.countByEntityTypeAndEntityIdAndDeletedFalseAndVisibility(
                         type, entityId, DocumentVisibility.SHARED)
@@ -156,7 +166,7 @@ public class DocumentService {
 
         auditService.record(doc.getEntityType().name(), target.id(), "DOCUMENT_UPDATED",
                 before, snapshot(saved), currentUser.require().getId(), null, null);
-        return toDto(saved);
+        return toDto(saved, target);
     }
 
     @Transactional
@@ -164,15 +174,20 @@ public class DocumentService {
         if (currentUser.isCustomer()) throw new AccessDeniedException("Not allowed");
         Document doc = liveForUpdate(id);
         Target target = targets.requireVisible(doc.getEntityType(), doc.getEntityId());
+        ViewScopeHolder.requireLive();
         User me = currentUser.require();
-        if (!me.getId().equals(doc.getUploadedByUserId()) && !targets.canManage(doc.getEntityType())) {
+        // In the record's region: the uploader may take back their own file where they may manage documents,
+        // and anyone who may manage the record's documents there may remove any of them.
+        boolean mayDeleteOwn = me.getId().equals(doc.getUploadedByUserId())
+                && currentUser.hasIn(Privileges.DOCUMENT_MANAGE, target.regionId());
+        if (!mayDeleteOwn && !targets.canManage(doc.getEntityType(), target.regionId())) {
             throw new AccessDeniedException("Not allowed");
         }
         DocumentSnapshot before = snapshot(doc);
 
         doc.setDeleted(true);
         doc.setDeletedByUserId(me.getId());
-        doc.setDeletedAt(Instant.now());
+        doc.setDeletedAt(clock.instant());
         repository.save(doc);
 
         auditService.record(doc.getEntityType().name(), target.id(), "DOCUMENT_DELETED",
@@ -202,28 +217,44 @@ public class DocumentService {
                 .orElseThrow(() -> new NotFoundException(NOT_FOUND));
     }
 
+    /**
+     * A record's documents; as of a date, those it had then (D8): uploaded by the end of that day and not yet
+     * deleted, so a file uploaded later is left out and one deleted later is back.
+     */
     private List<PredicateFactory> onRecord(DocumentEntityType type, Long entityId) {
+        AsOfPoint point = AsOf.current();
         List<PredicateFactory> scope = new ArrayList<>(List.of(
                 (root, q, cb) -> cb.equal(root.get("entityType"), type),
-                (root, q, cb) -> cb.equal(root.get("entityId"), entityId),
-                (root, q, cb) -> cb.isFalse(root.get("deleted"))));
+                (root, q, cb) -> cb.equal(root.get("entityId"), entityId)));
+        if (point == null) {
+            scope.add((root, q, cb) -> cb.isFalse(root.get("deleted")));
+        } else {
+            scope.add((root, q, cb) -> cb.lessThanOrEqualTo(root.<Instant>get("uploadedAt"), point.instant()));
+            scope.add((root, q, cb) -> cb.or(cb.isFalse(root.get("deleted")),
+                    cb.greaterThan(root.<Instant>get("deletedAt"), point.instant())));
+        }
         if (currentUser.isCustomer()) {
             scope.add((root, q, cb) -> cb.equal(root.get("visibility"), DocumentVisibility.SHARED));
         }
         return scope;
     }
 
-    DocumentDto toDto(Document d) {
-        boolean manage = targets.canManage(d.getEntityType());
-        boolean uploader = !currentUser.isCustomer()
-                && currentUser.has(Privileges.DOCUMENT_MANAGE)
+    /**
+     * Edit and delete answer for the record's region, and are off in a historical view (D14). Download is a read,
+     * served live (§5.2.3), so it stays on then; a file deleted since is listed then, but cannot be downloaded.
+     */
+    DocumentDto toDto(Document d, Target target) {
+        boolean live = !AsOf.active();
+        boolean manage = live && targets.canManage(d.getEntityType(), target.regionId());
+        boolean uploader = live && !currentUser.isCustomer()
+                && currentUser.hasIn(Privileges.DOCUMENT_MANAGE, target.regionId())
                 && currentUser.require().getId().equals(d.getUploadedByUserId());
         return new DocumentDto(d.getId(), d.getEntityType(), d.getEntityId(), d.getEntityLabel(),
                 d.getEntityType().link(d.getEntityId()), d.getFilename(), d.getContentType(),
                 d.getSizeBytes(), DocumentDtos.sizeLabel(d.getSizeBytes()), d.getVisibility(),
                 d.getDescription(),
                 new DocumentDtos.UploadedBy(d.getUploadedByUserId(), d.getUploadedByName()),
-                d.getUploadedAt(), true, manage, manage || uploader);
+                d.getUploadedAt(), !d.isDeleted(), manage, manage || uploader);
     }
 
     private static String key(DocumentEntityType type, Long entityId, String contentType) {

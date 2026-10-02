@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/auth/auth_controller.dart';
 import '../../features/poc/poc_providers.dart';
 import '../api/api_client.dart';
+import '../scope/as_of.dart';
 
 class ReferenceOption {
   final int id;
@@ -27,6 +29,8 @@ class ReferenceSearch {
 
 final referenceOptionsProvider =
     FutureProvider.autoDispose.family<List<ReferenceOption>, ReferenceSearch>((ref, q) async {
+  // The options answer live, for the regions asked about.
+  ref.watch(viewRegionsProvider);
   final dio = ref.watch(dioProvider);
   switch (q.kind) {
     case 'pocUser':
@@ -60,6 +64,28 @@ final referenceOptionsProvider =
           .cast<Map<String, dynamic>>()
           .map((m) => ReferenceOption((m['id'] as num).toInt(), m['invoiceNumber'] as String,
               subtitle: m['customerName'] as String?))
+          .toList();
+    // The regions a user may filter by are the ones they hold: no request needed (§6.16).
+    case 'region':
+      final user = ref.watch(currentUserProvider);
+      final needle = q.search.toLowerCase();
+      return [
+        for (final r in user?.regions ?? const [])
+          if (needle.isEmpty ||
+              r.code.toLowerCase().contains(needle) ||
+              r.name.toLowerCase().contains(needle))
+            ReferenceOption(r.id, r.code, subtitle: r.name),
+      ];
+    // Staff who hold access in the regions asked about (§6.13), not the whole directory.
+    case 'staffUser':
+      final res = await dio.get('/api/assignees/people', queryParameters: {
+        if (q.search.isNotEmpty) 'q': q.search,
+      });
+      return (res.data as List)
+          .cast<Map>()
+          .map((m) => ReferenceOption((m['userId'] as num).toInt(),
+              (m['name'] as String?) ?? (m['username'] as String? ?? '#${m['userId']}'),
+              subtitle: m['username'] == null ? null : '@${m['username']}'))
           .toList();
     case 'payment':
       final id = int.tryParse(q.search.replaceAll('#', '').trim());

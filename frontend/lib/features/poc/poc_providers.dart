@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
 
@@ -73,16 +75,20 @@ class CustomerPoc {
       );
 }
 
+/// Which POC seats I can hold in one region, and whether my book there is only a default I may
+/// clear or all I can see (§6.8).
 @immutable
-class MyPocScope {
-  final int userId;
+class RegionPocScope {
+  final int regionId;
+  final String? code;
   final bool clearable;
   final bool sales;
   final bool success;
   final bool collection;
 
-  const MyPocScope({
-    required this.userId,
+  const RegionPocScope({
+    required this.regionId,
+    this.code,
     required this.clearable,
     required this.sales,
     required this.success,
@@ -91,12 +97,62 @@ class MyPocScope {
 
   bool get isAnyPoc => sales || success || collection;
 
+  factory RegionPocScope.fromJson(Map<String, dynamic> json) => RegionPocScope(
+        regionId: (json['regionId'] as num).toInt(),
+        code: json['code'] as String?,
+        clearable: json['clearable'] as bool? ?? true,
+        sales: json['sales'] as bool? ?? false,
+        success: json['success'] as bool? ?? false,
+        collection: json['collection'] as bool? ?? false,
+      );
+}
+
+@immutable
+class MyPocScope {
+  final int userId;
+  final bool clearable;
+  final bool sales;
+  final bool success;
+  final bool collection;
+
+  /// The same, region by region, for the regions asked about. Empty from a server that does not
+  /// answer per region.
+  final List<RegionPocScope> regions;
+
+  const MyPocScope({
+    required this.userId,
+    required this.clearable,
+    required this.sales,
+    required this.success,
+    required this.collection,
+    this.regions = const [],
+  });
+
+  bool get isAnyPoc => sales || success || collection;
+
+  /// My seats in one region; the overall answer when that region is not listed.
+  RegionPocScope inRegion(int? regionId) {
+    for (final r in regions) {
+      if (r.regionId == regionId) return r;
+    }
+    return RegionPocScope(
+        regionId: regionId ?? 0,
+        clearable: clearable,
+        sales: sales,
+        success: success,
+        collection: collection);
+  }
+
   factory MyPocScope.fromJson(Map<String, dynamic> json) => MyPocScope(
         userId: (json['userId'] as num).toInt(),
         clearable: json['clearable'] as bool? ?? true,
         sales: json['sales'] as bool? ?? false,
         success: json['success'] as bool? ?? false,
         collection: json['collection'] as bool? ?? false,
+        regions: ((json['regions'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((m) => RegionPocScope.fromJson(m.cast<String, dynamic>()))
+            .toList(),
       );
 }
 
@@ -107,13 +163,18 @@ final canSeePocProvider = Provider<bool>((ref) {
 });
 
 final canAssignPocProvider = Provider<bool>((ref) {
+  // Assigning is a write, and a past date is read only (D2).
+  if (ref.watch(isHistoricalProvider)) return false;
   final user = ref.watch(currentUserProvider);
   if (user == null || user.isCustomer) return false;
   return user.has(Privileges.pocAssign);
 });
 
-final myPocScopeProvider = FutureProvider<MyPocScope?>((ref) async {
+// Disposed when unused and asked again when the regions change: which POC roles I hold is now
+// answered per region (G22).
+final myPocScopeProvider = FutureProvider.autoDispose<MyPocScope?>((ref) async {
   ref.watch(currentUserProvider.select((u) => u?.id));
+  ref.watch(viewRegionsProvider);
   if (!ref.watch(canSeePocProvider)) return null;
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/pocs/my-scope');
@@ -124,22 +185,31 @@ final myPocScopeProvider = FutureProvider<MyPocScope?>((ref) async {
 class AssignableQuery {
   final PocType type;
   final String search;
-  const AssignableQuery(this.type, this.search);
+
+  /// The customer the seat is for: who may hold it depends on that customer's region (§6.8).
+  final int? customerId;
+  const AssignableQuery(this.type, this.search, {this.customerId});
 
   @override
   bool operator ==(Object other) =>
-      other is AssignableQuery && other.type == type && other.search == search;
+      other is AssignableQuery &&
+      other.type == type &&
+      other.search == search &&
+      other.customerId == customerId;
   @override
-  int get hashCode => Object.hash(type, search);
+  int get hashCode => Object.hash(type, search, customerId);
 }
 
 final assignablePocsProvider =
     FutureProvider.autoDispose.family<List<PocUser>, AssignableQuery>((ref, q) async {
+  // With no record to answer for, who is assignable depends on the regions asked about (§6.8).
+  ref.watch(viewRegionsProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/pocs/assignable', queryParameters: {
     'type': q.type.name,
     if (q.search.isNotEmpty) 'q': q.search,
     'limit': 25,
+    if (q.customerId != null) 'customerId': q.customerId,
   });
   return (res.data as List).cast<Map<String, dynamic>>().map(PocUser.fromJson).toList();
 });

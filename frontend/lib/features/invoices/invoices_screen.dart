@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/pending_reply.dart';
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
@@ -18,11 +21,14 @@ import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
 import '../promises/promises_screen.dart' show pickPocParams;
+import '../regions/regions_screen.dart';
 
 final invoiceDetailProvider =
     FutureProvider.autoDispose.family<InvoiceDetail, int>((ref, id) async {
+  final asOf = ref.watch(viewAsOfProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/invoices/$id');
+  checkAsOf(res, asOf);
   return InvoiceDetail.fromJson(res.data as Map<String, dynamic>);
 });
 
@@ -33,9 +39,12 @@ class InvoicesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.invoiceManage) ?? false;
+    // A past date is read only (D2).
+    final historical = ref.watch(isHistoricalProvider);
+    final canManage = !historical && (user?.has(Privileges.invoiceManage) ?? false);
     final canExport = user?.has(Privileges.exportData) ?? false;
-    final canPromise = user?.has(Privileges.promiseManage) ?? false;
+    final canPromise = !historical && (user?.has(Privileges.promiseManage) ?? false);
+    final multiRegion = user?.multiRegion ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
     final canSendEmail = ref.watch(canSendEmailProvider);
@@ -185,7 +194,8 @@ class InvoicesScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, inv) => InvoiceStatusChip(status: inv.status),
+            cell: (context, inv) => PendingApprovalChip.beside(
+                InvoiceStatusChip(status: inv.status), inv.pendingApproval),
           ),
           // A person's name is as long as a customer's; capped and ellipsised like the
           // Customer column beside it, rather than cut mid-letter against the row actions
@@ -197,6 +207,8 @@ class InvoicesScreen extends ConsumerWidget {
               maxWidth: 180,
               cell: (context, inv) => PocNameCell(user: inv.salesPoc),
             ),
+          if (multiRegion)
+            regionColumn<InvoiceSummary>((inv) => inv.regionCode, (inv) => inv.regionName),
         ],
         rowActions: (context, inv) => [
           IconButton(
@@ -205,10 +217,16 @@ class InvoicesScreen extends ConsumerWidget {
             onPressed: () => context.go('/invoices/${inv.id}'),
           ),
           sendEmailRowAction(context,
-              type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber),
+              type: EmailEntityType.invoice,
+              entityId: inv.id,
+              entityLabel: inv.invoiceNumber,
+              regionId: inv.regionId),
           // A cancelled invoice owes nothing, whatever balance it last showed, and the backend
-          // refuses a promise on it (D-49).
-          if (canPromise && inv.balance > 0 && inv.status != InvoiceStatus.CANCELLED)
+          // refuses a promise on it (D-49). Raising one needs the right in the invoice's region.
+          if (canPromise &&
+              inv.balance > 0 &&
+              inv.status != InvoiceStatus.CANCELLED &&
+              (user?.hasIn(Privileges.promiseManage, inv.regionId) ?? false))
             IconButton(
               tooltip: 'Raise promise',
               icon: const Icon(Icons.handshake_outlined, size: 18),
@@ -219,7 +237,10 @@ class InvoicesScreen extends ConsumerWidget {
                 preselectedInvoices: [inv],
               ),
             ),
-          if (canManage && inv.status == InvoiceStatus.UNPAID)
+          // The row's own flag says whether this user may cancel it in its region (D14).
+          if (!historical &&
+              (inv.canManage ?? canManage) &&
+              inv.status == InvoiceStatus.UNPAID)
             IconButton(
               tooltip: 'Cancel invoice',
               icon: const Icon(Icons.block, size: 18),
@@ -251,7 +272,16 @@ class InvoicesScreen extends ConsumerWidget {
     );
     if (ok != true) return;
     try {
-      await ref.read(dioProvider).post('/api/invoices/${inv.id}/cancel');
+      final res = await ref.read(dioProvider).post('/api/invoices/${inv.id}/cancel');
+      final held = pendingFrom(res);
+      if (held != null) {
+        // Still unpaid until someone else approves; the list now flags it as waiting.
+        invalidateApprovals(ref);
+        if (context.mounted) {
+          showSentForApproval(context, held, message: 'Cancellation sent for approval');
+        }
+        return;
+      }
       ref.invalidate(tablePageProvider);
       ref.invalidate(tableSummaryProvider);
     } catch (e) {

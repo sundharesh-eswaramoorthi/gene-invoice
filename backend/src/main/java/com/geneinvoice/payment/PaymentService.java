@@ -1,7 +1,16 @@
 package com.geneinvoice.payment;
 
+import com.geneinvoice.approval.ApprovalContext;
+import com.geneinvoice.approval.ApprovalOperation;
+import com.geneinvoice.approval.Gated;
+import com.geneinvoice.approval.MakerChecker;
+import com.geneinvoice.approval.PendingChangeScope;
+import com.geneinvoice.approval.Outcome;
+import com.geneinvoice.approval.PendingChange;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
+import com.geneinvoice.automation.event.AutomationEvents;
+import com.geneinvoice.automation.rule.TriggerEntity;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Money;
 import com.geneinvoice.common.NotFoundException;
@@ -10,8 +19,10 @@ import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.common.scope.ViewScopeHolder;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.history.Records;
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.invoice.InvoiceService;
@@ -19,9 +30,11 @@ import com.geneinvoice.invoice.InvoiceStatus;
 import com.geneinvoice.poc.PocService;
 import com.geneinvoice.poc.PocType;
 import com.geneinvoice.poc.ScopeResolver;
+import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.RecordAccess;
+import com.geneinvoice.region.Region;
 import com.geneinvoice.promise.PaymentPromiseService;
 import com.geneinvoice.user.User;
-import com.geneinvoice.user.UserRepository;
 import jakarta.persistence.criteria.Expression;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -29,9 +42,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -45,21 +60,42 @@ public class PaymentService {
     private final InvoiceRepository invoiceRepository;
     private final PocService pocService;
     private final ScopeResolver scopeResolver;
+    private final RecordAccess recordAccess;
     private final TableQueryExecutor queryExecutor;
     private final AuditService auditService;
     private final CurrentUser currentUser;
     private final PaymentPromiseService promiseService;
-    private final UserRepository userRepository;
+    private final Records records;
+    private final AutomationEvents automationEvents;
+    private final MakerChecker makerChecker;
+    private final PendingChangeScope pendingChangeScope;
+    private final Clock clock;
 
     @Transactional
     public Payment record(PaymentDtos.CreatePaymentRequest req) {
+        return recordOrHold(req).appliedOrThrow();
+    }
+
+    /**
+     * Records the payment, or, above the region's PAYMENT_RECORD limit, holds it for someone else to approve and
+     * leaves every invoice, the customer's credit and the payments list as they were (B2). The money was received
+     * when it was recorded, so an approved payment keeps the time it was asked for as its payment time.
+     */
+    @Transactional
+    public Outcome<Payment> recordOrHold(PaymentDtos.CreatePaymentRequest req) {
         // The first lock of the money path, before anything of this customer's is read: two
         // cashiers recording a payment for one customer at the same instant queue here instead of
         // both reading the same paid amounts and credit balance and each writing their own
         // figures over the other's, which loses one payment's money outright (PPD-01).
         Customer customer = lockCustomer(req.customerId());
+        ViewScopeHolder.requireLive();
+        // Book-aware: outside the caller's book the customer is missing, and nothing is written (SC-12).
+        scopeResolver.requireVisible(ScopeResolver.Kind.CUSTOMER, customer.getId(), Region.idOf(customer.getRegion()),
+                "Customer not found");
+        currentUser.requireIn(Privileges.PAYMENT_MANAGE, Region.idOf(customer.getRegion()));
 
-        User collectionPoc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION);
+        User collectionPoc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION,
+                Region.idOf(customer.getRegion()));
 
         List<Long> chosen = req.invoiceIds() == null ? List.of() : req.invoiceIds();
         Set<Long> payFirst = promiseService.invoicesToPayFirst(req.promiseIds(), customer.getId(),
@@ -86,6 +122,8 @@ public class PaymentService {
             targets = new ArrayList<>(invoiceRepository.findByCustomerIdForUpdate(customer.getId()));
         }
         targets.sort(Comparator.comparing((Invoice i) -> !payFirst.contains(i.getId())).thenComparing(OLDEST_FIRST));
+        Optional<PendingChange> held = makerChecker.gate(recordGate(customer, collectionPoc, req));
+        if (held.isPresent()) return Outcome.held(held.get());
 
         Payment payment = Payment.builder()
                 .customer(customer)
@@ -94,6 +132,8 @@ public class PaymentService {
                 .notes(req.notes())
                 .collectionPoc(collectionPoc)
                 .status(PaymentStatus.ACTIVE)
+                .region(customer.getRegion())
+                .paidAt(ApprovalContext.current().map(ApprovalContext.Applying::requestedAt).orElse(clock.instant()))
                 .build();
 
         List<Movement> applied = applyTo(payment, targets, req.amount());
@@ -101,34 +141,52 @@ public class PaymentService {
         auditService.record(ENTITY, saved.getId(), "PAYMENT_RECORDED", null,
                 PaymentDtos.PaymentDto.from(saved), currentUser.idOrNull(), null, req.notes());
         auditMovements(saved, applied, "PAYMENT_APPLIED");
+        automationEvents.created(TriggerEntity.PAYMENT, saved.getId());
 
         pocService.notifyAssignee(collectionPoc, PocType.COLLECTION,
-                "payment #" + saved.getId(), "/payments/" + saved.getId());
+                "payment #" + saved.getId(), "/payments/" + saved.getId(), Region.idOf(saved.getRegion()));
         promiseService.reevaluateForCustomer(customer.getId());
-        return saved;
+        return Outcome.applied(saved);
+    }
+
+    /** What the approver of a held payment is shown; there is nothing before it. */
+    public record RecordView(BigDecimal amount, String method, String notes, List<Long> invoiceIds,
+                             List<Long> promiseIds, Long collectionPocUserId) {}
+
+    private static Gated recordGate(Customer customer, User collectionPoc, PaymentDtos.CreatePaymentRequest req) {
+        Long pocId = collectionPoc == null ? null : collectionPoc.getId();
+        return new Gated(ApprovalOperation.PAYMENT_RECORD, null, "New payment from " + customer.getName(), ENTITY,
+                null, null, customer.getId(), customer.getName(), Region.idOf(customer.getRegion()), pocId,
+                req.amount(), req, null,
+                new RecordView(req.amount(), req.method(), req.notes(), req.invoiceIds(), req.promiseIds(), pocId),
+                "Record payment of " + Money.format(req.amount()) + " from " + customer.getName(), false);
     }
 
     @Transactional
     public Payment update(Long id, PaymentDtos.UpdatePaymentRequest req) {
         Payment p = paymentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Payment not found"));
-        requireInBook(id);
+        requireVisible(p);
+        ViewScopeHolder.requireLive();
+        currentUser.requireIn(Privileges.PAYMENT_MANAGE, Region.idOf(p.getRegion()));
         Object before = PaymentDtos.PaymentDto.from(p);
 
         if (req.notes() != null) p.setNotes(req.notes());
         Long previousId = p.getCollectionPoc() == null ? null : p.getCollectionPoc().getId();
         if (req.collectionPocUserId() != null && !req.collectionPocUserId().equals(previousId)) {
-            if (!currentUser.canAssignPoc(userRepository)) {
+            if (!currentUser.canAssignPocIn(Region.idOf(p.getRegion()))) {
                 throw new BadRequestException("You may not change the Collection POC");
             }
-            User poc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION);
+            User poc = pocService.requireAssignable(req.collectionPocUserId(), PocType.COLLECTION,
+                    Region.idOf(p.getRegion()));
             p.setCollectionPoc(poc);
             pocService.notifyAssignee(poc, PocType.COLLECTION,
-                    "payment #" + p.getId(), "/payments/" + p.getId());
+                    "payment #" + p.getId(), "/payments/" + p.getId(), Region.idOf(p.getRegion()));
         }
         Payment saved = paymentRepository.save(p);
         auditService.record(ENTITY, id, "PAYMENT_UPDATED", before, PaymentDtos.PaymentDto.from(saved),
                 currentUser.require().getId(), null, null);
+        automationEvents.updated(TriggerEntity.PAYMENT, id, "DETAILS");
         return saved;
     }
 
@@ -193,12 +251,15 @@ public class PaymentService {
             payment.getAllocations().add(PaymentAllocation.builder()
                     .payment(payment).invoice(inv).amount(toApply).build());
             remaining = remaining.subtract(toApply);
+            automationEvents.invoiceMoney(inv.getId(), customer.getId(), "PAYMENT");
         }
         payment.setCreditApplied(remaining);
         if (remaining.signum() > 0) {
             customer.setCreditBalance(customer.getCreditBalance().add(remaining));
             customerRepository.save(customer);
+            automationEvents.updated(TriggerEntity.CUSTOMER, customer.getId(), "CREDIT");
         }
+        // Never the payment itself here: a new one has no id yet, and its callers publish it (S7).
         return moves;
     }
 
@@ -213,6 +274,7 @@ public class PaymentService {
         reverseAllocations(p);
         p.setStatus(PaymentStatus.VOIDED);
         Payment saved = paymentRepository.save(p);
+        automationEvents.updated(TriggerEntity.PAYMENT, paymentId, "STATUS");
         promiseService.reevaluateForCustomer(p.getCustomer().getId());
         return saved;
     }
@@ -230,6 +292,7 @@ public class PaymentService {
             InvoiceService.recomputeStatus(inv);
             invoiceRepository.save(inv);
             auditMovements(p, List.of(reversed), "PAYMENT_REVERSED");
+            automationEvents.invoiceMoney(inv.getId(), p.getCustomer().getId(), "PAYMENT");
         }
         p.getAllocations().clear();
         if (p.getCreditApplied() != null && p.getCreditApplied().signum() > 0) {
@@ -237,6 +300,7 @@ public class PaymentService {
             BigDecimal newCredit = c.getCreditBalance().subtract(p.getCreditApplied());
             c.setCreditBalance(newCredit.signum() < 0 ? BigDecimal.ZERO : newCredit);
             customerRepository.save(c);
+            automationEvents.updated(TriggerEntity.CUSTOMER, c.getId(), "CREDIT");
         }
         p.setCreditApplied(BigDecimal.ZERO);
     }
@@ -265,36 +329,29 @@ public class PaymentService {
         List<Movement> applied = applyTo(p, targets, newAmount);
         Payment saved = paymentRepository.save(p);
         auditMovements(saved, applied, "PAYMENT_APPLIED");
+        automationEvents.updated(TriggerEntity.PAYMENT, paymentId, "AMOUNT");
         promiseService.reevaluateForCustomer(p.getCustomer().getId());
         return saved;
     }
 
+    /** The payment, or as of a date the payment as it was then (not found if it did not exist yet). */
     @Transactional(readOnly = true)
     public Payment get(Long id) {
-        Payment p = paymentRepository.findById(id)
+        Payment p = records.find(Payment.class, id)
                 .orElseThrow(() -> new NotFoundException("Payment not found"));
         Long callerCustomer = currentUser.customerIdOrNull();
         // Another customer's payment answers exactly as a missing one does, which is what
-        // requireInBook already does for a POC outside their book (AUTH-08).
+        // requireVisible already does for a POC outside their book (AUTH-08).
         if (callerCustomer != null && !callerCustomer.equals(p.getCustomer().getId())) {
             throw new NotFoundException("Payment not found");
         }
-        requireInBook(id);
+        requireVisible(p);
         return p;
     }
 
-    private void requireInBook(Long id) {
-        if (!queryExecutor.inScope(Payment.class, TableSchemas.PAYMENTS, id,
-                scopeResolver.forPayments().predicates())) {
-            throw new NotFoundException("Payment not found");
-        }
-    }
-
-    @Transactional(readOnly = true)
-    public List<Payment> list(Long customerId) {
-        return customerId == null
-                ? paymentRepository.findAll()
-                : paymentRepository.findByCustomerIdOrderByPaidAtDesc(customerId);
+    private void requireVisible(Payment p) {
+        scopeResolver.requireVisible(ScopeResolver.Kind.PAYMENT, p.getId(), Region.idOf(p.getRegion()),
+                "Payment not found");
     }
 
     @Transactional(readOnly = true)
@@ -302,22 +359,27 @@ public class PaymentService {
         ScopeResolver.Scope scope = scopeResolver.forPayments();
         boolean poc = scopeResolver.canSeePoc();
         var page = queryExecutor.run(Payment.class, TableSchemas.PAYMENTS, query,
-                scope.predicates(), List.of("customer", "collectionPoc"));
-        return PageResponse.of(
-                page.content().stream().map(p -> PaymentDtos.PaymentDto.from(p, poc)).toList(),
-                query, page.total(), scope.lockedFilters());
+                scope.predicates(), List.of("customer", "collectionPoc", "region"));
+        Set<Long> pending = pendingChangeScope.pendingOn(ENTITY, page.content().stream().map(Payment::getId).toList());
+        return PageResponse.of(page.content().stream()
+                        .map(p -> PaymentDtos.PaymentDto.from(p, poc, recordAccess)
+                                .withPendingApproval(pending.contains(p.getId())))
+                        .toList(),
+                query, page.total(), scope);
     }
 
+    /** The ids a bulk action or export may touch: VIEW for an export, MANAGE (and any extras) for a write. */
     @Transactional(readOnly = true)
-    public List<Long> idsMatching(TableQuery query, int limit) {
+    public List<Long> idsMatching(TableQuery query, int limit, ScopeResolver.Access access, String... alsoRequired) {
         return queryExecutor.ids(Payment.class, TableSchemas.PAYMENTS, query,
-                scopeResolver.forPayments().predicates(), limit);
+                scopeResolver.scope(ScopeResolver.Kind.PAYMENT, access, ScopeResolver.Reach.SELECTED, alsoRequired)
+                        .predicates(), limit);
     }
 
     @Transactional(readOnly = true)
     public List<Payment> allMatching(TableQuery query) {
         return queryExecutor.run(Payment.class, TableSchemas.PAYMENTS, query,
-                scopeResolver.forPayments().predicates(), List.of("customer", "collectionPoc")).content();
+                scopeResolver.forPayments().predicates(), List.of("customer", "collectionPoc", "region")).content();
     }
 
     @Transactional(readOnly = true)

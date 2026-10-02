@@ -3,15 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
 import '../../shared/widgets/detail_scaffold.dart';
+import '../approvals/pending_banner.dart';
+import '../assignees/record_assignees.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_providers.dart';
+import '../regions/regions_screen.dart';
 import 'promise_form_dialog.dart';
 import 'promise_providers.dart';
 import 'promises_tab.dart';
@@ -27,23 +31,29 @@ class PromiseDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(promiseDetailProvider(id));
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.promiseManage) ?? false;
-    final canOverride = user?.has(Privileges.promiseOverride) ?? false;
+    // A past date is read only (D2).
+    final asOf = ref.watch(viewAsOfProvider);
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => RecordUnavailable(
-        message: notFoundMessage(e, 'promise'),
+        message: notFoundMessage(e, 'promise', asOf: asOf),
         onBack: () => context.go('/promises'),
       ),
       data: (p) {
         final title = 'Promise #${p.id}';
+        // The server says what this user may do to this promise in its region (D14); a snapshot
+        // without the flags falls back to the privileges. The server remains the authority.
+        final canManage =
+            asOf == null && (p.canManage ?? user?.has(Privileges.promiseManage) ?? false);
+        final canOverride =
+            asOf == null && (p.canOverride ?? user?.has(Privileges.promiseOverride) ?? false);
         final send = sendEmailHeaderButton(context, ref,
-            type: EmailEntityType.promise, entityId: p.id, entityLabel: title);
-        final email =
-            emailDetailTab(ref, type: EmailEntityType.promise, entityId: p.id, entityLabel: title);
+            type: EmailEntityType.promise, entityId: p.id, entityLabel: title, regionId: p.regionId);
+        final email = emailDetailTab(ref,
+            type: EmailEntityType.promise, entityId: p.id, entityLabel: title, regionId: p.regionId);
 
         return DetailScaffold(
           title: title,
@@ -87,7 +97,21 @@ class PromiseDetailScreen extends ConsumerWidget {
           ],
           initialTabSlug: initialTab,
           onTabChanged: (slug) => context.go('/promises/$id?tab=$slug'),
-          top: _top(context, p, canSeePoc: canSeePoc),
+          top: _top(context, p,
+              canSeePoc: canSeePoc,
+              showRegion: user?.multiRegion ?? false,
+              // Co-assignees are added here, after the promise is made (PC-14).
+              onEditAssignees: canManage
+                  ? () async {
+                      final saved = await showRecordAssigneesDialog(context,
+                          type: EmailEntityType.promise,
+                          entityId: p.id,
+                          path: '/api/promises/${p.id}/assignees',
+                          title: 'Assign promise #${p.id}',
+                          current: p.assignees ?? const []);
+                      if (saved) _refresh(ref);
+                    }
+                  : null),
           tabs: [
             if (canViewAudit)
               DetailTab(
@@ -114,13 +138,16 @@ class PromiseDetailScreen extends ConsumerWidget {
     ref.invalidate(auditHistoryProvider);
   }
 
-  Widget _top(BuildContext context, PaymentPromise p, {required bool canSeePoc}) {
+  Widget _top(BuildContext context, PaymentPromise p,
+      {required bool canSeePoc, required bool showRegion, VoidCallback? onEditAssignees}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // A change to it held for approval shows here, above everything else (G5).
+          PendingChangeBanner(entityType: 'PROMISE', entityId: p.id),
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -171,6 +198,16 @@ class PromiseDetailScreen extends ConsumerWidget {
               span: 2,
               child: Text((p.notes ?? '').isEmpty ? '—' : p.notes!),
             ),
+            if (showRegion)
+              DetailGridItem(
+                  label: 'Region', child: Text(regionLabel(p.regionCode, p.regionName))),
+            // Beside the one accountable Collection POC; only a promise's own page carries them.
+            if (p.assignees != null)
+              DetailGridItem(
+                label: 'Also assigned to',
+                span: 2,
+                child: RecordAssigneesView(assignees: p.assignees!, onEdit: onEditAssignees),
+              ),
             if (p.statusOverridden)
               DetailGridItem(
                 label: 'Status override',

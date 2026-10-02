@@ -52,6 +52,16 @@ class PaymentRecord {
   final PocUser? collectionPoc;
   final bool pocMissing;
 
+  final int? regionId;
+  final String? regionCode;
+  final String? regionName;
+
+  /// Whether this user may change this payment in its region (D14); null in a snapshot.
+  final bool? canManage;
+
+  /// A change to it is awaiting approval (list rows only).
+  final bool? pendingApproval;
+
   const PaymentRecord({
     required this.id,
     required this.customerId,
@@ -66,6 +76,11 @@ class PaymentRecord {
     required this.customerCreditBalance,
     this.collectionPoc,
     this.pocMissing = false,
+    this.regionId,
+    this.regionCode,
+    this.regionName,
+    this.canManage,
+    this.pendingApproval,
   });
 
   factory PaymentRecord.fromJson(Map<String, dynamic> json) => PaymentRecord(
@@ -86,5 +101,10 @@ class PaymentRecord {
             ? null
             : PocUser.fromJson(json['collectionPoc'] as Map<String, dynamic>),
         pocMissing: json['pocMissing'] as bool? ?? false,
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionCode: json['regionCode'] as String?,
+        regionName: json['regionName'] as String?,
+        canManage: json['canManage'] as bool?,
+        pendingApproval: json['pendingApproval'] as bool?,
       );
 }

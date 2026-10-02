@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../shared/models/dispute.dart';
 
 @immutable
@@ -25,6 +27,7 @@ class DisputeScope {
 
 final scopedDisputesProvider =
     FutureProvider.autoDispose.family<List<Dispute>, DisputeScope>((ref, scope) async {
+  final view = ref.watch(viewScopeProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/disputes', queryParameters: {
     'size': 50,
@@ -32,6 +35,7 @@ final scopedDisputesProvider =
     if (scope.targetId != null) 'targetId': scope.targetId,
     if (scope.customerId != null) 'customerId': scope.customerId,
   });
+  checkAsOf(res, view.asOf);
   return ((res.data as Map)['content'] as List)
       .cast<Map<String, dynamic>>()
       .map(Dispute.fromJson)
@@ -40,7 +44,9 @@ final scopedDisputesProvider =
 
 final disputeDetailProvider =
     FutureProvider.autoDispose.family<Dispute, int>((ref, id) async {
+  final asOf = ref.watch(viewAsOfProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/disputes/$id');
+  checkAsOf(res, asOf);
   return Dispute.fromJson(res.data as Map<String, dynamic>);
 });

@@ -109,11 +109,14 @@ class TopOutstandingTable extends StatelessWidget {
   final CustomerRanking ranking;
   final bool canOpenCustomer;
 
-  const TopOutstandingTable({super.key, required this.ranking, required this.canOpenCustomer});
+  /// The dashboard's today: the day viewed, when it is a past one.
+  final DateTime today;
+
+  const TopOutstandingTable(
+      {super.key, required this.ranking, required this.canOpenCustomer, required this.today});
 
   @override
   Widget build(BuildContext context) {
-    final today = todayUtc();
     return DashTable(
       empty: 'Nothing is outstanding',
       columns: const [
@@ -180,11 +183,15 @@ class UpcomingPromisesTable extends StatelessWidget {
   final bool showCustomer;
   final bool showPoc;
 
+  /// The dashboard's today: the day viewed, when it is a past one.
+  final DateTime today;
+
   const UpcomingPromisesTable({
     super.key,
     required this.promises,
     required this.showCustomer,
     required this.showPoc,
+    required this.today,
   });
 
   static String _due(DateTime promisedDate, DateTime today) {
@@ -200,7 +207,6 @@ class UpcomingPromisesTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final today = todayUtc();
     return DashTable(
       empty: 'No promises are due',
       columns: [

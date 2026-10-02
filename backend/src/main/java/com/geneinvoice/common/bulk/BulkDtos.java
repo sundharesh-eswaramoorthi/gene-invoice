@@ -44,6 +44,9 @@ public class BulkDtos {
 
     public record BulkOutcome(Long id, String reason) {}
 
+    /** A row whose change was held for approval: nothing about the record changed yet (§6.7). */
+    public record BulkPending(Long id, Long pendingChangeId, String summary) {}
+
     public record BulkResult(
             String action,
             int requested,
@@ -51,6 +54,7 @@ public class BulkDtos {
             List<BulkOutcome> failed,
             List<BulkOutcome> skipped,
             boolean truncated,
-            int limit
+            int limit,
+            List<BulkPending> pending
     ) {}
 }

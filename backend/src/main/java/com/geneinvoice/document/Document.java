@@ -1,6 +1,7 @@
 package com.geneinvoice.document;
 
 import com.geneinvoice.common.FieldLimits;
+import com.geneinvoice.common.time.AppClock;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.ColumnDefault;
@@ -93,7 +94,7 @@ public class Document {
 
     @PrePersist
     void onCreate() {
-        Instant now = Instant.now();
+        Instant now = AppClock.now();
         this.createdAt = now;
         this.updatedAt = now;
         if (this.uploadedAt == null) {
@@ -103,6 +104,6 @@ public class Document {
 
     @PreUpdate
     void onUpdate() {
-        this.updatedAt = Instant.now();
+        this.updatedAt = AppClock.now();
     }
 }

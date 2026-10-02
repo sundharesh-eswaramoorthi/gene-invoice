@@ -1,7 +1,8 @@
 package com.geneinvoice.user;
 
-import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -11,7 +12,15 @@ import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> findByIdForUpdate(@Param("id") Long id);
     boolean existsByUsername(String username);
+
+    /** Who last set this login's password for it, when it was not its owner (§5.11.8). */
+    @Query("select u.credentialsSetByUserId from User u where u.id = :id")
+    Optional<Long> findCredentialsSetBy(@Param("id") Long userId);
 
     /**
      * Usernames are unique whatever their case, the way emails already are: "ADMIN" must not be
@@ -35,29 +44,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByRoleName(String roleName);
 
     @Query("""
-            select distinct u from User u
-              join u.role r
-              join r.privileges p
-            where u.active = true
-              and u.customerId is null
-              and p.name = :privilege
-              and (:q is null
-                   or lower(u.username) like :q escape '\\'
-                   or lower(coalesce(u.fullName, '')) like :q escape '\\'
-                   or lower(coalesce(u.email, '')) like :q escape '\\')
-            order by u.fullName asc, u.username asc
-            """)
-    List<User> findAssignable(@Param("privilege") String privilege,
-                              @Param("q") String lowercaseLikePattern,
-                              Pageable pageable);
-
-    @Query("""
             select count(u) > 0 from User u
               join u.role r
               join r.privileges p
             where u.id = :userId and p.name = :privilege
             """)
     boolean hasPrivilege(@Param("userId") Long userId, @Param("privilege") String privilege);
+
+    /** Active staff whose role holds a global privilege: who hears that a rule was suspended (§5.10.7). */
+    @Query("""
+            select distinct u from User u
+              join u.role r
+              join r.privileges p
+            where u.active = true and u.customerId is null and p.name = :privilege
+            order by u.id
+            """)
+    List<User> findActiveStaffHolding(@Param("privilege") String privilege);
 
     @Query("""
             select count(distinct u.id) from User u

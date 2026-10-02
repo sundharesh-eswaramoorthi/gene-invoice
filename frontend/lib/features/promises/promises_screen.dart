@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
+import '../../shared/widgets/status_chip.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_providers.dart';
@@ -17,6 +19,7 @@ import '../poc/poc_picker.dart';
 import 'promise_form_dialog.dart';
 import 'promise_providers.dart';
 import 'promises_tab.dart';
+import '../regions/regions_screen.dart';
 
 class PromisesScreen extends ConsumerWidget {
   final TableQuery query;
@@ -25,8 +28,10 @@ class PromisesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.promiseManage) ?? false;
-    final canOverride = user?.has(Privileges.promiseOverride) ?? false;
+    // A past date is read only (D2).
+    final historical = ref.watch(isHistoricalProvider);
+    final canManage = !historical && (user?.has(Privileges.promiseManage) ?? false);
+    final canOverride = !historical && (user?.has(Privileges.promiseOverride) ?? false);
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canSendEmail = ref.watch(canSendEmailProvider);
@@ -118,8 +123,9 @@ class PromisesScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, p) =>
+            cell: (context, p) => PendingApprovalChip.beside(
                 PromiseStatusChip(status: p.status, overridden: p.statusOverridden),
+                p.pendingApproval),
           ),
           TableColumnSpec(
             label: 'Fulfilled',
@@ -140,6 +146,8 @@ class PromisesScreen extends ConsumerWidget {
               maxWidth: 180,
               cell: (context, p) => PocNameCell(user: p.collectionPoc),
             ),
+          if (user?.multiRegion ?? false)
+            regionColumn<PaymentPromise>((p) => p.regionCode, (p) => p.regionName),
         ],
         rowActions: (context, p) => [
           IconButton(
@@ -148,8 +156,12 @@ class PromisesScreen extends ConsumerWidget {
             onPressed: () => context.go('/customers/${p.customerId}?tab=promises'),
           ),
           sendEmailRowAction(context,
-              type: EmailEntityType.promise, entityId: p.id, entityLabel: 'Promise #${p.id}'),
-          if (canOverride && p.isLive)
+              type: EmailEntityType.promise,
+              entityId: p.id,
+              entityLabel: 'Promise #${p.id}',
+              regionId: p.regionId),
+          // The row's own flag says whether this user may override it in its region (D14).
+          if (!historical && (p.canOverride ?? canOverride) && p.isLive)
             IconButton(
               tooltip: 'Override status',
               icon: const Icon(Icons.rule, size: 18),

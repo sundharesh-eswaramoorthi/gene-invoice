@@ -2,9 +2,13 @@ package com.geneinvoice.email;
 
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.GlobalExceptionHandler;
 import com.geneinvoice.email.EmailDtos.EmailToken;
 import com.geneinvoice.email.EmailTargets.Person;
 import com.geneinvoice.email.EmailTargets.Target;
+import com.geneinvoice.region.Region;
+import com.geneinvoice.region.RegionAccessQueries;
+import com.geneinvoice.region.RegionRepository;
 import com.geneinvoice.user.User;
 import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
@@ -26,6 +31,8 @@ public class EmailAddressing {
     private final UserRepository userRepository;
     private final EmailTargets targets;
     private final CurrentUser currentUser;
+    private final RegionAccessQueries regionAccess;
+    private final RegionRepository regionRepository;
 
     private enum Kind { USER, ROLE, CUSTOMER }
 
@@ -110,16 +117,29 @@ public class EmailAddressing {
     }
 
     private Person activeInternalUser(Long userId) {
+        return Person.of(requireActiveInternalUser(userRepository, userId));
+    }
+
+    /** A person named by id: an existing, active staff account. Assignees are checked the same way (§5.9.1). */
+    public static User requireActiveInternalUser(UserRepository users, Long userId) {
         if (userId == null) throw new BadRequestException("A USER entry needs a userId");
-        User u = userRepository.findById(userId)
+        User u = users.findById(userId)
                 .orElseThrow(() -> new BadRequestException("User #" + userId + " does not exist"));
         if (!u.isActive() || u.getCustomerId() != null) {
             throw new BadRequestException(u.getUsername() + " is not an active internal user");
         }
-        return Person.of(u);
+        return u;
     }
 
     private static RoleRef offeredRole(EmailEntityType type, List<RoleRef> offered, EmailToken token) {
+        return requireOfferedRole(type, offered, token);
+    }
+
+    /**
+     * A role token as one of the roles offered on this kind of record; a token without a level takes the role's
+     * usual level there. Assignees are checked the same way (§5.9.1).
+     */
+    public static RoleRef requireOfferedRole(EmailEntityType type, List<RoleRef> offered, EmailToken token) {
         EmailRole role = EmailRole.parse(token.role());
         RoleLevel level = token.level() == null || token.level().isBlank()
                 ? EmailTargets.defaultLevel(type, role)
@@ -136,6 +156,7 @@ public class EmailAddressing {
     }
 
     public Resolution resolve(Plan plan, Target target) {
+        requireRegionAccess(plan, target);
         List<String> problems = new ArrayList<>();
         Person from = plan.from().person();
         RoleRef fromRole = plan.from().role();
@@ -180,6 +201,35 @@ public class EmailAddressing {
         List<EmailDtos.Unresolved> unresolved = missing.keySet().stream()
                 .map(token -> describeUnresolved(target.type(), token, target.label())).toList();
         return new Resolution(from, fromRole, recipients.entries(), unresolved, problems);
+    }
+
+    /**
+     * Staff named directly as a recipient or as the sender of an email about a record must hold a grant in its
+     * region (PC-2, SC-3): a person who cannot open the record is not written to about it, nor made to write.
+     * One grants query per email; an email about no region (a product, a user, a role) is not checked.
+     */
+    private void requireRegionAccess(Plan plan, Target target) {
+        if (target.regionId() == null) return;
+        Map<String, Person> named = new LinkedHashMap<>();
+        Person from = plan.from().person();
+        if (plan.from().role() == null && from != null && from.internal()) named.put("from", from);
+        for (int i = 0; i < plan.to().size(); i++) {
+            Person to = plan.to().get(i).person();
+            if (to != null && to.internal()) named.put("to[" + i + "]", to);
+        }
+        if (named.isEmpty()) return;
+        Set<Long> reach = regionAccess.withAccess(
+                named.values().stream().map(Person::userId).collect(Collectors.toSet()), target.regionId());
+        Map<String, String> errors = new LinkedHashMap<>();
+        String region = null;
+        for (Map.Entry<String, Person> e : named.entrySet()) {
+            if (reach.contains(e.getValue().userId())) continue;
+            if (region == null) {
+                region = regionRepository.findById(target.regionId()).map(Region::getName).orElse("this region");
+            }
+            errors.put(e.getKey(), e.getValue().name() + " has no access to " + region);
+        }
+        if (!errors.isEmpty()) throw new GlobalExceptionHandler.InvalidFieldsException(errors);
     }
 
     private static String inWords(List<String> parts) {

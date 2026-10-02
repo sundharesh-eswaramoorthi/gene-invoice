@@ -23,7 +23,7 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -45,10 +45,11 @@ public class GmailConnectionService {
     private final UserRepository userRepository;
     private final TransactionTemplate transactions;
     private final TransactionTemplate ownTransaction;
+    private final Clock clock;
 
     public GmailConnectionService(GmailConnectionRepository repository, MailTransport transport,
                                   MailConnections connections, CurrentUser currentUser, UserRepository userRepository,
-                                  PlatformTransactionManager transactionManager) {
+                                  PlatformTransactionManager transactionManager, Clock clock) {
         this.repository = repository;
         this.transport = transport;
         this.connections = connections;
@@ -57,6 +58,7 @@ public class GmailConnectionService {
         this.transactions = new TransactionTemplate(transactionManager);
         this.ownTransaction = new TransactionTemplate(transactionManager);
         this.ownTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.clock = clock;
     }
 
     public GmailConnectionDto mine() {
@@ -182,7 +184,7 @@ public class GmailConnectionService {
     private void ensureCopy(long userId) {
         if (repository.existsById(userId)) return;
         try {
-            ownTransaction.executeWithoutResult(tx -> repository.insertBlank(userId, Instant.now()));
+            ownTransaction.executeWithoutResult(tx -> repository.insertBlank(userId, clock.instant()));
         } catch (DataIntegrityViolationException e) {
         }
     }

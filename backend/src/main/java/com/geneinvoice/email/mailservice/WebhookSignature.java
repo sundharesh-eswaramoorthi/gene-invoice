@@ -1,5 +1,7 @@
 package com.geneinvoice.email.mailservice;
 
+import com.geneinvoice.common.time.WallClock;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -19,7 +21,7 @@ public final class WebhookSignature {
     private static final String PREFIX = "sha256=";
 
     public static boolean verify(String secret, String timestampHeader, String signatureHeader, byte[] body) {
-        return verify(secret, timestampHeader, signatureHeader, body, Instant.now());
+        return verify(secret, timestampHeader, signatureHeader, body, WallClock.UTC.instant());
     }
 
     static boolean verify(String secret, String timestampHeader, String signatureHeader, byte[] body, Instant now) {

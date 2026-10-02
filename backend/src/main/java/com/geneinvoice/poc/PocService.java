@@ -1,13 +1,25 @@
 package com.geneinvoice.poc;
 
 import com.geneinvoice.audit.AuditService;
+import com.geneinvoice.automation.event.AutomationEvents;
+import com.geneinvoice.automation.rule.TriggerEntity;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.common.Strings;
+import com.geneinvoice.common.scope.AsOf;
+import com.geneinvoice.common.scope.AsOfPoint;
+import com.geneinvoice.common.scope.ViewScopeHolder;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.customer.CustomerRepository;
+import com.geneinvoice.history.HistoryQueries;
 import com.geneinvoice.notification.NotificationService;
+import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.AccessLevel;
+import com.geneinvoice.region.Region;
+import com.geneinvoice.region.RegionAccessQueries;
+import com.geneinvoice.region.RegionRepository;
+import com.geneinvoice.region.UserRegionGrantRepository;
 import com.geneinvoice.user.User;
 import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,12 +28,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,6 +46,8 @@ public class PocService {
     public static final String AUDIT_POC_REMOVED = "POC_REMOVED";
     public static final String AUDIT_POC_PRIMARY_CHANGED = "POC_PRIMARY_CHANGED";
     private static final String NOTIF_POC_ASSIGNED = "POC_ASSIGNED";
+    /** The change label of a customer whose POC seats changed: the seat columns of the customers list. */
+    private static final String SEATS_CHANGED = "POC_SEATS";
 
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
@@ -38,21 +55,51 @@ public class PocService {
     private final AuditService auditService;
     private final NotificationService notificationService;
     private final CurrentUser currentUser;
+    private final RegionAccessQueries regionAccess;
+    private final UserRegionGrantRepository grantRepository;
+    private final RegionRepository regionRepository;
+    private final HistoryQueries historyQueries;
+    private final AutomationEvents automationEvents;
 
+    /**
+     * People who may be picked as this kind of POC in any of these regions: active staff whose role holds the
+     * assignability privilege and whose grant there reaches its level. No regions, nobody.
+     */
     @Transactional(readOnly = true)
-    public List<User> assignable(PocType type, String query, int limit) {
+    public List<User> assignable(PocType type, Collection<Long> regionIds, String query, int limit) {
+        if (regionIds == null || regionIds.isEmpty()) return List.of();
         // The picker's box is a plain substring search, so the user's own % and _ match only
         // themselves rather than acting as wildcards (CP-11).
         String pattern = (query == null || query.isBlank())
                 ? null
                 : "%" + Strings.escapeLike(query.trim().toLowerCase(Locale.ROOT)) + "%";
         int capped = Math.min(Math.max(limit, 1), 100);
-        return userRepository.findAssignable(type.assignabilityPrivilege(), pattern,
-                PageRequest.of(0, capped));
+        String privilege = type.assignabilityPrivilege();
+        return grantRepository.findAssignableInRegions(privilege, regionIds,
+                AccessLevel.atLeast(Privileges.requiredLevel(privilege)), pattern, PageRequest.of(0, capped));
     }
 
+    /**
+     * Someone who may be this kind of POC on a record in this region: today's checks, and then a grant in the
+     * region that reaches the privilege's level. A person who cannot see the region cannot hold a role in it.
+     */
     @Transactional(readOnly = true)
-    public User requireAssignable(Long userId, PocType type) {
+    public User requireAssignable(Long userId, PocType type, Long regionId) {
+        User u = requireAssignableByRole(userId, type);
+        if (!regionAccess.holds(userId, type.assignabilityPrivilege(), regionId)) {
+            String code = regionId == null ? "?" : regionRepository.findById(regionId).map(Region::getCode).orElse("?");
+            throw new BadRequestException("User " + u.getUsername() + " is not assignable as " + type.label()
+                    + " in region " + code);
+        }
+        return u;
+    }
+
+    /**
+     * Today's checks alone, before any region: active, internal, and a role that may hold the POC. For a request
+     * that spans regions (bulk ADD_POC), which then holds each record to its own region through {@link #add}.
+     */
+    @Transactional(readOnly = true)
+    public User requireAssignableByRole(Long userId, PocType type) {
         if (userId == null) {
             throw new BadRequestException(type.label() + " is required");
         }
@@ -71,26 +118,12 @@ public class PocService {
         return u;
     }
 
-    @Transactional(readOnly = true)
-    public Optional<User> callerIfAssignable(PocType type) {
-        User caller = currentUser.require();
-        if (caller.getCustomerId() != null) return Optional.empty();
-        return userRepository.hasPrivilege(caller.getId(), type.assignabilityPrivilege())
-                ? Optional.of(caller)
-                : Optional.empty();
-    }
-
+    /** The customer's seats, by type, the primary first; as of a date, the seats it had then (§5.7.17). */
     @Transactional(readOnly = true)
     public List<CustomerPoc> listFor(Long customerId) {
+        AsOfPoint point = AsOf.current();
+        if (point != null) return historyQueries.seatsAt(List.of(customerId), point);
         return customerPocRepository.findByCustomerIdOrderByPocTypeAscPrimaryDescIdAsc(customerId);
-    }
-
-    @Transactional(readOnly = true)
-    public Optional<User> primaryFor(Long customerId, PocType type) {
-        // The oldest of them, on the off-chance a database from before the invariant was the
-        // database's own still holds two: a reader answers, it does not fail (CP-02).
-        return customerPocRepository.findByCustomerIdAndPocTypeAndPrimaryTrueOrderByIdAsc(customerId, type)
-                .stream().findFirst().map(CustomerPoc::getUser);
     }
 
     @Transactional(readOnly = true)
@@ -103,6 +136,10 @@ public class PocService {
         return activeHoldersByType(customerId).getOrDefault(type, List.of());
     }
 
+    /**
+     * The customer's active seat holders by kind, primary first. Someone with no access to the customer's region
+     * holds no role on it (§5.6.7): they are left out, so they are neither emailed as the role nor defaulted to.
+     */
     @Transactional(readOnly = true)
     public Map<PocType, List<User>> activeHoldersByType(Long customerId) {
         Map<PocType, List<User>> byType = new EnumMap<>(PocType.class);
@@ -111,7 +148,24 @@ public class PocService {
                 byType.computeIfAbsent(seat.getPocType(), t -> new ArrayList<>()).add(seat.getUser());
             }
         }
-        return byType;
+        if (byType.isEmpty()) return byType;
+        Long regionId = customerRepository.regionIdOf(customerId).orElse(null);
+        Set<Long> reach = regionAccess.withAccess(byType.values().stream().flatMap(List::stream)
+                .map(User::getId).collect(Collectors.toSet()), regionId);
+        Map<PocType, List<User>> holders = new EnumMap<>(PocType.class);
+        byType.forEach((type, users) -> {
+            List<User> kept = users.stream().filter(u -> reach.contains(u.getId())).toList();
+            if (!kept.isEmpty()) holders.put(type, kept);
+        });
+        return holders;
+    }
+
+    /** Those of these people who hold any grant in the region, in their order; one grants query. */
+    public List<User> withRegionAccess(List<User> users, Long regionId) {
+        if (users.isEmpty()) return users;
+        Set<Long> reach = regionAccess.withAccess(users.stream().map(User::getId).collect(Collectors.toSet()),
+                regionId);
+        return users.stream().filter(u -> reach.contains(u.getId())).toList();
     }
 
     @Transactional
@@ -123,7 +177,8 @@ public class PocService {
         // rather than both finding an empty group, both calling themselves the first seat and
         // both ending up primary — after which "make primary" could never be answered (CP-02).
         Customer customer = lockCustomer(customerId);
-        User user = requireAssignable(userId, type);
+        Long regionId = requireAssignIn(customer);
+        User user = requireAssignable(userId, type, regionId);
 
         if (customerPocRepository.findByCustomerIdAndUserIdAndPocType(customerId, userId, type).isPresent()) {
             throw new AlreadyAssignedException(user.getUsername() + " is already a " + type.label()
@@ -157,8 +212,9 @@ public class PocService {
                     currentUser.require().getId(), null,
                     "Primary " + type.label() + " is now " + user.getUsername());
         }
+        automationEvents.updated(TriggerEntity.CUSTOMER, customerId, SEATS_CHANGED);
 
-        notifyAssignee(user, type, "customer " + customer.getName(), "/customers/" + customerId);
+        notifyAssignee(user, type, "customer " + customer.getName(), "/customers/" + customerId, regionId);
         return poc;
     }
 
@@ -170,7 +226,7 @@ public class PocService {
 
     @Transactional
     public void remove(Long customerId, Long pocId) {
-        lockCustomer(customerId);
+        requireAssignIn(lockCustomer(customerId));
         CustomerPoc poc = customerPocRepository.findById(pocId)
                 .orElseThrow(() -> new NotFoundException("POC assignment not found"));
         if (!poc.getCustomer().getId().equals(customerId)) {
@@ -219,6 +275,7 @@ public class PocService {
                     currentUser.require().getId(), null,
                     "Primary " + type.label() + " is now " + promoted.getUser().getUsername());
         }
+        automationEvents.updated(TriggerEntity.CUSTOMER, customerId, SEATS_CHANGED);
     }
 
     @Transactional
@@ -226,7 +283,7 @@ public class PocService {
         // Clearing the old primary and marking the new one is one change, and has to happen
         // inside one serialised transaction: two people tapping different chips at the same
         // moment used to leave both seats primary (CP-02).
-        lockCustomer(customerId);
+        requireAssignIn(lockCustomer(customerId));
         CustomerPoc poc = customerPocRepository.findById(pocId)
                 .orElseThrow(() -> new NotFoundException("POC assignment not found"));
         if (!poc.getCustomer().getId().equals(customerId)) {
@@ -243,6 +300,7 @@ public class PocService {
                         poc.getUser().getUsername(), true),
                 currentUser.require().getId(), null,
                 "Primary " + poc.getPocType().label() + " is now " + poc.getUser().getUsername());
+        automationEvents.updated(TriggerEntity.CUSTOMER, customerId, SEATS_CHANGED);
         return saved;
     }
 
@@ -264,14 +322,24 @@ public class PocService {
                 .orElseThrow(() -> new NotFoundException("Customer not found"));
     }
 
-    public void notifyAssignee(User assignee, PocType type, String what, String link) {
+    /** Seats are changed only where the caller may assign POCs, read under the customer's lock (§5.6.6). */
+    private Long requireAssignIn(Customer customer) {
+        ViewScopeHolder.requireLive();
+        Long regionId = Region.idOf(customer.getRegion());
+        currentUser.requireIn(Privileges.POC_ASSIGN, regionId);
+        return regionId;
+    }
+
+    /** Tells a new POC; one who cannot reach the record's region is not sent a link they cannot open (SC-17). */
+    public void notifyAssignee(User assignee, PocType type, String what, String link, Long regionId) {
         if (assignee == null) return;
         Long actor = currentUser.require().getId();
         if (assignee.getId().equals(actor)) return;
+        if (!regionAccess.withAccess(List.of(assignee.getId()), regionId).contains(assignee.getId())) return;
         notificationService.notify(assignee.getId(), NOTIF_POC_ASSIGNED,
                 "You are now " + type.label(),
                 "You have been assigned as " + type.label() + " for " + what + ".",
-                link);
+                link, regionId);
     }
 
     public record PocAuditSnapshot(String pocType, Long userId, String username, boolean primary) {}

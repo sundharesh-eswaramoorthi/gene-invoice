@@ -3,13 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/pending_reply.dart';
 import '../../core/field_limits.dart';
 import '../../core/format.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/invoice.dart';
+import '../../shared/models/privileges.dart';
 import '../../shared/models/promise.dart';
 import '../../shared/widgets/search_picker_field.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../auth/auth_controller.dart';
 import '../customers/customers_screen.dart';
 import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
@@ -25,17 +28,24 @@ Future<bool?> showRecordPaymentDialog({
     builder: (_) => _RecordPaymentDialog(initialCustomer: customer),
   );
   if (saved == null) return false;
+  final held = saved.pending;
+  if (held != null) {
+    // Nothing was recorded yet, so there is no payment to email about (B2).
+    if (context.mounted) showSentForApproval(context, held);
+    return true;
+  }
   if (context.mounted) {
     await notifyByEmailAfterSave(context,
         notify: saved.notify,
         type: EmailEntityType.payment,
-        entityId: saved.id,
+        entityId: saved.id!,
         event: EmailEvent.created);
   }
   return true;
 }
 
-typedef _RecordedPayment = ({int id, bool notify});
+/// A recorded payment's id, or — when it waits for approval — the change it is held as.
+typedef _RecordedPayment = ({int? id, PendingChangeRef? pending, bool notify});
 
 class _RecordPaymentDialog extends ConsumerStatefulWidget {
   final Customer? initialCustomer;
@@ -121,9 +131,15 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
         if (_selectedInvoices.isNotEmpty) 'invoiceIds': _selectedInvoices.toList(),
         if (_selectedPromises.isNotEmpty) 'promiseIds': _selectedPromises.toList(),
       });
+      // A held payment names no payment: it has none until someone approves it (§6.6).
+      final held = pendingFrom(res);
+      if (held != null) invalidateApprovals(ref);
       if (mounted) {
-        Navigator.of(context)
-            .pop<_RecordedPayment>((id: (res.data as Map)['id'] as int, notify: _notify));
+        Navigator.of(context).pop<_RecordedPayment>((
+          id: held == null ? (res.data as Map)['id'] as int : null,
+          pending: held,
+          notify: _notify,
+        ));
       }
     } catch (e) {
       setState(() => _error = apiErrorMessage(e));
@@ -156,7 +172,10 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
                 value: _customer,
                 labelOf: (c) => c.name,
                 subtitleOf: (c) => c.email,
-                search: (q) => searchCustomers(ref.read(dioProvider), q),
+                // Only customers in regions where this user may record payments (§7.5).
+                search: (q) => searchCustomers(ref.read(dioProvider), q,
+                    regionIds:
+                        regionsForPicker(ref.read(currentUserProvider), Privileges.paymentManage)),
                 errorText: _submitted && _customer == null ? 'Pick a customer' : null,
                 onChanged: (c) => setState(() {
                   _customer = c;
@@ -170,6 +189,7 @@ class _RecordPaymentDialogState extends ConsumerState<_RecordPaymentDialog> {
               if (canSeePoc)
                 PocPicker(
                   type: PocType.COLLECTION,
+                  customerId: _customer?.id,
                   value: _collectionPoc,
                   required: true,
                   errorText: _submitted && _collectionPoc == null

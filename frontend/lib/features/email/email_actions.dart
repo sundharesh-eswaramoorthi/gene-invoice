@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/scope/view_scope.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
@@ -15,8 +16,16 @@ export 'email_models.dart' show EmailEvent;
 export 'send_email_dialog.dart' show EmailComposeOutcome;
 export 'gmail_connection_screen.dart' show UserGmailStatus;
 
-final canSendEmailProvider = Provider<bool>(
-    (ref) => ref.watch(currentUserProvider)?.has(Privileges.emailSend) ?? false);
+// Sending is a write, and a past date is read only (D2).
+final canSendEmailProvider = Provider<bool>((ref) =>
+    !ref.watch(isHistoricalProvider) &&
+    (ref.watch(currentUserProvider)?.has(Privileges.emailSend) ?? false));
+/// Sending about one record needs EMAIL_SEND in that record's region (§7.5); the server checks it
+/// again. With no region known — a snapshot, a customer login — the flat privilege answers.
+final canSendEmailInProvider = Provider.family<bool, int?>((ref, regionId) =>
+    ref.watch(canSendEmailProvider) &&
+    (regionId == null ||
+        (ref.watch(currentUserProvider)?.hasIn(Privileges.emailSend, regionId) ?? false)));
 final canViewEmailProvider = Provider<bool>(
     (ref) => ref.watch(currentUserProvider)?.has(Privileges.emailView) ?? false);
 
@@ -33,8 +42,9 @@ Future<EmailComposeOutcome> showSendEmailForPickedRecord(BuildContext context,
     openSendEmailForPickedRecord(context, type: type);
 
 Widget sendEmailRowAction(BuildContext context,
-    {required EmailEntityType type, required int entityId, String? entityLabel}) {
-  final canSend = ProviderScope.containerOf(context, listen: false).read(canSendEmailProvider);
+    {required EmailEntityType type, required int entityId, String? entityLabel, int? regionId}) {
+  final canSend =
+      ProviderScope.containerOf(context, listen: false).read(canSendEmailInProvider(regionId));
   if (!canSend) return const SizedBox.shrink();
   return IconButton(
     tooltip: 'Send email',
@@ -64,8 +74,8 @@ BulkActionSpec sendEmailBulkAction(EmailEntityType type) => BulkActionSpec(
     );
 
 Widget? sendEmailHeaderButton(BuildContext context, WidgetRef ref,
-    {required EmailEntityType type, required int entityId, String? entityLabel}) {
-  if (!ref.watch(canSendEmailProvider)) return null;
+    {required EmailEntityType type, required int entityId, String? entityLabel, int? regionId}) {
+  if (!ref.watch(canSendEmailInProvider(regionId))) return null;
   return OutlinedButton.icon(
     icon: const Icon(Icons.mail_outline, size: 18),
     label: const Text('Send email'),
@@ -75,13 +85,14 @@ Widget? sendEmailHeaderButton(BuildContext context, WidgetRef ref,
 }
 
 DetailTab? emailDetailTab(WidgetRef ref,
-    {required EmailEntityType type, required int entityId, String? entityLabel}) {
+    {required EmailEntityType type, required int entityId, String? entityLabel, int? regionId}) {
   if (!ref.watch(canViewEmailProvider)) return null;
   return DetailTab(
     slug: 'email',
     label: 'Email',
     icon: Icons.mail_outline,
-    builder: (context) => EmailTab(type: type, entityId: entityId, entityLabel: entityLabel),
+    builder: (context) => EmailTab(
+        type: type, entityId: entityId, entityLabel: entityLabel, regionId: regionId),
   );
 }
 

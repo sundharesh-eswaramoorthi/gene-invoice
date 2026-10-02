@@ -1,6 +1,7 @@
 package com.geneinvoice.common.query;
 
 import com.geneinvoice.auth.CurrentUser;
+import com.geneinvoice.common.scope.AsOfIgnored;
 import com.geneinvoice.privilege.Privileges;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -14,21 +15,30 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
+@AsOfIgnored
 @RequestMapping("/api/table-schemas")
 @RequiredArgsConstructor
 public class TableSchemaController {
 
-    private static final Map<String, String> VIEW_PRIVILEGE = Map.of(
-            "invoices", Privileges.INVOICE_VIEW,
-            "payments", Privileges.PAYMENT_VIEW,
-            "customers", Privileges.CUSTOMER_VIEW,
-            "promises", Privileges.PROMISE_VIEW,
-            "products", Privileges.PRODUCT_VIEW,
-            "users", Privileges.USER_VIEW,
-            "roles", Privileges.ROLE_VIEW,
-            "disputes", Privileges.DISPUTE_VIEW,
-            "notifications", Privileges.NOTIFICATION_VIEW,
-            "inbox", Privileges.EMAIL_VIEW);
+    /** Who may read each table's schema: any one of the listed privileges. */
+    private static final Map<String, List<String>> VIEW_PRIVILEGE = Map.ofEntries(
+            Map.entry("invoices", List.of(Privileges.INVOICE_VIEW)),
+            Map.entry("payments", List.of(Privileges.PAYMENT_VIEW)),
+            Map.entry("customers", List.of(Privileges.CUSTOMER_VIEW)),
+            Map.entry("promises", List.of(Privileges.PROMISE_VIEW)),
+            Map.entry("products", List.of(Privileges.PRODUCT_VIEW)),
+            Map.entry("users", List.of(Privileges.USER_VIEW)),
+            Map.entry("roles", List.of(Privileges.ROLE_VIEW)),
+            Map.entry("regions", List.of(Privileges.REGION_VIEW, Privileges.USER_MANAGE)),
+            Map.entry("disputes", List.of(Privileges.DISPUTE_VIEW)),
+            Map.entry("tasks", List.of(Privileges.TASK_VIEW)),
+            // Whoever can see a record may see a change waiting on it (§5.11.9).
+            Map.entry("approvals", List.of(Privileges.CHANGE_APPROVE, Privileges.INVOICE_VIEW, Privileges.PAYMENT_VIEW,
+                    Privileges.PROMISE_VIEW, Privileges.DISPUTE_VIEW)),
+            Map.entry("automation-rules", List.of(Privileges.AUTOMATION_VIEW)),
+            Map.entry("automation-runs", List.of(Privileges.AUTOMATION_VIEW)),
+            Map.entry("notifications", List.of(Privileges.NOTIFICATION_VIEW)),
+            Map.entry("inbox", List.of(Privileges.EMAIL_VIEW)));
 
     private final CurrentUser currentUser;
 
@@ -66,8 +76,7 @@ public class TableSchemaController {
     }
 
     private boolean mayRead(String entity) {
-        String privilege = VIEW_PRIVILEGE.get(entity);
-        return privilege != null && currentUser.has(privilege);
+        return VIEW_PRIVILEGE.getOrDefault(entity, List.of()).stream().anyMatch(currentUser::has);
     }
 
     private SchemaDto describe(TableSchema schema) {

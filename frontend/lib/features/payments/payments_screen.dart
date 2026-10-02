@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
@@ -17,12 +19,15 @@ import '../poc/poc_name_cell.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_screen.dart' show pickPocParams;
+import '../regions/regions_screen.dart';
 import 'record_payment_dialog.dart';
 
 final paymentDetailProvider =
     FutureProvider.autoDispose.family<PaymentRecord, int>((ref, id) async {
+  final asOf = ref.watch(viewAsOfProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/payments/$id');
+  checkAsOf(res, asOf);
   return PaymentRecord.fromJson(res.data as Map<String, dynamic>);
 });
 
@@ -33,7 +38,9 @@ class PaymentsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.paymentManage) ?? false;
+    // A past date is read only (D2).
+    final historical = ref.watch(isHistoricalProvider);
+    final canManage = !historical && (user?.has(Privileges.paymentManage) ?? false);
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
@@ -144,7 +151,8 @@ class PaymentsScreen extends ConsumerWidget {
           TableColumnSpec(
             label: 'Status',
             sortKey: 'status',
-            cell: (context, p) => PaymentStatusChip(status: p.status),
+            cell: (context, p) =>
+                PendingApprovalChip.beside(PaymentStatusChip(status: p.status), p.pendingApproval),
           ),
           if (canSeePoc)
             TableColumnSpec(
@@ -153,6 +161,8 @@ class PaymentsScreen extends ConsumerWidget {
               maxWidth: 180,
               cell: (context, p) => PocNameCell(user: p.collectionPoc),
             ),
+          if (user?.multiRegion ?? false)
+            regionColumn<PaymentRecord>((p) => p.regionCode, (p) => p.regionName),
         ],
         rowActions: (context, p) => [
           IconButton(
@@ -161,7 +171,10 @@ class PaymentsScreen extends ConsumerWidget {
             onPressed: () => context.go('/payments/${p.id}'),
           ),
           sendEmailRowAction(context,
-              type: EmailEntityType.payment, entityId: p.id, entityLabel: 'Payment #${p.id}'),
+              type: EmailEntityType.payment,
+              entityId: p.id,
+              entityLabel: 'Payment #${p.id}',
+              regionId: p.regionId),
         ],
       ),
     );

@@ -5,10 +5,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../core/table/table_models.dart';
 import '../../core/table/table_providers.dart';
+import '../../shared/models/auth_models.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/payment_term.dart';
 import '../../shared/models/privileges.dart';
@@ -18,13 +21,26 @@ import '../poc/poc_name_cell.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promise_form_dialog.dart';
+import '../regions/regions_screen.dart';
 import 'payment_term_field.dart';
 
-Future<List<Customer>> searchCustomers(Dio dio, String search) async {
+/// Customers by name. [regionIds], when given, keeps to the regions a create flow may write in —
+/// an invoice can only be raised for a customer in a region where the user manages invoices
+/// (§7.5).
+/// The regions [privilege] holds in, for [searchCustomers]; null — no narrowing — when the server
+/// has not said which regions the user holds.
+Set<int>? regionsForPicker(CurrentUser? user, String privilege) =>
+    user == null || user.regions.isEmpty ? null : user.regionsWith(privilege);
+
+Future<List<Customer>> searchCustomers(Dio dio, String search, {Set<int>? regionIds}) async {
+  final filters = [
+    if (search.isNotEmpty) 'name:contains:$search',
+    if (regionIds != null) 'regionId:in:${(regionIds.toList()..sort()).join(',')}',
+  ];
   final res = await dio.get('/api/customers', queryParameters: {
     'size': 20,
     'sort': 'name,asc',
-    if (search.isNotEmpty) 'filter': ['name:contains:$search'],
+    if (filters.isNotEmpty) 'filter': filters,
   });
   return ((res.data as Map)['content'] as List)
       .cast<Map<String, dynamic>>()
@@ -34,8 +50,10 @@ Future<List<Customer>> searchCustomers(Dio dio, String search) async {
 
 final customerDetailProvider =
     FutureProvider.autoDispose.family<Customer, int>((ref, id) async {
+  final asOf = ref.watch(viewAsOfProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/customers/$id');
+  checkAsOf(res, asOf);
   return Customer.fromJson(res.data as Map<String, dynamic>);
 });
 
@@ -46,9 +64,12 @@ class CustomersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.customerManage) ?? false;
+    // A past date is read only (D2).
+    final historical = ref.watch(isHistoricalProvider);
+    final canManage = !historical && (user?.has(Privileges.customerManage) ?? false);
     final canExport = user?.has(Privileges.exportData) ?? false;
-    final canPromise = user?.has(Privileges.promiseManage) ?? false;
+    final canPromise = !historical && (user?.has(Privileges.promiseManage) ?? false);
+    final multiRegion = user?.multiRegion ?? false;
     final canSeePoc = ref.watch(canSeePocProvider);
     final canAssignPoc = ref.watch(canAssignPocProvider);
     final canSendEmail = ref.watch(canSendEmailProvider);
@@ -172,6 +193,7 @@ class CustomersScreen extends ConsumerWidget {
               maxWidth: 180,
               cell: (context, c) => PocNameCell(user: c.primaryCollectionPoc?.user),
             ),
+          if (multiRegion) regionColumn<Customer>((c) => c.regionCode, (c) => c.regionName),
         ],
         rowActions: (context, c) => [
           IconButton(
@@ -180,8 +202,14 @@ class CustomersScreen extends ConsumerWidget {
             onPressed: () => context.go('/customers/${c.id}'),
           ),
           sendEmailRowAction(context,
-              type: EmailEntityType.customer, entityId: c.id, entityLabel: c.name),
-          if (canPromise && c.outstanding > 0)
+              type: EmailEntityType.customer,
+              entityId: c.id,
+              entityLabel: c.name,
+              regionId: c.regionId),
+          // Raising a promise is a MANAGE-level action in the customer's own region (§7.5).
+          if (canPromise &&
+              c.outstanding > 0 &&
+              (user?.hasIn(Privileges.promiseManage, c.regionId) ?? false))
             IconButton(
               tooltip: 'Raise promise',
               icon: const Icon(Icons.handshake_outlined, size: 18),
@@ -293,11 +321,40 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
 
   /// Null means the system default, which is what a customer starts on (D1).
   PaymentTerm? _term;
+
+  /// The region a new customer belongs to, from those where this user manages customers.
+  int? _regionId;
+  bool _regionSeeded = false;
   bool _saving = false;
   bool _notify = false;
   String? _error;
 
   bool get _isCreate => widget.existing == null;
+
+  /// Active regions this user may create customers in (§7.5).
+  List<RegionAccess> _regionChoices() {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return const [];
+    return [
+      for (final r in user.regions)
+        if (r.active && user.hasIn(Privileges.customerManage, r.id)) r
+    ];
+  }
+
+  /// One choice needs no asking, nor does the one choice being viewed — the same region the server
+  /// would take. Otherwise nothing starts selected: the user picks, rather than the customer
+  /// quietly landing in the default region (§6.4).
+  void _seedRegion(List<RegionAccess> choices) {
+    if (_regionSeeded) return;
+    _regionSeeded = true;
+    if (choices.length == 1) {
+      _regionId = choices.single.id;
+      return;
+    }
+    final viewing = ref.read(viewScopeProvider).regionIds;
+    final inView = choices.where((r) => viewing != null && viewing.contains(r.id)).toList();
+    if (inView.length == 1) _regionId = inView.single.id;
+  }
 
   @override
   void initState() {
@@ -340,6 +397,7 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
           'paymentTerm': _term?.name,
           'username': _username.text.trim(),
           'password': _password.text,
+          if (_regionId != null) 'regionId': _regionId,
         });
         id = (res.data as Map)['id'] as int;
       } else {
@@ -363,6 +421,9 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
 
   @override
   Widget build(BuildContext context) {
+    ref.watch(currentUserProvider);
+    final regionChoices = _isCreate ? _regionChoices() : const <RegionAccess>[];
+    if (_isCreate) _seedRegion(regionChoices);
     return AlertDialog(
       title: Text(_isCreate ? 'New customer' : 'Edit customer'),
       content: SizedBox(
@@ -392,6 +453,20 @@ class _CustomerFormDialogState extends ConsumerState<CustomerFormDialog> {
                     controller: _address,
                     decoration: const InputDecoration(labelText: 'Address'),
                     maxLines: 2),
+                if (regionChoices.length > 1) ...[
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<int>(
+                    key: const ValueKey('customer-region'),
+                    initialValue: _regionId,
+                    decoration: const InputDecoration(labelText: 'Region'),
+                    items: [
+                      for (final r in regionChoices)
+                        DropdownMenuItem(value: r.id, child: Text('${r.code} — ${r.name}')),
+                    ],
+                    validator: (v) => v == null ? 'Choose the region this customer belongs to' : null,
+                    onChanged: (v) => setState(() => _regionId = v),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 PaymentTermField(
                   label: 'Payment terms',

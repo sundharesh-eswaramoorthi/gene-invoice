@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/data_table_scaffold.dart';
 import '../../core/table/route_query.dart';
 import '../../shared/models/auth_models.dart';
@@ -52,6 +54,17 @@ class DashboardAccess {
   String get collectedLabel => isCustomer ? 'Paid' : 'Collected';
 }
 
+/// For a card that counts only my own book in some of the regions asked about (Coverage.mixed),
+/// those regions' codes — "SOUTH" — for its badge; null for any other coverage.
+String? mixedBookRegions(WidgetRef ref, Coverage? coverage, List<int> bookRegionIds) {
+  if (coverage != Coverage.mixed) return null;
+  final regions = ref.watch(currentUserProvider)?.regions ?? const [];
+  final codes = [
+    for (final id in bookRegionIds) regions.where((r) => r.id == id).firstOrNull?.code ?? '#$id',
+  ];
+  return codes.isEmpty ? 'some regions' : codes.join(', ');
+}
+
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
@@ -59,6 +72,9 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final access = DashboardAccess.of(user);
+
+    // Nothing is written from a past day (D2).
+    final historical = ref.watch(isHistoricalProvider);
 
     return RefreshIndicator(
       onRefresh: () async => refreshDashboard(ref),
@@ -69,7 +85,7 @@ class DashboardScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           children: [
             _Header(user: user, access: access),
-            _QuickActions(user: user),
+            _QuickActions(user: user, historical: historical),
             _KeyFigures(access: access),
             const SizedBox(height: 16),
             _CardRow(sideBySide: wide, cards: [
@@ -138,14 +154,18 @@ class _Header extends ConsumerWidget {
     final theme = Theme.of(context);
     final months = ref.watch(dashboardMonthsProvider);
     final showPeriod = access.invoices || access.payments;
-    final today = todayUtc();
+    final asOf = ref.watch(viewAsOfProvider);
+    final today = ref.watch(dashboardTodayProvider);
+    final asAt = asOf == null ? 'as of today (UTC)' : 'as of ${asOfLabel(asOf)}';
     final from = DateTime.utc(today.year, today.month - (months - 1));
     final range =
         '${DateFormat('MMM yyyy').format(from)} – ${DateFormat('MMM yyyy').format(today)}';
 
     final String note;
     if (!showPeriod) {
-      note = 'These figures cover everything you are permitted to see.';
+      note = asOf == null
+          ? 'These figures cover everything you are permitted to see.'
+          : 'These figures cover everything you are permitted to see, $asAt.';
     } else {
       final flows = [
         if (access.invoices) 'billed',
@@ -153,7 +173,7 @@ class _Header extends ConsumerWidget {
       ].join(' and ');
       final account = access.isCustomer ? 'Your account. ' : '';
       note = '$account${flows[0].toUpperCase()}${flows.substring(1)} cover $range; '
-          'balances and promises are as of today (UTC).';
+          'balances and promises are $asAt.';
     }
 
     return Wrap(
@@ -189,12 +209,14 @@ class _Header extends ConsumerWidget {
 
 class _QuickActions extends StatelessWidget {
   final CurrentUser? user;
-  const _QuickActions({required this.user});
+  final bool historical;
+  const _QuickActions({required this.user, required this.historical});
 
   @override
   Widget build(BuildContext context) {
+    final managesPayments = !historical && (user?.has(Privileges.paymentManage) ?? false);
     final buttons = [
-      if (user?.has(Privileges.invoiceManage) ?? false)
+      if (!historical && (user?.has(Privileges.invoiceManage) ?? false))
         FilledButton.icon(
           icon: const Icon(Icons.add),
           label: const Text('New invoice'),
@@ -211,7 +233,7 @@ class _QuickActions extends StatelessWidget {
           icon: const Icon(Icons.payments_outlined),
           // Staff without PAYMENT_MANAGE land on every payment in the organisation, so the
           // button must not call it "My payments" (D-67).
-          label: Text((user?.has(Privileges.paymentManage) ?? false)
+          label: Text(managesPayments
               ? 'Record payment'
               : ((user?.isCustomer ?? false) ? 'My payments' : 'All payments')),
           onPressed: () => context.go('/payments'),
@@ -306,6 +328,11 @@ class _TrendCard extends ConsumerWidget {
       _ => '${access.collectedLabel} by month',
     };
     final book = parts.any((p) => p.valueOrNull?.coverage == Coverage.book);
+    final mixed = parts
+        .map((p) => p.valueOrNull)
+        .whereType<MonthlySeries>()
+        .where((s) => s.coverage == Coverage.mixed)
+        .firstOrNull;
 
     final failed = parts.where((p) => p.hasError).firstOrNull;
     final Widget body;
@@ -340,6 +367,9 @@ class _TrendCard extends ConsumerWidget {
           ? 'Payments count only what was paid against your invoices'
           : null,
       book: book,
+      bookRegions: book
+          ? null
+          : mixedBookRegions(ref, mixed?.coverage, mixed?.scope.bookRegionIds ?? const []),
       child: body,
     );
   }
@@ -354,10 +384,11 @@ class _InvoiceStatusCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final book = ref.watch(billedByMonthProvider).valueOrNull?.coverage == Coverage.book;
+    final billed = ref.watch(billedByMonthProvider).valueOrNull;
     return DashboardCard(
       title: 'Invoices by status',
-      book: book,
+      book: billed?.coverage == Coverage.book,
+      bookRegions: mixedBookRegions(ref, billed?.coverage, billed?.scope.bookRegionIds ?? const []),
       child: asyncCard(ref.watch(invoiceSummaryProvider), (s) {
         DonutSlice slice(InvoiceStatus status, String key) => DonutSlice(
               label: statusLabel(status),
@@ -386,7 +417,11 @@ class _AgingCard extends ConsumerWidget {
       title: 'Outstanding by days overdue',
       subtitle: 'Days overdue',
       book: aging.valueOrNull?.coverage == Coverage.book,
-      child: asyncCard(aging, (data) => AgingBars(data: data, today: todayUtc())),
+      bookRegions: mixedBookRegions(
+          ref, aging.valueOrNull?.coverage, aging.valueOrNull?.scope.bookRegionIds ?? const []),
+      // Each band links to the invoices due in it, counted back from the day viewed.
+      child: asyncCard(
+          aging, (data) => AgingBars(data: data, today: ref.watch(dashboardTodayProvider))),
     );
   }
 }
@@ -403,6 +438,7 @@ class _PromiseStatusCard extends ConsumerWidget {
       title: 'Promises by status',
       subtitle: 'Cancelled promises are left out',
       book: ref.watch(upcomingPromisesProvider).valueOrNull?.book ?? false,
+      bookRegions: _upcomingBookRegions(ref),
       child: asyncCard(ref.watch(promiseSummaryProvider), (s) {
         DonutSlice slice(PromiseStatus status, String key) => DonutSlice(
               label: promiseStatusLabel(status),
@@ -430,8 +466,12 @@ class _TopOutstandingCard extends ConsumerWidget {
     final ranking = ref.watch(topOutstandingProvider);
     return DashboardCard(
       title: 'Top customers by outstanding',
-      subtitle: 'The five owing the most today',
+      subtitle: ref.watch(viewAsOfProvider) == null
+          ? 'The five owing the most today'
+          : 'The five owing the most that day',
       book: ranking.valueOrNull?.coverage == Coverage.book,
+      bookRegions: mixedBookRegions(
+          ref, ranking.valueOrNull?.coverage, ranking.valueOrNull?.scope.bookRegionIds ?? const []),
       action: access.customers
           ? TextButton(
               onPressed: () => context.go('/customers?sort=outstanding,desc'),
@@ -439,7 +479,11 @@ class _TopOutstandingCard extends ConsumerWidget {
             )
           : null,
       child: asyncCard(
-          ranking, (r) => TopOutstandingTable(ranking: r, canOpenCustomer: access.customers)),
+          ranking,
+          (r) => TopOutstandingTable(
+              ranking: r,
+              canOpenCustomer: access.customers,
+              today: ref.watch(dashboardTodayProvider))),
     );
   }
 }
@@ -459,6 +503,8 @@ class _TopPayingCard extends ConsumerWidget {
           ? 'Last $months months, paid against your invoices'
           : 'The five who paid the most in the last $months months',
       book: book,
+      bookRegions: mixedBookRegions(
+          ref, ranking.valueOrNull?.coverage, ranking.valueOrNull?.scope.bookRegionIds ?? const []),
       child:
           asyncCard(ranking, (r) => TopPayingTable(ranking: r, canOpenCustomer: access.customers)),
     );
@@ -472,18 +518,30 @@ class _UpcomingPromisesCard extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final upcoming = ref.watch(upcomingPromisesProvider);
+    final today = ref.watch(dashboardTodayProvider);
     return DashboardCard(
       title: 'Upcoming promises',
       subtitle: 'The next ten due, open or partly kept',
       book: upcoming.valueOrNull?.book ?? false,
+      bookRegions: _upcomingBookRegions(ref),
       action: TextButton(
-        onPressed: () => context.go(UpcomingPromises.listLink(todayUtc())),
+        onPressed: () => context.go(UpcomingPromises.listLink(today)),
         child: const Text('View all'),
       ),
       child: asyncCard(
           upcoming,
           (u) => UpcomingPromisesTable(
-              promises: u.promises, showCustomer: !access.isCustomer, showPoc: access.pocs)),
+              promises: u.promises,
+              showCustomer: !access.isCustomer,
+              showPoc: access.pocs,
+              today: today)),
     );
   }
+}
+
+/// The promises cards are fed by the promises list, whose book-only regions come as its own
+/// `bookRegionIds` rather than a coverage.
+String? _upcomingBookRegions(WidgetRef ref) {
+  final ids = ref.watch(upcomingPromisesProvider).valueOrNull?.bookRegionIds ?? const [];
+  return ids.isEmpty ? null : mixedBookRegions(ref, Coverage.mixed, ids);
 }

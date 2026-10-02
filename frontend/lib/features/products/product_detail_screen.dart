@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/product.dart';
@@ -23,13 +24,15 @@ class ProductDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(productDetailProvider(id));
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.has(Privileges.productManage) ?? false;
+    // A past date is read only (D2).
+    final asOf = ref.watch(viewAsOfProvider);
+    final canEdit = asOf == null && (user?.has(Privileges.productManage) ?? false);
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
 
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => RecordUnavailable(
-        message: notFoundMessage(e, 'product'),
+        message: notFoundMessage(e, 'product', asOf: asOf),
         onBack: () => context.go('/products'),
       ),
       data: (product) {

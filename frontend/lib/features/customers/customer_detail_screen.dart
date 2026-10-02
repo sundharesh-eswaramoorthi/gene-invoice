@@ -5,12 +5,14 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/payment_term.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
+import '../approvals/pending_banner.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/disputes_tab.dart';
@@ -20,7 +22,11 @@ import '../poc/customer_poc_editor.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
+import '../regions/regions_screen.dart';
+import '../tasks/task_actions.dart';
+import '../tasks/task_models.dart';
 import 'customers_screen.dart';
+import 'move_region_dialog.dart';
 import 'payment_term_field.dart';
 
 class CustomerDetailScreen extends ConsumerStatefulWidget {
@@ -192,9 +198,9 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(customerDetailProvider(widget.id));
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.has(Privileges.customerManage) ?? false;
+    // A past date is read only (D2), and its values are not ones to edit from.
+    final asOf = ref.watch(viewAsOfProvider);
     final canSeePoc = ref.watch(canSeePocProvider);
-    final canAssignPoc = ref.watch(canAssignPocProvider);
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
     final canSeePromises = user?.has(Privileges.promiseView) ?? false;
     final canSeeDisputes = user?.hasAny(
@@ -204,18 +210,42 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => RecordUnavailable(
-        message: notFoundMessage(e, 'customer'),
+        message: notFoundMessage(e, 'customer', asOf: asOf),
         onBack: () => context.go('/customers'),
       ),
       data: (customer) {
-        _seed(customer);
+        if (asOf == null) _seed(customer);
+        // The server says what this user may do to this customer in its region (D14); a snapshot
+        // without the flag falls back to the privilege. The server remains the authority.
+        final canEdit =
+            asOf == null && (customer.canManage ?? user?.has(Privileges.customerManage) ?? false);
+        final canAssignPoc = ref.watch(canAssignPocProvider) &&
+            (user?.hasIn(Privileges.pocAssign, customer.regionId) ?? false);
+        final canMove = asOf == null && customer.canMoveRegion == true;
+        final regionId = customer.regionId;
         // A customer login reaches its own customer here, and may write about it too (E13).
         final sendEmail = sendEmailHeaderButton(context, ref,
-            type: EmailEntityType.customer, entityId: customer.id, entityLabel: customer.name);
+            type: EmailEntityType.customer,
+            entityId: customer.id,
+            entityLabel: customer.name,
+            regionId: regionId);
+        // The customer's own tasks and those on its invoices and payments (§5.9.5).
+        final tasksTab = tasksDetailTab(ref,
+            entityType: TaskEntityType.CUSTOMER,
+            entityId: customer.id,
+            customerScope: true,
+            entityLabel: customer.name,
+            regionId: regionId);
         final documentsTab = documentsDetailTab(ref,
-            type: DocumentEntityType.customer, entityId: customer.id, entityLabel: customer.name);
+            type: DocumentEntityType.customer,
+            entityId: customer.id,
+            entityLabel: customer.name,
+            regionId: regionId);
         final emailTab = emailDetailTab(ref,
-            type: EmailEntityType.customer, entityId: customer.id, entityLabel: customer.name);
+            type: EmailEntityType.customer,
+            entityId: customer.id,
+            entityLabel: customer.name,
+            regionId: regionId);
         return PopScope(
           canPop: !_dirty,
           onPopInvokedWithResult: (didPop, _) {
@@ -228,6 +258,12 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             titleTrailing: [
               if (canSeePoc && customer.pocMissing) const PocMissingBadge(),
               if (sendEmail != null) sendEmail,
+              if (canMove)
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.swap_horiz, size: 18),
+                  label: const Text('Move region'),
+                  onPressed: _dirty ? null : () => showMoveRegionDialog(context, ref, customer),
+                ),
               // Only for those who may manage customers: the endpoint is behind the same
               // privilege, so anyone else would only be offered a 403 (CP-03).
               if (canEdit)
@@ -241,7 +277,11 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
             ],
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) => context.go('/customers/${widget.id}?tab=$slug'),
-            top: _top(customer, canEdit: canEdit, canSeePoc: canSeePoc, canAssignPoc: canAssignPoc),
+            top: _top(customer,
+                canEdit: canEdit,
+                canSeePoc: canSeePoc,
+                canAssignPoc: canAssignPoc,
+                showRegion: user?.multiRegion ?? false),
             tabs: [
               if (canSeeDisputes)
                 DetailTab(
@@ -255,8 +295,10 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                   slug: 'promises',
                   label: 'Payment Promise',
                   icon: Icons.handshake_outlined,
-                  builder: (context) =>
-                      PromisesTab(customerId: customer.id, customerName: customer.name),
+                  builder: (context) => PromisesTab(
+                      customerId: customer.id,
+                      customerName: customer.name,
+                      regionId: regionId),
                 ),
               if (canViewAudit)
                 DetailTab(
@@ -270,6 +312,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                   ),
                 ),
               if (documentsTab != null) documentsTab,
+              if (tasksTab != null) tasksTab,
               if (emailTab != null) emailTab,
             ],
           ),
@@ -283,6 +326,7 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
     required bool canEdit,
     required bool canSeePoc,
     required bool canAssignPoc,
+    required bool showRegion,
   }) {
     void pocsChanged() {
       ref.invalidate(customerDetailProvider(c.id));
@@ -297,6 +341,8 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // A change to it held for approval shows here, above everything else (G5).
+          PendingChangeBanner(entityType: 'CUSTOMER', entityId: c.id),
           _figuresAndSave(
             [
               _figure(context, 'Outstanding', formatMoney(c.outstanding),
@@ -393,6 +439,9 @@ class _CustomerDetailScreenState extends ConsumerState<CustomerDetailScreen> {
                   onChanged: pocsChanged,
                 ),
               ),
+            if (showRegion)
+              DetailGridItem(
+                  label: 'Region', child: ReadOnlyValue(regionLabel(c.regionCode, c.regionName))),
           ]),
           if (_error != null)
             Padding(

@@ -107,7 +107,15 @@ Map<String, dynamic> _dispute(int id, String customerName) => {
 
 Dio _dio(Map<String, List<Map<String, dynamic>>> rowsByPath) => Dio()
   ..interceptors.add(InterceptorsWrapper(onRequest: (o, handler) {
-    final Object data = o.path.startsWith('/api/table-schemas/')
+    // A header sorts only when the schema publishes its column as sortable, as the server's does.
+    final Object data = o.path == '/api/table-schemas/disputes'
+        ? {
+            'entity': 'disputes',
+            'columns': [
+              {'name': 'customerId', 'label': 'Customer', 'type': 'REFERENCE', 'sortable': true},
+            ],
+          }
+        : o.path.startsWith('/api/table-schemas/')
         ? {'entity': 'x', 'columns': <dynamic>[]}
         : o.path.endsWith('/summary')
             ? <String, dynamic>{}

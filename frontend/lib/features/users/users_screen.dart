@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
+import '../../core/scope/view_scope.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
 import '../../core/table/data_table_scaffold.dart';
@@ -14,6 +15,8 @@ import '../../core/table/table_providers.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
+import '../regions/regions_screen.dart';
+import 'region_grants_editor.dart';
 
 final usersProvider = FutureProvider.autoDispose<List<AppUser>>((ref) async {
   final dio = ref.watch(dioProvider);
@@ -64,7 +67,9 @@ class UsersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.userManage) ?? false;
+    // A past date is read only (D2).
+    final historical = ref.watch(isHistoricalProvider);
+    final canManage = !historical && (user?.has(Privileges.userManage) ?? false);
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canSendEmail = ref.watch(canSendEmailProvider);
     final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.user);
@@ -156,6 +161,10 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
   bool _saving = false;
   String? _error;
 
+  /// A new user's region access. Until it is touched it follows the role chosen: the default
+  /// region, at the level that role needs (§7.5).
+  List<RegionGrant>? _grants;
+
   @override
   void initState() {
     super.initState();
@@ -190,6 +199,8 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
           'password': _password.text,
           'roleId': _role!.id,
           'active': _active,
+          // Always sent: without it the server gives no access anywhere (§4.6).
+          'regionGrants': _newGrants().map((g) => g.toJson()).toList(),
         });
         id = ((res.data as Map)['id'] as num).toInt();
       } else {
@@ -210,10 +221,23 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
     }
   }
 
+  /// A customer login takes its region from its customer and holds no grants of its own.
+  bool get _isCustomerRole => _role?.name == 'CUSTOMER';
+
+  List<RegionGrant> _newGrants() {
+    if (_isCustomerRole) return const [];
+    if (_grants != null) return _grants!;
+    final editor = ref.read(currentUserProvider);
+    if (editor == null) return const [];
+    return initialGrantsFor(editor, _role?.privileges ?? const [],
+        ref.read(regionOptionsProvider).valueOrNull ?? const []);
+  }
+
   @override
   Widget build(BuildContext context) {
     final roles = ref.watch(rolesProvider);
     final isNew = widget.existing == null;
+    if (isNew) ref.watch(regionOptionsProvider);
 
     return AlertDialog(
       title: Text(isNew ? 'New user' : 'Edit user'),
@@ -269,6 +293,19 @@ class _UserFormDialogState extends ConsumerState<UserFormDialog> {
                     );
                   },
                 ),
+                if (isNew && !_isCustomerRole) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Region access', style: Theme.of(context).textTheme.titleSmall),
+                  ),
+                  const SizedBox(height: 4),
+                  RegionGrantsEditor(
+                    value: _newGrants(),
+                    rolePrivileges: _role?.privileges.toSet(),
+                    onChanged: (next) => setState(() => _grants = next),
+                  ),
+                ],
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Active'),

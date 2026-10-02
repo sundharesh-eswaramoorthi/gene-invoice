@@ -6,9 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/customer.dart';
 import '../../shared/models/payment_term.dart';
+import '../../shared/widgets/status_chip.dart';
+import '../approvals/approval_models.dart';
 
 class AuditEntry {
   final int? id;
@@ -33,6 +37,19 @@ class AuditEntry {
 
   final int? paymentId;
 
+  /// How the change came about: USER (or null), AUTOMATION, APPROVAL and so on (D4).
+  final String? origin;
+  final int? ruleId;
+
+  /// The held change this entry belongs to: the request and its decision (CHANGE_*), or the
+  /// write an approval applied.
+  final int? pendingChangeId;
+
+  /// Where that change stands now — or stood on the date viewed (§5.11.11).
+  final String? pendingStatus;
+  final int? approvedByUserId;
+  final String? approvedByUsername;
+
   const AuditEntry({
     required this.id,
     required this.entityType,
@@ -50,10 +67,18 @@ class AuditEntry {
     this.actorHidden = false,
     this.headline,
     this.paymentId,
+    this.origin,
+    this.ruleId,
+    this.pendingChangeId,
+    this.pendingStatus,
+    this.approvedByUserId,
+    this.approvedByUsername,
   });
 
+  /// An entry with no id of its own is either reconstructed from the record (derived) or stands
+  /// for a held change; two of the latter at the same instant must not share a key.
   String get stableKey => '$entityType:$entityId:$action:'
-      '${id ?? 'derived:${createdAt?.microsecondsSinceEpoch}'}';
+      '${id ?? (pendingChangeId != null ? 'pending:$pendingChangeId' : 'derived:${createdAt?.microsecondsSinceEpoch}')}';
 
   factory AuditEntry.fromJson(Map<String, dynamic> json) {
     final action = json['action'] as String;
@@ -78,6 +103,12 @@ class AuditEntry {
       actorHidden: json['actorHidden'] as bool? ?? false,
       headline: _headline(action, before, after),
       paymentId: _paymentIdOf(action, before, after),
+      origin: json['origin'] as String?,
+      ruleId: (json['ruleId'] as num?)?.toInt(),
+      pendingChangeId: (json['pendingChangeId'] as num?)?.toInt(),
+      pendingStatus: json['pendingStatus'] as String?,
+      approvedByUserId: (json['approvedByUserId'] as num?)?.toInt(),
+      approvedByUsername: json['approvedByUsername'] as String?,
     );
   }
 }
@@ -124,6 +155,7 @@ String? _headline(String action, Object? before, Object? after) {
       ];
       return promised.isEmpty ? null : promised.join(' ');
     case 'PROMISE_STATUS_CHANGED':
+    case 'TASK_STATUS_CHANGED':
     case 'PROMISE_STATUS_OVERRIDDEN':
     case 'PROMISE_OVERRIDE_CLEARED':
     case 'PROMISE_CANCELLED':
@@ -176,12 +208,14 @@ typedef AuditHistoryKey = ({String entityType, int entityId, bool includeRelated
 
 final auditHistoryProvider =
     FutureProvider.autoDispose.family<List<AuditEntry>, AuditHistoryKey>((ref, key) async {
+  final view = ref.watch(viewScopeProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/audit', queryParameters: {
     'entityType': key.entityType,
     'entityId': key.entityId,
     if (key.includeRelated) 'includeRelated': true,
   });
+  checkAsOf(res, view.asOf);
   return (res.data as List).cast<Map<String, dynamic>>().map(AuditEntry.fromJson).toList();
 });
 
@@ -215,6 +249,8 @@ const _actionLabels = <String, String>{
   'DISPUTE_OPENED': 'Dispute opened',
   'DISPUTE_APPROVED': 'Dispute approved',
   'DISPUTE_DENIED': 'Dispute denied',
+  'DISPUTE_ASSIGNEES_CHANGED': 'Dispute assignees changed',
+  'PROMISE_ASSIGNEES_CHANGED': 'Promise assignees changed',
   'DOCUMENT_UPLOADED': 'Document uploaded',
   'DOCUMENT_UPDATED': 'Document updated',
   'DOCUMENT_DELETED': 'Document removed',
@@ -225,17 +261,44 @@ const _actionLabels = <String, String>{
   'USER_UPDATED': 'User updated',
   'USER_ACTIVATED': 'User activated',
   'USER_DEACTIVATED': 'User deactivated',
+  // A change held for approval (B2): its request and what became of it.
+  'CHANGE_REQUESTED': 'Change sent for approval',
+  'CHANGE_SUPERSEDED': 'Change request replaced',
+  'CHANGE_APPROVED': 'Change approved',
+  'CHANGE_REJECTED': 'Change rejected',
+  'CHANGE_WITHDRAWN': 'Change request withdrawn',
+  'CHANGE_APPLY_FAILED': 'Approved change could not be applied',
+  'CHANGE_CLOSED': 'Change request closed',
+  'APPROVAL_THRESHOLDS_CHANGED': 'Approval thresholds changed',
+  // Tasks on a record (A6).
+  'TASK_CREATED': 'Task created',
+  'TASK_UPDATED': 'Task updated',
+  'TASK_STATUS_CHANGED': 'Task status changed',
+  'TASK_ASSIGNEES_CHANGED': 'Task assignees changed',
+  'TASK_CANCELLED_WITH_RECORD': 'Task cancelled with its record',
+  // Automation rules (A1-A5): their own history.
+  'RULE_CREATED': 'Rule created',
+  'RULE_UPDATED': 'Rule updated',
+  'RULE_ENABLED': 'Rule enabled',
+  'RULE_DISABLED': 'Rule disabled',
+  'RULE_DELETED': 'Rule deleted',
+  'RULE_SUSPENDED': 'Rule suspended',
+  'RULE_RESUMED': 'Rule resumed',
+  'RULE_OWNERSHIP_TAKEN': 'Rule taken over by a new owner',
+  'RULE_RUN_REQUESTED': 'Rule run by hand',
 };
 
 String auditActionLabel(String action) => _actionLabels[action] ?? humanizeEnum(action);
 
-const _typeOrder = ['CUSTOMER', 'INVOICE', 'PAYMENT', 'PROMISE', 'DISPUTE'];
+const _typeOrder = ['CUSTOMER', 'INVOICE', 'PAYMENT', 'PROMISE', 'DISPUTE', 'TASK', 'RULE'];
 const _typeLabels = <String, String>{
   'CUSTOMER': 'Customer',
   'INVOICE': 'Invoices',
   'PAYMENT': 'Payments',
   'PROMISE': 'Promises',
   'DISPUTE': 'Disputes',
+  'TASK': 'Tasks',
+  'RULE': 'Rules',
 };
 
 String? _routeFor(String entityType, int id) => switch (entityType) {
@@ -244,6 +307,8 @@ String? _routeFor(String entityType, int id) => switch (entityType) {
       'PAYMENT' => '/payments/$id',
       'PROMISE' => '/promises/$id',
       'DISPUTE' => '/disputes/$id',
+      'TASK' => '/tasks/$id',
+      'RULE' => '/automation/$id',
       _ => null,
     };
 
@@ -253,6 +318,8 @@ IconData _iconFor(String entityType) => switch (entityType) {
       'PAYMENT' => Icons.payments_outlined,
       'PROMISE' => Icons.handshake_outlined,
       'DISPUTE' => Icons.flag_outlined,
+      'TASK' => Icons.checklist,
+      'RULE' => Icons.bolt_outlined,
       _ => Icons.history,
     };
 
@@ -384,7 +451,17 @@ class _AuditTile extends StatelessWidget {
       if (entry.createdAt != null) formatDateTime(entry.createdAt),
       if (who != null) who,
       if (entry.disputeId != null && entry.entityType != 'DISPUTE') 'via dispute #${entry.disputeId}',
+      // The write an approval applied: whose request it was is the "by", who approved it here.
+      if (entry.pendingChangeId != null && !entry.action.startsWith('CHANGE_'))
+        [
+          'via approval #${entry.pendingChangeId}',
+          if (entry.approvedByUsername != null) 'approved by ${entry.approvedByUsername}',
+        ].join(' · '),
     ].join(' • ');
+    final pendingStatus =
+        entry.pendingStatus == null ? null : parsePendingStatus(entry.pendingStatus);
+    // A write a rule made names the rule, except on the rule's own history.
+    final viaRule = entry.entityType == 'RULE' ? null : entry.ruleId;
 
     // Each link is its own node, so a screen reader can reach the link without activating it
     // instead of expanding the row (D-59).
@@ -408,15 +485,25 @@ class _AuditTile extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (showRecord || entry.paymentId != null)
+            if (showRecord ||
+                entry.paymentId != null ||
+                entry.pendingChangeId != null ||
+                viaRule != null)
               Wrap(
                 spacing: 12,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   if (showRecord)
                     link(entry.entityLabel ?? '${humanizeEnum(entry.entityType)} #${entry.entityId}',
                         _routeFor(entry.entityType, entry.entityId)),
                   if (entry.paymentId != null)
                     link('Payment #${entry.paymentId}', '/payments/${entry.paymentId}'),
+                  if (entry.pendingChangeId != null)
+                    link('Approval #${entry.pendingChangeId}',
+                        '/approvals/${entry.pendingChangeId}'),
+                  if (pendingStatus != null) ApprovalStatusChip(status: pendingStatus),
+                  if (viaRule != null) link('Rule #$viaRule', '/automation/$viaRule'),
                 ],
               ),
             if (meta.isNotEmpty) Text(meta),
@@ -434,18 +521,9 @@ class _AuditDetails extends StatelessWidget {
   final AuditEntry entry;
   const _AuditDetails({required this.entry});
 
-  static String _pretty(String raw) {
-    try {
-      return const JsonEncoder.withIndent('  ').convert(jsonDecode(raw));
-    } catch (_) {
-      return raw;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    const mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -463,14 +541,65 @@ class _AuditDetails extends StatelessWidget {
           Text('Note: ${entry.reason}'),
           const SizedBox(height: 8),
         ],
-        if (entry.beforeJson != null) ...[
-          Text('Before', style: theme.textTheme.titleSmall),
-          SelectableText(_pretty(entry.beforeJson!), style: mono),
+        JsonDiffView(before: entry.beforeJson, after: entry.afterJson),
+      ],
+    );
+  }
+}
+
+/// A record's JSON before and after something — an audit entry's snapshots, or a held change's
+/// current and proposed values — pretty-printed one above the other. Each side is either raw JSON
+/// text or already-decoded JSON; a side that is null is left out.
+class JsonDiffView extends StatelessWidget {
+  final Object? before;
+  final Object? after;
+  final String beforeLabel;
+  final String afterLabel;
+
+  /// The heading of [after] when there is no [before] to compare it with.
+  final String onlyAfterLabel;
+
+  const JsonDiffView({
+    super.key,
+    required this.before,
+    required this.after,
+    this.beforeLabel = 'Before',
+    this.afterLabel = 'After',
+    this.onlyAfterLabel = 'Details',
+  });
+
+  static String pretty(Object value) {
+    const encoder = JsonEncoder.withIndent('  ');
+    if (value is String) {
+      try {
+        return encoder.convert(jsonDecode(value));
+      } catch (_) {
+        return value;
+      }
+    }
+    try {
+      return encoder.convert(value);
+    } catch (_) {
+      return value.toString();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    const mono = TextStyle(fontFamily: 'monospace', fontSize: 12);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (before != null) ...[
+          Text(beforeLabel, style: theme.textTheme.titleSmall),
+          SelectableText(pretty(before!), style: mono),
           const SizedBox(height: 8),
         ],
-        if (entry.afterJson != null) ...[
-          Text(entry.beforeJson == null ? 'Details' : 'After', style: theme.textTheme.titleSmall),
-          SelectableText(_pretty(entry.afterJson!), style: mono),
+        if (after != null) ...[
+          Text(before == null ? onlyAfterLabel : afterLabel, style: theme.textTheme.titleSmall),
+          SelectableText(pretty(after!), style: mono),
         ],
       ],
     );

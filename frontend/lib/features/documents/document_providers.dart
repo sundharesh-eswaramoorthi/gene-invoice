@@ -5,6 +5,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/table_models.dart';
 import '../audit/audit_history_panel.dart';
 import 'document_files.dart';
@@ -15,6 +17,7 @@ typedef DocumentRecordKey = ({DocumentEntityType type, int entityId});
 
 final entityDocumentsProvider = FutureProvider.autoDispose
     .family<PagedResult<DocumentItem>, DocumentListKey>((ref, key) async {
+  final view = ref.watch(viewScopeProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/documents', queryParameters: {
     'entityType': key.type.wire,
@@ -22,17 +25,20 @@ final entityDocumentsProvider = FutureProvider.autoDispose
     'page': key.page,
     'size': key.size,
   });
+  checkAsOf(res, view.asOf);
   return PagedResult.fromJson((res.data as Map).cast<String, dynamic>())
       .map(DocumentItem.fromJson);
 });
 
 final documentCountProvider =
     FutureProvider.autoDispose.family<int, DocumentRecordKey>((ref, key) async {
+  final view = ref.watch(viewScopeProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/documents/count', queryParameters: {
     'entityType': key.type.wire,
     'entityId': key.entityId,
   });
+  checkAsOf(res, view.asOf);
   return ((res.data as Map)['count'] as num?)?.toInt() ?? 0;
 });
 

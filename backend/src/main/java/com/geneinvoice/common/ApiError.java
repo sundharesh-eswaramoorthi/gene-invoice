@@ -1,5 +1,7 @@
 package com.geneinvoice.common;
 
+import com.geneinvoice.common.time.WallClock;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -13,11 +15,11 @@ public record ApiError(
         Map<String, String> fieldErrors
 ) {
     public static ApiError of(int status, String error, String message, String path) {
-        return new ApiError(Instant.now(), status, error, message, path, null);
+        return new ApiError(Instant.now(WallClock.UTC), status, error, message, path, null);
     }
 
     public static ApiError validation(String path, Map<String, String> fieldErrors) {
-        return new ApiError(Instant.now(), 400, "Validation Failed",
+        return new ApiError(Instant.now(WallClock.UTC), 400, "Validation Failed",
                 "One or more fields are invalid", path, fieldErrors);
     }
 }

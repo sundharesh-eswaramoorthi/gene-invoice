@@ -46,6 +46,8 @@ class InboxScreen extends ConsumerWidget {
         emptyMessage: 'No emails match this filter',
         onRowTap: (_, item) => _open(context, item),
         onBulkDone: () => ref.invalidate(inboxUnreadCountProvider),
+        // Marking read is housekeeping, allowed on a past date too (§5.2.4).
+        bulkWhileHistorical: true,
         bulkActions: const [
           BulkActionSpec(action: 'MARK_READ', label: 'Mark read', icon: Icons.done_all),
           BulkActionSpec(

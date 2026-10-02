@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/approvals/approval_detail_screen.dart';
+import '../features/approvals/approval_thresholds_screen.dart';
+import '../features/approvals/approvals_screen.dart';
 import '../features/auth/auth_controller.dart';
 import '../features/auth/login_screen.dart';
+import '../features/automation/rule_editor_screen.dart';
+import '../features/automation/rules_screen.dart';
 import '../features/customers/customer_detail_screen.dart';
 import '../features/customers/customers_screen.dart';
 import '../features/dashboard/dashboard_screen.dart';
@@ -21,6 +26,10 @@ import '../features/products/product_detail_screen.dart';
 import '../features/products/products_screen.dart';
 import '../features/promises/promise_detail_screen.dart';
 import '../features/promises/promises_screen.dart';
+import '../features/regions/region_detail_screen.dart';
+import '../features/regions/regions_screen.dart';
+import '../features/tasks/task_detail_screen.dart';
+import '../features/tasks/tasks_screen.dart';
 import '../features/users/role_detail_screen.dart';
 import '../features/users/roles_screen.dart';
 import '../features/users/user_detail_screen.dart';
@@ -33,7 +42,11 @@ import 'table/table_providers.dart';
 import 'unsaved_changes.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final auth = ref.watch(authControllerProvider);
+  // A new router only when someone signs in or out. Reading `/me` again for the same user — after
+  // a region is created, say — must not send them back to the start; the guards below read the
+  // user afresh, and _RouterRefresh re-runs them.
+  ref.watch(authControllerProvider.select((s) => s.user?.id));
+  final auth = ref.read(authControllerProvider);
 
   int sizeFor(String entity) => ref.read(pageSizeStoreProvider)[entity] ?? 20;
 
@@ -62,7 +75,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     refreshListenable: _RouterRefresh(ref),
     redirect: (context, state) {
-      final loggedIn = auth.user != null;
+      final loggedIn = ref.read(authControllerProvider).user != null;
       final goingToLogin = state.matchedLocation == '/login';
       if (!loggedIn && !goingToLogin) return '/login';
       if (loggedIn && goingToLogin) return '/';
@@ -199,6 +212,122 @@ final routerProvider = Provider<GoRouter>((ref) {
                 backTo: '/disputes',
                 build: (id) => DisputeDetailScreen(
                       key: ValueKey('dispute-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
+          ),
+
+          // Tasks assigned to me, and every task I can see (A6). The badge's notification and a
+          // record's Tasks tab link to one task.
+          GoRoute(
+            path: '/my-tasks',
+            redirect: needs(navPrivilegesFor('/my-tasks')),
+            builder: (c, s) => TasksScreen(
+              key: const ValueKey('my-tasks'),
+              mine: true,
+              query: RouteQuery.read(s, defaultSize: sizeFor('tasks'), defaultSort: 'dueDate,asc'),
+            ),
+          ),
+          GoRoute(
+            path: '/tasks',
+            redirect: needs(navPrivilegesFor('/tasks')),
+            builder: (c, s) => TasksScreen(
+              key: const ValueKey('tasks'),
+              query: RouteQuery.read(s, defaultSize: sizeFor('tasks'), defaultSort: 'dueDate,asc'),
+            ),
+          ),
+          GoRoute(
+            path: '/tasks/:id',
+            // Not a nav route, so it names its own guard (G16): tasks are staff only.
+            redirect: needs(navPrivilegesFor('/tasks')),
+            onExit: mayLeave,
+            builder: (c, s) => pageForId(s,
+                noun: 'task',
+                backTo: '/tasks',
+                build: (id) => TaskDetailScreen(
+                      key: ValueKey('task-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
+          ),
+
+          GoRoute(
+            path: '/approvals',
+            // The list is staff only (customers 403, §6.11), though a customer may open one change
+            // from a record's banner below.
+            redirect: (c, s) => (ref.read(authControllerProvider).user?.isCustomer ?? false)
+                ? '/'
+                : needs(navPrivilegesFor('/approvals'))(c, s),
+            builder: (c, s) => ApprovalsScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('approvals'), defaultSort: 'requestedAt,desc'),
+              view: approvalsViewNamed(s.uri.queryParameters['view']),
+            ),
+          ),
+          // A pending-change notification, a record's banner and a 202 all link here (§7.6).
+          GoRoute(
+            path: '/approvals/:id',
+            redirect: needs(navPrivilegesFor('/approvals')),
+            builder: (c, s) => pageForId(s,
+                noun: 'change',
+                backTo: '/approvals',
+                build: (id) => ApprovalDetailScreen(
+                      key: ValueKey('approval-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
+          ),
+          GoRoute(
+            path: '/approval-thresholds',
+            redirect: needs(const [Privileges.approvalThresholdManage, Privileges.changeApprove]),
+            builder: (c, s) => ApprovalThresholdsScreen(
+              key: ValueKey('approval-thresholds-${s.uri.queryParameters['regionId']}'),
+              regionId: int.tryParse(s.uri.queryParameters['regionId'] ?? ''),
+            ),
+          ),
+
+          // Automation rules (A1-A5). "New" comes before ":id", which would otherwise take it.
+          GoRoute(
+            path: '/automation',
+            redirect: needs(navPrivilegesFor('/automation')),
+            builder: (c, s) => RulesScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('automation-rules'), defaultSort: 'name,asc'),
+            ),
+          ),
+          GoRoute(
+            path: '/automation/new',
+            redirect: needs(const [Privileges.automationManage]),
+            onExit: mayLeave,
+            builder: (c, s) => const RuleEditorScreen(key: ValueKey('rule-new')),
+          ),
+          GoRoute(
+            path: '/automation/:id',
+            redirect: needs(const [Privileges.automationView]),
+            onExit: mayLeave,
+            builder: (c, s) => pageForId(s,
+                noun: 'rule',
+                backTo: '/automation',
+                build: (id) => RuleEditorScreen(
+                      key: ValueKey('rule-$id'),
+                      id: id,
+                      initialTab: s.uri.queryParameters['tab'],
+                    )),
+          ),
+
+          GoRoute(
+            path: '/regions',
+            redirect: needs(navPrivilegesFor('/regions')),
+            builder: (c, s) => RegionsScreen(
+              query: RouteQuery.read(s, defaultSize: sizeFor('regions'), defaultSort: 'code,asc'),
+            ),
+          ),
+          GoRoute(
+            path: '/regions/:id',
+            redirect: needs(const [Privileges.regionView]),
+            builder: (c, s) => pageForId(s,
+                noun: 'region',
+                backTo: '/regions',
+                build: (id) => RegionDetailScreen(
+                      key: ValueKey('region-$id'),
                       id: id,
                       initialTab: s.uri.queryParameters['tab'],
                     )),

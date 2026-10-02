@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/auth/auth_controller.dart';
 import '../api/api_client.dart';
+import '../scope/as_of.dart';
+import '../scope/view_scope.dart';
 import 'table_models.dart';
 
 @immutable
@@ -53,21 +55,27 @@ final tableSchemaProvider = FutureProvider.family<TableSchema, String>((ref, ent
   return TableSchema.fromJson(res.data as Map<String, dynamic>);
 });
 
+// Both watch the view scope, so every mounted list and its tiles ask again when the regions or the
+// date change; the scope's own parameters are added by the Dio interceptor (D13).
 final tablePageProvider =
     FutureProvider.autoDispose.family<PagedResult<Map<String, dynamic>>, TableRequest>((ref, req) async {
+  final scope = ref.watch(viewScopeProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get(req.path, queryParameters: req.apiParams);
+  checkAsOf(res, scope.asOf);
   return PagedResult.fromJson(res.data as Map<String, dynamic>);
 });
 
 final tableSummaryProvider =
     FutureProvider.autoDispose.family<Map<String, dynamic>, TableRequest>((ref, req) async {
+  final scope = ref.watch(viewScopeProvider);
   final dio = ref.watch(dioProvider);
   final params = Map<String, dynamic>.from(req.apiParams)
     ..remove('page')
     ..remove('size')
     ..remove('sort');
   final res = await dio.get('${req.path}/summary', queryParameters: params);
+  checkAsOf(res, scope.asOf);
   return (res.data as Map).cast<String, dynamic>();
 });
 

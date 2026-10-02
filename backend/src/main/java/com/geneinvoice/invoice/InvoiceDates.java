@@ -1,6 +1,7 @@
 package com.geneinvoice.invoice;
 
 import com.geneinvoice.common.BadRequestException;
+import com.geneinvoice.common.time.Today;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -12,7 +13,7 @@ public final class InvoiceDates {
     private InvoiceDates() {}
 
     public static LocalDate today() {
-        return LocalDate.now(ZoneOffset.UTC);
+        return Today.date();
     }
 
     public static LocalDate dayOf(Instant instant) {

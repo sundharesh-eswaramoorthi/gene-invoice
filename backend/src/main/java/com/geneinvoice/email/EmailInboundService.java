@@ -15,7 +15,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -37,6 +37,7 @@ public class EmailInboundService implements IncomingMailHandler {
     private final EmailDirectory directory;
     private final UserRepository userRepository;
     private final TransactionTemplate transactions;
+    private final Clock clock;
 
     private record Link(EmailEntityType type, Long id, String label, Email repliedTo) {}
 
@@ -109,7 +110,7 @@ public class EmailInboundService implements IncomingMailHandler {
                 .providerThreadId(mail.providerThreadId())
                 .rfcMessageId(EmailText.fit(messageId, Email.HEADER_ID_MAX))
                 .inReplyTo(EmailText.fit(messageId(mail.inReplyTo()), Email.HEADER_ID_MAX))
-                .occurredAt(mail.receivedAt() == null ? Instant.now() : mail.receivedAt());
+                .occurredAt(mail.receivedAt() == null ? clock.instant() : mail.receivedAt());
         describeSender(email, fromHeader, fromAddress);
 
         RecipientSet recipients = new RecipientSet();

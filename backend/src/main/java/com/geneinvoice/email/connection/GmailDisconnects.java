@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -35,6 +36,7 @@ public class GmailDisconnects {
     private final UserRepository userRepository;
     private final TransactionTemplate transactions;
     private final boolean async;
+    private final Clock clock;
     private final ExecutorService background = Executors.newSingleThreadExecutor(runnable -> {
         Thread t = new Thread(runnable, "gmail-disconnect");
         t.setDaemon(true);
@@ -44,7 +46,7 @@ public class GmailDisconnects {
     public GmailDisconnects(GmailConnectionRepository repository, GmailConnectionService copies,
                             MailTransport transport, MailConnections connections, UserRepository userRepository,
                             TransactionTemplate transactions,
-                            @Value("${app.mail.dispatch.async:true}") boolean async) {
+                            @Value("${app.mail.dispatch.async:true}") boolean async, Clock clock) {
         this.repository = repository;
         this.copies = copies;
         this.transport = transport;
@@ -52,6 +54,7 @@ public class GmailDisconnects {
         this.userRepository = userRepository;
         this.transactions = transactions;
         this.async = async;
+        this.clock = clock;
     }
 
     @PreDestroy
@@ -72,7 +75,7 @@ public class GmailDisconnects {
     public void mark(Collection<Long> userIds) {
         List<Long> ids = distinct(userIds);
         if (ids.isEmpty()) return;
-        Instant now = Instant.now();
+        Instant now = clock.instant();
         boolean configured = transport.isConfigured();
         transactions.executeWithoutResult(tx -> ids.forEach(id -> {
             if (!configured && !repository.existsById(id)) return;

@@ -1,8 +1,12 @@
 package com.geneinvoice.invoice;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.Money;
 import com.geneinvoice.poc.PocDtos;
+import com.geneinvoice.poc.ScopeResolver;
+import com.geneinvoice.region.RecordAccess;
+import com.geneinvoice.region.Region;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotEmpty;
@@ -76,13 +80,22 @@ public class InvoiceDtos {
             PocDtos.PocUserDto salesPoc,
             Boolean pocMissing,
             Long version,
-            Instant createdAt
+            Instant createdAt,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Long regionId,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String regionCode,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String regionName,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean canManage
     ) {
+        /** An audit snapshot: no capability flags, so a caller's rights never land in audit JSON. */
         public static InvoiceDto from(Invoice inv) {
-            return from(inv, true);
+            return from(inv, true, null);
         }
 
         public static InvoiceDto from(Invoice inv, boolean includePoc) {
+            return from(inv, includePoc, null);
+        }
+
+        public static InvoiceDto from(Invoice inv, boolean includePoc, RecordAccess access) {
             LocalDate today = InvoiceDates.today();
             return new InvoiceDto(inv.getId(), inv.getInvoiceNumber(),
                     inv.getCustomer().getId(), inv.getCustomer().getName(),
@@ -95,7 +108,9 @@ public class InvoiceDtos {
                     includePoc ? PocDtos.PocUserDto.from(inv.getSalesPoc()) : null,
                     includePoc ? inv.getSalesPoc() == null : null,
                     inv.getVersion(),
-                    inv.getCreatedAt());
+                    inv.getCreatedAt(),
+                    Region.idOf(inv.getRegion()), Region.codeOf(inv.getRegion()), Region.nameOf(inv.getRegion()),
+                    manageFlag(inv, access));
         }
     }
 
@@ -107,13 +122,19 @@ public class InvoiceDtos {
             BigDecimal total, BigDecimal paidAmount, BigDecimal balance,
             InvoiceStatus status,
             PocDtos.PocUserDto salesPoc,
-            Boolean pocMissing
+            Boolean pocMissing,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Long regionId,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String regionCode,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String regionName,
+            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean canManage,
+            /** Whether a change waits for approval on it; filled by the list only (§5.11.9). */
+            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean pendingApproval
     ) {
         public static InvoiceSummary from(Invoice inv) {
-            return from(inv, true);
+            return from(inv, true, null);
         }
 
-        public static InvoiceSummary from(Invoice inv, boolean includePoc) {
+        public static InvoiceSummary from(Invoice inv, boolean includePoc, RecordAccess access) {
             LocalDate today = InvoiceDates.today();
             return new InvoiceSummary(inv.getId(), inv.getInvoiceNumber(),
                     inv.getCustomer().getId(), inv.getCustomer().getName(),
@@ -123,8 +144,20 @@ public class InvoiceDtos {
                     inv.getTotal(), inv.getPaidAmount(), inv.getBalance(),
                     inv.getStatus(),
                     includePoc ? PocDtos.PocUserDto.from(inv.getSalesPoc()) : null,
-                    includePoc ? inv.getSalesPoc() == null : null);
+                    includePoc ? inv.getSalesPoc() == null : null,
+                    Region.idOf(inv.getRegion()), Region.codeOf(inv.getRegion()), Region.nameOf(inv.getRegion()),
+                    manageFlag(inv, access), null);
         }
+
+        public InvoiceSummary withPendingApproval(Boolean pending) {
+            return new InvoiceSummary(id, invoiceNumber, customerId, customerName, invoiceDate, dueDate, paymentTerm,
+                    paymentTermLabel, overdue, daysOverdue, total, paidAmount, balance, status, salesPoc, pocMissing,
+                    regionId, regionCode, regionName, canManage, pending);
+        }
+    }
+
+    private static Boolean manageFlag(Invoice inv, RecordAccess access) {
+        return access == null ? null : access.canManage(ScopeResolver.Kind.INVOICE, Region.idOf(inv.getRegion()));
     }
 
     public record InvoiceSummaryTiles(

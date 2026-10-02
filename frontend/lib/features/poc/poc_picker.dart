@@ -16,6 +16,10 @@ class PocPicker extends StatelessWidget {
 
   final bool showLabel;
 
+  /// The customer the seat is on, so only people who can hold it in that customer's region are
+  /// offered (§6.8). Without one, the regions being viewed decide.
+  final int? customerId;
+
   const PocPicker({
     super.key,
     required this.type,
@@ -26,6 +30,7 @@ class PocPicker extends StatelessWidget {
     this.errorText,
     this.labelOverride,
     this.showLabel = true,
+    this.customerId,
   });
 
   @override
@@ -82,7 +87,8 @@ class PocPicker extends StatelessWidget {
   Future<void> _openPicker(BuildContext context) async {
     final selected = await showDialog<PocUser>(
       context: context,
-      builder: (_) => _PocPickerDialog(type: type, selectedId: value?.id),
+      builder: (_) =>
+          _PocPickerDialog(type: type, selectedId: value?.id, customerId: customerId),
     );
     if (selected != null) onChanged(selected);
   }
@@ -91,7 +97,8 @@ class PocPicker extends StatelessWidget {
 class _PocPickerDialog extends ConsumerStatefulWidget {
   final PocType type;
   final int? selectedId;
-  const _PocPickerDialog({required this.type, this.selectedId});
+  final int? customerId;
+  const _PocPickerDialog({required this.type, this.selectedId, this.customerId});
 
   @override
   ConsumerState<_PocPickerDialog> createState() => _PocPickerDialogState();
@@ -119,7 +126,8 @@ class _PocPickerDialogState extends ConsumerState<_PocPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(assignablePocsProvider(AssignableQuery(widget.type, _search)));
+    final async = ref.watch(assignablePocsProvider(
+        AssignableQuery(widget.type, _search, customerId: widget.customerId)));
     return AlertDialog(
       title: Text('Choose ${pocTypeLabel(widget.type)}'),
       content: SizedBox(

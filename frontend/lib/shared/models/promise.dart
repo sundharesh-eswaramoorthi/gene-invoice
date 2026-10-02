@@ -1,4 +1,5 @@
 import '../../features/poc/poc_providers.dart';
+import 'record_assignee.dart';
 
 enum PromiseStatus { OPEN, KEPT, PARTIALLY_KEPT, BROKEN, CANCELLED }
 
@@ -82,6 +83,20 @@ class PaymentPromise {
   final int? createdByUserId;
   final DateTime? createdAt;
 
+  final int? regionId;
+  final String? regionCode;
+  final String? regionName;
+
+  /// What this user may do to this promise in its region (D14); null in a snapshot.
+  final bool? canManage;
+  final bool? canOverride;
+
+  /// A change to it is awaiting approval (list rows only).
+  final bool? pendingApproval;
+
+  /// Its co-assignees (detail only).
+  final List<RecordAssignee>? assignees;
+
   const PaymentPromise({
     required this.id,
     required this.customerId,
@@ -101,6 +116,13 @@ class PaymentPromise {
     this.payments = const [],
     this.createdByUserId,
     this.createdAt,
+    this.regionId,
+    this.regionCode,
+    this.regionName,
+    this.canManage,
+    this.canOverride,
+    this.pendingApproval,
+    this.assignees,
   });
 
   bool get isLive => status != PromiseStatus.CANCELLED;
@@ -139,5 +161,12 @@ class PaymentPromise {
         createdByUserId: (json['createdByUserId'] as num?)?.toInt(),
         createdAt:
             json['createdAt'] == null ? null : DateTime.parse(json['createdAt'] as String),
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionCode: json['regionCode'] as String?,
+        regionName: json['regionName'] as String?,
+        canManage: json['canManage'] as bool?,
+        canOverride: json['canOverride'] as bool?,
+        pendingApproval: json['pendingApproval'] as bool?,
+        assignees: RecordAssignee.listFrom(json['assignees']),
       );
 }

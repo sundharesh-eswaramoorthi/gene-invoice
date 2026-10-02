@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
@@ -13,6 +14,7 @@ import '../../shared/models/payment.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/pending_banner.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
@@ -22,6 +24,9 @@ import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
+import '../regions/regions_screen.dart';
+import '../tasks/task_actions.dart';
+import '../tasks/task_models.dart';
 import 'payments_screen.dart';
 
 class PaymentDetailScreen extends ConsumerStatefulWidget {
@@ -117,9 +122,10 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(paymentDetailProvider(widget.id));
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.has(Privileges.paymentManage) ?? false;
+    // A past date is read only (D2), and its values are not ones to edit from.
+    final asOf = ref.watch(viewAsOfProvider);
     final canSeePoc = ref.watch(canSeePocProvider);
-    final canAssignPoc = ref.watch(canAssignPocProvider);
+    final mayAssignPoc = ref.watch(canAssignPocProvider);
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
     final canSeePromises = user?.has(Privileges.promiseView) ?? false;
     final canSeeDisputes = user?.hasAny(
@@ -129,18 +135,38 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => RecordUnavailable(
-        message: notFoundMessage(e, 'payment'),
+        message: notFoundMessage(e, 'payment', asOf: asOf),
         onBack: () => context.go('/payments'),
       ),
       data: (payment) {
-        _seed(payment);
+        if (asOf == null) _seed(payment);
         final label = 'Payment #${payment.id}';
+        // The server says what this user may do to this payment in its region (D14); a snapshot
+        // without the flag falls back to the privilege. The server remains the authority.
+        final canEdit =
+            asOf == null && (payment.canManage ?? user?.has(Privileges.paymentManage) ?? false);
+        final canAssignPoc =
+            mayAssignPoc && (user?.hasIn(Privileges.pocAssign, payment.regionId) ?? false);
         final sendEmail = sendEmailHeaderButton(context, ref,
-            type: EmailEntityType.payment, entityId: payment.id, entityLabel: label);
+            type: EmailEntityType.payment,
+            entityId: payment.id,
+            entityLabel: label,
+            regionId: payment.regionId);
+        final tasksTab = tasksDetailTab(ref,
+            entityType: TaskEntityType.PAYMENT,
+            entityId: payment.id,
+            entityLabel: label,
+            regionId: payment.regionId);
         final documentsTab = documentsDetailTab(ref,
-            type: DocumentEntityType.payment, entityId: payment.id, entityLabel: label);
+            type: DocumentEntityType.payment,
+            entityId: payment.id,
+            entityLabel: label,
+            regionId: payment.regionId);
         final emailTab = emailDetailTab(ref,
-            type: EmailEntityType.payment, entityId: payment.id, entityLabel: label);
+            type: EmailEntityType.payment,
+            entityId: payment.id,
+            entityLabel: label,
+            regionId: payment.regionId);
         return PopScope(
           canPop: !_dirty,
           onPopInvokedWithResult: (didPop, _) {
@@ -155,6 +181,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
               PaymentStatusChip(status: payment.status),
               if (canSeeDisputes &&
                   user!.canRaiseDispute &&
+                  asOf == null &&
                   payment.status != PaymentStatus.VOIDED)
                 TextButton.icon(
                   icon: const Icon(Icons.flag_outlined, size: 18),
@@ -171,7 +198,11 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) => context.go('/payments/${widget.id}?tab=$slug'),
             top: _top(payment,
-                canEdit: canEdit, canSeePoc: canSeePoc, canAssignPoc: canAssignPoc),
+                canEdit: canEdit,
+                canSeePoc: canSeePoc,
+                canAssignPoc: canAssignPoc,
+                historical: asOf != null,
+                showRegion: user?.multiRegion ?? false),
             tabs: [
               if (canSeeDisputes)
                 DetailTab(
@@ -193,6 +224,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                     customerId: payment.customerId,
                     customerName: payment.customerName,
                     paymentId: payment.id,
+                    regionId: payment.regionId,
                   ),
                 ),
               if (canViewAudit)
@@ -207,6 +239,7 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                   ),
                 ),
               if (documentsTab != null) documentsTab,
+              if (tasksTab != null) tasksTab,
               if (emailTab != null) emailTab,
             ],
           ),
@@ -220,6 +253,8 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
     required bool canEdit,
     required bool canSeePoc,
     required bool canAssignPoc,
+    required bool historical,
+    required bool showRegion,
   }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
@@ -227,6 +262,8 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // A change to it held for approval shows here, above everything else (G5).
+          PendingChangeBanner(entityType: 'PAYMENT', entityId: p.id),
           _figuresAndSave(
             [
               _figure(context, 'Amount', formatMoney(p.amount)),
@@ -242,7 +279,9 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                 label: 'Collection POC',
                 child: PocPicker(
                   type: PocType.COLLECTION,
-                  value: _collectionPoc,
+                  customerId: p.customerId,
+                  // The POC on the day viewed, not the one being edited today.
+                  value: historical ? p.collectionPoc : _collectionPoc,
                   showLabel: false,
                   enabled: canEdit && canAssignPoc,
                   required: true,
@@ -266,6 +305,9 @@ class _PaymentDetailScreenState extends ConsumerState<PaymentDetailScreen> {
                     )
                   : ReadOnlyValue(p.notes ?? ''),
             ),
+            if (showRegion)
+              DetailGridItem(
+                  label: 'Region', child: ReadOnlyValue(regionLabel(p.regionCode, p.regionName))),
           ]),
           const SizedBox(height: 12),
           Text('Invoice allocations', style: Theme.of(context).textTheme.titleSmall),

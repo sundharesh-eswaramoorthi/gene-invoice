@@ -2,16 +2,45 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/route_query.dart';
 import '../../shared/models/promise.dart';
 
-enum Coverage { all, book, own }
+/// Whose figures a card counts. [mixed]: the whole of some of the regions asked about, but only my
+/// own book in others (B1).
+enum Coverage { all, book, own, mixed }
 
-Coverage _coverage(Object? wire) => switch (wire) {
+Coverage parseCoverage(Object? wire) => switch (wire) {
       'BOOK' => Coverage.book,
       'OWN' => Coverage.own,
+      'MIXED' => Coverage.mixed,
       _ => Coverage.all,
     };
+
+/// Which regions a figure answered for, where of those only my book counts, and the day it is as
+/// of (null when live) — the dashboard's counterpart of a list's `regionIds`, `bookRegionIds` and
+/// `asOf` (§6.9).
+class DashboardScope {
+  final List<int> regionIds;
+  final List<int> bookRegionIds;
+  final String? asOf;
+
+  const DashboardScope({this.regionIds = const [], this.bookRegionIds = const [], this.asOf});
+
+  static const none = DashboardScope();
+
+  factory DashboardScope.fromJson(Object? json) {
+    if (json is! Map) return none;
+    List<int> ids(Object? raw) =>
+        ((raw as List?) ?? const []).whereType<num>().map((e) => e.toInt()).toList();
+    return DashboardScope(
+      regionIds: ids(json['regionIds']),
+      bookRegionIds: ids(json['bookRegionIds']),
+      asOf: json['asOf'] as String?,
+    );
+  }
+}
 
 double _money(Object? v) => (v as num? ?? 0).toDouble();
 
@@ -33,15 +62,18 @@ class MonthPoint {
 
 class MonthlySeries {
   final Coverage coverage;
+  final DashboardScope scope;
 
   final List<MonthPoint> months;
 
-  const MonthlySeries({required this.coverage, required this.months});
+  const MonthlySeries(
+      {required this.coverage, required this.months, this.scope = DashboardScope.none});
 
   double get total => months.fold(0, (sum, m) => sum + m.amount);
 
   factory MonthlySeries.fromJson(Map<String, dynamic> json) => MonthlySeries(
-        coverage: _coverage(json['coverage']),
+        coverage: parseCoverage(json['coverage']),
+        scope: DashboardScope.fromJson(json['scope']),
         months: ((json['months'] as List?) ?? const [])
             .cast<Map<String, dynamic>>()
             .map(MonthPoint.fromJson)
@@ -90,12 +122,15 @@ DateTime? _day(Object? value) =>
 
 class OutstandingByAge {
   final Coverage coverage;
+  final DashboardScope scope;
   final List<AgeBucket> buckets;
 
-  const OutstandingByAge({required this.coverage, required this.buckets});
+  const OutstandingByAge(
+      {required this.coverage, required this.buckets, this.scope = DashboardScope.none});
 
   factory OutstandingByAge.fromJson(Map<String, dynamic> json) => OutstandingByAge(
-        coverage: _coverage(json['coverage']),
+        coverage: parseCoverage(json['coverage']),
+        scope: DashboardScope.fromJson(json['scope']),
         buckets: ((json['buckets'] as List?) ?? const [])
             .cast<Map<String, dynamic>>()
             .map(AgeBucket.fromJson)
@@ -121,14 +156,17 @@ class RankedCustomer {
 
 class CustomerRanking {
   final Coverage coverage;
+  final DashboardScope scope;
   final List<RankedCustomer> customers;
 
-  const CustomerRanking({required this.coverage, required this.customers});
+  const CustomerRanking(
+      {required this.coverage, required this.customers, this.scope = DashboardScope.none});
 
   static CustomerRanking _fromJson(
       Map<String, dynamic> json, String amountKey, String countKey, String dateKey) {
     return CustomerRanking(
-      coverage: _coverage(json['coverage']),
+      coverage: parseCoverage(json['coverage']),
+      scope: DashboardScope.fromJson(json['scope']),
       customers: ((json['customers'] as List?) ?? const [])
           .cast<Map<String, dynamic>>()
           .map((c) => RankedCustomer(
@@ -151,60 +189,76 @@ class CustomerRanking {
 
 final dashboardMonthsProvider = StateProvider<int>((ref) => 12);
 
-DateTime todayUtc() {
-  final now = DateTime.now().toUtc();
+DateTime todayUtc([DateTime? at]) {
+  final now = (at ?? DateTime.now()).toUtc();
   return DateTime.utc(now.year, now.month, now.day);
+}
+
+/// Where the dashboard reads the time from; tests move it past midnight.
+final dashboardClockProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+
+/// The day the dashboard's "today" is: the date being viewed, or today (UTC). It drives the
+/// ageing links, "days" counts and upcoming promises, as the server's today does its figures (D9).
+/// Worked out again on every refresh and every visit, so a session that runs past midnight
+/// moves on with the server.
+final dashboardTodayProvider = Provider.autoDispose<DateTime>((ref) {
+  final asOf = ref.watch(viewAsOfProvider);
+  return asOf == null
+      ? todayUtc(ref.watch(dashboardClockProvider)())
+      : DateTime.utc(asOf.year, asOf.month, asOf.day);
+});
+
+/// Every figure on the dashboard answers for the regions asked about, as of the day viewed (§6.9):
+/// each asks again when either changes, and refuses an answer that is not the day it asked for.
+Future<Map<String, dynamic>> _dashboardGet(Ref ref, String path,
+    [Map<String, dynamic>? params]) async {
+  final view = ref.watch(viewScopeProvider);
+  final res = await ref.watch(dioProvider).get(path, queryParameters: params);
+  checkAsOf(res, view.asOf);
+  return _map(res.data);
 }
 
 final billedByMonthProvider = FutureProvider.autoDispose<MonthlySeries>((ref) async {
   final months = ref.watch(dashboardMonthsProvider);
-  final res = await ref
-      .watch(dioProvider)
-      .get('/api/dashboard/billed-by-month', queryParameters: {'months': months});
-  return MonthlySeries.fromJson(_map(res.data));
+  return MonthlySeries.fromJson(
+      await _dashboardGet(ref, '/api/dashboard/billed-by-month', {'months': months}));
 });
 
 final collectedByMonthProvider = FutureProvider.autoDispose<MonthlySeries>((ref) async {
   final months = ref.watch(dashboardMonthsProvider);
-  final res = await ref
-      .watch(dioProvider)
-      .get('/api/dashboard/collected-by-month', queryParameters: {'months': months});
-  return MonthlySeries.fromJson(_map(res.data));
+  return MonthlySeries.fromJson(
+      await _dashboardGet(ref, '/api/dashboard/collected-by-month', {'months': months}));
 });
 
-final outstandingByAgeProvider = FutureProvider.autoDispose<OutstandingByAge>((ref) async {
-  final res = await ref.watch(dioProvider).get('/api/dashboard/outstanding-by-age');
-  return OutstandingByAge.fromJson(_map(res.data));
-});
+final outstandingByAgeProvider = FutureProvider.autoDispose<OutstandingByAge>((ref) async =>
+    OutstandingByAge.fromJson(await _dashboardGet(ref, '/api/dashboard/outstanding-by-age')));
 
-final topOutstandingProvider = FutureProvider.autoDispose<CustomerRanking>((ref) async {
-  final res = await ref.watch(dioProvider).get('/api/dashboard/top-outstanding-customers');
-  return CustomerRanking.outstandingFromJson(_map(res.data));
-});
+final topOutstandingProvider = FutureProvider.autoDispose<CustomerRanking>((ref) async =>
+    CustomerRanking.outstandingFromJson(
+        await _dashboardGet(ref, '/api/dashboard/top-outstanding-customers')));
 
 final topPayingProvider = FutureProvider.autoDispose<CustomerRanking>((ref) async {
   final months = ref.watch(dashboardMonthsProvider);
-  final res = await ref
-      .watch(dioProvider)
-      .get('/api/dashboard/top-paying-customers', queryParameters: {'months': months});
-  return CustomerRanking.payingFromJson(_map(res.data));
+  return CustomerRanking.payingFromJson(
+      await _dashboardGet(ref, '/api/dashboard/top-paying-customers', {'months': months}));
 });
 
-final invoiceSummaryProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
-  final res = await ref.watch(dioProvider).get('/api/invoices/summary');
-  return _map(res.data);
-});
+final invoiceSummaryProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+    (ref) => _dashboardGet(ref, '/api/invoices/summary'));
 
-final promiseSummaryProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
-  final res = await ref.watch(dioProvider).get('/api/promises/summary');
-  return _map(res.data);
-});
+final promiseSummaryProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+    (ref) => _dashboardGet(ref, '/api/promises/summary'));
 
 class UpcomingPromises {
   final List<PaymentPromise> promises;
   final bool book;
 
-  const UpcomingPromises({required this.promises, required this.book});
+  /// Regions where only my own book is listed while others are listed whole (B1); empty when
+  /// [book] already says the whole list is my book.
+  final List<int> bookRegionIds;
+
+  const UpcomingPromises(
+      {required this.promises, required this.book, this.bookRegionIds = const []});
 
   static String listLink(DateTime today) => RouteQuery.location('/promises', {
         'sort': 'promisedDate,asc',
@@ -218,22 +272,30 @@ List<String> _upcomingFilters(DateTime today) => [
     ];
 
 final upcomingPromisesProvider = FutureProvider.autoDispose<UpcomingPromises>((ref) async {
-  final res = await ref.watch(dioProvider).get('/api/promises', queryParameters: {
+  final data = await _dashboardGet(ref, '/api/promises', {
     'size': 10,
     'sort': 'promisedDate,asc',
-    'filter': _upcomingFilters(todayUtc()),
+    'filter': _upcomingFilters(ref.watch(dashboardTodayProvider)),
   });
-  final data = _map(res.data);
+  final book = ((data['lockedFilters'] as List?) ?? const []).isNotEmpty;
   return UpcomingPromises(
     promises: ((data['content'] as List?) ?? const [])
         .cast<Map<String, dynamic>>()
         .map(PaymentPromise.fromJson)
         .toList(),
-    book: ((data['lockedFilters'] as List?) ?? const []).isNotEmpty,
+    // lockedFilters still means the whole list is my book (R14).
+    book: book,
+    bookRegionIds: book
+        ? const []
+        : ((data['bookRegionIds'] as List?) ?? const [])
+            .whereType<num>()
+            .map((e) => e.toInt())
+            .toList(),
   );
 });
 
 void refreshDashboard(WidgetRef ref) {
+  ref.invalidate(dashboardTodayProvider);
   ref.invalidate(billedByMonthProvider);
   ref.invalidate(collectedByMonthProvider);
   ref.invalidate(outstandingByAgeProvider);

@@ -25,9 +25,10 @@ spring:
   task:
     scheduling:
       pool:
-        # The email sweeper and the promise sweeper each get a thread, so a slow mail service call
-        # (up to 40 s) never holds up the other.
-        size: 3
+        # The email sweeper, the promise sweeper, the history reconciler, the approval housekeeping, the automation
+        # consumer and the automation schedule tick each get a thread, so a slow mail service call (up to 40 s) never
+        # holds up the others; one spare.
+        size: 7
   servlet:
     multipart:
       # The same setting as app.documents.max-size-bytes below, not a copy of today's value of
@@ -65,6 +66,35 @@ app:
       connect-timeout-ms: 5000
       read-timeout-ms: 40000                          # connecting calls Google
       webhook-max-bytes: 33554432                     # largest webhook body read; 32 MiB
+  history:
+    # A record whose version cannot be built (a mapping error, not a database one) is logged and skipped, and
+    # its old version stays until the reconciler catches up: history must never stop a save. Tests say true.
+    strict: false
+    # How often the reconciler repairs history that drifted from the live tables (and how long after startup it
+    # first runs): once a day.
+    reconcile-interval-ms: 86400000
+  approval:
+    # For this long after a customer moves region, a change to it is held at the stricter of the old and the new
+    # region's limits, so a move can never be a way round a limit.
+    move-cooldown-days: 30
+  automation:
+    # The outbox consumer (A5): off stops the poll; events keep being written and wait until it is on again.
+    consumer-enabled: true
+    poll-interval-ms: 2000
+    tick-interval-ms: 30000
+    batch-size: 50                       # events claimed per page of a drain
+    lease-seconds: 300                   # a worker that stopped gives its event back after this long
+    max-attempts: 5                      # a failing event is given up on (DEAD) after this many attempts
+    max-claims: 20                       # ... or after this many claims that never finished
+    page-size: 500                       # records per page of a set run
+    slice-budget-ms: 10000
+    default-max-records-per-run: 1000
+    max-actions-per-rule-per-hour: 1000
+    max-email-recipients: 50
+    max-catch-up-slots: 31               # a rule catching up slot by slot (ALL) runs at most this many
+    event-retention-days: 14             # also bounds history_transactions and replay
+    default-zone: ${AUTOMATION_ZONE:UTC}
+    node-id: ${AUTOMATION_NODE_ID:}      # empty: the host's name and a random suffix
 
 ---
 spring:
@@ -96,7 +126,8 @@ spring:
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 5
+      # The requests, plus the background jobs: the automation consumer runs each action in a transaction of its own.
+      maximum-pool-size: 8
       connection-timeout: 30000
   jpa:
     hibernate:

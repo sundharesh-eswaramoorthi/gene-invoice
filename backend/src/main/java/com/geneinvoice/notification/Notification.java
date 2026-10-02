@@ -1,5 +1,6 @@
 package com.geneinvoice.notification;
 
+import com.geneinvoice.common.time.AppClock;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -8,7 +9,8 @@ import java.time.Instant;
 @Entity
 @Table(name = "notifications", indexes = {
         @Index(name = "idx_notif_user", columnList = "user_id"),
-        @Index(name = "idx_notif_user_read", columnList = "user_id,is_read")
+        @Index(name = "idx_notif_user_read", columnList = "user_id,is_read"),
+        @Index(name = "idx_notification_user_region", columnList = "user_id,region_id")
 })
 @Getter
 @Setter
@@ -36,8 +38,14 @@ public class Notification {
     @Column(length = MESSAGE_MAX)
     private String message;
 
-    @Column(length = 300)
+    public static final int LINK_MAX = 300;
+
+    @Column(length = LINK_MAX)
     private String link;
+
+    /** The region of the record it is about, so the bell answers "which regions" (PC-9); null for the rest. */
+    @Column(name = "region_id")
+    private Long regionId;
 
     @Column(name = "is_read", nullable = false)
     @Builder.Default
@@ -48,6 +56,6 @@ public class Notification {
 
     @PrePersist
     void onCreate() {
-        this.createdAt = Instant.now();
+        this.createdAt = AppClock.now();
     }
 }

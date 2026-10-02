@@ -2,6 +2,8 @@ package com.geneinvoice.document;
 
 import com.geneinvoice.common.ApiError;
 import com.geneinvoice.common.query.PageResponse;
+import com.geneinvoice.common.scope.AsOfAware;
+import com.geneinvoice.common.scope.AsOfIgnored;
 import com.geneinvoice.privilege.Privileges;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.nio.charset.StandardCharsets;
 
 @RestController
+@AsOfAware
 @RequestMapping("/api/documents")
 @RequiredArgsConstructor
 public class DocumentController {
@@ -53,6 +56,7 @@ public class DocumentController {
     }
 
     @GetMapping("/{id}/download")
+    @AsOfIgnored
     @PreAuthorize("hasAuthority('" + Privileges.DOCUMENT_VIEW + "')")
     public ResponseEntity<Resource> download(@PathVariable Long id) {
         DocumentService.Download file = service.download(id);

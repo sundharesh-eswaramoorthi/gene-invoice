@@ -43,6 +43,8 @@ class NotificationsScreen extends ConsumerWidget {
         onRowTap: (context, n) => _open(context, ref, n),
         // Marking rows read here changes the bell's badge, which lives outside this table (D-55).
         onBulkDone: () => ref.invalidate(unreadCountProvider),
+        // Marking read is housekeeping, allowed on a past date too (§5.2.4).
+        bulkWhileHistorical: true,
         bulkActions: const [
           BulkActionSpec(action: 'MARK_READ', label: 'Mark read', icon: Icons.done_all),
           BulkActionSpec(

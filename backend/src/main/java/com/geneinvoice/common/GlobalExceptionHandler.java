@@ -2,6 +2,8 @@ package com.geneinvoice.common;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
+import com.geneinvoice.approval.ApprovalConflictException;
+import com.geneinvoice.common.scope.CodedBadRequestException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.ConcurrencyFailureException;
@@ -35,6 +37,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> notFound(NotFoundException ex, HttpServletRequest req) {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(
                 ApiError.of(404, "Not Found", ex.getMessage(), req.getRequestURI()));
+    }
+
+    @ExceptionHandler(CodedBadRequestException.class)
+    public ResponseEntity<ApiError> codedBadRequest(CodedBadRequestException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(
+                ApiError.of(400, ex.code, ex.getMessage(), req.getRequestURI()));
+    }
+
+    /** Another change is waiting on the record, or this one was already decided: a conflict, told as it is. */
+    @ExceptionHandler(ApprovalConflictException.class)
+    public ResponseEntity<ApiError> approvalConflict(ApprovalConflictException ex, HttpServletRequest req) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(
+                ApiError.of(409, "Conflict", ex.getMessage(), req.getRequestURI()));
     }
 
     @ExceptionHandler(BadRequestException.class)

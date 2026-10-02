@@ -1,6 +1,9 @@
 package com.geneinvoice.invoice;
 
 import com.geneinvoice.audit.AuditService;
+import com.geneinvoice.common.origin.WriteOrigin;
+import com.geneinvoice.common.origin.WriteOrigins;
+import com.geneinvoice.common.schema.SchemaSupport;
 import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.InitializingBean;
@@ -18,7 +21,6 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
-import java.util.Locale;
 import java.util.Map;
 
 @Component
@@ -44,14 +46,15 @@ class InvoiceSchemaUpgrade implements InitializingBean {
         int filled = 0;
         try (Connection connection = dataSource.getConnection()) {
             filled = backfill(connection, term);
-            enforceDueDateNotNull(connection);
+            SchemaSupport.enforceNotNull(connection, "invoices", "due_date");
         } catch (SQLException e) {
             log.warn("Could not finish the invoice due-date upgrade: {}", e.getMessage());
         }
         if (filled > 0) {
-            auditService.record(InvoiceService.ENTITY, BACKFILL_ENTITY_ID,
-                    "INVOICE_DUE_DATES_BACKFILLED", null, new Backfill(filled, term), null, null,
-                    "Backfilled " + filled + " invoice due dates using " + term.label());
+            int backfilled = filled;
+            WriteOrigins.run(WriteOrigin.schema(), () -> auditService.record(InvoiceService.ENTITY,
+                    BACKFILL_ENTITY_ID, "INVOICE_DUE_DATES_BACKFILLED", null, new Backfill(backfilled, term),
+                    null, null, "Backfilled " + backfilled + " invoice due dates using " + term.label()));
         }
     }
 
@@ -141,43 +144,5 @@ class InvoiceSchemaUpgrade implements InitializingBean {
         if (value instanceof Timestamp ts) return ts.toInstant();
         if (value instanceof LocalDateTime ldt) return ldt.toInstant(ZoneOffset.UTC);
         throw new IllegalStateException("Unexpected invoice_date: " + value);
-    }
-
-    static void enforceDueDateNotNull(Connection connection) throws SQLException {
-        String product = product(connection);
-        String alter;
-        if (product.contains("postgresql")) {
-            alter = "alter table invoices alter column due_date set not null";
-        } else if (product.contains("h2")) {
-            alter = "alter table invoices alter column due_date date not null";
-        } else {
-            return;
-        }
-        if (!isNullable(connection, "invoices", "due_date")) return;
-        try (Statement statement = connection.createStatement()) {
-            statement.execute(alter);
-            if (!connection.getAutoCommit()) connection.commit();
-            log.info("invoices.due_date is now not null");
-        } catch (SQLException e) {
-            log.warn("Could not make invoices.due_date not null: {}", e.getMessage());
-        }
-    }
-
-    static boolean isNullable(Connection connection, String table, String column) throws SQLException {
-        boolean h2 = product(connection).contains("h2");
-        try (PreparedStatement statement = connection.prepareStatement("""
-                select is_nullable from information_schema.columns
-                 where table_name = ? and column_name = ? and table_schema = %s
-                """.formatted(h2 ? "schema()" : "current_schema()"))) {
-            statement.setString(1, h2 ? table.toUpperCase(Locale.ROOT) : table);
-            statement.setString(2, h2 ? column.toUpperCase(Locale.ROOT) : column);
-            try (ResultSet rows = statement.executeQuery()) {
-                return !rows.next() || !"NO".equalsIgnoreCase(rows.getString(1));
-            }
-        }
-    }
-
-    private static String product(Connection connection) throws SQLException {
-        return connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
     }
 }

@@ -1,6 +1,8 @@
 package com.geneinvoice.email.mailservice;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.geneinvoice.common.scope.AsOfIgnored;
+import com.geneinvoice.common.time.WallClock;
 import com.geneinvoice.email.mailservice.MailServiceDtos.Event;
 import com.geneinvoice.email.mailservice.MailServiceDtos.EventBatch;
 import jakarta.servlet.http.HttpServletRequest;
@@ -14,13 +16,13 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 @RestController
+@AsOfIgnored
 @ConditionalOnProperty(name = "app.mail.transport", havingValue = "mail-service")
 @Slf4j
 public class MailServiceEventsController {
@@ -43,11 +45,12 @@ public class MailServiceEventsController {
     }
 
     @PostMapping(PATH)
+    @AsOfIgnored
     public ResponseEntity<Map<String, Object>> events(
             @RequestHeader(value = "X-Mail-Timestamp", required = false) String timestamp,
             @RequestHeader(value = "X-Mail-Signature", required = false) String signature,
             HttpServletRequest request) {
-        if (signature == null || !WebhookSignature.timely(timestamp, Instant.now())) return invalidSignature();
+        if (signature == null || !WebhookSignature.timely(timestamp, WallClock.UTC.instant())) return invalidSignature();
         long maxBytes = properties.getWebhookMaxBytes();
         if (request.getContentLengthLong() > maxBytes) return tooLarge();
         byte[] body;

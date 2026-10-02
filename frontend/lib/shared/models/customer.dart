@@ -23,6 +23,19 @@ class Customer {
   final bool pocMissing;
   final DateTime? createdAt;
 
+  /// The region this customer — and everything raised against it — belongs to (B1).
+  final int? regionId;
+  final String? regionCode;
+  final String? regionName;
+
+  /// What the server says this user may do to this customer in its region (D14). Null in a
+  /// snapshot, where the screen falls back to the flat privilege.
+  final bool? canManage;
+  final bool? canMoveRegion;
+
+  /// The optimistic-lock version a region move is checked against, when the server sends it.
+  final int? version;
+
   const Customer({
     required this.id,
     required this.name,
@@ -39,6 +52,12 @@ class Customer {
     this.collectionPocs,
     this.pocMissing = false,
     this.createdAt,
+    this.regionId,
+    this.regionCode,
+    this.regionName,
+    this.canManage,
+    this.canMoveRegion,
+    this.version,
   });
 
   /// What to call this customer's terms on screen. No terms of their own is a legitimate state
@@ -87,5 +106,11 @@ class Customer {
         pocMissing: json['pocMissing'] as bool? ?? false,
         createdAt:
             json['createdAt'] == null ? null : DateTime.parse(json['createdAt'] as String),
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionCode: json['regionCode'] as String?,
+        regionName: json['regionName'] as String?,
+        canManage: json['canManage'] as bool?,
+        canMoveRegion: json['canMoveRegion'] as bool?,
+        version: (json['version'] as num?)?.toInt(),
       );
 }

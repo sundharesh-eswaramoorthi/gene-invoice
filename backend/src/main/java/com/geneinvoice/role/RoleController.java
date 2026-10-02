@@ -4,6 +4,7 @@ import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.FieldLimits;
 import com.geneinvoice.common.NotFoundException;
 import com.geneinvoice.auth.CurrentUser;
+import com.geneinvoice.automation.rule.RuleService;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.Csv;
 import com.geneinvoice.common.query.FilterParams;
@@ -11,6 +12,7 @@ import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.common.scope.AsOfIgnored;
 import com.geneinvoice.email.connection.GmailDisconnects;
 import com.geneinvoice.privilege.Privilege;
 import com.geneinvoice.privilege.PrivilegeRepository;
@@ -35,6 +37,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
+@AsOfIgnored
 @RequestMapping("/api/roles")
 @RequiredArgsConstructor
 public class RoleController {
@@ -45,6 +48,7 @@ public class RoleController {
     private final TableQueryExecutor queryExecutor;
     private final GmailDisconnects gmailDisconnects;
     private final CurrentUser currentUser;
+    private final RuleService ruleService;
 
     public record RoleDto(Long id, String name, String description, List<String> privileges) {
         static RoleDto from(Role r) {
@@ -73,6 +77,7 @@ public class RoleController {
     }
 
     @PostMapping("/export")
+    @AsOfIgnored
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.ROLE_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         TableQuery query = TableQuery.parseUnpaged(TableSchemas.ROLES, req.sort(), req.filters());
@@ -137,6 +142,8 @@ public class RoleController {
         if (sentEmail && !sendsEmail(saved)) {
             gmailDisconnects.request(userRepository.findInternalIdsByRoleId(id));
         }
+        // Rules run as their owners: one whose owner lost what it needs is suspended now (§5.10.7, SC-14).
+        ruleService.recheckOwnersOfRole(id);
         return RoleDto.from(saved);
     }
 

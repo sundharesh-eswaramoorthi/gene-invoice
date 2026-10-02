@@ -3,6 +3,10 @@ package com.geneinvoice.config;
 import com.geneinvoice.privilege.Privilege;
 import com.geneinvoice.privilege.PrivilegeRepository;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.AccessLevel;
+import com.geneinvoice.region.RecordScope;
+import com.geneinvoice.region.RegionGrantService;
+import com.geneinvoice.region.RegionService;
 import com.geneinvoice.role.Role;
 import com.geneinvoice.role.RoleRepository;
 import com.geneinvoice.user.User;
@@ -34,6 +38,8 @@ public class DataSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RegionService regionService;
+    private final RegionGrantService regionGrantService;
 
     @Override
     @Transactional
@@ -64,7 +70,9 @@ public class DataSeeder implements CommandLineRunner {
                 SCOPE_OVERRIDE,
                 EMAIL_VIEW, EMAIL_SEND,
                 DOCUMENT_VIEW, DOCUMENT_MANAGE,
-                EXPORT_DATA
+                EXPORT_DATA,
+                TASK_VIEW, TASK_MANAGE,
+                AUTOMATION_VIEW, AUTOMATION_MANAGE
         ));
         upsertRole("VIEWER", "Read-only access", pickByNames(
                 CUSTOMER_VIEW, PRODUCT_VIEW, INVOICE_VIEW, PAYMENT_VIEW,
@@ -73,7 +81,8 @@ public class DataSeeder implements CommandLineRunner {
                 PROMISE_VIEW,
                 SCOPE_OVERRIDE,
                 EMAIL_VIEW,
-                DOCUMENT_VIEW
+                DOCUMENT_VIEW,
+                TASK_VIEW
         ));
         Set<Privilege> customerPrivileges = pickByNames(
                 CUSTOMER_VIEW,
@@ -103,7 +112,9 @@ public class DataSeeder implements CommandLineRunner {
                 PROMISE_VIEW,
                 EMAIL_VIEW, EMAIL_SEND,
                 DOCUMENT_VIEW, DOCUMENT_MANAGE,
-                EXPORT_DATA
+                EXPORT_DATA,
+                TASK_VIEW, TASK_MANAGE,
+                AUTOMATION_VIEW, AUTOMATION_MANAGE
         ));
         createRoleIfAbsent(ROLE_SUCCESS_POC, "Customer success contact for an account", createdNow, pickByNames(
                 CUSTOMER_VIEW, CUSTOMER_MANAGE,
@@ -119,7 +130,9 @@ public class DataSeeder implements CommandLineRunner {
                 SCOPE_OVERRIDE,
                 EMAIL_VIEW, EMAIL_SEND,
                 DOCUMENT_VIEW, DOCUMENT_MANAGE,
-                EXPORT_DATA
+                EXPORT_DATA,
+                TASK_VIEW, TASK_MANAGE,
+                AUTOMATION_VIEW, AUTOMATION_MANAGE
         ));
         createRoleIfAbsent(ROLE_COLLECTION_POC, "Collections contact for an account", createdNow, pickByNames(
                 CUSTOMER_VIEW,
@@ -134,7 +147,9 @@ public class DataSeeder implements CommandLineRunner {
                 SCOPE_OVERRIDE,
                 EMAIL_VIEW, EMAIL_SEND,
                 DOCUMENT_VIEW, DOCUMENT_MANAGE,
-                EXPORT_DATA
+                EXPORT_DATA,
+                TASK_VIEW, TASK_MANAGE,
+                AUTOMATION_VIEW, AUTOMATION_MANAGE
         ));
 
         if (!userRepository.existsByUsername("admin")) {
@@ -146,7 +161,8 @@ public class DataSeeder implements CommandLineRunner {
                     .role(admin)
                     .active(true)
                     .build();
-            userRepository.save(u);
+            regionGrantService.ensure(userRepository.save(u), regionService.defaultRegion(),
+                    AccessLevel.APPROVE, RecordScope.ALL);
             log.info("Seeded admin user: admin / admin123");
         }
 
@@ -159,7 +175,8 @@ public class DataSeeder implements CommandLineRunner {
                     .role(cashier)
                     .active(true)
                     .build();
-            userRepository.save(u);
+            regionGrantService.ensure(userRepository.save(u), regionService.defaultRegion(),
+                    AccessLevel.APPROVE, RecordScope.ALL);
             log.info("Seeded cashier user: cashier / cashier123");
         }
     }

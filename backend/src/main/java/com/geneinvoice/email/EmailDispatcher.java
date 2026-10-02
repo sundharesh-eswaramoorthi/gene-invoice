@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -46,6 +47,7 @@ public class EmailDispatcher {
     private final MailTransport transport;
     private final TransactionTemplate transactions;
     private final boolean async;
+    private final Clock clock;
     private final ExecutorService background = Executors.newSingleThreadExecutor(runnable -> {
         Thread t = new Thread(runnable, "email-dispatch");
         t.setDaemon(true);
@@ -55,12 +57,13 @@ public class EmailDispatcher {
 
     public EmailDispatcher(EmailRepository emailRepository, EmailRecipientRepository recipientRepository,
                            MailTransport transport, TransactionTemplate transactions,
-                           @Value("${app.mail.dispatch.async:true}") boolean async) {
+                           @Value("${app.mail.dispatch.async:true}") boolean async, Clock clock) {
         this.emailRepository = emailRepository;
         this.recipientRepository = recipientRepository;
         this.transport = transport;
         this.transactions = transactions;
         this.async = async;
+        this.clock = clock;
     }
 
     @PreDestroy
@@ -69,7 +72,7 @@ public class EmailDispatcher {
     }
 
     public void dispatch(Long emailId) {
-        dispatch(emailId, Instant.now());
+        dispatch(emailId, clock.instant());
     }
 
     private void dispatch(Long emailId, Instant now) {
@@ -117,7 +120,7 @@ public class EmailDispatcher {
     }
 
     public void sweep() {
-        sweep(Instant.now());
+        sweep(clock.instant());
     }
 
     void sweep(Instant now) {
@@ -142,7 +145,7 @@ public class EmailDispatcher {
     }
 
     private void dispatchQuietly(Long emailId) {
-        dispatchQuietly(emailId, Instant.now());
+        dispatchQuietly(emailId, clock.instant());
     }
 
     private void dispatchQuietly(Long emailId, Instant now) {
@@ -154,7 +157,7 @@ public class EmailDispatcher {
     }
 
     private Submission claim(Long emailId, Instant due) {
-        if (emailRepository.claim(emailId, due, Instant.now()) == 0) return null;
+        if (emailRepository.claim(emailId, due, clock.instant()) == 0) return null;
         Email email = emailRepository.findById(emailId).orElseThrow();
         List<EmailRecipient> recipients = recipientRepository.findByEmailIdOrderByIdAsc(emailId);
         if (recipients.stream().noneMatch(r -> r.getDeliveryStatus() != null)) {
@@ -225,7 +228,7 @@ public class EmailDispatcher {
                         copy.setDeliveryError(NOT_ACCEPTED);
                     });
         }
-        EmailDeliveryRollup.handedOff(email, Instant.now());
+        EmailDeliveryRollup.handedOff(email, clock.instant());
         EmailDeliveryRollup.apply(email, recipients);
         recipientRepository.saveAll(recipients);
         emailRepository.save(email);
@@ -259,7 +262,7 @@ public class EmailDispatcher {
         if (transientFailure && email.getAttempts() < MAX_ATTEMPTS) {
             email.setStatus(EmailStatus.QUEUED);
             email.setError(error);
-            email.setNextAttemptAt(Instant.now().plus(
+            email.setNextAttemptAt(clock.instant().plus(
                     email.getAttempts() <= 1 ? Duration.ofMinutes(1) : Duration.ofMinutes(5)));
             emailRepository.save(email);
             return;

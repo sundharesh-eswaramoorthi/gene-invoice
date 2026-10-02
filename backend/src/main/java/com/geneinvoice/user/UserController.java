@@ -1,7 +1,13 @@
 package com.geneinvoice.user;
 
+import com.geneinvoice.approval.PendingChangeRepository;
+import com.geneinvoice.assignee.RecordAssignee;
+import com.geneinvoice.assignee.RecordAssigneeRepository;
 import com.geneinvoice.audit.AuditService;
 import com.geneinvoice.auth.CurrentUser;
+import com.geneinvoice.automation.rule.AutomationRuleRepository;
+import com.geneinvoice.automation.rule.RuleService;
+import com.geneinvoice.automation.rule.SuspendReason;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Emails;
 import com.geneinvoice.common.Passwords;
@@ -16,11 +22,15 @@ import com.geneinvoice.common.query.PageResponse;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.common.scope.AsOfIgnored;
 import com.geneinvoice.email.connection.GmailDisconnects;
 import com.geneinvoice.invoice.InvoiceRepository;
 import com.geneinvoice.payment.PaymentRepository;
 import com.geneinvoice.poc.CustomerPocRepository;
 import com.geneinvoice.privilege.Privileges;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.geneinvoice.region.RegionDtos;
+import com.geneinvoice.region.RegionGrantService;
 import jakarta.servlet.http.HttpServletRequest;
 import com.geneinvoice.promise.PaymentPromiseRepository;
 import com.geneinvoice.role.Role;
@@ -38,6 +48,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -45,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
+@AsOfIgnored
 @RequestMapping("/api/users")
 @RequiredArgsConstructor
 public class UserController {
@@ -59,20 +71,34 @@ public class UserController {
     private final InvoiceRepository invoiceRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentPromiseRepository promiseRepository;
+    private final AutomationRuleRepository ruleRepository;
     private final CustomerPocRepository customerPocRepository;
+    private final RecordAssigneeRepository recordAssigneeRepository;
+    private final PendingChangeRepository pendingChangeRepository;
     private final GmailDisconnects gmailDisconnects;
+    private final RegionGrantService regionGrantService;
+    private final UserAccountService userAccountService;
+    private final RuleService ruleService;
+    private final Clock clock;
 
+    /** {@code regionGrants} only on a single user's read and on create; null (omitted) in lists and audit. */
     public record UserDto(Long id, String username, String email, String fullName,
                           boolean active, String role, Long customerId,
-                          List<String> privileges, Instant createdAt) {
+                          List<String> privileges, Instant createdAt,
+                          @JsonInclude(JsonInclude.Include.NON_NULL)
+                          List<RegionDtos.UserGrantDto> regionGrants) {
         static UserDto from(User u) {
+            return from(u, null);
+        }
+
+        static UserDto from(User u, List<RegionDtos.UserGrantDto> regionGrants) {
             return new UserDto(u.getId(), u.getUsername(), u.getEmail(), u.getFullName(),
                     u.isActive(), u.getRole() == null ? null : u.getRole().getName(),
                     u.getCustomerId(),
                     u.getRole() == null ? List.of()
                             : u.getRole().getPrivileges().stream()
                                     .map(com.geneinvoice.privilege.Privilege::getName).sorted().toList(),
-                    u.getCreatedAt());
+                    u.getCreatedAt(), regionGrants);
         }
     }
 
@@ -82,7 +108,8 @@ public class UserController {
             @Size(max = FieldLimits.FULL_NAME) String fullName,
             @NotBlank String password,
             @NotNull Long roleId,
-            Boolean active
+            Boolean active,
+            List<RegionDtos.@Valid @NotNull GrantInput> regionGrants
     ) {}
 
     public record UpdateUserRequest(
@@ -109,8 +136,8 @@ public class UserController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.USER_VIEW + "')")
     public UserDto get(@PathVariable Long id) {
-        return userRepository.findById(id).map(UserDto::from)
-                .orElseThrow(() -> new NotFoundException("User not found"));
+        User u = userRepository.findById(id).orElseThrow(() -> new NotFoundException("User not found"));
+        return UserDto.from(u, regionGrantService.grantsOf(id));
     }
 
     @PostMapping
@@ -142,7 +169,9 @@ public class UserController {
                 .role(role)
                 .active(in.active() == null || in.active())
                 .build();
-        return UserDto.from(userRepository.save(u));
+        // The account and the region access asked for commit together; none asked for means none given.
+        UserAccountService.Created created = userAccountService.create(u, in.regionGrants());
+        return UserDto.from(created.user(), created.regionGrants());
     }
 
     @PutMapping("/{id}")
@@ -176,7 +205,9 @@ public class UserController {
             u.setPassword(passwordEncoder.encode(in.password()));
             // An administrator resetting somebody's password ends that person's open sessions
             // too: it is the same act for the same reason (AUTH-04).
-            u.setCredentialsChangedAt(Instant.now());
+            u.setCredentialsChangedAt(clock.instant());
+            // A customer login whose password staff set could be signed into by them (SC-10).
+            if (u.getCustomerId() != null) u.setCredentialsSetByUserId(currentUser.require().getId());
         }
         if (in.roleId() != null) {
             Role role = roleRepository.findById(in.roleId())
@@ -188,6 +219,12 @@ public class UserController {
         auditService.record("USER", id, "USER_UPDATED", before, UserDto.from(saved),
                 currentUser.require().getId(), null, null);
         if (couldSendEmail && !GmailDisconnects.mayConnect(saved)) gmailDisconnects.request(List.of(id));
+        // Their rules run as them (§5.10.7): suspended now rather than at their next event.
+        if (deactivating) {
+            ruleService.suspendOwnedBy(id, SuspendReason.OWNER_INACTIVE);
+        } else if (movingRole) {
+            ruleService.recheckOwner(id);
+        }
         return UserDto.from(saved);
     }
 
@@ -214,6 +251,7 @@ public class UserController {
                     currentUser.require().getId(), null,
                     "Deactivated instead of deleted: named as a POC on " + references + " record(s)");
             if (couldSendEmail) gmailDisconnects.request(List.of(id));
+            ruleService.suspendOwnedBy(id, SuspendReason.OWNER_INACTIVE);
             return Map.of("deleted", false, "deactivated", true, "pocReferences", references);
         }
         boolean internal = u.getCustomerId() == null;
@@ -237,7 +275,13 @@ public class UserController {
         return invoiceRepository.countBySalesPocId(userId)
                 + paymentRepository.countByCollectionPocId(userId)
                 + promiseRepository.countByCollectionPocId(userId)
-                + customerPocRepository.countByUserId(userId);
+                + customerPocRepository.countByUserId(userId)
+                // Named as an assignee: deleting them would leave a task (dispute, promise) nobody is on.
+                + recordAssigneeRepository.countByKindAndUserIdAndRemovedAtIsNull(RecordAssignee.USER, userId)
+                // Named on a change as its maker or decider: the approval trail must keep saying who.
+                + pendingChangeRepository.countByMakerUserIdOrDecidedByUserId(userId, userId)
+                // Owns a rule: the rule runs as them, and says so; deleting them would leave it running as nobody.
+                + ruleRepository.countByOwnerUserIdAndDeletedAtIsNull(userId);
     }
 
     public static final List<String> BULK_ACTIONS = List.of("ACTIVATE", "DEACTIVATE");
@@ -271,6 +315,7 @@ public class UserController {
             User saved = userRepository.save(u);
             auditService.record("USER", id, activate ? "USER_ACTIVATED" : "USER_DEACTIVATED",
                     before, UserDto.from(saved), actor, null, "Bulk action");
+            if (!activate) ruleService.suspendOwnedBy(id, SuspendReason.OWNER_INACTIVE);
             if (couldSendEmail && !GmailDisconnects.mayConnect(saved)) {
                 gmailDisconnects.mark(List.of(id));
                 leftEmail.add(id);
@@ -281,6 +326,7 @@ public class UserController {
     }
 
     @PostMapping("/export")
+    @AsOfIgnored
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.USER_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
         List<Long> ids = resolveIds(req);

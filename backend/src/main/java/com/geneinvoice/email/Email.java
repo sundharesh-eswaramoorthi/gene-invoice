@@ -1,6 +1,7 @@
 package com.geneinvoice.email;
 
 import com.geneinvoice.common.FieldLimits;
+import com.geneinvoice.common.time.AppClock;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.ColumnDefault;
@@ -25,6 +26,8 @@ public class Email {
 
     public static final int LABEL_MAX = 200;
     public static final int NAME_MAX = 200;
+    /** A bulk send's id, or the rule run an email came from. */
+    public static final int BATCH_MAX = 40;
     public static final int ADDRESS_MAX = 320;
     public static final int UNRESOLVED_MAX = 1000;
     public static final int ERROR_MAX = 1000;
@@ -128,7 +131,7 @@ public class Email {
     @Column(name = "in_reply_to", length = HEADER_ID_MAX)
     private String inReplyTo;
 
-    @Column(name = "batch_id", length = 40)
+    @Column(name = "batch_id", length = BATCH_MAX)
     private String batchId;
 
     @Column(name = "occurred_at", nullable = false)
@@ -145,7 +148,7 @@ public class Email {
 
     @PrePersist
     void onCreate() {
-        Instant now = Instant.now();
+        Instant now = AppClock.now();
         this.createdAt = now;
         this.updatedAt = now;
         if (this.occurredAt == null) {
@@ -155,7 +158,7 @@ public class Email {
 
     @PreUpdate
     void onUpdate() {
-        this.updatedAt = Instant.now();
+        this.updatedAt = AppClock.now();
     }
 
     public boolean entityIsDeleted() {

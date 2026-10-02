@@ -16,6 +16,18 @@ spring:
           statement_inspector: com.geneinvoice.CountingStatements
 
 app:
+  history:
+    # A version that cannot be built fails the test's save instead of being logged and skipped.
+    strict: true
+    # Long enough that the background reconciler never races a test; tests call it directly.
+    reconcile-interval-ms: 3600000
+  approval:
+    # Never on its own schedule: a purge must not race a test's clock; tests call ApprovalHousekeeping.purge.
+    housekeeping-cron: "-"
+  automation:
+    # Long enough that the consumer and the ticker never race a test; tests call AutomationWorker.drain directly.
+    poll-interval-ms: 3600000
+    tick-interval-ms: 3600000
   jwt:
     secret: test-secret-that-is-definitely-at-least-32-bytes-long-for-hs256
     expiration-ms: 3600000

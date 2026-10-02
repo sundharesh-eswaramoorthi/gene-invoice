@@ -1,6 +1,7 @@
 package com.geneinvoice.dashboard;
 
-import com.geneinvoice.invoice.InvoiceDates;
+import com.geneinvoice.common.scope.AsOfAware;
+import com.geneinvoice.common.time.Today;
 import com.geneinvoice.privilege.Privileges;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.LocalDate;
 
 @RestController
+@AsOfAware
 @RequestMapping("/api/dashboard")
 @RequiredArgsConstructor
 public class DashboardController {
@@ -49,7 +51,8 @@ public class DashboardController {
         return service.topPaying(months, limit, today());
     }
 
+    /** The viewed day: today, or the date asked about (the ageing and the month window are measured from it). */
     private static LocalDate today() {
-        return InvoiceDates.today();
+        return Today.date();
     }
 }

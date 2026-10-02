@@ -3,7 +3,9 @@ package com.geneinvoice.dashboard;
 import com.geneinvoice.auth.CurrentUser;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.query.Aggregates;
-import com.geneinvoice.customer.Customer;
+import com.geneinvoice.common.scope.AsOf;
+import com.geneinvoice.common.scope.AsOfPoint;
+import com.geneinvoice.history.Temporal;
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.invoice.InvoiceStatus;
 import com.geneinvoice.payment.Payment;
@@ -16,7 +18,7 @@ import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.From;
-import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Selection;
@@ -34,8 +36,19 @@ import java.time.OffsetDateTime;
 import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
+/**
+ * The dashboard figures. Every query roots and joins through {@link Temporal}, so as of a date each figure is the
+ * one the dashboard showed that day (§5.12): the invoices, payments and allocations that existed then, as they
+ * were, under the customers' names then, with "today" (ageing, the month window) being the viewed day.
+ */
 @Service
 @RequiredArgsConstructor
 public class DashboardService {
@@ -68,16 +81,17 @@ public class DashboardService {
         ScopeResolver.Scope scope = scopeResolver.forInvoices();
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
-        Root<Invoice> inv = cq.from(Invoice.class);
+        List<Predicate> where = new ArrayList<>();
+        Root<?> inv = Temporal.fromValid(cq, Invoice.class, cb, where);
         Expression<Instant> date = inv.get("invoiceDate");
 
-        List<Predicate> where = scoped(inv, cq, cb, scope);
+        where.addAll(scoped(inv, cq, cb, scope));
         where.add(cb.notEqual(inv.get("status"), InvoiceStatus.CANCELLED));
         where.add(within(cb, date, window));
         cq.multiselect(monthSelections(cb, date, inv.get("total"), inv.get("id"), window))
                 .where(where.toArray(new Predicate[0]));
         return new DashboardDtos.MonthlySeries(coverage(scope),
-                points(window, em.createQuery(cq).getSingleResult()));
+                points(window, em.createQuery(cq).getSingleResult()), scopeInfo(scope));
     }
 
     @Transactional(readOnly = true)
@@ -85,7 +99,8 @@ public class DashboardService {
         ScopeResolver.Scope scope = scopeResolver.forInvoices();
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
-        Root<Invoice> inv = cq.from(Invoice.class);
+        List<Predicate> where = new ArrayList<>();
+        Root<?> inv = Temporal.fromValid(cq, Invoice.class, cb, where);
         Expression<LocalDate> dueDate = inv.get("dueDate");
         Expression<BigDecimal> balance = balance(cb, inv);
 
@@ -94,7 +109,8 @@ public class DashboardService {
             select.add(Aggregates.sumWhen(cb, overdueBy(cb, dueDate, age, today), balance));
             select.add(Aggregates.countWhen(cb, overdueBy(cb, dueDate, age, today)));
         }
-        cq.multiselect(select).where(open(cb, inv, scoped(inv, cq, cb, scope)).toArray(new Predicate[0]));
+        where.addAll(scoped(inv, cq, cb, scope));
+        cq.multiselect(select).where(open(cb, inv, where).toArray(new Predicate[0]));
         Object[] row = em.createQuery(cq).getSingleResult();
 
         List<DashboardDtos.AgeBucket> buckets = new ArrayList<>();
@@ -105,7 +121,7 @@ public class DashboardService {
                     age.toDays() == null ? null : today.minusDays(age.toDays()),
                     age.fromDays() == null ? null : today.minusDays(age.fromDays())));
         }
-        return new DashboardDtos.OutstandingByAge(coverage(scope), buckets);
+        return new DashboardDtos.OutstandingByAge(coverage(scope), buckets, scopeInfo(scope));
     }
 
     @Transactional(readOnly = true)
@@ -115,13 +131,15 @@ public class DashboardService {
         ScopeResolver.Scope scope = scopeResolver.forInvoices();
         CriteriaBuilder cb = em.getCriteriaBuilder();
         CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
-        Root<Invoice> inv = cq.from(Invoice.class);
-        Join<Invoice, Customer> customer = inv.join("customer");
+        List<Predicate> where = new ArrayList<>();
+        Root<?> inv = Temporal.fromValid(cq, Invoice.class, cb, where);
+        From<?, ?> customer = Temporal.join(inv, "customer", JoinType.INNER, cb);
         Expression<BigDecimal> outstanding = cb.sum(balance(cb, inv));
+        where.addAll(scoped(inv, cq, cb, scope));
 
         cq.multiselect(customer.get("id"), customer.get("name"), outstanding,
                         cb.count(inv.get("id")), cb.least(inv.<Instant>get("invoiceDate")))
-                .where(open(cb, inv, scoped(inv, cq, cb, scope)).toArray(new Predicate[0]))
+                .where(open(cb, inv, where).toArray(new Predicate[0]))
                 .groupBy(customer.get("id"), customer.get("name"))
                 .orderBy(cb.desc(outstanding), cb.asc(customer.get("name")));
 
@@ -130,22 +148,38 @@ public class DashboardService {
                 .map(r -> new DashboardDtos.OutstandingCustomer((Long) r[0], (String) r[1],
                         Aggregates.asMoney(r[2]), Aggregates.asLong(r[3]), asInstant(r[4])))
                 .toList();
-        return new DashboardDtos.TopOutstanding(coverage(scope), rows);
+        return new DashboardDtos.TopOutstanding(coverage(scope), rows, scopeInfo(scope));
     }
 
     @Transactional(readOnly = true)
     public DashboardDtos.MonthlySeries collectedByMonth(int months, LocalDate today) {
         List<YearMonth> window = window(months, today);
-        CriteriaBuilder cb = em.getCriteriaBuilder();
-        CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
-        Collected c = collected(cq, cb);
+        Split split = split();
+        BigDecimal[] amounts = new BigDecimal[window.size()];
+        long[] counts = new long[window.size()];
+        Arrays.fill(amounts, BigDecimal.ZERO);
+        for (Via via : split.parts()) {
+            CriteriaBuilder cb = em.getCriteriaBuilder();
+            CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
+            Collected c = collected(cq, cb, split, via);
 
-        List<Predicate> where = c.where();
-        where.add(within(cb, c.paidAt(), window));
-        cq.multiselect(monthSelections(cb, c.paidAt(), c.amount(), c.paymentId(), window))
-                .where(where.toArray(new Predicate[0]));
-        return new DashboardDtos.MonthlySeries(paymentCoverage(),
-                points(window, em.createQuery(cq).getSingleResult()));
+            List<Predicate> where = c.where();
+            where.add(within(cb, c.paidAt(), window));
+            cq.multiselect(monthSelections(cb, c.paidAt(), c.amount(), c.paymentId(), window))
+                    .where(where.toArray(new Predicate[0]));
+            // A payment is in exactly one region (I1), so the parts never count the same one twice.
+            List<DashboardDtos.MonthPoint> part = points(window, em.createQuery(cq).getSingleResult());
+            for (int i = 0; i < window.size(); i++) {
+                amounts[i] = amounts[i].add(part.get(i).amount());
+                counts[i] += part.get(i).count();
+            }
+        }
+        List<DashboardDtos.MonthPoint> points = new ArrayList<>();
+        for (int i = 0; i < window.size(); i++) {
+            points.add(new DashboardDtos.MonthPoint(window.get(i).toString(), Aggregates.asMoney(amounts[i]),
+                    counts[i]));
+        }
+        return new DashboardDtos.MonthlySeries(split.coverage(), points, split.scopeInfo());
     }
 
     @Transactional(readOnly = true)
@@ -153,66 +187,139 @@ public class DashboardService {
         requireStaff();
         requireLimit(limit);
         List<YearMonth> window = window(months, today);
-        CriteriaBuilder cb = em.getCriteriaBuilder();
-        CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
-        Collected c = collected(cq, cb);
-        Expression<BigDecimal> total = cb.sum(c.amount());
+        Split split = split();
+        Map<Long, DashboardDtos.PayingCustomer> merged = new LinkedHashMap<>();
+        for (Via via : split.parts()) {
+            CriteriaBuilder cb = em.getCriteriaBuilder();
+            CriteriaQuery<Object[]> cq = cb.createQuery(Object[].class);
+            Collected c = collected(cq, cb, split, via);
+            Expression<BigDecimal> total = cb.sum(c.amount());
 
-        List<Predicate> where = c.where();
-        where.add(within(cb, c.paidAt(), window));
-        cq.multiselect(c.customer().get("id"), c.customer().get("name"), total,
-                        cb.countDistinct(c.paymentId()), cb.greatest(c.paidAt()))
-                .where(where.toArray(new Predicate[0]))
-                .groupBy(c.customer().get("id"), c.customer().get("name"))
-                .orderBy(cb.desc(total), cb.asc(c.customer().get("name")));
+            List<Predicate> where = c.where();
+            where.add(within(cb, c.paidAt(), window));
+            cq.multiselect(c.customer().get("id"), c.customer().get("name"), total,
+                            cb.countDistinct(c.paymentId()), cb.greatest(c.paidAt()))
+                    .where(where.toArray(new Predicate[0]))
+                    .groupBy(c.customer().get("id"), c.customer().get("name"))
+                    .orderBy(cb.desc(total), cb.asc(c.customer().get("name")));
 
-        List<DashboardDtos.PayingCustomer> rows = em.createQuery(cq).setMaxResults(limit)
-                .getResultList().stream()
-                .map(r -> new DashboardDtos.PayingCustomer((Long) r[0], (String) r[1],
-                        Aggregates.asMoney(r[2]), Aggregates.asLong(r[3]), asInstant(r[4])))
-                .toList();
-        return new DashboardDtos.TopPaying(paymentCoverage(), rows);
+            // A customer is in one region, so in one part: each part's own top rows are enough.
+            em.createQuery(cq).setMaxResults(limit).getResultList().forEach(r -> merged.merge((Long) r[0],
+                    new DashboardDtos.PayingCustomer((Long) r[0], (String) r[1],
+                            Aggregates.asMoney(r[2]), Aggregates.asLong(r[3]), asInstant(r[4])),
+                    DashboardService::sameCustomer));
+        }
+        // One part keeps the database's order. Several are merged by amount, then by name ignoring case (then
+        // exactly, then by id, so the order is total): a tie across parts reads by name, not by part (RR-3).
+        List<DashboardDtos.PayingCustomer> rows = new ArrayList<>(merged.values());
+        if (split.parts().size() > 1) {
+            rows.sort(Comparator.comparing(DashboardDtos.PayingCustomer::collected).reversed()
+                    .thenComparing(DashboardDtos.PayingCustomer::customerName, String.CASE_INSENSITIVE_ORDER)
+                    .thenComparing(DashboardDtos.PayingCustomer::customerName)
+                    .thenComparing(DashboardDtos.PayingCustomer::customerId));
+        }
+        rows = rows.stream().limit(limit).toList();
+        return new DashboardDtos.TopPaying(split.coverage(), rows, split.scopeInfo());
+    }
+
+    private static DashboardDtos.PayingCustomer sameCustomer(DashboardDtos.PayingCustomer a,
+                                                             DashboardDtos.PayingCustomer b) {
+        Instant last = a.lastPaidAt() == null ? b.lastPaidAt()
+                : b.lastPaidAt() == null || a.lastPaidAt().isAfter(b.lastPaidAt()) ? a.lastPaidAt() : b.lastPaidAt();
+        return new DashboardDtos.PayingCustomer(a.customerId(), a.customerName(),
+                a.collected().add(b.collected()), a.payments() + b.payments(), last);
+    }
+
+    /** How a part of "collected" is counted: whole payments, or the allocations to the caller's book. */
+    private enum Via { PAYMENTS, ALLOCATIONS }
+
+    /**
+     * "Collected" split by region (B1). Where the caller sees every payment ({@code sums}: the payment
+     * scope's full regions) it is the payments themselves; where they see only a book ({@code allocations}:
+     * the book regions of either scope) it is what was allocated to their invoices or paid on their
+     * payments, as it was for a whole book before regions. A customer login sees its own payments.
+     */
+    private record Split(ScopeResolver.Scope invoices, ScopeResolver.Scope payments,
+                         Set<Long> sums, Set<Long> allocations, boolean own) {
+
+        List<Via> parts() {
+            if (own) return List.of(Via.PAYMENTS);
+            List<Via> out = new ArrayList<>();
+            if (!sums.isEmpty()) out.add(Via.PAYMENTS);
+            if (!allocations.isEmpty()) out.add(Via.ALLOCATIONS);
+            return out;
+        }
+
+        DashboardDtos.Coverage coverage() {
+            if (own) return DashboardDtos.Coverage.OWN;
+            if (!sums.isEmpty() && !allocations.isEmpty()) return DashboardDtos.Coverage.MIXED;
+            if (!sums.isEmpty()) return DashboardDtos.Coverage.ALL;
+            if (!allocations.isEmpty()) return DashboardDtos.Coverage.BOOK;
+            return invoices.lockedFilters().isEmpty() && payments.lockedFilters().isEmpty()
+                    ? DashboardDtos.Coverage.ALL : DashboardDtos.Coverage.BOOK;
+        }
+
+        DashboardDtos.ScopeInfo scopeInfo() {
+            if (own) return DashboardService.scopeInfo(payments);
+            Set<Long> answered = new TreeSet<>(sums);
+            answered.addAll(allocations);
+            return new DashboardDtos.ScopeInfo(List.copyOf(answered), List.copyOf(allocations), asOf());
+        }
+    }
+
+    private Split split() {
+        ScopeResolver.Scope invoices = scopeResolver.forInvoices();
+        ScopeResolver.Scope payments = scopeResolver.forPayments();
+        if (currentUser.isCustomer()) {
+            return new Split(invoices, payments, Set.of(), Set.of(), true);
+        }
+        Set<Long> book = new TreeSet<>(payments.coverage().book());
+        book.addAll(invoices.coverage().book());
+        return new Split(invoices, payments, new TreeSet<>(payments.coverage().full()), book, false);
     }
 
     private record Collected(Expression<BigDecimal> amount, Expression<Instant> paidAt,
-                             Expression<Long> paymentId, From<?, Customer> customer,
+                             Expression<Long> paymentId, From<?, ?> customer,
                              List<Predicate> where) {}
 
-    private Collected collected(CriteriaQuery<Object[]> cq, CriteriaBuilder cb) {
-        if (paidAgainstBookOnly()) {
-            Root<PaymentAllocation> alloc = cq.from(PaymentAllocation.class);
-            Join<PaymentAllocation, Payment> payment = alloc.join("payment");
-            Join<PaymentAllocation, Invoice> invoice = alloc.join("invoice");
-            List<Predicate> where = new ArrayList<>();
+    private Collected collected(CriteriaQuery<Object[]> cq, CriteriaBuilder cb, Split split, Via via) {
+        List<Predicate> where = new ArrayList<>();
+        if (via == Via.ALLOCATIONS) {
+            Root<?> alloc = Temporal.fromValid(cq, PaymentAllocation.class, cb, where);
+            From<?, ?> payment = Temporal.join(alloc, "payment", JoinType.INNER, cb);
+            From<?, ?> invoice = Temporal.join(alloc, "invoice", JoinType.INNER, cb);
             where.add(cb.equal(payment.get("status"), PaymentStatus.ACTIVE));
-            Predicate onMyInvoices =
-                    invoice.get("id").in(idsInScope(Invoice.class, scopeResolver.forInvoices(), cq, cb));
-            ScopeResolver.Scope payments = scopeResolver.forPayments();
-            where.add(payments.predicates().isEmpty() ? onMyInvoices
-                    : cb.or(onMyInvoices, payment.get("id").in(idsInScope(Payment.class, payments, cq, cb))));
+            where.add(invoice.get("region").get("id").in(split.allocations()));
+            where.add(cb.or(
+                    invoice.get("id").in(idsInScope(Invoice.class, split.invoices(), cq, cb)),
+                    payment.get("id").in(idsInScope(Payment.class, split.payments(), cq, cb))));
             return new Collected(alloc.get("amount"), payment.get("paidAt"), payment.get("id"),
-                    invoice.join("customer"), where);
+                    Temporal.join(invoice, "customer", JoinType.INNER, cb), where);
         }
-        Root<Payment> payment = cq.from(Payment.class);
-        List<Predicate> where = scoped(payment, cq, cb, scopeResolver.forPayments());
+        Root<?> payment = Temporal.fromValid(cq, Payment.class, cb, where);
+        where.addAll(scoped(payment, cq, cb, split.payments()));
+        if (!split.own()) {
+            where.add(payment.get("region").get("id").in(split.sums()));
+        }
         where.add(cb.equal(payment.get("status"), PaymentStatus.ACTIVE));
         return new Collected(payment.get("amount"), payment.get("paidAt"), payment.get("id"),
-                payment.join("customer"), where);
+                Temporal.join(payment, "customer", JoinType.INNER, cb), where);
     }
 
-    private boolean paidAgainstBookOnly() {
-        return !scopeResolver.forInvoices().lockedFilters().isEmpty();
-    }
-
-    private DashboardDtos.Coverage paymentCoverage() {
-        return paidAgainstBookOnly()
-                ? DashboardDtos.Coverage.BOOK
-                : coverage(scopeResolver.forPayments());
-    }
-
+    /** OWN for a customer login; BOOK for a pure book view (its chip); MIXED when some regions are a book. */
     private DashboardDtos.Coverage coverage(ScopeResolver.Scope scope) {
         if (currentUser.isCustomer()) return DashboardDtos.Coverage.OWN;
-        return scope.lockedFilters().isEmpty() ? DashboardDtos.Coverage.ALL : DashboardDtos.Coverage.BOOK;
+        if (!scope.lockedFilters().isEmpty()) return DashboardDtos.Coverage.BOOK;
+        return scope.coverage().mixed() ? DashboardDtos.Coverage.MIXED : DashboardDtos.Coverage.ALL;
+    }
+
+    private static DashboardDtos.ScopeInfo scopeInfo(ScopeResolver.Scope scope) {
+        return new DashboardDtos.ScopeInfo(scope.regionIds(), scope.bookRegionIds(), asOf());
+    }
+
+    private static String asOf() {
+        AsOfPoint point = AsOf.current();
+        return point == null ? null : point.date().toString();
     }
 
     private void requireStaff() {
@@ -288,11 +395,11 @@ public class DashboardService {
         return age.fromDays() == null ? cb.or(cb.isNull(dueDate), within) : within;
     }
 
-    private static Expression<BigDecimal> balance(CriteriaBuilder cb, Root<Invoice> inv) {
+    private static Expression<BigDecimal> balance(CriteriaBuilder cb, Root<?> inv) {
         return cb.diff(inv.<BigDecimal>get("total"), inv.<BigDecimal>get("paidAmount"));
     }
 
-    private static List<Predicate> open(CriteriaBuilder cb, Root<Invoice> inv, List<Predicate> where) {
+    private static List<Predicate> open(CriteriaBuilder cb, Root<?> inv, List<Predicate> where) {
         where.add(cb.notEqual(inv.get("status"), InvoiceStatus.CANCELLED));
         where.add(cb.greaterThan(balance(cb, inv), BigDecimal.ZERO));
         return where;
@@ -308,12 +415,13 @@ public class DashboardService {
         return out;
     }
 
-    private static <T> Subquery<Long> idsInScope(Class<T> type, ScopeResolver.Scope scope,
-                                                 CriteriaQuery<?> cq, CriteriaBuilder cb) {
-        Subquery<Long> sq = cq.subquery(Long.class);
-        Root<T> root = sq.from(type);
-        sq.select(root.get("id")).where(scoped(root, cq, cb, scope).toArray(new Predicate[0]));
-        return sq;
+    /** The ids of the records of {@code type} in scope (as of a date, those valid then, in scope then). */
+    private static Subquery<Long> idsInScope(Class<?> type, ScopeResolver.Scope scope,
+                                             CriteriaQuery<?> cq, CriteriaBuilder cb) {
+        return Temporal.subquery(cq, Long.class, type, cb, (root, sq, where) -> {
+            where.addAll(scoped(root, cq, cb, scope));
+            return root.get("id");
+        });
     }
 
     private static Instant asInstant(Object o) {

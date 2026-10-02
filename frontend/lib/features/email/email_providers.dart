@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/scope/as_of.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/table/table_models.dart';
 import '../../shared/models/privileges.dart';
 import '../auth/auth_controller.dart';
@@ -27,6 +29,7 @@ typedef EntityEmailsKey = ({EmailEntityType type, int entityId, int page, int si
 
 final entityEmailsProvider = FutureProvider.autoDispose
     .family<PagedResult<EmailMessage>, EntityEmailsKey>((ref, key) async {
+  final view = ref.watch(viewScopeProvider);
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/emails', queryParameters: {
     'entityType': key.type.wire,
@@ -35,14 +38,17 @@ final entityEmailsProvider = FutureProvider.autoDispose
     'size': key.size,
     'sort': 'occurredAt,desc',
   });
+  checkAsOf(res, view.asOf);
   return PagedResult.fromJson((res.data as Map).cast<String, dynamic>())
       .map(EmailMessage.fromJson);
 });
 
+/// The inbox reader's message. The inbox is live whatever the date (D9), so the message it opens
+/// is today's too: a mail that arrived after the date viewed must still open.
 final emailDetailProvider =
     FutureProvider.autoDispose.family<EmailMessage, int>((ref, id) async {
   final dio = ref.watch(dioProvider);
-  final res = await dio.get('/api/emails/$id');
+  final res = await dio.get('/api/emails/$id', options: Options(extra: regionsOnlyExtra));
   return EmailMessage.fromJson((res.data as Map).cast<String, dynamic>());
 });
 
@@ -51,6 +57,8 @@ final inboxUnreadCountProvider = StreamProvider.autoDispose<int>((ref) {
   // Signing out changes that to nobody while the rail's badge still watches. There is no count to
   // ask for then, and asking without a token only earns a 401 that signs out again (D-70).
   if (userId == null) return const Stream.empty();
+  // Live whatever the date, but only for the regions asked about (§5.6.7).
+  ref.watch(viewRegionsProvider);
   return pollUnreadCount(ref, ref.watch(dioProvider), '/api/inbox/unread-count');
 });
 

@@ -1,8 +1,10 @@
 package com.geneinvoice.promise;
 
+import com.geneinvoice.common.time.AppClock;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.invoice.Invoice;
 import com.geneinvoice.payment.Payment;
+import com.geneinvoice.region.Region;
 import com.geneinvoice.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -18,7 +20,8 @@ import java.util.Set;
         @Index(name = "idx_promise_customer", columnList = "customer_id"),
         @Index(name = "idx_promise_status", columnList = "status"),
         @Index(name = "idx_promise_date", columnList = "promised_date"),
-        @Index(name = "idx_promise_poc", columnList = "collection_poc_user_id")
+        @Index(name = "idx_promise_poc", columnList = "collection_poc_user_id"),
+        @Index(name = "idx_payment_promises_region", columnList = "region_id")
 })
 @Getter
 @Setter
@@ -90,6 +93,11 @@ public class PaymentPromise {
     @Column(name = "created_by_user_id")
     private Long createdByUserId;
 
+    /** The region this record belongs to: copied from its customer and never written by an ORM update (F3). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "region_id", updatable = false)
+    private Region region;
+
     @Column(updatable = false)
     private Instant createdAt;
 
@@ -97,14 +105,16 @@ public class PaymentPromise {
 
     @PrePersist
     void onCreate() {
-        Instant now = Instant.now();
+        // The service copies the region from the customer it locked; this only catches a path that forgot.
+        if (this.region == null && this.customer != null) this.region = this.customer.getRegion();
+        Instant now = AppClock.now();
         this.createdAt = now;
         this.updatedAt = now;
     }
 
     @PreUpdate
     void onUpdate() {
-        this.updatedAt = Instant.now();
+        this.updatedAt = AppClock.now();
     }
 
     public BigDecimal getRemainingAmount() {

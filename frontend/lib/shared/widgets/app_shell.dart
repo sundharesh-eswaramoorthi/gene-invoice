@@ -3,11 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/unsaved_changes.dart';
+import '../../features/approvals/approval_providers.dart';
 import '../../features/auth/auth_controller.dart';
 import '../../features/auth/change_password_dialog.dart';
 import '../../features/email/email_providers.dart';
 import '../../features/notifications/notifications_providers.dart';
+import '../../features/tasks/task_providers.dart';
 import '../models/privileges.dart';
+import 'as_of_banner.dart';
+import 'as_of_chip.dart';
+import 'region_selector.dart';
+
+/// Which count, if any, a nav entry shows on its icon.
+enum NavBadge { none, inbox, myTasks, approvals }
 
 class NavEntry {
   final String label;
@@ -16,15 +24,15 @@ class NavEntry {
   final List<String> requiredAnyOf;
   final bool hideForCustomer;
 
-  final bool unreadBadge;
+  final NavBadge badge;
   const NavEntry(this.label, this.icon, this.path, this.requiredAnyOf,
-      {this.hideForCustomer = false, this.unreadBadge = false});
+      {this.hideForCustomer = false, this.badge = NavBadge.none});
 }
 
 const navEntries = <NavEntry>[
   NavEntry('Dashboard', Icons.dashboard_outlined, '/', []),
   // Not hidden from customer logins: mail to their customer's addresses reaches them too (E13).
-  NavEntry('Inbox', Icons.inbox_outlined, '/inbox', [Privileges.emailView], unreadBadge: true),
+  NavEntry('Inbox', Icons.inbox_outlined, '/inbox', [Privileges.emailView], badge: NavBadge.inbox),
   NavEntry('Customers', Icons.people_outline, '/customers',
       [Privileges.customerView, Privileges.customerManage],
       hideForCustomer: true),
@@ -35,6 +43,29 @@ const navEntries = <NavEntry>[
   NavEntry('Promises', Icons.handshake_outlined, '/promises', [Privileges.promiseView]),
   NavEntry('Disputes', Icons.flag_outlined, '/disputes',
       [Privileges.disputeView, Privileges.disputeCreate, Privileges.disputeManage]),
+  // Tasks on customers, invoices and payments (A6): mine, counted on the badge, then everyone's.
+  // Neither path is a prefix of the other, so each lights up alone (G15).
+  NavEntry('My tasks', Icons.assignment_ind_outlined, '/my-tasks',
+      [Privileges.taskView, Privileges.taskManage],
+      hideForCustomer: true, badge: NavBadge.myTasks),
+  NavEntry('Tasks', Icons.checklist, '/tasks', [Privileges.taskView, Privileges.taskManage],
+      hideForCustomer: true),
+  // Changes held for a second person's approval (B2). Anyone who can see the records they touch
+  // may see them; the badge counts those waiting on me.
+  NavEntry('Approvals', Icons.fact_check_outlined, '/approvals', [
+    Privileges.changeApprove,
+    Privileges.invoiceView,
+    Privileges.paymentView,
+    Privileges.promiseView,
+    Privileges.disputeView,
+  ], hideForCustomer: true, badge: NavBadge.approvals),
+  // Rules that act on customers, invoices and payments by themselves (A1-A5).
+  NavEntry('Automation', Icons.bolt_outlined, '/automation',
+      [Privileges.automationView, Privileges.automationManage],
+      hideForCustomer: true),
+  // Staff administration of the regions everything belongs to (B1).
+  NavEntry('Regions', Icons.public_outlined, '/regions', [Privileges.regionView],
+      hideForCustomer: true),
   NavEntry('Products', Icons.inventory_2_outlined, '/products',
       [Privileges.productView, Privileges.productManage],
       hideForCustomer: true),
@@ -87,6 +118,10 @@ class AppShell extends ConsumerWidget {
         title: const Text('Gene Invoice'),
         actions: [
           if (user != null) ...[
+            // Which regions and which day every page answers for (B1, B3). Neither fetches while
+            // the shell builds (G13).
+            RegionSelector(compact: !showAccountLabel),
+            if (!isCustomer) AsOfChip(compact: !showAccountLabel),
             if (user.has(Privileges.notificationView))
               const _NotificationsBell(),
             PopupMenuButton<String>(
@@ -177,7 +212,23 @@ class AppShell extends ConsumerWidget {
               onSelect: (path) => goGuarded(context, path),
             ),
           if (isWide) const VerticalDivider(width: 1),
-          Expanded(child: child),
+          // The banner takes no room while live. The page keeps its place in the tree either way,
+          // so moving to a past date and back does not rebuild it from scratch.
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const AsOfBanner(),
+                // The page is a route of a nested Navigator, and its modal barrier blocks the
+                // semantics of everything painted before it in the same container. A container of
+                // its own keeps that block to the page, so the banner and the rail stay readable
+                // by assistive technology (ASO-R1-1).
+                Expanded(
+                  child: Semantics(container: true, explicitChildNodes: true, child: child),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -232,8 +283,14 @@ class _NavIcon extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final icon = Icon(entry.icon);
-    if (!entry.unreadBadge) return icon;
-    final count = ref.watch(inboxUnreadCountProvider).maybeWhen(data: (c) => c, orElse: () => 0);
+    final counter = switch (entry.badge) {
+      NavBadge.inbox => inboxUnreadCountProvider,
+      NavBadge.approvals => approvalsAwaitingMeCountProvider,
+      NavBadge.myTasks => myTasksCountProvider,
+      NavBadge.none => null,
+    };
+    if (counter == null) return icon;
+    final count = ref.watch(counter).maybeWhen(data: (c) => c, orElse: () => 0);
     return Badge(
       isLabelVisible: count > 0,
       label: Text(count > 99 ? '99+' : '$count'),

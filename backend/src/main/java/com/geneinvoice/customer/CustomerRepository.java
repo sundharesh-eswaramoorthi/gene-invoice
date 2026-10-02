@@ -14,6 +14,10 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     @Query("select c from Customer c where c.id = :id")
     Optional<Customer> findByIdForUpdate(@Param("id") Long id);
 
+    /** The region alone, without loading the customer: what a customer login's rights are built from. */
+    @Query("select c.region.id from Customer c where c.id = :id")
+    Optional<Long> regionIdOf(@Param("id") Long id);
+
     boolean existsByEmailIgnoreCase(String email);
 
     boolean existsByEmailIgnoreCaseAndIdNot(String email, Long id);

@@ -131,6 +131,13 @@ class PagedResult<T> {
 
   final List<TableFilter> lockedFilters;
 
+  /// The regions actually answered, and those of them where only my own book is shown (B1).
+  final List<int> regionIds;
+  final List<int> bookRegionIds;
+
+  /// The date the rows are as of; null when they are live.
+  final String? asOf;
+
   const PagedResult({
     required this.content,
     required this.page,
@@ -140,6 +147,9 @@ class PagedResult<T> {
     required this.sort,
     required this.appliedFilters,
     required this.lockedFilters,
+    this.regionIds = const [],
+    this.bookRegionIds = const [],
+    this.asOf,
   });
 
   static PagedResult<Map<String, dynamic>> fromJson(Map<String, dynamic> json) => PagedResult(
@@ -157,7 +167,13 @@ class PagedResult<T> {
             .map((e) => TableFilter.parse(e.toString()))
             .whereType<TableFilter>()
             .toList(),
+        regionIds: _ids(json['regionIds']),
+        bookRegionIds: _ids(json['bookRegionIds']),
+        asOf: json['asOf'] as String?,
       );
+
+  static List<int> _ids(Object? raw) =>
+      ((raw as List?) ?? const []).whereType<num>().map((e) => e.toInt()).toList();
 
   PagedResult<R> map<R>(R Function(T) mapper) => PagedResult<R>(
         content: content.map(mapper).toList(),
@@ -168,6 +184,9 @@ class PagedResult<T> {
         sort: sort,
         appliedFilters: appliedFilters,
         lockedFilters: lockedFilters,
+        regionIds: regionIds,
+        bookRegionIds: bookRegionIds,
+        asOf: asOf,
       );
 
   bool get isEmpty => content.isEmpty;

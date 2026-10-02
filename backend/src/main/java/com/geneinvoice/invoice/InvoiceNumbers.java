@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -20,6 +21,7 @@ public class InvoiceNumbers {
 
     private final InvoiceNumberSequenceRepository sequenceRepository;
     private final InvoiceRepository invoiceRepository;
+    private final Clock clock;
 
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
@@ -31,7 +33,7 @@ public class InvoiceNumbers {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public String next() {
-        String day = LocalDate.now(ZoneOffset.UTC).format(DAY);
+        String day = LocalDate.ofInstant(clock.instant(), ZoneOffset.UTC).format(DAY);
         String prefix = "INV-" + day + "-";
         InvoiceNumberSequence seq = sequenceRepository.lockById(ROW)
                 .orElseGet(() -> sequenceRepository.saveAndFlush(new InvoiceNumberSequence(ROW, null, 0)));

@@ -1,6 +1,8 @@
 package com.geneinvoice.invoice;
 
+import com.geneinvoice.common.time.AppClock;
 import com.geneinvoice.customer.Customer;
+import com.geneinvoice.region.Region;
 import com.geneinvoice.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -13,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(name = "invoices")
+@Table(name = "invoices", indexes = @Index(name = "idx_invoices_region", columnList = "region_id"))
 @Getter
 @Setter
 @NoArgsConstructor
@@ -66,6 +68,11 @@ public class Invoice {
     @JoinColumn(name = "sales_poc_user_id")
     private User salesPoc;
 
+    /** The region this record belongs to: copied from its customer and never written by an ORM update (F3). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "region_id", updatable = false)
+    private Region region;
+
     @Version
     @Column(name = "version")
     private Long version;
@@ -75,7 +82,9 @@ public class Invoice {
 
     @PrePersist
     void onCreate() {
-        this.createdAt = Instant.now();
+        // The service copies the region from the customer it locked; this only catches a path that forgot.
+        if (this.region == null && this.customer != null) this.region = this.customer.getRegion();
+        this.createdAt = AppClock.now();
         if (this.invoiceDate == null) {
             this.invoiceDate = this.createdAt;
         }

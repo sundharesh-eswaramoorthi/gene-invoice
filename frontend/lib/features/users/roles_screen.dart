@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
+import '../../core/scope/view_scope.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/models/user.dart';
 import '../../core/table/data_table_scaffold.dart';
@@ -15,12 +16,67 @@ import '../auth/auth_controller.dart';
 import '../email/email_actions.dart';
 import 'users_screen.dart';
 
-final allPrivilegesProvider = FutureProvider.autoDispose<List<String>>((ref) async {
+/// A privilege, and the least grant level it needs in a region — null for one the role alone
+/// decides, whatever the region (§4.1).
+class PrivilegeInfo {
+  final String name;
+  final String? regionLevel;
+  const PrivilegeInfo(this.name, this.regionLevel);
+
+  factory PrivilegeInfo.fromJson(Map<String, dynamic> json) {
+    final name = json['name'] as String;
+    // A server that does not say yet is answered from the same table the server keeps.
+    return PrivilegeInfo(
+        name,
+        json.containsKey('regionLevel')
+            ? json['regionLevel'] as String?
+            : Privileges.levelFor(name));
+  }
+}
+
+final allPrivilegesProvider = FutureProvider.autoDispose<List<PrivilegeInfo>>((ref) async {
   final dio = ref.watch(dioProvider);
   final res = await dio.get('/api/privileges');
-  return (res.data as List).map((e) => (e as Map<String, dynamic>)['name'] as String).toList()
-    ..sort();
+  return (res.data as List).map((e) => PrivilegeInfo.fromJson(e as Map<String, dynamic>)).toList()
+    ..sort((a, b) => a.name.compareTo(b.name));
 });
+
+String privilegeLevelLabel(String? regionLevel) => switch (regionLevel) {
+      null => 'Global',
+      'READ' => 'Read',
+      'MANAGE' => 'Manage',
+      'APPROVE' => 'Approve',
+      _ => regionLevel,
+    };
+
+/// Which grant a privilege needs in a region before it takes effect there, or "Global" when the
+/// role alone decides.
+class PrivilegeLevelBadge extends StatelessWidget {
+  final String? regionLevel;
+  const PrivilegeLevelBadge({super.key, required this.regionLevel});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final (bg, fg) = switch (regionLevel) {
+      null => (scheme.surfaceContainerHighest, scheme.onSurfaceVariant),
+      'APPROVE' => (scheme.tertiaryContainer, scheme.onTertiaryContainer),
+      'MANAGE' => (scheme.secondaryContainer, scheme.onSecondaryContainer),
+      _ => (scheme.primaryContainer, scheme.onPrimaryContainer),
+    };
+    return Tooltip(
+      message: regionLevel == null
+          ? 'Held wherever the role is'
+          : 'Takes effect in a region where the user holds ${privilegeLevelLabel(regionLevel)} access or more',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
+        child: Text(privilegeLevelLabel(regionLevel),
+            style: TextStyle(fontSize: 11, color: fg, fontWeight: FontWeight.w500)),
+      ),
+    );
+  }
+}
 
 final roleDetailProvider = FutureProvider.autoDispose.family<AppRole, int>((ref, id) async {
   final dio = ref.watch(dioProvider);
@@ -53,7 +109,9 @@ class RolesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.roleManage) ?? false;
+    // A past date is read only (D2).
+    final historical = ref.watch(isHistoricalProvider);
+    final canManage = !historical && (user?.has(Privileges.roleManage) ?? false);
     final canExport = user?.has(Privileges.exportData) ?? false;
     final canSendEmail = ref.watch(canSendEmailProvider);
     final sendEmail = sendEmailPageAction(context, ref, type: EmailEntityType.role);
@@ -209,11 +267,18 @@ class _RoleFormDialogState extends ConsumerState<RoleFormDialog> {
                             padding: EdgeInsets.all(12), child: LinearProgressIndicator()),
                         error: (e, _) => Text('Failed: $e'),
                         data: (list) => Column(
-                          children: list.map((name) {
+                          children: list.map((info) {
+                            final name = info.name;
                             return CheckboxListTile(
                               dense: true,
                               contentPadding: EdgeInsets.zero,
-                              title: Text(name),
+                              title: Row(
+                                children: [
+                                  Flexible(child: Text(name)),
+                                  const SizedBox(width: 8),
+                                  PrivilegeLevelBadge(regionLevel: info.regionLevel),
+                                ],
+                              ),
                               value: _selected.contains(name),
                               onChanged: (v) => setState(() {
                                 if (v == true) {

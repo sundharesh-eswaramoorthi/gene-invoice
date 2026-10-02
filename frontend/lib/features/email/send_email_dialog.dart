@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
 import '../../core/field_limits.dart';
 import '../../core/table/table_providers.dart';
+import '../automation/placeholder_button.dart';
 import 'email_entity.dart';
 import 'email_models.dart';
 import 'email_providers.dart';
@@ -92,6 +94,8 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   final _formKey = GlobalKey<FormState>();
   final _subject = TextEditingController();
   final _body = TextEditingController();
+  final _subjectFocus = FocusNode(debugLabel: 'email-subject');
+  final _bodyFocus = FocusNode(debugLabel: 'email-body');
 
   int? _entityId;
   Map<String, dynamic>? _pickedRecord;
@@ -107,6 +111,10 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
   String? _toError;
   String? _recordError;
   String? _error;
+
+  /// The server's word on the subject or the body — an unknown placeholder, say (§5.10.4).
+  String? _subjectError;
+  String? _bodyError;
   bool _sending = false;
 
   AutovalidateMode _subjectValidation = AutovalidateMode.disabled;
@@ -118,6 +126,7 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
 
   int _previewSeq = 0;
   String _previewedSubject = '';
+  String _checkedBody = '';
 
   bool get _bulk => widget.mode == SendEmailMode.bulk;
 
@@ -128,7 +137,14 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     _subject.addListener(() {
       if (_subject.text == _previewedSubject) return;
       _previewedSubject = _subject.text;
+      // The server's word on the old text no longer holds once it is edited.
+      if (_subjectError != null) setState(() => _subjectError = null);
       _schedulePreview();
+    });
+    _body.addListener(() {
+      if (_body.text == _checkedBody) return;
+      _checkedBody = _body.text;
+      if (_bodyError != null) setState(() => _bodyError = null);
     });
   }
 
@@ -137,6 +153,8 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
     _previewDebounce?.cancel();
     _subject.dispose();
     _body.dispose();
+    _subjectFocus.dispose();
+    _bodyFocus.dispose();
     super.dispose();
   }
 
@@ -291,6 +309,8 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
           ? 'Choose the ${widget.type.noun} this email is about'
           : null;
       _error = null;
+      _subjectError = null;
+      _bodyError = null;
       if (!subjectOk) _subjectValidation = AutovalidateMode.onUserInteraction;
     });
     if (!subjectOk || _toError != null || _recordError != null) return;
@@ -314,10 +334,75 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
       }
       messenger.showSnackBar(SnackBar(content: Text(emailOutcomeMessage(email))));
     } catch (e) {
-      if (mounted) setState(() => _error = apiErrorMessage(e));
+      if (!mounted) return;
+      final fields = _textErrors(e);
+      setState(() {
+        _subjectError = fields['subject'];
+        _bodyError = fields['body'];
+        final placed = (_subjectError == null ? 0 : 1) + (_bodyError == null ? 0 : 1);
+        _error = placed > 0 && fields.length == placed ? null : apiErrorMessage(e);
+      });
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  /// A 400's `fieldErrors`, for the subject and body to show under themselves.
+  static Map<String, String> _textErrors(Object error) {
+    final data = error is DioException ? error.response?.data : null;
+    final fields = data is Map ? data['fieldErrors'] : null;
+    if (fields is! Map) return const {};
+    return {for (final e in fields.entries) '${e.key}': '${e.value}'};
+  }
+
+  /// The records whose emails may carry placeholders (§5.10.4); a promise or a dispute offers its
+  /// customer's. Customer logins write plain text.
+  bool _offersPlaceholders(EmailContext ctx) =>
+      !ctx.restricted &&
+      const {
+        EmailEntityType.customer,
+        EmailEntityType.invoice,
+        EmailEntityType.payment,
+        EmailEntityType.promise,
+        EmailEntityType.dispute,
+      }.contains(widget.type);
+
+  /// [field] with the placeholder button beside it when this email offers placeholders, and the
+  /// server's complaint about it underneath. [field] is built with [controller] and [focusNode].
+  Widget _withPlaceholders(
+      EmailContext ctx, Widget field, TextEditingController controller, FocusNode focusNode,
+      {required bool singleLine, required String? error}) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: field),
+            if (_offersPlaceholders(ctx))
+              PlaceholderButton(
+                key: ValueKey(singleLine ? 'email-subject-placeholder' : 'email-body-placeholder'),
+                entityType: widget.type.wire,
+                controller: controller,
+                focusNode: focusNode,
+                singleLine: singleLine,
+                enabled: !_sending,
+                hideWhenUnavailable: true,
+                // No rule sends a hand-written email, so there is no rule to name (PC-10).
+                exclude: (k) => k.startsWith('Rule.'),
+                onInserted: (_) => _schedulePreview(),
+              ),
+          ],
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, left: 12),
+            child: Text(error, style: TextStyle(color: scheme.error, fontSize: 12)),
+          ),
+      ],
+    );
   }
 
   String _roleText(EmailRoleOption r, EmailContext ctx,
@@ -559,21 +644,37 @@ class _SendEmailDialogState extends ConsumerState<SendEmailDialog> {
           const SizedBox(height: 12),
           _toField(ctx),
           const SizedBox(height: 12),
-          TextFormField(
-            controller: _subject,
-            decoration: const InputDecoration(labelText: 'Subject *'),
-            inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.emailSubject)],
-            autovalidateMode: _subjectValidation,
-            validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a subject' : null,
+          _withPlaceholders(
+            ctx,
+            TextFormField(
+              controller: _subject,
+              focusNode: _subjectFocus,
+              decoration: const InputDecoration(labelText: 'Subject *'),
+              inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.emailSubject)],
+              autovalidateMode: _subjectValidation,
+              validator: (v) => (v ?? '').trim().isEmpty ? 'Enter a subject' : null,
+            ),
+            _subject,
+            _subjectFocus,
+            singleLine: true,
+            error: _subjectError,
           ),
           const SizedBox(height: 12),
-          TextFormField(
-            controller: _body,
-            minLines: 4,
-            maxLines: 12,
-            keyboardType: TextInputType.multiline,
-            decoration: const InputDecoration(labelText: 'Message', alignLabelWithHint: true),
-            inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.emailBody)],
+          _withPlaceholders(
+            ctx,
+            TextFormField(
+              controller: _body,
+              focusNode: _bodyFocus,
+              minLines: 4,
+              maxLines: 12,
+              keyboardType: TextInputType.multiline,
+              decoration: const InputDecoration(labelText: 'Message', alignLabelWithHint: true),
+              inputFormatters: [LengthLimitingTextInputFormatter(FieldLimits.emailBody)],
+            ),
+            _body,
+            _bodyFocus,
+            singleLine: false,
+            error: _bodyError,
           ),
           if (!_bulk && _entityId != null && _to.isNotEmpty) ...[
             const SizedBox(height: 12),

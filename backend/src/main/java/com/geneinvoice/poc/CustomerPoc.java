@@ -1,5 +1,6 @@
 package com.geneinvoice.poc;
 
+import com.geneinvoice.common.time.AppClock;
 import com.geneinvoice.customer.Customer;
 import com.geneinvoice.user.User;
 import jakarta.persistence.*;
@@ -50,6 +51,6 @@ public class CustomerPoc {
 
     @PrePersist
     void onCreate() {
-        this.createdAt = Instant.now();
+        this.createdAt = AppClock.now();
     }
 }

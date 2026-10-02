@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/auth/auth_controller.dart';
+import '../scope/view_scope.dart';
 import '../storage/secure_storage.dart';
 
 const String _defaultBaseUrl = String.fromEnvironment(
@@ -23,6 +24,7 @@ final dioProvider = Provider<Dio>((ref) {
     contentType: 'application/json',
   ));
 
+  dio.interceptors.add(viewScopeInterceptor(() => ref.read(viewScopeProvider)));
   dio.interceptors.add(InterceptorsWrapper(
     onRequest: (options, handler) async {
       final token = await storage.read();

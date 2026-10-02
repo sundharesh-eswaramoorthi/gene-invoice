@@ -12,12 +12,15 @@ import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.common.scope.AsOfAware;
 import com.geneinvoice.poc.PocDtos;
 import com.geneinvoice.poc.PocService;
 import com.geneinvoice.poc.PocType;
+import com.geneinvoice.poc.ScopeResolver;
 import com.geneinvoice.privilege.Privileges;
+import com.geneinvoice.region.CustomerRegionMoveService;
+import com.geneinvoice.region.RegionMoveDtos;
 import jakarta.servlet.http.HttpServletRequest;
-import com.geneinvoice.user.UserRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -29,6 +32,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
+@AsOfAware
 @RequestMapping("/api/customers")
 @RequiredArgsConstructor
 public class CustomerController {
@@ -37,7 +41,7 @@ public class CustomerController {
     private final PocService pocService;
     private final BulkExecutor bulkExecutor;
     private final CurrentUser currentUser;
-    private final UserRepository userRepository;
+    private final CustomerRegionMoveService moveService;
 
     private TableSchema schema() {
         return TableSchemas.CUSTOMERS.visibleTo(currentUser.isCustomer());
@@ -85,6 +89,14 @@ public class CustomerController {
         service.delete(id);
     }
 
+    /** The customer and every record of it go to another region (§6.4). */
+    @PostMapping("/{id}/move-region")
+    @PreAuthorize("hasAuthority('" + Privileges.CUSTOMER_MANAGE + "')")
+    public RegionMoveDtos.MoveResult moveRegion(@PathVariable Long id,
+                                                @Valid @RequestBody RegionMoveDtos.MoveRequest req) {
+        return moveService.move(id, req);
+    }
+
     @GetMapping("/{id}/pocs")
     @PreAuthorize("hasAuthority('" + Privileges.POC_VIEW + "')")
     public List<PocDtos.CustomerPocDto> pocs(@PathVariable Long id) {
@@ -124,13 +136,14 @@ public class CustomerController {
     @PostMapping("/bulk")
     @PreAuthorize("hasAuthority('" + Privileges.CUSTOMER_MANAGE + "')")
     public BulkDtos.BulkResult bulk(@Valid @RequestBody BulkDtos.BulkRequest req) {
-        List<Long> ids = resolveIds(req);
+        // Rows the caller sees but may not change in their region drop out as not reachable.
+        List<Long> ids = resolveIds(req, ScopeResolver.Access.MANAGE, Privileges.POC_ASSIGN);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
         if (!"ADD_POC".equals(req.action())) {
             throw new BadRequestException(
                     "Unknown bulk action: " + req.action() + " (expected one of " + BULK_ACTIONS + ")");
         }
-        if (!currentUser.canAssignPoc(userRepository)) {
+        if (!currentUser.canAssignPocAnywhere()) {
             // Not allowed is 403, not "bad request" (D-46).
             throw new org.springframework.security.access.AccessDeniedException(
                     "You may not change POC assignments");
@@ -146,7 +159,8 @@ public class CustomerController {
         if (pocType == PocType.SALES) {
             throw new BadRequestException("Sales POC is assigned per invoice, not per customer");
         }
-        pocService.requireAssignable(userId, pocType);
+        // Today's checks once; each customer then holds the person to its own region, in add.
+        pocService.requireAssignableByRole(userId, pocType);
         return bulkExecutor.run(req, ids, truncated, id -> {
             try {
                 pocService.add(id, pocType, userId, makePrimary);
@@ -157,9 +171,10 @@ public class CustomerController {
     }
 
     @PostMapping("/export")
+    @AsOfAware
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.CUSTOMER_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
-        List<Long> ids = resolveIds(req);
+        List<Long> ids = resolveIds(req, ScopeResolver.Access.VIEW);
         List<CustomerDtos.CustomerDto> rows = service.toDtos(
                 service.allMatching(TableQuery.parseUnpaged(schema(), req.sort(), req.filters()))
                         .stream().filter(c -> ids.contains(c.getId())).toList());
@@ -198,9 +213,9 @@ public class CustomerController {
                 .reduce((a, b) -> a + "; " + b).orElse("");
     }
 
-    private List<Long> resolveIds(BulkDtos.BulkRequest req) {
+    private List<Long> resolveIds(BulkDtos.BulkRequest req, ScopeResolver.Access access, String... alsoRequired) {
         TableQuery query = TableQuery.parseUnpaged(schema(), req.sort(), req.filters());
-        List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT);
+        List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT, access, alsoRequired);
         if (req.allMatching()) return permitted;
         if (req.ids() == null || req.ids().isEmpty()) {
             throw new BadRequestException("Provide ids or set selectAllMatchingFilter");

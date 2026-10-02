@@ -18,6 +18,10 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
     @Query("select i from Invoice i where i.id = :id")
     Optional<Invoice> findByIdForUpdate(@Param("id") Long id);
 
+    /** The customer alone, read without a lock: what a write locks first, before the invoice (§5.11.5). */
+    @Query("select i.customer.id from Invoice i where i.id = :id")
+    Optional<Long> customerIdOf(@Param("id") Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select i from Invoice i where i.id in :ids order by i.id")
     List<Invoice> findAllByIdForUpdate(@Param("ids") Collection<Long> ids);

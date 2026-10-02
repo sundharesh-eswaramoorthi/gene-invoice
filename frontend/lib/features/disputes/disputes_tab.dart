@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
 import '../../shared/widgets/status_chip.dart';
@@ -27,8 +28,11 @@ class DisputesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canCreate =
-        (user?.canRaiseDispute ?? false) && targetType != null && targetId != null;
+    // A past date is read only (D2).
+    final canCreate = !ref.watch(isHistoricalProvider) &&
+        (user?.canRaiseDispute ?? false) &&
+        targetType != null &&
+        targetId != null;
     final scope = DisputeScope(
         targetType: targetType, targetId: targetId, customerId: customerId);
     final async = ref.watch(scopedDisputesProvider(scope));
@@ -90,7 +94,8 @@ class DisputesTab extends ConsumerWidget {
                     subtitle: Text('${formatDateTime(d.createdAt)}\n${d.reason}',
                         maxLines: 3, overflow: TextOverflow.ellipsis),
                     isThreeLine: true,
-                    trailing: DisputeStatusChip(status: d.status),
+                    trailing: PendingApprovalChip.beside(
+                        DisputeStatusChip(status: d.status), d.pendingApproval),
                     onTap: () => goGuarded(context, '/disputes/${d.id}'),
                   );
                 },

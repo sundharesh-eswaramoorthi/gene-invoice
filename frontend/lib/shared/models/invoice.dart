@@ -43,6 +43,16 @@ class InvoiceSummary {
 
   final bool pocMissing;
 
+  final int? regionId;
+  final String? regionCode;
+  final String? regionName;
+
+  /// Whether this user may edit or cancel this invoice in its region (D14); null in a snapshot.
+  final bool? canManage;
+
+  /// A change to it is awaiting approval (list rows only).
+  final bool? pendingApproval;
+
   const InvoiceSummary({
     required this.id,
     required this.invoiceNumber,
@@ -60,6 +70,11 @@ class InvoiceSummary {
     required this.status,
     this.salesPoc,
     this.pocMissing = false,
+    this.regionId,
+    this.regionCode,
+    this.regionName,
+    this.canManage,
+    this.pendingApproval,
   });
 
   String get termsLabel => paymentTermLabel ?? paymentTerm?.label ?? '—';
@@ -83,6 +98,11 @@ class InvoiceSummary {
             ? null
             : PocUser.fromJson(json['salesPoc'] as Map<String, dynamic>),
         pocMissing: json['pocMissing'] as bool? ?? false,
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionCode: json['regionCode'] as String?,
+        regionName: json['regionName'] as String?,
+        canManage: json['canManage'] as bool?,
+        pendingApproval: json['pendingApproval'] as bool?,
       );
 }
 
@@ -140,6 +160,11 @@ class InvoiceDetail extends InvoiceSummary {
     required this.items,
     super.salesPoc,
     super.pocMissing,
+    super.regionId,
+    super.regionCode,
+    super.regionName,
+    super.canManage,
+    super.pendingApproval,
     this.createdAt,
   });
 
@@ -169,6 +194,11 @@ class InvoiceDetail extends InvoiceSummary {
         createdAt: json['createdAt'] == null
             ? null
             : DateTime.parse(json['createdAt'] as String),
+        regionId: (json['regionId'] as num?)?.toInt(),
+        regionCode: json['regionCode'] as String?,
+        regionName: json['regionName'] as String?,
+        canManage: json['canManage'] as bool?,
+        pendingApproval: json['pendingApproval'] as bool?,
       );
 }
 

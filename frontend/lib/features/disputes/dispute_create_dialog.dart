@@ -22,6 +22,8 @@ Future<bool?> showDisputeDialog({
   required int targetId,
   required String targetLabel,
 }) async {
+  assert(disputeTargetsRaisedByPeople.contains(targetType),
+      'People raise disputes on invoices and payments only');
   final filed = await showDialog<({int id, bool notify})>(
     context: context,
     builder: (_) => _DisputeCreateDialog(
@@ -66,21 +68,23 @@ class _DisputeCreateDialogState extends ConsumerState<_DisputeCreateDialog> {
   bool _saving = false;
   String? _error;
 
-  List<DropdownMenuItem<String>> get _actionOptions {
-    if (widget.targetType == DisputeTargetType.INVOICE) {
-      return const [
-        DropdownMenuItem(value: '', child: Text('Just describe (no specific change)')),
-        DropdownMenuItem(value: 'cancel', child: Text('Cancel this invoice')),
-        DropdownMenuItem(value: 'update_notes', child: Text('Correct the notes only')),
-      ];
-    }
-    return const [
-      DropdownMenuItem(value: '', child: Text('Just describe (no specific change)')),
-      DropdownMenuItem(value: 'void', child: Text('Void / never happened')),
-      DropdownMenuItem(value: 'update_amount', child: Text('Correct the amount')),
-      DropdownMenuItem(value: 'update_meta', child: Text('Correct method / notes')),
-    ];
-  }
+  List<DropdownMenuItem<String>> get _actionOptions => switch (widget.targetType) {
+        DisputeTargetType.INVOICE => const [
+            DropdownMenuItem(value: '', child: Text('Just describe (no specific change)')),
+            DropdownMenuItem(value: 'cancel', child: Text('Cancel this invoice')),
+            DropdownMenuItem(value: 'update_notes', child: Text('Correct the notes only')),
+          ],
+        DisputeTargetType.PAYMENT => const [
+            DropdownMenuItem(value: '', child: Text('Just describe (no specific change)')),
+            DropdownMenuItem(value: 'void', child: Text('Void / never happened')),
+            DropdownMenuItem(value: 'update_amount', child: Text('Correct the amount')),
+            DropdownMenuItem(value: 'update_meta', child: Text('Correct method / notes')),
+          ],
+        // Only a rule raises one on a customer; nobody reaches this form for it.
+        DisputeTargetType.CUSTOMER => const [
+            DropdownMenuItem(value: '', child: Text('Just describe (no specific change)')),
+          ],
+      };
 
   @override
   void dispose() {

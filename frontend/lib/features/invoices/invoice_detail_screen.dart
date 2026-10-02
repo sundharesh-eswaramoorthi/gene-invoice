@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_client.dart';
+import '../../core/api/pending_reply.dart';
 import '../../core/field_limits.dart';
 import '../../core/format.dart';
+import '../../core/scope/as_of.dart';
 import '../../core/table/table_providers.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/dispute.dart';
@@ -14,6 +16,7 @@ import '../../shared/models/payment_term.dart';
 import '../../shared/models/privileges.dart';
 import '../../shared/widgets/detail_scaffold.dart';
 import '../../shared/widgets/status_chip.dart';
+import '../approvals/pending_banner.dart';
 import '../audit/audit_history_panel.dart';
 import '../auth/auth_controller.dart';
 import '../disputes/dispute_create_dialog.dart';
@@ -23,6 +26,9 @@ import '../email/email_actions.dart';
 import '../poc/poc_picker.dart';
 import '../poc/poc_providers.dart';
 import '../promises/promises_tab.dart';
+import '../regions/regions_screen.dart';
+import '../tasks/task_actions.dart';
+import '../tasks/task_models.dart';
 import 'invoices_screen.dart';
 
 class InvoiceDetailScreen extends ConsumerStatefulWidget {
@@ -36,6 +42,7 @@ class InvoiceDetailScreen extends ConsumerStatefulWidget {
 
 class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
   final _notes = TextEditingController();
+  String _savedNotes = '';
   PocUser? _salesPoc;
   int? _savedSalesPocId;
   PaymentTerm? _term;
@@ -65,6 +72,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     if (_loadedInto) return;
     _loadedInto = true;
     _notes.text = inv.notes ?? '';
+    _savedNotes = inv.notes ?? '';
     _salesPoc = inv.salesPoc;
     _savedSalesPocId = inv.salesPoc?.id;
     _term = inv.paymentTerm;
@@ -125,22 +133,46 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
   }
 
   Future<void> _save() async {
+    // Only what the user changed is sent; an absent field is left as it is (B2: a held edit
+    // must not claim fields its maker never touched).
+    final notesChanged = _notes.text.trim() != _savedNotes.trim();
+    final pocChanged = _salesPoc != null && _salesPoc!.id != _savedSalesPocId;
+    final termsChanged = _term != _savedTerm || _dueDate != _savedDueDate;
+    if (!notesChanged && !pocChanged && !termsChanged) {
+      setState(() {
+        _dirty = false;
+        _error = null;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Nothing has changed')));
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
     });
     try {
-      final pocChanged = _salesPoc != null && _salesPoc!.id != _savedSalesPocId;
-      final termsChanged = _term != _savedTerm || _dueDate != _savedDueDate;
-      await ref.read(dioProvider).patch('/api/invoices/${widget.id}', data: {
-        'notes': _notes.text.trim(),
+      final notice = sentForApprovalNotice(context);
+      final res = await ref.read(dioProvider).patch('/api/invoices/${widget.id}', data: {
+        if (notesChanged) 'notes': _notes.text.trim(),
         if (pocChanged) 'salesPocUserId': _salesPoc!.id,
         if (termsChanged && _term == PaymentTerm.CUSTOM && _dueDate != null)
           'dueDate': formatDate(_dueDate),
         if (termsChanged && _term != null && _term != PaymentTerm.CUSTOM)
           'paymentTerm': _term!.name,
       });
+      final held = pendingFrom(res);
+      // The user may have left while it was sent; a held edit is still theirs to hear about.
+      if (!mounted) {
+        if (held != null) notice(held);
+        return;
+      }
+      if (held != null) {
+        await _heldForApproval(held, notice);
+        return;
+      }
       _savedSalesPocId = _salesPoc?.id;
+      _savedNotes = _notes.text.trim();
       _savedTerm = _term;
       _savedDueDate = _dueDate;
       ref.invalidate(invoiceDetailProvider(widget.id));
@@ -148,23 +180,41 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
       ref.invalidate(tableSummaryProvider);
       ref.invalidate(auditHistoryProvider);
       setState(() => _dirty = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Invoice saved')));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invoice saved')));
     } catch (e) {
-      setState(() => _error = apiErrorMessage(e));
+      if (mounted) setState(() => _error = apiErrorMessage(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// Nothing was changed: the edit waits for someone else (B2). The fields go back to what the
+  /// invoice holds now, so they never show values that have not taken effect (G18).
+  Future<void> _heldForApproval(PendingChangeRef held, SentForApprovalNotice notice) async {
+    _dirty = false;
+    ref.invalidate(auditHistoryProvider);
+    invalidateApprovals(ref);
+    notice(held);
+    InvoiceDetail? live;
+    try {
+      live = await ref.refresh(invoiceDetailProvider(widget.id).future);
+    } catch (_) {
+      // The page shows why it cannot load; it re-seeds when it next can.
+    }
+    if (!mounted) return;
+    setState(() {
+      _loadedInto = false;
+      if (live != null && ref.read(viewAsOfProvider) == null) _seed(live);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(invoiceDetailProvider(widget.id));
     final user = ref.watch(currentUserProvider);
-    final canEdit = user?.has(Privileges.invoiceManage) ?? false;
-    final canAssignPoc = ref.watch(canAssignPocProvider);
+    // A past date is read only (D2), and its values are not ones to edit from.
+    final asOf = ref.watch(viewAsOfProvider);
+    final mayAssignPoc = ref.watch(canAssignPocProvider);
     final canSeePoc = ref.watch(canSeePocProvider);
     final canViewAudit = user?.has(Privileges.auditView) ?? false;
     final canSeePromises = user?.has(Privileges.promiseView) ?? false;
@@ -175,17 +225,37 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     return async.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => RecordUnavailable(
-        message: notFoundMessage(e, 'invoice'),
+        message: notFoundMessage(e, 'invoice', asOf: asOf),
         onBack: () => context.go('/invoices'),
       ),
       data: (inv) {
-        _seed(inv);
+        if (asOf == null) _seed(inv);
+        // The server says what this user may do to this invoice in its region (D14); a snapshot
+        // without the flag falls back to the privilege. The server remains the authority.
+        final canEdit =
+            asOf == null && (inv.canManage ?? user?.has(Privileges.invoiceManage) ?? false);
+        final canAssignPoc =
+            mayAssignPoc && (user?.hasIn(Privileges.pocAssign, inv.regionId) ?? false);
         final sendEmail = sendEmailHeaderButton(context, ref,
-            type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
+            type: EmailEntityType.invoice,
+            entityId: inv.id,
+            entityLabel: inv.invoiceNumber,
+            regionId: inv.regionId);
+        final tasksTab = tasksDetailTab(ref,
+            entityType: TaskEntityType.INVOICE,
+            entityId: inv.id,
+            entityLabel: inv.invoiceNumber,
+            regionId: inv.regionId);
         final documentsTab = documentsDetailTab(ref,
-            type: DocumentEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
+            type: DocumentEntityType.invoice,
+            entityId: inv.id,
+            entityLabel: inv.invoiceNumber,
+            regionId: inv.regionId);
         final emailTab = emailDetailTab(ref,
-            type: EmailEntityType.invoice, entityId: inv.id, entityLabel: inv.invoiceNumber);
+            type: EmailEntityType.invoice,
+            entityId: inv.id,
+            entityLabel: inv.invoiceNumber,
+            regionId: inv.regionId);
         return PopScope(
           canPop: !_dirty,
           onPopInvokedWithResult: (didPop, _) {
@@ -203,7 +273,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
               if (canSeePoc && inv.pocMissing) const PocMissingBadge(),
               InvoiceStatusChip(status: inv.status),
               if (inv.overdue) OverdueBadge(daysOverdue: inv.daysOverdue),
-              if (canSeeDisputes && user!.canRaiseDispute)
+              if (canSeeDisputes && user!.canRaiseDispute && asOf == null)
                 TextButton.icon(
                   icon: const Icon(Icons.flag_outlined, size: 18),
                   label: const Text('Raise dispute'),
@@ -219,7 +289,12 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
             initialTabSlug: widget.initialTab,
             onTabChanged: (slug) =>
                 context.go('/invoices/${widget.id}?tab=$slug'),
-            top: _top(inv, canEdit: canEdit, canAssignPoc: canAssignPoc, canSeePoc: canSeePoc),
+            top: _top(inv,
+                canEdit: canEdit,
+                canAssignPoc: canAssignPoc,
+                canSeePoc: canSeePoc,
+                historical: asOf != null,
+                showRegion: user?.multiRegion ?? false),
             tabs: [
               if (canSeeDisputes)
                 DetailTab(
@@ -241,6 +316,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                     customerId: inv.customerId,
                     customerName: inv.customerName,
                     invoice: inv,
+                    regionId: inv.regionId,
                   ),
                 ),
               if (canViewAudit)
@@ -255,6 +331,7 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                   ),
                 ),
               if (documentsTab != null) documentsTab,
+              if (tasksTab != null) tasksTab,
               if (emailTab != null) emailTab,
             ],
           ),
@@ -268,6 +345,8 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
     required bool canEdit,
     required bool canAssignPoc,
     required bool canSeePoc,
+    required bool historical,
+    required bool showRegion,
   }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
@@ -275,6 +354,8 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // A change to it held for approval shows here, above everything else (G5).
+          PendingChangeBanner(entityType: 'INVOICE', entityId: inv.id),
           _figuresAndSave(
             [
               _figure(context, 'Total', formatMoney(inv.total)),
@@ -291,7 +372,9 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                 label: 'Sales POC',
                 child: PocPicker(
                   type: PocType.SALES,
-                  value: _salesPoc,
+                  customerId: inv.customerId,
+                  // The POC on the day viewed, not the one being edited today.
+                  value: historical ? inv.salesPoc : _salesPoc,
                   showLabel: false,
                   enabled: canEdit && canAssignPoc,
                   required: true,
@@ -352,6 +435,10 @@ class _InvoiceDetailScreenState extends ConsumerState<InvoiceDetailScreen> {
                     )
                   : ReadOnlyValue(inv.notes ?? ''),
             ),
+            if (showRegion)
+              DetailGridItem(
+                  label: 'Region',
+                  child: ReadOnlyValue(regionLabel(inv.regionCode, inv.regionName))),
           ]),
           const SizedBox(height: 12),
           Wrap(

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../features/auth/auth_controller.dart';
 import '../api/api_client.dart';
+import '../api/pending_reply.dart';
+import '../scope/view_scope.dart';
 import 'filter_editor.dart';
 import 'table_models.dart';
 import 'table_providers.dart';
@@ -73,6 +76,11 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
   final Widget Function(BuildContext context, Map<String, dynamic> summary)? tiles;
   final List<BulkActionSpec> bulkActions;
 
+  /// Whether [bulkActions] stay offered while a past date is viewed. Only for housekeeping the
+  /// server allows then — marking notifications or mail read (§5.2.4); every other bulk action is
+  /// a change, and a past date is read only (D2).
+  final bool bulkWhileHistorical;
+
   final List<QuickFilterSpec> quickFilters;
 
   /// Called after a bulk action has run, for anything outside the table that its rows feed —
@@ -86,6 +94,22 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
   final Widget? header;
 
   final List<Widget> actions;
+
+  /// Where bulk actions and export go when [path] is a narrower view of another list — "My tasks"
+  /// (`/api/tasks/mine`) acts through `/api/tasks`. Null means [path].
+  final String? actionPath;
+
+  /// Filters that make [actionPath]'s "every row matching" mean this view's rows: sent with a bulk
+  /// action or export beside the user's own, never shown as chips.
+  final List<TableFilter> actionFilters;
+
+  /// Narrows sorting below what the schema publishes as sortable — a list whose past dates
+  /// answer fewer sorts than today does, say. Null leaves the schema's word final.
+  final bool Function(String key)? canSort;
+
+  /// The only fields the filter editor and quick filters offer, when a list answers fewer
+  /// filters than its schema publishes (a past date, say). Null offers every filterable column.
+  final Set<String>? filterFields;
 
   const DataTableScaffold({
     super.key,
@@ -103,12 +127,17 @@ class DataTableScaffold<T> extends ConsumerStatefulWidget {
     this.mobileCard,
     this.tiles,
     this.bulkActions = const [],
+    this.bulkWhileHistorical = false,
     this.quickFilters = const [],
     this.canExport = false,
     this.selectable = true,
     this.emptyMessage = 'No rows match this filter',
     this.header,
     this.actions = const [],
+    this.actionPath,
+    this.actionFilters = const [],
+    this.canSort,
+    this.filterFields,
   });
 
   @override
@@ -120,8 +149,14 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
   bool _selectAllMatching = false;
   bool _busy = false;
   final _hScroll = ScrollController();
+  bool _historical = false;
 
-  bool get _selectable => widget.selectable && (widget.bulkActions.isNotEmpty || widget.canExport);
+  /// While a past date is viewed nothing can be changed, so no bulk action is offered; export
+  /// still is, as of that date.
+  List<BulkActionSpec> get _bulkActions =>
+      _historical && !widget.bulkWhileHistorical ? const [] : widget.bulkActions;
+
+  bool get _selectable => widget.selectable && (_bulkActions.isNotEmpty || widget.canExport);
 
   @override
   void dispose() {
@@ -185,7 +220,13 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
 
   @override
   Widget build(BuildContext context) {
+    // Other regions or another date is another set of rows, so what was ticked no longer shows —
+    // and bulk actions and exports by id are checked against each record's own region, not the
+    // regions chosen (I3), so a stale selection would reach rows the user has moved away from.
+    ref.listen<ViewScope>(viewScopeProvider, (_, __) => _clearSelection());
+    _historical = ref.watch(isHistoricalProvider);
     final pageAsync = ref.watch(tablePageProvider(_request));
+    final page = pageAsync.valueOrNull;
     final schemaAsync = ref.watch(tableSchemaProvider(widget.entity));
     final schema = schemaAsync.valueOrNull;
     final isNarrow = MediaQuery.sizeOf(context).width < 760;
@@ -194,7 +235,8 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
       schema: schema,
       query: widget.query,
       quickFilters: widget.quickFilters,
-      lockedFilters: pageAsync.valueOrNull?.lockedFilters ?? const [],
+      lockedFilters: page?.lockedFilters ?? const [],
+      filterFields: widget.filterFields,
       onQueryChanged: (q) => widget.onQueryChanged(q),
     );
     final pageActions = Theme(
@@ -228,13 +270,28 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
                 Padding(padding: const EdgeInsets.fromLTRB(0, 8, 12, 8), child: pageActions),
             ],
           ),
+        // A list that keeps no history answers with today's rows whatever the date; say so rather
+        // than let them pass for the past.
+        if (_historical && page != null && page.asOf == null)
+          const _InfoStrip(
+            icon: Icons.update,
+            message: "Showing current data — history isn't kept for this list",
+          ),
+        // Where only the user's own book is shown in some of the regions asked about, but not all
+        // of them, no locked-filter chip says so (R14); this does (B1).
+        if (page != null && page.bookRegionIds.isNotEmpty && page.lockedFilters.isEmpty)
+          _InfoStrip(
+            icon: Icons.person_outline,
+            message: 'Your book only in: ${_regionCodes(page.bookRegionIds)}',
+            tooltip: 'In these regions the list shows only the records you are the POC for',
+          ),
         if (_selected.isNotEmpty || _selectAllMatching)
           _SelectionToolbar(
             selectedCount: _selected.length,
-            totalMatching: pageAsync.valueOrNull?.totalElements ?? 0,
+            totalMatching: page?.totalElements ?? 0,
             selectAllMatching: _selectAllMatching,
             busy: _busy,
-            actions: widget.bulkActions,
+            actions: _bulkActions,
             canExport: widget.canExport,
             onSelectAllMatching: () => setState(() => _selectAllMatching = true),
             onClear: _clearSelection,
@@ -294,6 +351,22 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     );
   }
 
+  String _regionCodes(List<int> ids) {
+    final regions = ref.read(currentUserProvider)?.regions ?? const [];
+    return [
+      for (final id in ids) regions.where((r) => r.id == id).firstOrNull?.code ?? '#$id',
+    ].join(', ');
+  }
+
+  /// Whether a header sorts: only a column the live schema publishes as sortable, since the
+  /// server refuses any other sort and the refused sort would stay in the URL. Nothing sorts
+  /// while the schema loads.
+  bool _sortable(TableColumnSpec<T> c, TableSchema? schema) {
+    final key = c.sortKey;
+    if (key == null || schema?.column(key)?.sortable != true) return false;
+    return widget.canSort?.call(key) ?? true;
+  }
+
   Widget _dataTable(List<T> rows, TableSchema? schema) {
     final sortField = widget.query.sort?.split(',').first;
     final ascending = !(widget.query.sort?.endsWith('desc') ?? false);
@@ -311,7 +384,7 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
           DataColumn(
             label: _capped(c, Text(c.label, style: const TextStyle(fontWeight: FontWeight.w600))),
             numeric: c.numeric,
-            onSort: c.sortKey == null
+            onSort: !_sortable(c, schema)
                 ? null
                 : (index, asc) => widget.onQueryChanged(
                     widget.query.withSort('${c.sortKey},${asc ? 'asc' : 'desc'}')),
@@ -448,6 +521,16 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     );
   }
 
+  String get _actionPath => widget.actionPath ?? widget.path;
+
+  List<String> get _actionFilterWires =>
+      [...widget.query.filters, ...widget.actionFilters].map((f) => f.wire).toList();
+
+  /// The list's own parameters (the approvals view, say), so a bulk action or export over "every
+  /// row matching" means the rows this list shows.
+  Map<String, dynamic>? get _actionParams =>
+      widget.extraParams.isEmpty ? null : Map.of(widget.extraParams);
+
   Future<void> _runBulkAction(BulkActionSpec spec) async {
     Map<String, dynamic>? params;
     if (spec.buildParams != null) {
@@ -470,12 +553,13 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
 
     setState(() => _busy = true);
     try {
-      final res = await ref.read(dioProvider).post(spec.endpoint ?? '${widget.path}/bulk', data: {
+      final res = await ref.read(dioProvider).post(spec.endpoint ?? '$_actionPath/bulk',
+          queryParameters: _actionParams, data: {
         'action': spec.action,
         if (!_selectAllMatching) 'ids': _selected.toList(),
         if (_selectAllMatching) 'selectAllMatchingFilter': true,
         'sort': widget.query.sort,
-        'filters': widget.query.filters.map((f) => f.wire).toList(),
+        'filters': _actionFilterWires,
         if (params != null) 'params': params,
       });
       if (mounted) {
@@ -496,12 +580,13 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
   Future<void> _runExport() async {
     setState(() => _busy = true);
     try {
-      final res = await ref.read(dioProvider).post('${widget.path}/export', data: {
+      final res = await ref.read(dioProvider).post('$_actionPath/export',
+          queryParameters: _actionParams, data: {
         'action': 'EXPORT',
         if (!_selectAllMatching) 'ids': _selected.toList(),
         if (_selectAllMatching) 'selectAllMatchingFilter': true,
         'sort': widget.query.sort,
-        'filters': widget.query.filters.map((f) => f.wire).toList(),
+        'filters': _actionFilterWires,
       });
       if (mounted) _showCsv(res.data.toString());
     } catch (e) {
@@ -554,11 +639,16 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
     final failed = ((result['failed'] as List?) ?? const []).cast<Map<String, dynamic>>();
     final skipped = ((result['skipped'] as List?) ?? const []).cast<Map<String, dynamic>>();
     final truncated = result['truncated'] as bool? ?? false;
+    // Rows held for approval (B2; only an invoice bulk cancel today): asked for, not yet done.
+    final pending = ((result['pending'] as List?) ?? const []).whereType<Map>().toList();
+    if (pending.isNotEmpty) invalidateApprovals(ref);
 
     if (failed.isEmpty && skipped.isEmpty && !truncated) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(spec.successMessage?.call(succeeded) ??
-              '$succeeded record${succeeded == 1 ? '' : 's'} updated')));
+          content: Text(pending.isEmpty
+              ? spec.successMessage?.call(succeeded) ??
+                  '$succeeded record${succeeded == 1 ? '' : 's'} updated'
+              : '$succeeded updated, ${pending.length} sent for approval')));
       return;
     }
 
@@ -573,7 +663,9 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('$succeeded succeeded, ${failed.length} failed, '
+                Text('$succeeded succeeded, '
+                    '${pending.isEmpty ? '' : '${pending.length} sent for approval, '}'
+                    '${failed.length} failed, '
                     '${skipped.length} skipped, of ${result['requested']} requested.'),
                 if (truncated)
                   Padding(
@@ -584,6 +676,11 @@ class _DataTableScaffoldState<T> extends ConsumerState<DataTableScaffold<T>> {
                       style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
                   ),
+                if (pending.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text('Awaiting approval', style: Theme.of(context).textTheme.titleSmall),
+                  for (final p in pending) Text('#${p['id']} → approval #${p['pendingChangeId']}'),
+                ],
                 if (failed.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Text('Failed', style: Theme.of(context).textTheme.titleSmall),
@@ -730,6 +827,7 @@ class _FilterBar extends StatelessWidget {
   final TableQuery query;
   final List<QuickFilterSpec> quickFilters;
   final List<TableFilter> lockedFilters;
+  final Set<String>? filterFields;
   final ValueChanged<TableQuery> onQueryChanged;
 
   const _FilterBar({
@@ -737,6 +835,7 @@ class _FilterBar extends StatelessWidget {
     required this.query,
     required this.quickFilters,
     required this.lockedFilters,
+    required this.filterFields,
     required this.onQueryChanged,
   });
 
@@ -744,7 +843,11 @@ class _FilterBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final quick = schema == null
         ? const <QuickFilterSpec>[]
-        : quickFilters.where((q) => schema!.column(q.filter.field)?.filterable ?? false).toList();
+        : quickFilters
+            .where((q) =>
+                (schema!.column(q.filter.field)?.filterable ?? false) &&
+                (filterFields?.contains(q.filter.field) ?? true))
+            .toList();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -759,7 +862,8 @@ class _FilterBar extends StatelessWidget {
             onPressed: schema == null
                 ? null
                 : () async {
-                    final f = await showFilterEditor(context: context, schema: schema!);
+                    final f = await showFilterEditor(
+                        context: context, schema: schema!, allowedFields: filterFields);
                     if (f != null) onQueryChanged(query.addFilter(f));
                   },
           ),
@@ -785,8 +889,11 @@ class _FilterBar extends StatelessWidget {
               onPressed: schema == null
                   ? null
                   : () async {
-                      final edited =
-                          await showFilterEditor(context: context, schema: schema!, existing: f);
+                      final edited = await showFilterEditor(
+                          context: context,
+                          schema: schema!,
+                          existing: f,
+                          allowedFields: filterFields);
                       if (edited != null) {
                         onQueryChanged(query.removeFilter(f).addFilter(edited));
                       }
@@ -806,6 +913,39 @@ class _FilterBar extends StatelessWidget {
   String _lockedLabel(TableFilter f) {
     if (f.field == 'myBook') return 'My book only';
     return 'My records only';
+  }
+}
+
+class _InfoStrip extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final String? tooltip;
+
+  const _InfoStrip({required this.icon, required this.message, this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final strip = Material(
+      color: scheme.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: scheme.onSecondaryContainer),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(message,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: scheme.onSecondaryContainer)),
+            ),
+          ],
+        ),
+      ),
+    );
+    return tooltip == null ? strip : Tooltip(message: tooltip!, child: strip);
   }
 }
 

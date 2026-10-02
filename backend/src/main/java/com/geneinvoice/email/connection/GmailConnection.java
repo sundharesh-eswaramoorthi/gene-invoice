@@ -1,5 +1,6 @@
 package com.geneinvoice.email.connection;
 
+import com.geneinvoice.common.time.AppClock;
 import com.geneinvoice.email.transport.ConnectionStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -50,6 +51,6 @@ public class GmailConnection {
     @PrePersist
     @PreUpdate
     void touch() {
-        this.updatedAt = Instant.now();
+        this.updatedAt = AppClock.now();
     }
 }

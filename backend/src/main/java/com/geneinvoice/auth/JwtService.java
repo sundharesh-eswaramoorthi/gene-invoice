@@ -1,5 +1,6 @@
 package com.geneinvoice.auth;
 
+import com.geneinvoice.common.time.WallClock;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -40,7 +41,7 @@ public class JwtService {
     public static final String CREDENTIALS_CHANGED_AT = "cga";
 
     public String generateToken(String username, Map<String, Object> claims) {
-        Date now = new Date();
+        Date now = Date.from(WallClock.UTC.instant());
         return Jwts.builder()
                 .claims(claims)
                 .subject(username)

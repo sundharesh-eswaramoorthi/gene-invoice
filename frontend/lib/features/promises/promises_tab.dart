@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/api_client.dart';
 import '../../core/format.dart';
+import '../../core/scope/view_scope.dart';
 import '../../core/unsaved_changes.dart';
 import '../../shared/models/invoice.dart';
 import '../../shared/models/privileges.dart';
@@ -44,26 +45,34 @@ class PromisesTab extends ConsumerWidget {
 
   final int? paymentId;
 
+  /// The customer's region: raising a promise needs PROMISE_MANAGE there (§7.5).
+  final int? regionId;
+
   const PromisesTab({
     super.key,
     required this.customerId,
     this.customerName,
     this.invoice,
     this.paymentId,
+    this.regionId,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
-    final canManage = user?.has(Privileges.promiseManage) ?? false;
-    final canOverride = user?.has(Privileges.promiseOverride) ?? false;
+    // A past date is read only (D2).
+    final historical = ref.watch(isHistoricalProvider);
+    final mayManage = user?.has(Privileges.promiseManage) ?? false;
+    final mayOverride = user?.has(Privileges.promiseOverride) ?? false;
+    final canRaise =
+        !historical && mayManage && (user?.hasIn(Privileges.promiseManage, regionId) ?? false);
     final scope =
         PromiseScope(customerId: customerId, invoiceId: invoice?.id, paymentId: paymentId);
     final async = ref.watch(scopedPromisesProvider(scope));
 
     return Column(
       children: [
-        if (canManage && paymentId == null)
+        if (canRaise && paymentId == null)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
             child: Align(
@@ -97,10 +106,11 @@ class PromisesTab extends ConsumerWidget {
                 padding: const EdgeInsets.all(12),
                 itemCount: promises.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 8),
+                // Each promise's own flags say what this user may do to it in its region (D14).
                 itemBuilder: (context, i) => PromiseCard(
                   promise: promises[i],
-                  canManage: canManage,
-                  canOverride: canOverride,
+                  canManage: !historical && (promises[i].canManage ?? mayManage),
+                  canOverride: !historical && (promises[i].canOverride ?? mayOverride),
                   onChanged: () => ref.invalidate(scopedPromisesProvider(scope)),
                 ),
               );
@@ -143,8 +153,10 @@ class PromiseCard extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
-                PromiseStatusChip(
-                    status: promise.status, overridden: promise.statusOverridden),
+                PendingApprovalChip.beside(
+                    PromiseStatusChip(
+                        status: promise.status, overridden: promise.statusOverridden),
+                    promise.pendingApproval),
               ],
             ),
             const SizedBox(height: 6),

@@ -26,6 +26,10 @@ class DashboardCard extends StatelessWidget {
   final String title;
   final String? subtitle;
   final bool book;
+
+  /// Where a card counts only my own book in some of the regions asked about — "SOUTH" — and the
+  /// whole of the others (Coverage.mixed); null otherwise.
+  final String? bookRegions;
   final Widget? action;
   final Widget child;
 
@@ -34,6 +38,7 @@ class DashboardCard extends StatelessWidget {
     required this.title,
     this.subtitle,
     this.book = false,
+    this.bookRegions,
     this.action,
     required this.child,
   });
@@ -63,7 +68,10 @@ class DashboardCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (book) const BookBadge(),
+                if (book)
+                  const BookBadge()
+                else if (bookRegions != null)
+                  BookBadge(regions: bookRegions),
                 if (action != null) action!,
               ],
             ),
@@ -77,13 +85,18 @@ class DashboardCard extends StatelessWidget {
 }
 
 class BookBadge extends StatelessWidget {
-  const BookBadge({super.key});
+  /// The regions where only my book counts, when that is not all of them.
+  final String? regions;
+
+  const BookBadge({super.key, this.regions});
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Tooltip(
-      message: 'Only your own book, not the whole organisation',
+      message: regions == null
+          ? 'Only your own book, not the whole organisation'
+          : 'Only your own book in $regions; everything in the other regions',
       child: Container(
         margin: const EdgeInsets.only(left: 8),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -96,7 +109,7 @@ class BookBadge extends StatelessWidget {
           children: [
             Icon(Icons.person_outline, size: 14, color: scheme.onSecondaryContainer),
             const SizedBox(width: 4),
-            Text('Your book',
+            Text(regions == null ? 'Your book' : 'Your book in $regions',
                 style: Theme.of(context)
                     .textTheme
                     .labelSmall

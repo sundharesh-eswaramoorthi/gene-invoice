@@ -19,6 +19,12 @@ abstract final class FieldLimits {
 
   static const documentMaxBytes = 10485760;
 
+  static const taskTitle = 200;
+  static const taskDescription = 2000;
+
+  static const ruleName = 120;
+  static const ruleDescription = 500;
+
   static const gmailClientId = 300;
   static const gmailClientSecret = 300;
   static const gmailRefreshToken = 2000;

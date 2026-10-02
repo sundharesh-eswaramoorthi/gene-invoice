@@ -1,6 +1,13 @@
 package com.geneinvoice.promise;
 
+import com.geneinvoice.approval.Outcome;
+import com.geneinvoice.approval.PendingChangeViews;
+import com.geneinvoice.assignee.AssignedTo;
+import com.geneinvoice.assignee.AssigneeDtos;
+import com.geneinvoice.assignee.AssigneeService;
+import com.geneinvoice.assignee.AssigneeStore;
 import com.geneinvoice.auth.CurrentUser;
+import com.geneinvoice.common.Outcomes;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.bulk.BulkDtos;
 import com.geneinvoice.common.bulk.BulkExecutor;
@@ -11,8 +18,15 @@ import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
 import com.geneinvoice.common.query.TableSchemas;
+import com.geneinvoice.common.scope.AsOf;
+import com.geneinvoice.common.scope.AsOfAware;
+import com.geneinvoice.common.scope.AsOfPoint;
+import com.geneinvoice.email.EmailDtos.EmailToken;
+import com.geneinvoice.email.EmailEntityType;
+import com.geneinvoice.email.EmailTargets;
+import com.geneinvoice.poc.ScopeResolver;
 import com.geneinvoice.privilege.Privileges;
-import com.geneinvoice.user.UserRepository;
+import com.geneinvoice.region.Region;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +40,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @RestController
+@AsOfAware
 @RequestMapping("/api/promises")
 @RequiredArgsConstructor
 public class PaymentPromiseController {
@@ -33,7 +48,10 @@ public class PaymentPromiseController {
     private final PaymentPromiseService service;
     private final BulkExecutor bulkExecutor;
     private final CurrentUser currentUser;
-    private final UserRepository userRepository;
+    private final PendingChangeViews pendingChangeViews;
+    private final AssigneeStore assigneeStore;
+    private final AssigneeService assigneeService;
+    private final EmailTargets emailTargets;
 
     private TableSchema schema() {
         return TableSchemas.PROMISES.visibleTo(currentUser.isCustomer());
@@ -75,20 +93,67 @@ public class PaymentPromiseController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.PROMISE_VIEW + "')")
     public PromiseDtos.PromiseDto get(@PathVariable Long id) {
-        return service.dto(id);
+        return detail(service.dto(id));
     }
 
+    /**
+     * Makes a promise. Co-assignees named with it must be able to see the customer, and are told once it is made;
+     * the promise page assigns them afterwards as a rule (§5.10.12). Above the region's limit: 202 and the pending
+     * change (§6.6), its co-assignees kept with it.
+     */
     @PostMapping
     @PreAuthorize("hasAuthority('" + Privileges.PROMISE_MANAGE + "')")
-    public PromiseDtos.PromiseDto create(@Valid @RequestBody PromiseDtos.CreatePromiseRequest req) {
-        return service.create(req);
+    public ResponseEntity<Object> create(@Valid @RequestBody PromiseDtos.CreatePromiseRequest req) {
+        if (req.assignees() != null && !req.assignees().isEmpty()) {
+            List<EmailToken> tokens = assigneeStore.validate(EmailEntityType.PROMISE, req.assignees(),
+                    EmailTargets.offeredRoles(EmailEntityType.PROMISE));
+            Long regionId = emailTargets.load(EmailEntityType.CUSTOMER, req.customerId()).regionId();
+            assigneeService.requireVisible(AssignedTo.PROMISE, tokens, EmailEntityType.CUSTOMER, req.customerId(),
+                    regionId);
+        }
+        Outcome<PromiseDtos.PromiseDto> out = service.createOrHold(req);
+        if (out instanceof Outcome.Applied<PromiseDtos.PromiseDto> applied) {
+            Long id = applied.value().id();
+            assigneeService.notifyAssignedTo(AssignedTo.PROMISE, id, assigneeStore.list(AssignedTo.PROMISE, id),
+                    currentUser.idOrNull());
+        }
+        return Outcomes.respond(out, dto -> dto, pendingChangeViews);
+    }
+
+    /**
+     * Replaces the promise's co-assignees (§6.13): PROMISE_MANAGE in its region. Someone named who could not open
+     * the promise is a 400 against {@code assignees} and nothing changes; those newly assigned are told.
+     */
+    @PutMapping("/{id}/assignees")
+    @PreAuthorize("hasAuthority('" + Privileges.PROMISE_MANAGE + "')")
+    public PromiseDtos.PromiseDto assignees(@PathVariable Long id, @RequestBody PromiseDtos.AssigneesRequest req) {
+        Long regionId = service.dto(id).regionId();
+        currentUser.requireIn(Privileges.PROMISE_MANAGE, regionId);
+        List<EmailToken> tokens = assigneeStore.validate(EmailEntityType.PROMISE, req == null ? null
+                : req.assignees(), EmailTargets.offeredRoles(EmailEntityType.PROMISE));
+        assigneeService.requireVisible(AssignedTo.PROMISE, tokens, EmailEntityType.PROMISE, id, regionId);
+        List<EmailToken> added = service.setAssignees(id, tokens);
+        assigneeService.notifyAssignedTo(AssignedTo.PROMISE, id, added, currentUser.idOrNull());
+        return detail(service.dto(id));
+    }
+
+    /** The promise's page: for staff, its co-assignees and the people each means now (as of a date, then). */
+    private PromiseDtos.PromiseDto detail(PromiseDtos.PromiseDto dto) {
+        if (currentUser.isCustomer()) return dto;
+        List<EmailToken> tokens = assigneeStore.list(AssignedTo.PROMISE, dto.id());
+        AsOfPoint point = AsOf.current();
+        List<AssigneeDtos.AssigneeDto> people = point != null
+                ? assigneeService.describeAt(tokens, EmailEntityType.PROMISE, dto.id(), dto.customerId(), point)
+                : assigneeService.describe(AssignedTo.PROMISE, tokens, EmailEntityType.PROMISE,
+                        emailTargets.load(EmailEntityType.PROMISE, dto.id()));
+        return dto.withAssignees(people);
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasAuthority('" + Privileges.PROMISE_MANAGE + "')")
-    public PromiseDtos.PromiseDto update(@PathVariable Long id,
+    public ResponseEntity<Object> update(@PathVariable Long id,
                                          @Valid @RequestBody PromiseDtos.UpdatePromiseRequest req) {
-        return service.update(id, req);
+        return Outcomes.respond(service.updateOrHold(id, req), dto -> dto, pendingChangeViews);
     }
 
     @PostMapping("/{id}/cancel")
@@ -100,9 +165,10 @@ public class PaymentPromiseController {
 
     @PostMapping("/{id}/override")
     @PreAuthorize("hasAuthority('" + Privileges.PROMISE_OVERRIDE + "')")
-    public PromiseDtos.PromiseDto override(@PathVariable Long id,
+    public ResponseEntity<Object> override(@PathVariable Long id,
                                            @Valid @RequestBody PromiseDtos.OverrideStatusRequest req) {
-        return service.override(id, req.status(), req.reason());
+        return Outcomes.respond(service.overrideOrHold(id, req.status(), req.reason()), dto -> dto,
+                pendingChangeViews);
     }
 
     @DeleteMapping("/{id}/override")
@@ -116,7 +182,10 @@ public class PaymentPromiseController {
     @PostMapping("/bulk")
     @PreAuthorize("hasAuthority('" + Privileges.PROMISE_MANAGE + "')")
     public BulkDtos.BulkResult bulk(@Valid @RequestBody BulkDtos.BulkRequest req) {
-        List<Long> ids = resolveIds(req);
+        // Rows the caller sees but may not change in their region drop out as not reachable.
+        List<Long> ids = "REASSIGN_COLLECTION_POC".equals(req.action())
+                ? resolveIds(req, ScopeResolver.Access.MANAGE, Privileges.POC_ASSIGN)
+                : resolveIds(req, ScopeResolver.Access.MANAGE);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
         // "Already cancelled" is a row that did not qualify, not one that went wrong, and is
         // reported as skipped like every other list's is (TBL-05).
@@ -131,7 +200,7 @@ public class PaymentPromiseController {
                 // The privilege is checked once for the whole request, as the payments list does:
                 // it is the caller that is or is not allowed to move a Collection POC, not the
                 // individual row (PPD-05).
-                if (!currentUser.canAssignPoc(userRepository)) {
+                if (!currentUser.canAssignPocAnywhere()) {
                     throw new BadRequestException("You may not change the Collection POC");
                 }
                 yield bulkExecutor.run(req, ids, truncated,
@@ -143,9 +212,10 @@ public class PaymentPromiseController {
     }
 
     @PostMapping("/export")
+    @AsOfAware
     @PreAuthorize("hasAuthority('" + Privileges.EXPORT_DATA + "') and hasAuthority('" + Privileges.PROMISE_VIEW + "')")
     public ResponseEntity<String> export(@RequestBody BulkDtos.BulkRequest req) {
-        List<Long> ids = resolveIds(req);
+        List<Long> ids = resolveIds(req, ScopeResolver.Access.VIEW);
         List<PromiseDtos.PromiseDto> rows = service.allMatching(
                         TableQuery.parseUnpaged(schema(), req.sort(), req.filters())).stream()
                 .filter(p -> ids.contains(p.getId()))
@@ -169,9 +239,9 @@ public class PaymentPromiseController {
                 .body(Csv.of(headers, body));
     }
 
-    private List<Long> resolveIds(BulkDtos.BulkRequest req) {
+    private List<Long> resolveIds(BulkDtos.BulkRequest req, ScopeResolver.Access access, String... alsoRequired) {
         TableQuery query = TableQuery.parseUnpaged(schema(), req.sort(), req.filters());
-        List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT);
+        List<Long> permitted = service.idsMatching(query, TableQueryExecutor.BULK_ID_LIMIT, access, alsoRequired);
         if (req.allMatching()) return permitted;
         if (req.ids() == null || req.ids().isEmpty()) {
             throw new BadRequestException("Provide ids or set selectAllMatchingFilter");

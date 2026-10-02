@@ -3,6 +3,7 @@ package com.geneinvoice.email.mailservice;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.geneinvoice.common.DatabaseErrors;
 import com.geneinvoice.email.CopyRef;
 import com.geneinvoice.email.Email;
 import com.geneinvoice.email.EmailDeliveryRollup;
@@ -28,16 +29,10 @@ import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.dao.DataAccessResourceFailureException;
-import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.sql.SQLNonTransientConnectionException;
-import java.sql.SQLRecoverableException;
-import java.sql.SQLTransientException;
-import java.time.Instant;
+import java.time.Clock;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -61,6 +56,7 @@ public class MailServiceEventHandler {
     private final UserRepository userRepository;
     private final TransactionTemplate transactions;
     private final ObjectMapper json;
+    private final Clock clock;
 
     public void apply(Event event) {
         switch (event.type() == null ? "" : event.type()) {
@@ -72,15 +68,7 @@ public class MailServiceEventHandler {
     }
 
     public static boolean databaseUnavailable(Throwable failure) {
-        for (Throwable t = failure; t != null; t = t.getCause()) {
-            if (t instanceof TransientDataAccessException || t instanceof DataAccessResourceFailureException
-                    || t instanceof TransactionException || t instanceof org.hibernate.TransactionException
-                    || t instanceof SQLTransientException || t instanceof SQLRecoverableException
-                    || t instanceof SQLNonTransientConnectionException) {
-                return true;
-            }
-        }
-        return false;
+        return DatabaseErrors.isUnavailable(failure);
     }
 
     private <T> T data(Event event, Class<T> type) {
@@ -114,7 +102,7 @@ public class MailServiceEventHandler {
             boolean awaitingHandOff = copy.getDeliveryStatus() == RecipientDeliveryStatus.QUEUED;
             boolean handOffUnderWay = email.getStatus() == EmailStatus.SENDING && email.getHandedOffAt() == null;
             if (!EmailDeliveryRollup.applyCopy(email, copy, state)) return;
-            if (awaitingHandOff) EmailDeliveryRollup.handedOff(email, Instant.now());
+            if (awaitingHandOff) EmailDeliveryRollup.handedOff(email, clock.instant());
             EmailDeliveryRollup.apply(email, recipients);
             if (handOffUnderWay && email.getHandedOffAt() == null && email.getStatus() == EmailStatus.QUEUED) {
                 email.setStatus(EmailStatus.SENDING);

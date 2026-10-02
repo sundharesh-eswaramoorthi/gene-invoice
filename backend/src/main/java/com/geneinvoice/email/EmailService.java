@@ -2,7 +2,11 @@ package com.geneinvoice.email;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.geneinvoice.assignee.VisibilityProbe;
 import com.geneinvoice.auth.CurrentUser;
+import com.geneinvoice.automation.action.RecordContexts;
+import com.geneinvoice.automation.placeholder.PlaceholderCatalogue;
+import com.geneinvoice.automation.placeholder.PlaceholderRenderer;
 import com.geneinvoice.common.BadRequestException;
 import com.geneinvoice.common.Emails;
 import com.geneinvoice.common.FieldLimits;
@@ -17,6 +21,9 @@ import com.geneinvoice.common.query.PredicateFactory;
 import com.geneinvoice.common.query.TableQuery;
 import com.geneinvoice.common.query.TableQueryExecutor;
 import com.geneinvoice.common.query.TableSchema;
+import com.geneinvoice.common.scope.AsOf;
+import com.geneinvoice.common.scope.AsOfPoint;
+import com.geneinvoice.common.scope.ViewScopeHolder;
 import com.geneinvoice.email.EmailDtos.EmailToken;
 import com.geneinvoice.email.connection.GmailConnectionService;
 import com.geneinvoice.email.connection.GmailStatus;
@@ -24,13 +31,18 @@ import com.geneinvoice.email.transport.ConnectionState;
 import com.geneinvoice.email.transport.MailConnections;
 import com.geneinvoice.email.transport.MailTransport;
 import com.geneinvoice.email.transport.SyncResult;
+import com.geneinvoice.privilege.Privileges;
 import com.geneinvoice.user.User;
+import com.geneinvoice.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -79,6 +91,40 @@ public class EmailService {
     private final GmailConnectionService gmailConnections;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactions;
+    private final VisibilityProbe visibilityProbe;
+    private final UserRepository userRepository;
+    private final RecordContexts recordContexts;
+
+    /** An email a rule would send, resolved as sending it would be (§5.10.5): why it could not go, and what to know. */
+    public record RenderedPreview(EmailDtos.PreviewDto email, List<String> problems, List<String> warnings) {}
+
+    /**
+     * Who an email a rule sends would come from and go to, once everyone who cannot see the record is left out.
+     * {@code noRecipients}: nothing stops it but that nobody is left to write to.
+     */
+    private record AutomationResolution(EmailTargets.Target target, EmailAddressing.Resolution resolution,
+                                        List<String> problems, List<String> warnings, boolean noRecipients) {}
+
+    /**
+     * An email a rule sends could not be queued, and why (§5.10.5). With {@code noRecipients} nothing stopped it but
+     * that nobody was left to write to, and the rule's action is skipped rather than failed.
+     */
+    public static class NotQueued extends RuntimeException {
+
+        private final boolean noRecipients;
+
+        public NotQueued(String message, boolean noRecipients) {
+            super(message);
+            this.noRecipients = noRecipients;
+        }
+
+        public boolean noRecipients() {
+            return noRecipients;
+        }
+    }
+
+    /** An email a rule queued, to be sent once the rule's action has committed; and what is worth saying about it. */
+    public record Queued(Long emailId, List<String> warnings) {}
 
     /** Subject and body as they will be saved (E16), checked the same way for one email and for a bulk send. */
     private record Content(String subject, String body) {
@@ -185,15 +231,203 @@ public class EmailService {
     }
 
     public EmailDtos.PreviewDto preview(EmailDtos.SendEmailRequest req) {
-        EmailTargets.Target target = targets.load(EmailEntityType.parse(req.entityType()), requireId(req.entityId()));
+        EmailTargets.Target target = targets.loadForSend(EmailEntityType.parse(req.entityType()),
+                requireId(req.entityId()));
+        RecordContexts.EmailTexts texts = placeholders(target, req.subject(), req.body());
         EmailAddressing.Resolution resolution = addressing.resolve(
                 addressing.plan(target, req.from(), req.to()), target);
         EmailViews.Viewer viewer = views.viewer();
+        List<String> warnings = new ArrayList<>(warnings(resolution.from()));
+        warnings.addAll(texts.warnings());
         return new EmailDtos.PreviewDto(
                 resolution.from() == null ? null
                         : views.sender(resolution.from(), resolution.fromRole(), viewer, target.type()),
                 views.recipients(resolution.recipients(), viewer, target.type()),
-                resolution.unresolved(), resolution.problems(), warnings(resolution.from()));
+                resolution.unresolved(), resolution.problems(), warnings);
+    }
+
+    /**
+     * An email written by hand about a record, its placeholders filled in as the caller sees it (A4, PC-10). Only a
+     * customer, an invoice, a payment, a promise or a dispute offers them; text with no placeholder, or about any
+     * other record, is kept exactly as written. A placeholder that is none, or not offered on this kind of record, is
+     * a 400 on its field.
+     */
+    private RecordContexts.EmailTexts placeholders(EmailTargets.Target target, String subject, String body) {
+        List<PlaceholderCatalogue.Item> offered = PlaceholderCatalogue.offered(target.type());
+        boolean inSubject = PlaceholderRenderer.mayHavePlaceholders(subject);
+        boolean inBody = PlaceholderRenderer.mayHavePlaceholders(body);
+        if (offered.isEmpty() || !inSubject && !inBody) return new RecordContexts.EmailTexts(subject, body, List.of());
+        requireOffered(target.type(), subject, body);
+        return recordContexts.renderForEmail(target, subject, body);
+    }
+
+    private static void requireOffered(EmailEntityType type, String subject, String body) {
+        List<PlaceholderCatalogue.Item> offered = PlaceholderCatalogue.offered(type);
+        Map<String, String> errors = new LinkedHashMap<>();
+        String where = type.noun() + " emails";
+        PlaceholderRenderer.validate(subject, offered, where, "subject", errors);
+        PlaceholderRenderer.validate(body, offered, where, "body", errors);
+        if (!errors.isEmpty()) throw new GlobalExceptionHandler.InvalidFieldsException(errors);
+    }
+
+    /**
+     * The email a rule would send about a record, its text already rendered, resolved exactly as sending it would be
+     * and as whoever is signed in (the preview's caller, or the rule's owner): nothing is written, and what would stop
+     * it is told in {@code problems} rather than thrown.
+     */
+    @Transactional(readOnly = true)
+    public RenderedPreview previewRendered(EmailEntityType type, Long id, EmailToken from, boolean fallbackToOwner,
+                                           List<EmailToken> to, String renderedSubject, String renderedBody,
+                                           int maxRecipients) {
+        AutomationResolution r = resolveForAutomation(type, id, from, fallbackToOwner, to, renderedSubject,
+                renderedBody, maxRecipients);
+        EmailViews.Viewer viewer = views.viewer();
+        List<String> warnings = new ArrayList<>(r.warnings());
+        EmailAddressing.Resolution resolution = r.resolution();
+        if (resolution != null) warnings.addAll(warnings(resolution.from()));
+        EmailDtos.PreviewDto email = resolution == null
+                ? new EmailDtos.PreviewDto(null, List.of(), List.of(), r.problems(), warnings)
+                : new EmailDtos.PreviewDto(
+                        resolution.from() == null ? null
+                                : views.sender(resolution.from(), resolution.fromRole(), viewer, type),
+                        views.recipients(resolution.recipients(), viewer, type),
+                        resolution.unresolved(), r.problems(), warnings);
+        return new RenderedPreview(email, r.problems(), warnings);
+    }
+
+    /**
+     * Steps 1 to 6 of sending an email for a rule (§5.10.5): the record as the signed-in person, the content, the
+     * sender (a role nobody holds falls back to the owner when allowed), the recipients, and the automation visibility
+     * rule: a person named who cannot see the record is not written to, nor made to write (PC-2, SC-3).
+     */
+    private AutomationResolution resolveForAutomation(EmailEntityType type, Long id, EmailToken from,
+                                                      boolean fallbackToOwner, List<EmailToken> to, String subject,
+                                                      String body, int maxRecipients) {
+        return resolveForAutomation(targets.load(type, id), from, fallbackToOwner, to, subject, body, maxRecipients);
+    }
+
+    private AutomationResolution resolveForAutomation(EmailTargets.Target target, EmailToken from,
+                                                      boolean fallbackToOwner, List<EmailToken> to, String subject,
+                                                      String body, int maxRecipients) {
+        EmailEntityType type = target.type();
+        Long id = target.id();
+        List<String> problems = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+        if (target.regionId() != null && !currentUser.hasIn(Privileges.EMAIL_SEND, target.regionId())) {
+            problems.add("Email cannot be sent about " + target.label() + ": EMAIL_SEND is not held in its region");
+        }
+        if (EmailText.oneLine(EmailText.storable(subject)).isEmpty()) problems.add("The subject is empty");
+        if (body != null && body.length() > FieldLimits.EMAIL_BODY) {
+            problems.add("The message is longer than " + FieldLimits.EMAIL_BODY + " characters");
+        }
+
+        List<EmailToken> recipients = new ArrayList<>();
+        for (EmailToken token : to == null ? List.<EmailToken>of() : to) {
+            if (token != null && "USER".equalsIgnoreCase(token.type()) && token.userId() != null
+                    && !visibilityProbe.canSee(token.userId(), type, id, target.regionId())) {
+                warnings.add(personName(token.userId()) + " cannot see this record, so was not emailed");
+            } else {
+                recipients.add(token);
+            }
+        }
+        EmailToken sender = from;
+        if (from != null && "USER".equalsIgnoreCase(from.type()) && from.userId() != null
+                && !visibilityProbe.canSee(from.userId(), type, id, target.regionId())) {
+            String who = personName(from.userId());
+            sender = senderFallback(who + " cannot see this record, so cannot be the sender",
+                    who + " cannot see this record, so it would come from the rule's owner", fallbackToOwner,
+                    problems, warnings);
+        } else if (from != null && "ROLE".equalsIgnoreCase(from.type())) {
+            RoleRef role = EmailAddressing.requireOfferedRole(type, targets.rolesOffered(target), from);
+            if (target.sender(role).isEmpty()) {
+                String nobody = "Nobody holds " + role.label(type) + " on " + target.label();
+                sender = senderFallback(nobody + ", so it cannot be the sender",
+                        nobody + ", so it would come from the rule's owner", fallbackToOwner, problems, warnings);
+            }
+        }
+        if (recipients.isEmpty()) {
+            boolean onlyThat = problems.isEmpty();
+            problems.add(to == null || to.isEmpty() ? "Add at least one recipient" : "No recipients left");
+            return new AutomationResolution(target, null, problems, warnings, onlyThat);
+        }
+
+        EmailAddressing.Resolution resolution;
+        try {
+            resolution = addressing.resolve(addressing.plan(target, sender, recipients), target);
+        } catch (GlobalExceptionHandler.InvalidFieldsException e) {
+            problems.addAll(e.getFieldErrors().values());
+            return new AutomationResolution(target, null, problems, warnings, false);
+        } catch (BadRequestException | AccessDeniedException e) {
+            problems.add(e.getMessage());
+            return new AutomationResolution(target, null, problems, warnings, false);
+        }
+        if (resolution.fromRole() != null && resolution.from() != null && resolution.from().internal()
+                && !visibilityProbe.canSee(resolution.from().userId(), type, id, target.regionId())) {
+            String who = resolution.from().name();
+            EmailToken fallback = senderFallback(who + " cannot see this record, so cannot be the sender",
+                    who + " cannot see this record, so it would come from the rule's owner", fallbackToOwner,
+                    problems, warnings);
+            if (fallback == null && fallbackToOwner) {
+                resolution = addressing.resolve(addressing.plan(target, null, recipients), target);
+            }
+        }
+        List<RecipientSet.Entry> kept = new ArrayList<>();
+        for (RecipientSet.Entry entry : resolution.recipients()) {
+            if (entry.internal() && entry.userId() != null
+                    && !visibilityProbe.canSee(entry.userId(), type, id, target.regionId())) {
+                warnings.add(entry.name() + " cannot see this record, so was not emailed");
+            } else {
+                kept.add(entry);
+            }
+        }
+        List<String> resolutionProblems = new ArrayList<>(resolution.problems());
+        if (kept.isEmpty() && resolutionProblems.isEmpty()) resolutionProblems.add("No recipients left");
+        boolean onlyNoRecipients = kept.isEmpty() && problems.isEmpty();
+        problems.addAll(resolutionProblems);
+        long toCount = kept.stream().filter(e -> e.field() == RecipientField.TO).count();
+        if (toCount > maxRecipients) {
+            problems.add("An email from a rule goes to at most " + maxRecipients + " people; this one would go to "
+                    + toCount);
+        }
+        resolution = new EmailAddressing.Resolution(resolution.from(), resolution.fromRole(), kept,
+                resolution.unresolved(), resolutionProblems);
+        return new AutomationResolution(target, resolution, problems, warnings, onlyNoRecipients);
+    }
+
+    /**
+     * Saves the email a rule sends about a record (§5.10.5): an ordinary OUTBOUND email on the record, sent by the
+     * rule's owner (whoever is signed in), from an internal person (V5), to exactly the people left once those who
+     * cannot see the record are dropped. Its text is already rendered. It is only queued, in the rule's action
+     * transaction, never sent here: the caller sends it once that has committed (R15). Anything that stops it is a
+     * {@link NotQueued}; content that cannot be saved is a 400 as for any email.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Queued queue(EmailEntityType type, Long id, EmailToken from, boolean fallbackToOwner, List<EmailToken> to,
+                        String subject, String body, String batchId, int maxRecipients) {
+        EmailTargets.Target target = targets.loadForSend(type, id);
+        Content content = Content.check(subject, body, to);
+        AutomationResolution r = resolveForAutomation(target, from, fallbackToOwner, to, content.subject(),
+                content.body(), maxRecipients);
+        if (!r.problems().isEmpty()) throw new NotQueued(String.join("; ", r.problems()), r.noRecipients());
+        Long emailId = save(target, content, r.resolution(), EmailText.fit(batchId, Email.BATCH_MAX));
+        List<String> warnings = new ArrayList<>(r.warnings());
+        warnings.addAll(warnings(r.resolution().from()));
+        return new Queued(emailId, warnings);
+    }
+
+    /** The sender cannot be used: the owner sends instead when the action allows it, otherwise it cannot go. */
+    private static EmailToken senderFallback(String problem, String warning, boolean fallbackToOwner,
+                                             List<String> problems, List<String> warnings) {
+        if (fallbackToOwner) {
+            warnings.add(warning);
+        } else {
+            problems.add(problem);
+        }
+        return null;
+    }
+
+    private String personName(Long userId) {
+        return userRepository.findById(userId).map(EmailText::nameOf).orElse("User #" + userId);
     }
 
     /**
@@ -216,8 +450,11 @@ public class EmailService {
     }
 
     public EmailDtos.EmailDto send(EmailDtos.SendEmailRequest req) {
-        EmailTargets.Target target = targets.load(EmailEntityType.parse(req.entityType()), requireId(req.entityId()));
-        Content content = Content.check(req.subject(), req.body(), req.to());
+        ViewScopeHolder.requireLive();
+        EmailTargets.Target target = targets.loadForSend(EmailEntityType.parse(req.entityType()),
+                requireId(req.entityId()));
+        RecordContexts.EmailTexts texts = placeholders(target, req.subject(), req.body());
+        Content content = Content.check(texts.subject(), texts.body(), req.to());
         EmailAddressing.Resolution resolution = addressing.resolve(
                 addressing.plan(target, req.from(), req.to()), target);
         resolution.problem().ifPresent(problem -> {
@@ -233,27 +470,54 @@ public class EmailService {
             throw new BadRequestException(
                     "Unknown bulk action: " + req.action() + " (expected one of " + List.of(BULK_ACTION) + ")");
         }
+        ViewScopeHolder.requireLive();
         EmailEntityType type = EmailEntityType.parse(req.stringParam("entityType"));
         targets.requireTypeAccess(type);
         EmailToken from = param(req, "from", new TypeReference<EmailToken>() {});
         List<EmailToken> to = param(req, "to", new TypeReference<List<EmailToken>>() {});
-        Content content = Content.check(req.stringParam("subject"), req.stringParam("body"), to);
+        String subject = req.stringParam("subject");
+        String body = req.stringParam("body");
+        Content content = Content.check(subject, body, to);
         EmailAddressing.Plan plan = addressing.plan(type, from, to);
+        // Each row gets its own record's values ({{Invoice.Number}}); a placeholder that is none refuses the send.
+        boolean perRow = !PlaceholderCatalogue.offered(type).isEmpty()
+                && (PlaceholderRenderer.mayHavePlaceholders(subject) || PlaceholderRenderer.mayHavePlaceholders(body));
+        if (perRow) requireOffered(type, subject, body);
 
         List<Long> ids = targets.bulkIds(type, req);
         boolean truncated = req.allMatching() && ids.size() >= TableQueryExecutor.BULK_ID_LIMIT;
         String batchId = UUID.randomUUID().toString();
         Map<Long, Long> emailByRecord = new HashMap<>();
         BulkDtos.BulkResult result = bulkExecutor.run(req, ids, truncated, id -> {
-            EmailTargets.Target target = targets.load(type, id);
-            EmailAddressing.Resolution resolution = addressing.resolve(plan, target);
+            EmailTargets.Target target = targets.loadForSend(type, id);
+            EmailAddressing.Resolution resolution;
+            try {
+                resolution = addressing.resolve(plan, target);
+            } catch (GlobalExceptionHandler.InvalidFieldsException e) {
+                // A person named for every row who cannot reach this row's region: this row does not qualify.
+                throw new BulkExecutor.IneligibleException(
+                        new java.util.TreeMap<>(e.getFieldErrors()).firstEntry().getValue());
+            }
             resolution.problem().ifPresent(problem -> {
                 throw new BulkExecutor.IneligibleException(problem);
             });
-            emailByRecord.put(id, save(target, content, resolution, batchId));
+            emailByRecord.put(id, save(target, perRow ? rowContent(target, subject, body, to) : content,
+                    resolution, batchId));
         });
         dispatcher.dispatchAll(result.succeeded().stream().map(emailByRecord::get).filter(Objects::nonNull).toList());
         return result;
+    }
+
+    /** One row's text of a bulk send, its placeholders filled in; a row whose text cannot be saved does not qualify. */
+    private Content rowContent(EmailTargets.Target target, String subject, String body, List<EmailToken> to) {
+        RecordContexts.EmailTexts texts = recordContexts.renderForEmail(target, subject, body);
+        try {
+            return Content.check(texts.subject(), texts.body(), to);
+        } catch (GlobalExceptionHandler.InvalidFieldsException e) {
+            Map.Entry<String, String> first = new java.util.TreeMap<>(e.getFieldErrors()).firstEntry();
+            throw new BulkExecutor.IneligibleException(
+                    ("subject".equals(first.getKey()) ? "Subject " : "Message ") + first.getValue());
+        }
     }
 
     private Long save(EmailTargets.Target target, Content content, EmailAddressing.Resolution resolution,
@@ -295,8 +559,9 @@ public class EmailService {
     }
 
     public EmailDtos.EmailDto retry(Long id) {
+        ViewScopeHolder.requireLive();
         Email email = emailRepository.findById(id).orElseThrow(() -> new NotFoundException("Email not found"));
-        targets.requireVisible(email.getEntityType(), email.getEntityId());
+        targets.loadForSend(email.getEntityType(), email.getEntityId());
         EmailViews.Viewer viewer = views.viewer();
         if (viewer.isCustomer() && !EmailViews.customerTookPart(email,
                 recipientRepository.findByEmailIdOrderByIdAsc(id), viewer.customerId())) {
@@ -319,7 +584,10 @@ public class EmailService {
         return get(id);
     }
 
-    /** A record's emails, newest first; a customer sees only those their customer took part in (E13). */
+    /**
+     * A record's emails, newest first; a customer sees only those their customer took part in (E13). As of a date,
+     * those written or received by the end of that day (D8); how each was delivered is told as it is now.
+     */
     public PageResponse<EmailDtos.EmailDto> list(String entityType, Long entityId, Integer page, Integer size) {
         EmailEntityType type = EmailEntityType.parse(entityType);
         targets.requireVisible(type, entityId);
@@ -328,13 +596,21 @@ public class EmailService {
         List<PredicateFactory> scope = new ArrayList<>(List.of(
                 (root, q, cb) -> cb.equal(root.get("entityType"), type),
                 (root, q, cb) -> cb.equal(root.get("entityId"), entityId)));
+        AsOfPoint point = AsOf.current();
+        if (point != null) {
+            scope.add((root, q, cb) -> cb.lessThanOrEqualTo(root.<Instant>get("occurredAt"), point.instant()));
+        }
         if (viewer.isCustomer()) scope.add(EmailViews.customerTookPart(viewer.customerId()));
         var result = queryExecutor.run(Email.class, RECORD_EMAILS, query, scope, List.of());
         return PageResponse.of(views.toDtos(result.content(), viewer, true), query, result.total(), List.of());
     }
 
+    /** One email; as of a date, one written or received after that day is missing (D8). */
     public EmailDtos.EmailDto get(Long id) {
-        Email email = emailRepository.findById(id).orElseThrow(() -> new NotFoundException("Email not found"));
+        AsOfPoint point = AsOf.current();
+        Email email = emailRepository.findById(id)
+                .filter(e -> point == null || !e.getOccurredAt().isAfter(point.instant()))
+                .orElseThrow(() -> new NotFoundException("Email not found"));
         List<EmailRecipient> recipients = recipientRepository.findByEmailIdOrderByIdAsc(id);
         EmailViews.Viewer viewer = views.viewer();
         boolean party = viewer.userId().equals(email.getFromUserId())
